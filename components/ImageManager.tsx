@@ -8,17 +8,10 @@ interface ImageManagerProps {
 }
 
 const ImageThumbnail: React.FC<{ image: RenpyImage }> = ({ image }) => {
-  const handleDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData('renpy/image-tag', image.tag);
-    e.dataTransfer.effectAllowed = 'copy';
-  };
-
   return (
     <div
-      draggable
-      onDragStart={handleDragStart}
-      className="relative aspect-square bg-gray-200 dark:bg-gray-700 rounded-md overflow-hidden cursor-grab group transition-transform hover:scale-105"
-      title={`Drag to use image: ${image.tag}`}
+      className="relative aspect-square bg-gray-200 dark:bg-gray-700 rounded-md overflow-hidden cursor-pointer group transition-transform hover:scale-105"
+      title={`Click to preview image: ${image.tag}`}
     >
       <img src={image.dataUrl} alt={image.tag} className="w-full h-full object-cover" />
       <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-1">

@@ -1,9 +1,9 @@
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import StoryCanvas from './components/StoryCanvas';
 import EditorModal from './components/EditorModal';
 import ConfirmModal from './components/ConfirmModal';
 import StoryElementsPanel from './components/StoryElementsPanel';
-import ImageContextMenu from './components/ImageContextMenu';
 import { useRenpyAnalysis, performRenpyAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import type { Block, Position, BlockGroup, Link, Character, Variable, RenpyImage } from './types';
@@ -60,7 +60,6 @@ function uuidv4() {
 type Theme = 'system' | 'light' | 'dark';
 type SaveStatus = 'saving' | 'saved' | 'error';
 type AppState = { blocks: Block[], groups: BlockGroup[] };
-type ImageDropContextState = { visible: boolean; x: number; y: number; blockId: string; imageTag: string; } | null;
 
 
 // Wrap the file system API check in a try-catch block to prevent runtime errors
@@ -143,7 +142,6 @@ const App: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadConfirm, setUploadConfirm] = useState<{ visible: boolean, file: File | null }>({ visible: false, file: null });
   const [images, setImages] = useState<RenpyImage[]>([]);
-  const [imageDropContext, setImageDropContext] = useState<ImageDropContextState>(null);
   const imageImportInputRef = useRef<HTMLInputElement>(null);
 
   const analysisResult = useRenpyAnalysis(liveBlocks, analysisTrigger);
@@ -264,6 +262,7 @@ const App: React.FC = () => {
     if (oldTag !== newChar.tag) {
       const dialogueLineRegex = new RegExp(`^(\\s*)(${oldTag})(\\s+((?:".*?")|(?:'.*?')))$`, "gm");
       newBlocks = newBlocks.map(b => {
+        // FIX: Corrected typo from `dialogdialogueLineRegex` to `dialogueLineRegex`.
         if (b.content.match(dialogueLineRegex)) {
           dirtyIds.add(b.id);
           return { ...b, content: b.content.replace(dialogueLineRegex, `$1${newChar.tag}$3`) };
@@ -321,10 +320,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (imageDropContext?.visible) {
-        if (e.key === 'Escape') setImageDropContext(null);
-        return;
-      }
       const activeEl = document.activeElement;
       if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.getAttribute('role') === 'textbox')) return;
 
@@ -379,7 +374,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedBlockIds, selectedGroupIds, deleteBlocks, handleOpenEditor, addBlock, liveBlocks, liveGroups, commitChange, undo, redo, imageDropContext]);
+  }, [selectedBlockIds, selectedGroupIds, deleteBlocks, handleOpenEditor, addBlock, liveBlocks, liveGroups, commitChange, undo, redo]);
 
   const toggleTheme = () => {
     const themes: Theme[] = ['system', 'light', 'dark'];
@@ -692,26 +687,6 @@ const App: React.FC = () => {
   
   const handleRefreshAnalysis = () => setAnalysisTrigger(c => c + 1);
   
-  const handleImageDrop = useCallback((blockId: string, imageTag: string, x: number, y: number) => {
-    setImageDropContext({ visible: true, x, y, blockId, imageTag });
-  }, []);
-
-  const handleInsertImageCode = useCallback((type: 'scene' | 'show') => {
-    if (!imageDropContext) return;
-    const { blockId, imageTag } = imageDropContext;
-    
-    const targetBlock = liveBlocks.find(b => b.id === blockId);
-    if (!targetBlock) return;
-
-    const lineToAdd = `    ${type} ${imageTag}`;
-    const newContent = targetBlock.content + '\n' + lineToAdd;
-    
-    const newBlocks = liveBlocks.map(b => b.id === blockId ? { ...b, content: newContent } : b);
-    commitChange({ blocks: newBlocks, groups: liveGroups }, [blockId]);
-
-    setImageDropContext(null);
-  }, [imageDropContext, liveBlocks, liveGroups, commitChange]);
-  
   const handleImportImages = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -831,7 +806,6 @@ const App: React.FC = () => {
             onInteractionEnd={onInteractionEnd}
             deleteBlock={(id) => deleteBlocks([id])}
             onOpenEditor={handleOpenEditor}
-            onImageDrop={handleImageDrop}
             selectedBlockIds={selectedBlockIds}
             setSelectedBlockIds={setSelectedBlockIds}
             selectedGroupIds={selectedGroupIds}
@@ -865,17 +839,7 @@ const App: React.FC = () => {
         />
       </main>
 
-       {imageDropContext?.visible && (
-        <ImageContextMenu
-          x={imageDropContext.x}
-          y={imageDropContext.y}
-          imageTag={imageDropContext.imageTag}
-          onSelect={handleInsertImageCode}
-          onClose={() => setImageDropContext(null)}
-        />
-      )}
-
-      {editingBlock && (
+       {editingBlock && (
         <EditorModal
           block={editingBlock}
           analysisResult={analysisResult}

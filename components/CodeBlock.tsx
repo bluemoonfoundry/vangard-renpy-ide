@@ -9,7 +9,6 @@ interface CodeBlockProps {
   updateBlock: (id: string, newBlockData: Partial<Block>) => void;
   deleteBlock: (id: string) => void;
   onOpenEditor: (id: string) => void;
-  onImageDrop: (blockId: string, imageTag: string, clientX: number, clientY: number) => void;
   isSelected: boolean;
   isDragging: boolean;
   isRoot: boolean;
@@ -28,7 +27,6 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
   updateBlock, 
   deleteBlock, 
   onOpenEditor,
-  onImageDrop,
   isSelected,
   isDragging,
   isRoot,
@@ -41,7 +39,6 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
   const titleInputRef = useRef<HTMLInputElement>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
   
   const { firstLabels, invalidJumps, labels, dialogueLines, characters } = analysisResult;
   
@@ -103,8 +100,6 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
     ? 'border-indigo-500 dark:border-indigo-400' 
     : isUsageHighlighted
     ? 'border-sky-500 dark:border-sky-400'
-    : isDragOver
-    ? 'border-emerald-500 dark:border-emerald-400'
     : hasInvalidJumps 
     ? 'border-red-500' 
     : 'border-gray-200 dark:border-gray-700';
@@ -113,35 +108,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
     ? 'shadow-indigo-500/50'
     : isUsageHighlighted
     ? 'shadow-sky-500/50'
-    : isDragOver
-    ? 'shadow-emerald-500/50'
     : '';
-    
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-  };
-  
-  const handleDragEnter = (e: React.DragEvent) => {
-    if(e.dataTransfer.types.includes('renpy/image-tag')) {
-      e.preventDefault();
-      setIsDragOver(true);
-    }
-  };
-  
-  const handleDragLeave = (e: React.DragEvent) => {
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    const imageTag = e.dataTransfer.getData('renpy/image-tag');
-    if (imageTag) {
-      onImageDrop(block.id, imageTag, e.clientX, e.clientY);
-    }
-  };
-
 
   return (
     <div
@@ -155,10 +122,6 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
         zIndex: isSelected ? 10 : 5,
       }}
       onDoubleClick={() => onOpenEditor(block.id)}
-      onDragOver={handleDragOver}
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
     >
       <div className="drag-handle h-8 bg-gray-100 dark:bg-gray-700 rounded-t-md flex items-center px-3 justify-between cursor-grab">
         <div className="flex items-center space-x-2 flex-grow min-w-0">
