@@ -51,6 +51,11 @@ export interface ImageGroup {
   images: RenpyImage[];
 }
 
+export interface RenpyAudio {
+  fileName: string;
+  filePath: string;
+  dataUrl: string;
+}
 
 export interface VariableUsage {
   blockId: string;

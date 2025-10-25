@@ -6,7 +6,7 @@ import ConfirmModal from './components/ConfirmModal';
 import StoryElementsPanel from './components/StoryElementsPanel';
 import { useRenpyAnalysis, performRenpyAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
-import type { Block, Position, BlockGroup, Link, Character, Variable, RenpyImage } from './types';
+import type { Block, Position, BlockGroup, Link, Character, Variable, RenpyImage, RenpyAudio } from './types';
 import JSZip from 'jszip';
 
 // Add all necessary FS API types to the global scope to fix compilation issues
@@ -142,7 +142,9 @@ const App: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadConfirm, setUploadConfirm] = useState<{ visible: boolean, file: File | null }>({ visible: false, file: null });
   const [images, setImages] = useState<RenpyImage[]>([]);
+  const [audios, setAudios] = useState<RenpyAudio[]>([]);
   const imageImportInputRef = useRef<HTMLInputElement>(null);
+  const audioImportInputRef = useRef<HTMLInputElement>(null);
 
   const analysisResult = useRenpyAnalysis(liveBlocks, analysisTrigger);
 
@@ -465,6 +467,23 @@ const App: React.FC = () => {
     }
     return loadedImages;
   };
+  
+  const processAudioDirectory = async (audioDirHandle: FileSystemDirectoryHandle, currentPath: string): Promise<RenpyAudio[]> => {
+    const loadedAudios: RenpyAudio[] = [];
+    for await (const entry of audioDirHandle.values()) {
+        const newPath = `${currentPath}/${entry.name}`;
+        if (entry.kind === 'file' && /\.(mp3|ogg|wav)$/i.test(entry.name)) {
+            const fileHandle = entry as FileSystemFileHandle;
+            const file = await fileHandle.getFile();
+            const dataUrl = await fileToDataUrl(file);
+            loadedAudios.push({ fileName: entry.name, filePath: newPath, dataUrl });
+        } else if (entry.kind === 'directory') {
+            const subAudios = await processAudioDirectory(entry as FileSystemDirectoryHandle, newPath);
+            loadedAudios.push(...subAudios);
+        }
+    }
+    return loadedAudios;
+  };
 
   const handleOpenFolder = async () => {
     if (!isFileSystemApiSupported) {
@@ -482,7 +501,8 @@ const App: React.FC = () => {
             return;
         }
         setDirectoryHandle(rootHandle);
-        setImages([]); // Clear previous images
+        setImages([]);
+        setAudios([]);
 
         const newBlocks: Block[] = [];
         const findRpyFilesRecursively = async (dirHandle: FileSystemDirectoryHandle, currentPath: string) => {
@@ -497,8 +517,11 @@ const App: React.FC = () => {
                     });
                 } else if (entry.kind === 'directory') {
                     if (entry.name.toLowerCase() === 'images') {
-                        const loadedImages = await processImageDirectory(entry, 'images');
+                        const loadedImages = await processImageDirectory(entry as FileSystemDirectoryHandle, 'images');
                         setImages(loadedImages);
+                    } else if (entry.name.toLowerCase() === 'audio') {
+                        const loadedAudios = await processAudioDirectory(entry as FileSystemDirectoryHandle, 'audio');
+                        setAudios(loadedAudios);
                     } else {
                         await findRpyFilesRecursively(entry as FileSystemDirectoryHandle, newPath);
                     }
@@ -606,6 +629,7 @@ const App: React.FC = () => {
       const zip = await JSZip.loadAsync(file);
       const newBlocks: Block[] = [];
       const newImages: RenpyImage[] = [];
+      const newAudios: RenpyAudio[] = [];
       
       for (const relativePath in zip.files) {
         const zipEntry = zip.files[relativePath];
@@ -620,12 +644,18 @@ const App: React.FC = () => {
             const fileName = relativePath.split('/').pop() || '';
             const { tag, attributes } = parseImageFileName(fileName, relativePath);
             newImages.push({ tag, attributes, fileName, filePath: relativePath, dataUrl });
+        } else if (/\.(mp3|ogg|wav)$/i.test(relativePath) && relativePath.toLowerCase().startsWith('audio/')) {
+            const blob = await zipEntry.async('blob');
+            const dataUrl = await fileToDataUrl(blob);
+            const fileName = relativePath.split('/').pop() || '';
+            newAudios.push({ fileName, filePath: relativePath, dataUrl });
         }
       }
       
       setDirectoryHandle(null);
       setDirtyBlockIds(new Set());
       setImages(newImages);
+      setAudios(newAudios);
       
       const preliminaryAnalysis = performRenpyAnalysis(newBlocks);
       const laidOutBlocks = tidyUpLayout(newBlocks, preliminaryAnalysis.links);
@@ -720,6 +750,40 @@ const App: React.FC = () => {
         alert("Could not import images. You may need to grant file system permissions again.");
     } finally {
         if(imageImportInputRef.current) imageImportInputRef.current.value = "";
+    }
+  };
+
+  const handleImportAudios = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    if (!directoryHandle) {
+        alert("Please open a project folder first to import audio files directly into it.");
+        return;
+    }
+
+    try {
+        const audioDir = await directoryHandle.getDirectoryHandle('audio', { create: true });
+        const newAudios: RenpyAudio[] = [...audios];
+
+        for (const file of files) {
+            const newFileHandle = await audioDir.getFileHandle(file.name, { create: true });
+            const writable = await newFileHandle.createWritable();
+            await writable.write(file);
+            await writable.close();
+            
+            const dataUrl = await fileToDataUrl(file);
+            const filePath = `audio/${file.name}`;
+            
+            const existingIndex = newAudios.findIndex(aud => aud.filePath === filePath);
+            if (existingIndex > -1) newAudios[existingIndex] = { fileName: file.name, filePath, dataUrl };
+            else newAudios.push({ fileName: file.name, filePath, dataUrl });
+        }
+        setAudios(newAudios);
+    } catch (err) {
+        console.error("Error importing audio:", err);
+        alert("Could not import audio. You may need to grant file system permissions again.");
+    } finally {
+        if(audioImportInputRef.current) audioImportInputRef.current.value = "";
     }
   };
 
@@ -827,6 +891,8 @@ const App: React.FC = () => {
             onFindVariableUsages={handleFindVariableUsages}
             images={images}
             onImportImages={() => imageImportInputRef.current?.click()}
+            audios={audios}
+            onImportAudios={() => audioImportInputRef.current?.click()}
             isFileSystemApiSupported={isFileSystemApiSupported && !!directoryHandle}
         />
         <input
@@ -836,6 +902,14 @@ const App: React.FC = () => {
             accept="image/png, image/jpeg, image/webp"
             multiple
             onChange={handleImportImages}
+        />
+        <input
+            type="file"
+            ref={audioImportInputRef}
+            style={{ display: 'none' }}
+            accept="audio/mpeg, audio/ogg, audio/wav"
+            multiple
+            onChange={handleImportAudios}
         />
       </main>
 
@@ -857,6 +931,7 @@ const App: React.FC = () => {
           onConfirm={() => {
             commitChange({ blocks: [], groups: [] });
             setImages([]);
+            setAudios([]);
             setIsClearConfirmVisible(false);
             setDirectoryHandle(null);
             setDirtyBlockIds(new Set());

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import type { Character, Variable, RenpyImage } from '../types';
+import type { Character, Variable, RenpyImage, RenpyAudio } from '../types';
 import VariableManager from './VariableManager';
 import ImageManager from './ImageManager';
+import AudioManager from './AudioManager';
 
 interface StoryElementsPanelProps {
     isOpen: boolean;
@@ -18,6 +19,9 @@ interface StoryElementsPanelProps {
     // Image props
     images: RenpyImage[];
     onImportImages: () => void;
+    // Audio props
+    audios: RenpyAudio[];
+    onImportAudios: () => void;
     isFileSystemApiSupported: boolean;
 }
 
@@ -87,11 +91,13 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     isOpen, 
     characters, characterUsage, onAddCharacter, onUpdateCharacter, onFindCharacterUsages, 
     variables, onAddVariable, onFindVariableUsages,
-    images, onImportImages, isFileSystemApiSupported
+    images, onImportImages,
+    audios, onImportAudios,
+    isFileSystemApiSupported
 }) => {
     const [mode, setMode] = useState<'list' | 'add' | 'edit'>('list');
     const [editingChar, setEditingChar] = useState<Character | undefined>(undefined);
-    const [activeTab, setActiveTab] = useState<'characters' | 'variables' | 'images'>('characters');
+    const [activeTab, setActiveTab] = useState<'characters' | 'variables' | 'images' | 'audio'>('characters');
     
     const characterList = Array.from(characters.values());
 
@@ -107,7 +113,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
 
     if (!isOpen) return null;
 
-    type TabName = 'characters' | 'variables' | 'images';
+    type TabName = 'characters' | 'variables' | 'images' | 'audio';
     const TabButton: React.FC<{ tabName: TabName; label: string }> = ({ tabName, label }) => (
         <button
             onClick={() => setActiveTab(tabName)}
@@ -124,10 +130,11 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
             </div>
 
             <div className="p-2 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 flex-wrap">
                     <TabButton tabName="characters" label="Characters" />
                     <TabButton tabName="variables" label="Variables" />
                     <TabButton tabName="images" label="Images" />
+                    <TabButton tabName="audio" label="Audio" />
                 </div>
             </div>
 
@@ -194,6 +201,13 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                     <ImageManager 
                         images={images}
                         onImportImages={onImportImages}
+                        isImportEnabled={isFileSystemApiSupported}
+                    />
+                )}
+                {activeTab === 'audio' && (
+                    <AudioManager 
+                        audios={audios}
+                        onImportAudios={onImportAudios}
                         isImportEnabled={isFileSystemApiSupported}
                     />
                 )}
