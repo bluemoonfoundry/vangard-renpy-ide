@@ -24,177 +24,179 @@ const stringToColor = (str: string) => {
   return PALETTE[Math.abs(hash) % PALETTE.length];
 };
 
-export const useRenpyAnalysis = (blocks: Block[], trigger: number): RenpyAnalysisResult => {
-  const analysisResult = useMemo(() => {
-    const result: RenpyAnalysisResult = {
-      labels: {},
-      jumps: {},
-      links: [],
-      invalidJumps: {},
-      firstLabels: {},
-      rootBlockIds: new Set(),
-      leafBlockIds: new Set(),
-      branchingBlockIds: new Set(),
-      characters: new Map(),
-      dialogueLines: new Map(),
-      characterUsage: new Map(),
-      variables: new Map(),
-      variableUsages: new Map(),
-    };
+export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
+  const result: RenpyAnalysisResult = {
+    labels: {},
+    jumps: {},
+    links: [],
+    invalidJumps: {},
+    firstLabels: {},
+    rootBlockIds: new Set(),
+    leafBlockIds: new Set(),
+    branchingBlockIds: new Set(),
+    characters: new Map(),
+    dialogueLines: new Map(),
+    characterUsage: new Map(),
+    variables: new Map(),
+    variableUsages: new Map(),
+  };
 
-    // First pass: find all labels, characters, and variable definitions
-    blocks.forEach(block => {
-      let isFirstLabelInBlock = true;
-      const lines = block.content.split('\n');
-      lines.forEach((line, index) => {
-        // Find Labels
-        const labelMatch = line.match(LABEL_REGEX);
-        if (labelMatch && labelMatch[1]) {
-          const labelName = labelMatch[1];
-          const labelLocation: LabelLocation = {
-            blockId: block.id,
-            label: labelName,
-            line: index + 1,
-            column: labelMatch[0].indexOf(labelName) + 1,
-          };
-          result.labels[labelName] = labelLocation;
+  // First pass: find all labels, characters, and variable definitions
+  blocks.forEach(block => {
+    let isFirstLabelInBlock = true;
+    const lines = block.content.split('\n');
+    lines.forEach((line, index) => {
+      // Find Labels
+      const labelMatch = line.match(LABEL_REGEX);
+      if (labelMatch && labelMatch[1]) {
+        const labelName = labelMatch[1];
+        const labelLocation: LabelLocation = {
+          blockId: block.id,
+          label: labelName,
+          line: index + 1,
+          column: labelMatch[0].indexOf(labelName) + 1,
+        };
+        result.labels[labelName] = labelLocation;
+        
+        if (isFirstLabelInBlock) {
+          result.firstLabels[block.id] = labelName;
+          isFirstLabelInBlock = false;
+        }
+      }
+      
+      // Find Characters
+      const charMatch = line.match(CHARACTER_REGEX);
+      if (charMatch) {
+        const colorMatch = charMatch[3].match(COLOR_REGEX);
+        const character: Character = {
+          tag: charMatch[1],
+          name: charMatch[2],
+          color: colorMatch ? colorMatch[1] : stringToColor(charMatch[1]),
+          definedInBlockId: block.id,
+        };
+        result.characters.set(character.tag, character);
+      }
+
+      // Find Variables
+      const varMatch = line.match(DEFINE_DEFAULT_REGEX);
+      if (varMatch) {
+        const variable: Variable = {
+          type: varMatch[1] as 'define' | 'default',
+          name: varMatch[2],
+          initialValue: varMatch[3].trim(),
+          definedInBlockId: block.id,
+          line: index + 1,
+        };
+        result.variables.set(variable.name, variable);
+      }
+    });
+  });
+
+  // Second pass: find jumps, dialogue, and variable usages
+  const variableNames = Array.from(result.variables.keys());
+  blocks.forEach(block => {
+    result.jumps[block.id] = [];
+    const lines = block.content.split('\n');
+    lines.forEach((line, index) => {
+      // Find Jumps/Calls
+      for (const match of line.matchAll(JUMP_CALL_REGEX)) {
+        const targetLabel = match[2];
+        if (!targetLabel || match.index === undefined) continue;
+
+        const jumpLocation: JumpLocation = {
+          blockId: block.id,
+          target: targetLabel,
+          line: index + 1,
+          columnStart: match.index + match[1].length + 2,
+          columnEnd: match.index + match[1].length + 2 + targetLabel.length,
+        };
+        result.jumps[block.id].push(jumpLocation);
+
+        const targetLabelLocation = result.labels[targetLabel];
+
+        if (targetLabelLocation) {
+          if (block.id !== targetLabelLocation.blockId) {
+            if (!result.links.some(l => l.sourceId === block.id && l.targetId === targetLabelLocation.blockId)) {
+              result.links.push({
+                sourceId: block.id,
+                targetId: targetLabelLocation.blockId,
+                targetLabel: targetLabel,
+              });
+            }
+          }
+        } else {
+          if (!result.invalidJumps[block.id]) result.invalidJumps[block.id] = [];
+          if (!result.invalidJumps[block.id].includes(targetLabel)) {
+            result.invalidJumps[block.id].push(targetLabel);
+          }
+        }
+      }
+      
+      // Find Dialogue
+      const dialogueMatch = line.match(DIALOGUE_REGEX);
+      if (dialogueMatch && result.characters.has(dialogueMatch[1])) {
+        const tag = dialogueMatch[1];
+        if (!result.dialogueLines.has(block.id)) {
+          result.dialogueLines.set(block.id, []);
+        }
+        result.dialogueLines.get(block.id)!.push({ line: index + 1, tag });
+      }
+
+      // Find Variable Usages
+      variableNames.forEach(varName => {
+        const usageRegex = new RegExp(`\\b${varName.replace('.', '\\.')}\\b`);
+        if (usageRegex.test(line)) {
+          const defOnThisLine = result.variables.get(varName)?.definedInBlockId === block.id && result.variables.get(varName)?.line === index + 1;
           
-          if (isFirstLabelInBlock) {
-            result.firstLabels[block.id] = labelName;
-            isFirstLabelInBlock = false;
-          }
-        }
-        
-        // Find Characters
-        const charMatch = line.match(CHARACTER_REGEX);
-        if (charMatch) {
-          const colorMatch = charMatch[3].match(COLOR_REGEX);
-          const character: Character = {
-            tag: charMatch[1],
-            name: charMatch[2],
-            color: colorMatch ? colorMatch[1] : stringToColor(charMatch[1]),
-            definedInBlockId: block.id,
-          };
-          result.characters.set(character.tag, character);
-        }
-
-        // Find Variables
-        const varMatch = line.match(DEFINE_DEFAULT_REGEX);
-        if (varMatch) {
-          const variable: Variable = {
-            type: varMatch[1] as 'define' | 'default',
-            name: varMatch[2],
-            initialValue: varMatch[3].trim(),
-            definedInBlockId: block.id,
-            line: index + 1,
-          };
-          result.variables.set(variable.name, variable);
-        }
-      });
-    });
-
-    // Second pass: find jumps, dialogue, and variable usages
-    const variableNames = Array.from(result.variables.keys());
-    blocks.forEach(block => {
-      result.jumps[block.id] = [];
-      const lines = block.content.split('\n');
-      lines.forEach((line, index) => {
-        // Find Jumps/Calls
-        for (const match of line.matchAll(JUMP_CALL_REGEX)) {
-          const targetLabel = match[2];
-          if (!targetLabel || match.index === undefined) continue;
-
-          const jumpLocation: JumpLocation = {
-            blockId: block.id,
-            target: targetLabel,
-            line: index + 1,
-            columnStart: match.index + match[1].length + 2,
-            columnEnd: match.index + match[1].length + 2 + targetLabel.length,
-          };
-          result.jumps[block.id].push(jumpLocation);
-
-          const targetLabelLocation = result.labels[targetLabel];
-
-          if (targetLabelLocation) {
-            if (block.id !== targetLabelLocation.blockId) {
-              if (!result.links.some(l => l.sourceId === block.id && l.targetId === targetLabelLocation.blockId)) {
-                result.links.push({
-                  sourceId: block.id,
-                  targetId: targetLabelLocation.blockId,
-                  targetLabel: targetLabel,
-                });
+          if (!defOnThisLine) {
+              if (!result.variableUsages.has(varName)) {
+                  result.variableUsages.set(varName, []);
               }
-            }
-          } else {
-            if (!result.invalidJumps[block.id]) result.invalidJumps[block.id] = [];
-            if (!result.invalidJumps[block.id].includes(targetLabel)) {
-              result.invalidJumps[block.id].push(targetLabel);
-            }
+              const usages = result.variableUsages.get(varName)!;
+              if (!usages.some(u => u.blockId === block.id && u.line === index + 1)) {
+                   usages.push({ blockId: block.id, line: index + 1 });
+              }
           }
         }
-        
-        // Find Dialogue
-        const dialogueMatch = line.match(DIALOGUE_REGEX);
-        if (dialogueMatch && result.characters.has(dialogueMatch[1])) {
-          const tag = dialogueMatch[1];
-          if (!result.dialogueLines.has(block.id)) {
-            result.dialogueLines.set(block.id, []);
-          }
-          result.dialogueLines.get(block.id)!.push({ line: index + 1, tag });
-        }
-
-        // Find Variable Usages
-        variableNames.forEach(varName => {
-          const usageRegex = new RegExp(`\\b${varName.replace('.', '\\.')}\\b`);
-          if (usageRegex.test(line)) {
-            const defOnThisLine = result.variables.get(varName)?.definedInBlockId === block.id && result.variables.get(varName)?.line === index + 1;
-            
-            if (!defOnThisLine) {
-                if (!result.variableUsages.has(varName)) {
-                    result.variableUsages.set(varName, []);
-                }
-                const usages = result.variableUsages.get(varName)!;
-                if (!usages.some(u => u.blockId === block.id && u.line === index + 1)) {
-                     usages.push({ blockId: block.id, line: index + 1 });
-                }
-            }
-          }
-        });
       });
     });
+  });
 
-    // Third pass: Calculate character usage
-    result.characters.forEach(char => {
-      result.characterUsage.set(char.tag, 0); // Initialize all defined chars with 0
+  // Third pass: Calculate character usage
+  result.characters.forEach(char => {
+    result.characterUsage.set(char.tag, 0); // Initialize all defined chars with 0
+  });
+  result.dialogueLines.forEach((lines) => {
+    lines.forEach(dialogue => {
+      const currentCount = result.characterUsage.get(dialogue.tag) || 0;
+      result.characterUsage.set(dialogue.tag, currentCount + 1);
     });
-    result.dialogueLines.forEach((lines) => {
-      lines.forEach(dialogue => {
-        const currentCount = result.characterUsage.get(dialogue.tag) || 0;
-        result.characterUsage.set(dialogue.tag, currentCount + 1);
-      });
-    });
+  });
 
-    // Fourth pass: Classify blocks
-    const allTargetIds = new Set(result.links.map(link => link.targetId));
+  // Fourth pass: Classify blocks
+  const allTargetIds = new Set(result.links.map(link => link.targetId));
 
-    blocks.forEach(block => {
-      const blockJumps = result.jumps[block.id] || [];
-      const hasMenu = block.content.split('\n').some(line => MENU_REGEX.test(line));
+  blocks.forEach(block => {
+    const blockJumps = result.jumps[block.id] || [];
+    const hasMenu = block.content.split('\n').some(line => MENU_REGEX.test(line));
 
-      if (!allTargetIds.has(block.id)) {
-        result.rootBlockIds.add(block.id);
-      }
-      if (blockJumps.length === 0) {
-        result.leafBlockIds.add(block.id);
-      }
-      const distinctTargets = new Set(blockJumps.map(j => (result.labels[j.target] || {}).blockId).filter(Boolean));
-      if (hasMenu || distinctTargets.size > 1) {
-        result.branchingBlockIds.add(block.id);
-      }
-    });
+    if (!allTargetIds.has(block.id)) {
+      result.rootBlockIds.add(block.id);
+    }
+    if (blockJumps.length === 0) {
+      result.leafBlockIds.add(block.id);
+    }
+    const distinctTargets = new Set(blockJumps.map(j => (result.labels[j.target] || {}).blockId).filter(Boolean));
+    if (hasMenu || distinctTargets.size > 1) {
+      result.branchingBlockIds.add(block.id);
+    }
+  });
 
-    return result;
-  }, [blocks, trigger]);
+  return result;
+};
 
+
+export const useRenpyAnalysis = (blocks: Block[], trigger: number): RenpyAnalysisResult => {
+  const analysisResult = useMemo(() => performRenpyAnalysis(blocks), [blocks, trigger]);
   return analysisResult;
 };

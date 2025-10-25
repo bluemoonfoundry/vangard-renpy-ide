@@ -1,12 +1,15 @@
 
 
 
+
+
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import StoryCanvas from './components/StoryCanvas';
 import EditorModal from './components/EditorModal';
 import ConfirmModal from './components/ConfirmModal';
 import StoryElementsPanel from './components/StoryElementsPanel';
-import { useRenpyAnalysis } from './hooks/useRenpyAnalysis';
+import { useRenpyAnalysis, performRenpyAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import type { Block, Position, BlockGroup, Link, Character, Variable } from './types';
 import JSZip from 'jszip';
@@ -243,6 +246,7 @@ const App: React.FC = () => {
     if (oldTag !== newChar.tag) {
       const dialogueLineRegex = new RegExp(`^(\\s*)(${oldTag})(\\s+((?:".*?")|(?:'.*?')))$`, "gm");
       newBlocks = newBlocks.map(b => {
+        // FIX: Corrected typo from dialogdialogueLineRegex to dialogueLineRegex.
         if (b.content.match(dialogueLineRegex)) {
           dirtyIds.add(b.id);
           return { ...b, content: b.content.replace(dialogueLineRegex, `$1${newChar.tag}$3`) };
@@ -474,7 +478,10 @@ const App: React.FC = () => {
         
         await findRpyFilesRecursively(rootHandle, '');
         
-        const laidOutBlocks = tidyUpLayout(newBlocks, []);
+        // Perform analysis before layout to ensure an intelligent initial arrangement
+        const preliminaryAnalysis = performRenpyAnalysis(newBlocks);
+        const laidOutBlocks = tidyUpLayout(newBlocks, preliminaryAnalysis.links);
+
         commitChange({ blocks: laidOutBlocks, groups: [] });
         setSelectedBlockIds([]);
         setSelectedGroupIds([]);
@@ -592,7 +599,10 @@ const App: React.FC = () => {
       
       setDirectoryHandle(null);
       setDirtyBlockIds(new Set());
-      const laidOutBlocks = tidyUpLayout(newBlocks, []);
+      
+      const preliminaryAnalysis = performRenpyAnalysis(newBlocks);
+      const laidOutBlocks = tidyUpLayout(newBlocks, preliminaryAnalysis.links);
+
       commitChange({ blocks: laidOutBlocks, groups: [] });
       setSelectedBlockIds([]);
       setSelectedGroupIds([]);

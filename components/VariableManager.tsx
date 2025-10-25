@@ -90,6 +90,7 @@ const VariableManager: React.FC<VariableManagerProps> = ({ variables, onAddVaria
         }
         // FIX: Explicitly type `a` and `b` to resolve TypeScript inference issue.
         grouped.defined.sort((a: Variable, b: Variable) => a.name.localeCompare(b.name));
+        // FIX: Explicitly type `a` and `b` to resolve TypeScript inference issue.
         grouped.defaulted.sort((a: Variable, b: Variable) => a.name.localeCompare(b.name));
         return grouped;
     }, [filteredVariables]);
