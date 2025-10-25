@@ -1,0 +1,58 @@
+import React from 'react';
+
+interface ConfirmModalProps {
+  title: string;
+  children: React.ReactNode;
+  onConfirm: () => void;
+  onClose: () => void;
+  confirmText?: string;
+  confirmClassName?: string;
+}
+
+const ConfirmModal: React.FC<ConfirmModalProps> = ({ 
+  title, 
+  children, 
+  onConfirm, 
+  onClose, 
+  confirmText = 'Confirm',
+  confirmClassName = 'bg-red-600 hover:bg-red-700'
+}) => {
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
+      onClick={onClose} // Close on backdrop click
+      aria-modal="true"
+      role="dialog"
+    >
+      <div
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md m-4 flex flex-col"
+        onClick={e => e.stopPropagation()} // Prevent closing when clicking inside modal
+      >
+        <header className="p-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-xl font-bold">{title}</h2>
+        </header>
+        <main className="p-6">
+          <p className="text-gray-600 dark:text-gray-300">
+            {children}
+          </p>
+        </main>
+        <footer className="bg-gray-50 dark:bg-gray-700 p-4 rounded-b-lg flex justify-end items-center space-x-4">
+          <button
+            onClick={onClose}
+            className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 font-bold py-2 px-4 rounded transition duration-200"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className={`${confirmClassName} text-white font-bold py-2 px-4 rounded transition duration-200`}
+          >
+            {confirmText}
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+};
+
+export default ConfirmModal;

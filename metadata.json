@@ -1,0 +1,5 @@
+{
+  "name": "Ren'Py Visual Novel Accelerator",
+  "description": "A visual editor for creating and connecting blocks of Ren'Py code. Write code in draggable blocks, and the editor will automatically draw arrows to visualize jumps and calls between labels, helping you map out your story's flow.",
+  "requestFramePermissions": []
+}
