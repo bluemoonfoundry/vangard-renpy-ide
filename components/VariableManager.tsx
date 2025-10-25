@@ -76,7 +76,7 @@ const VariableManager: React.FC<VariableManagerProps> = ({ variables, onAddVaria
         if (!filterStoryVars) {
             return allVars;
         }
-        return allVars.filter(v => !nonStoryVarPrefixes.some(prefix => v.name.startsWith(prefix)));
+        return allVars.filter((v: Variable) => !nonStoryVarPrefixes.some(prefix => v.name.startsWith(prefix)));
     }, [variables, filterStoryVars, nonStoryVarPrefixes]);
 
     const { defined, defaulted } = useMemo(() => {
@@ -88,9 +88,7 @@ const VariableManager: React.FC<VariableManagerProps> = ({ variables, onAddVaria
                 grouped.defaulted.push(variable);
             }
         }
-        // FIX: Explicitly type `a` and `b` to resolve TypeScript inference issue.
         grouped.defined.sort((a: Variable, b: Variable) => a.name.localeCompare(b.name));
-        // FIX: Explicitly type `a` and `b` to resolve TypeScript inference issue.
         grouped.defaulted.sort((a: Variable, b: Variable) => a.name.localeCompare(b.name));
         return grouped;
     }, [filteredVariables]);

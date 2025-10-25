@@ -1,17 +1,12 @@
-
-
-
-
-
-
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import StoryCanvas from './components/StoryCanvas';
 import EditorModal from './components/EditorModal';
 import ConfirmModal from './components/ConfirmModal';
 import StoryElementsPanel from './components/StoryElementsPanel';
+import ImageContextMenu from './components/ImageContextMenu';
 import { useRenpyAnalysis, performRenpyAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
-import type { Block, Position, BlockGroup, Link, Character, Variable } from './types';
+import type { Block, Position, BlockGroup, Link, Character, Variable, RenpyImage } from './types';
 import JSZip from 'jszip';
 
 // Add all necessary FS API types to the global scope to fix compilation issues
@@ -37,6 +32,7 @@ declare global {
     readonly kind: 'directory';
     values(): AsyncIterableIterator<FileSystemFileHandle | FileSystemDirectoryHandle>;
     getFileHandle(name: string, options?: { create?: boolean }): Promise<FileSystemFileHandle>;
+    getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<FileSystemDirectoryHandle>;
   }
 
   // Fix: Define the AIStudio interface to include the method we need.
@@ -64,6 +60,8 @@ function uuidv4() {
 type Theme = 'system' | 'light' | 'dark';
 type SaveStatus = 'saving' | 'saved' | 'error';
 type AppState = { blocks: Block[], groups: BlockGroup[] };
+type ImageDropContextState = { visible: boolean; x: number; y: number; blockId: string; imageTag: string; } | null;
+
 
 // Wrap the file system API check in a try-catch block to prevent runtime errors
 // in environments where accessing the APIs might be restricted.
@@ -89,6 +87,23 @@ const loadInitialState = (): AppState => {
     console.error("Failed to load state from local storage", e);
     return { blocks: [], groups: [] };
   }
+};
+
+const fileToDataUrl = (file: File | Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
+const parseImageFileName = (fileName: string, filePath: string): { tag: string; attributes: string[] } => {
+    const nameWithoutExt = fileName.replace(/\.[^/.]+$/, "");
+    const parts = nameWithoutExt.split('_');
+    const tag = parts.join(' ');
+    const attributes = parts.slice(1);
+    return { tag, attributes };
 };
 
 const App: React.FC = () => {
@@ -127,6 +142,9 @@ const App: React.FC = () => {
   const [dirtyBlockIds, setDirtyBlockIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadConfirm, setUploadConfirm] = useState<{ visible: boolean, file: File | null }>({ visible: false, file: null });
+  const [images, setImages] = useState<RenpyImage[]>([]);
+  const [imageDropContext, setImageDropContext] = useState<ImageDropContextState>(null);
+  const imageImportInputRef = useRef<HTMLInputElement>(null);
 
   const analysisResult = useRenpyAnalysis(liveBlocks, analysisTrigger);
 
@@ -246,7 +264,6 @@ const App: React.FC = () => {
     if (oldTag !== newChar.tag) {
       const dialogueLineRegex = new RegExp(`^(\\s*)(${oldTag})(\\s+((?:".*?")|(?:'.*?')))$`, "gm");
       newBlocks = newBlocks.map(b => {
-        // FIX: Corrected typo from dialogdialogueLineRegex to dialogueLineRegex.
         if (b.content.match(dialogueLineRegex)) {
           dirtyIds.add(b.id);
           return { ...b, content: b.content.replace(dialogueLineRegex, `$1${newChar.tag}$3`) };
@@ -304,6 +321,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (imageDropContext?.visible) {
+        if (e.key === 'Escape') setImageDropContext(null);
+        return;
+      }
       const activeEl = document.activeElement;
       if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.getAttribute('role') === 'textbox')) return;
 
@@ -358,7 +379,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedBlockIds, selectedGroupIds, deleteBlocks, handleOpenEditor, addBlock, liveBlocks, liveGroups, commitChange, undo, redo]);
+  }, [selectedBlockIds, selectedGroupIds, deleteBlocks, handleOpenEditor, addBlock, liveBlocks, liveGroups, commitChange, undo, redo, imageDropContext]);
 
   const toggleTheme = () => {
     const themes: Theme[] = ['system', 'light', 'dark'];
@@ -432,6 +453,24 @@ const App: React.FC = () => {
     commitChange({ blocks: newBlocks, groups: liveGroups });
   };
 
+  const processImageDirectory = async (imageDirHandle: FileSystemDirectoryHandle, currentPath: string): Promise<RenpyImage[]> => {
+    const loadedImages: RenpyImage[] = [];
+    for await (const entry of imageDirHandle.values()) {
+        const newPath = `${currentPath}/${entry.name}`;
+        if (entry.kind === 'file' && /\.(png|jpe?g|webp)$/i.test(entry.name)) {
+            const fileHandle = entry as FileSystemFileHandle;
+            const file = await fileHandle.getFile();
+            const dataUrl = await fileToDataUrl(file);
+            const { tag, attributes } = parseImageFileName(entry.name, newPath);
+            loadedImages.push({ tag, attributes, fileName: entry.name, filePath: newPath, dataUrl });
+        } else if (entry.kind === 'directory') {
+            const subImages = await processImageDirectory(entry as FileSystemDirectoryHandle, newPath);
+            loadedImages.push(...subImages);
+        }
+    }
+    return loadedImages;
+  };
+
   const handleOpenFolder = async () => {
     if (!isFileSystemApiSupported) {
         alert("Your browser does not support the File System Access API. Please use a modern browser like Chrome or Edge.");
@@ -439,21 +478,18 @@ const App: React.FC = () => {
     }
     try {
         let rootHandle: FileSystemDirectoryHandle;
-        // Use the standard API if available, otherwise fall back to the AI Studio one.
         if (window.showDirectoryPicker) {
             rootHandle = await window.showDirectoryPicker();
         } else if (window.aistudio?.showDirectoryPicker) {
             rootHandle = await window.aistudio.showDirectoryPicker();
         } else {
-            // This case should ideally not be reached if isFileSystemApiSupported is true, but it's a safe fallback.
             alert("File System Access API could not be initialized.");
             return;
         }
-
         setDirectoryHandle(rootHandle);
+        setImages([]); // Clear previous images
 
         const newBlocks: Block[] = [];
-        
         const findRpyFilesRecursively = async (dirHandle: FileSystemDirectoryHandle, currentPath: string) => {
             for await (const entry of dirHandle.values()) {
                 const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
@@ -462,23 +498,21 @@ const App: React.FC = () => {
                     const file = await fileHandle.getFile();
                     const content = await file.text();
                     newBlocks.push({
-                        id: uuidv4(),
-                        content,
-                        position: { x: 0, y: 0 },
-                        width: 300,
-                        height: 200,
-                        filePath: newPath,
-                        fileHandle: fileHandle,
+                        id: uuidv4(), content, position: { x: 0, y: 0 }, width: 300, height: 200, filePath: newPath, fileHandle,
                     });
                 } else if (entry.kind === 'directory') {
-                    await findRpyFilesRecursively(entry as FileSystemDirectoryHandle, newPath);
+                    if (entry.name.toLowerCase() === 'images') {
+                        const loadedImages = await processImageDirectory(entry, 'images');
+                        setImages(loadedImages);
+                    } else {
+                        await findRpyFilesRecursively(entry as FileSystemDirectoryHandle, newPath);
+                    }
                 }
             }
         };
         
         await findRpyFilesRecursively(rootHandle, '');
         
-        // Perform analysis before layout to ensure an intelligent initial arrangement
         const preliminaryAnalysis = performRenpyAnalysis(newBlocks);
         const laidOutBlocks = tidyUpLayout(newBlocks, preliminaryAnalysis.links);
 
@@ -487,11 +521,8 @@ const App: React.FC = () => {
         setSelectedGroupIds([]);
         setDirtyBlockIds(new Set());
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        console.log('User cancelled directory picker.');
-      } else {
-        console.error("Error opening directory:", err);
-      }
+      if (err instanceof DOMException && err.name === 'AbortError') console.log('User cancelled directory picker.');
+      else console.error("Error opening directory:", err);
     }
   };
   
@@ -579,26 +610,27 @@ const App: React.FC = () => {
     try {
       const zip = await JSZip.loadAsync(file);
       const newBlocks: Block[] = [];
+      const newImages: RenpyImage[] = [];
       
       for (const relativePath in zip.files) {
         const zipEntry = zip.files[relativePath];
-        if (zipEntry.dir || !relativePath.endsWith('.rpy')) {
-          continue;
-        }
+        if (zipEntry.dir) continue;
 
-        const content = await zipEntry.async('string');
-        newBlocks.push({
-          id: uuidv4(),
-          content,
-          position: { x: 0, y: 0 },
-          width: 300,
-          height: 200,
-          filePath: relativePath,
-        });
+        if (relativePath.endsWith('.rpy')) {
+            const content = await zipEntry.async('string');
+            newBlocks.push({ id: uuidv4(), content, position: { x: 0, y: 0 }, width: 300, height: 200, filePath: relativePath });
+        } else if (/\.(png|jpe?g|webp)$/i.test(relativePath) && relativePath.toLowerCase().startsWith('images/')) {
+            const blob = await zipEntry.async('blob');
+            const dataUrl = await fileToDataUrl(blob);
+            const fileName = relativePath.split('/').pop() || '';
+            const { tag, attributes } = parseImageFileName(fileName, relativePath);
+            newImages.push({ tag, attributes, fileName, filePath: relativePath, dataUrl });
+        }
       }
       
       setDirectoryHandle(null);
       setDirtyBlockIds(new Set());
+      setImages(newImages);
       
       const preliminaryAnalysis = performRenpyAnalysis(newBlocks);
       const laidOutBlocks = tidyUpLayout(newBlocks, preliminaryAnalysis.links);
@@ -659,6 +691,63 @@ const App: React.FC = () => {
   }, []);
   
   const handleRefreshAnalysis = () => setAnalysisTrigger(c => c + 1);
+  
+  const handleImageDrop = useCallback((blockId: string, imageTag: string, x: number, y: number) => {
+    setImageDropContext({ visible: true, x, y, blockId, imageTag });
+  }, []);
+
+  const handleInsertImageCode = useCallback((type: 'scene' | 'show') => {
+    if (!imageDropContext) return;
+    const { blockId, imageTag } = imageDropContext;
+    
+    const targetBlock = liveBlocks.find(b => b.id === blockId);
+    if (!targetBlock) return;
+
+    const lineToAdd = `    ${type} ${imageTag}`;
+    const newContent = targetBlock.content + '\n' + lineToAdd;
+    
+    const newBlocks = liveBlocks.map(b => b.id === blockId ? { ...b, content: newContent } : b);
+    commitChange({ blocks: newBlocks, groups: liveGroups }, [blockId]);
+
+    setImageDropContext(null);
+  }, [imageDropContext, liveBlocks, liveGroups, commitChange]);
+  
+  const handleImportImages = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    if (!directoryHandle) {
+        alert("Please open a project folder first to import images directly into it.");
+        return;
+    }
+
+    try {
+        const imagesDir = await directoryHandle.getDirectoryHandle('images', { create: true });
+        const newImages: RenpyImage[] = [...images];
+
+        for (const file of files) {
+            const newFileHandle = await imagesDir.getFileHandle(file.name, { create: true });
+            const writable = await newFileHandle.createWritable();
+            await writable.write(file);
+            await writable.close();
+            
+            const dataUrl = await fileToDataUrl(file);
+            const filePath = `images/${file.name}`;
+            const { tag, attributes } = parseImageFileName(file.name, filePath);
+            
+            // Avoid duplicates
+            const existingIndex = newImages.findIndex(img => img.filePath === filePath);
+            if (existingIndex > -1) newImages[existingIndex] = { tag, attributes, fileName: file.name, filePath, dataUrl };
+            else newImages.push({ tag, attributes, fileName: file.name, filePath, dataUrl });
+        }
+        setImages(newImages);
+    } catch (err) {
+        console.error("Error importing images:", err);
+        alert("Could not import images. You may need to grant file system permissions again.");
+    } finally {
+        if(imageImportInputRef.current) imageImportInputRef.current.value = "";
+    }
+  };
+
 
   const editingBlock = liveBlocks.find(b => b.id === editingBlockId);
   
@@ -742,6 +831,7 @@ const App: React.FC = () => {
             onInteractionEnd={onInteractionEnd}
             deleteBlock={(id) => deleteBlocks([id])}
             onOpenEditor={handleOpenEditor}
+            onImageDrop={handleImageDrop}
             selectedBlockIds={selectedBlockIds}
             setSelectedBlockIds={setSelectedBlockIds}
             selectedGroupIds={selectedGroupIds}
@@ -761,8 +851,29 @@ const App: React.FC = () => {
             variables={analysisResult.variables}
             onAddVariable={handleAddVariable}
             onFindVariableUsages={handleFindVariableUsages}
+            images={images}
+            onImportImages={() => imageImportInputRef.current?.click()}
+            isFileSystemApiSupported={isFileSystemApiSupported && !!directoryHandle}
+        />
+        <input
+            type="file"
+            ref={imageImportInputRef}
+            style={{ display: 'none' }}
+            accept="image/png, image/jpeg, image/webp"
+            multiple
+            onChange={handleImportImages}
         />
       </main>
+
+       {imageDropContext?.visible && (
+        <ImageContextMenu
+          x={imageDropContext.x}
+          y={imageDropContext.y}
+          imageTag={imageDropContext.imageTag}
+          onSelect={handleInsertImageCode}
+          onClose={() => setImageDropContext(null)}
+        />
+      )}
 
       {editingBlock && (
         <EditorModal
@@ -781,6 +892,7 @@ const App: React.FC = () => {
           confirmText="Clear Canvas"
           onConfirm={() => {
             commitChange({ blocks: [], groups: [] });
+            setImages([]);
             setIsClearConfirmVisible(false);
             setDirectoryHandle(null);
             setDirtyBlockIds(new Set());

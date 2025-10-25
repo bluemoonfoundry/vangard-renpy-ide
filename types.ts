@@ -38,6 +38,20 @@ export interface Variable {
   line: number;
 }
 
+export interface RenpyImage {
+  tag: string; // "bg park" or "eileen happy"
+  attributes: string[]; // ["park"] or ["happy"]
+  fileName: string; // "park.jpg" or "eileen_happy.png"
+  filePath: string; // "images/bg/park.jpg"
+  dataUrl: string; // "data:image/jpeg;base64,..."
+}
+
+export interface ImageGroup {
+  name: string; // "bg" or "characters/eileen"
+  images: RenpyImage[];
+}
+
+
 export interface VariableUsage {
   blockId: string;
   line: number;

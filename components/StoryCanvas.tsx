@@ -14,6 +14,7 @@ interface StoryCanvasProps {
   onInteractionEnd: () => void;
   deleteBlock: (id: string) => void;
   onOpenEditor: (id: string) => void;
+  onImageDrop: (blockId: string, imageTag: string, clientX: number, clientY: number) => void;
   selectedBlockIds: string[];
   setSelectedBlockIds: (ids: string[] | ((prev: string[]) => string[])) => void;
   selectedGroupIds: string[];
@@ -134,7 +135,7 @@ type InteractionState =
   | { type: 'resizing-block'; block: Block; }
   | { type: 'resizing-group'; group: BlockGroup; };
 
-const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResult, updateBlock, updateGroup, updateBlockPositions, updateGroupPositions, onInteractionEnd, deleteBlock, onOpenEditor, selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, findUsagesHighlightIds, clearFindUsages, dirtyBlockIds }) => {
+const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResult, updateBlock, updateGroup, updateBlockPositions, updateGroupPositions, onInteractionEnd, deleteBlock, onOpenEditor, onImageDrop, selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, findUsagesHighlightIds, clearFindUsages, dirtyBlockIds }) => {
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [rubberBandRect, setRubberBandRect] = useState<Rect | null>(null);
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
@@ -545,6 +546,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
               updateBlock={updateBlock}
               deleteBlock={deleteBlock}
               onOpenEditor={onOpenEditor}
+              onImageDrop={onImageDrop}
               isSelected={selectedBlockIds.includes(block.id)}
               isDragging={isDraggingSelection && selectedBlockIds.includes(block.id)}
               isRoot={analysisResult.rootBlockIds.has(block.id)}

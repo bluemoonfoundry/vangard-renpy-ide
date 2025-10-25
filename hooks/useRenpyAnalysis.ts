@@ -4,10 +4,10 @@ import type { Block, Link, RenpyAnalysisResult, LabelLocation, JumpLocation, Cha
 const LABEL_REGEX = /^\s*label\s+([a-zA-Z0-9_]+):/;
 const JUMP_CALL_REGEX = /\b(jump|call)\s+([a-zA-Z0-9_]+)/g;
 const MENU_REGEX = /^\s*menu:/;
-const CHARACTER_REGEX = /^\s*define\s+([a-zA-Z0-9_]+)\s*=\s*Character\s*\(\s*['"](.+?)['"](.*?)\)/;
 const COLOR_REGEX = /color\s*=\s*['"](#?[a-zA-Z0-9]+)['"]/;
 const DIALOGUE_REGEX = /^\s*([a-zA-Z0-9_]+)\s+"/;
-const DEFINE_DEFAULT_REGEX = /^\s*(define|default)\s+([a-zA-Z0-9_.]+)\s*=\s*(.+)/;
+// This regex now uses a negative lookahead `(?!Character\s*\()` to specifically exclude lines that are Character definitions.
+const DEFINE_DEFAULT_REGEX = /^\s*(define|default)\s+([a-zA-Z0-9_.]+)\s*=\s*(?!Character\s*\()(.+)/;
 
 
 const PALETTE = [
@@ -43,6 +43,21 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
 
   // First pass: find all labels, characters, and variable definitions
   blocks.forEach(block => {
+    // Find Characters first from the whole content to support multiline definitions
+    const CHARACTER_REGEX_G = /^\s*define\s+([a-zA-Z0-9_]+)\s*=\s*Character\s*\(\s*['"](.+?)['"]([\s\S]*?)\)/gm;
+    for (const match of block.content.matchAll(CHARACTER_REGEX_G)) {
+      const args = match[3];
+      const colorMatch = args.match(COLOR_REGEX);
+      const character: Character = {
+        tag: match[1],
+        name: match[2],
+        color: colorMatch ? colorMatch[1] : stringToColor(match[1]),
+        definedInBlockId: block.id,
+      };
+      result.characters.set(character.tag, character);
+    }
+    
+    // Then process line-by-line for labels and variables
     let isFirstLabelInBlock = true;
     const lines = block.content.split('\n');
     lines.forEach((line, index) => {
@@ -64,20 +79,7 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
         }
       }
       
-      // Find Characters
-      const charMatch = line.match(CHARACTER_REGEX);
-      if (charMatch) {
-        const colorMatch = charMatch[3].match(COLOR_REGEX);
-        const character: Character = {
-          tag: charMatch[1],
-          name: charMatch[2],
-          color: colorMatch ? colorMatch[1] : stringToColor(charMatch[1]),
-          definedInBlockId: block.id,
-        };
-        result.characters.set(character.tag, character);
-      }
-
-      // Find Variables
+      // Find Variables (which now correctly ignores Character definitions)
       const varMatch = line.match(DEFINE_DEFAULT_REGEX);
       if (varMatch) {
         const variable: Variable = {

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import type { Character, Variable } from '../types';
+import type { Character, Variable, RenpyImage } from '../types';
 import VariableManager from './VariableManager';
+import ImageManager from './ImageManager';
 
 interface StoryElementsPanelProps {
     isOpen: boolean;
@@ -14,6 +15,10 @@ interface StoryElementsPanelProps {
     variables: Map<string, Variable>;
     onAddVariable: (variable: Omit<Variable, 'definedInBlockId' | 'line'>) => void;
     onFindVariableUsages: (variableName: string) => void;
+    // Image props
+    images: RenpyImage[];
+    onImportImages: () => void;
+    isFileSystemApiSupported: boolean;
 }
 
 const CharacterEditor: React.FC<{
@@ -78,10 +83,15 @@ const CharacterEditor: React.FC<{
     );
 };
 
-const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({ isOpen, characters, characterUsage, onAddCharacter, onUpdateCharacter, onFindCharacterUsages, variables, onAddVariable, onFindVariableUsages }) => {
+const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({ 
+    isOpen, 
+    characters, characterUsage, onAddCharacter, onUpdateCharacter, onFindCharacterUsages, 
+    variables, onAddVariable, onFindVariableUsages,
+    images, onImportImages, isFileSystemApiSupported
+}) => {
     const [mode, setMode] = useState<'list' | 'add' | 'edit'>('list');
     const [editingChar, setEditingChar] = useState<Character | undefined>(undefined);
-    const [activeTab, setActiveTab] = useState<'characters' | 'variables'>('characters');
+    const [activeTab, setActiveTab] = useState<'characters' | 'variables' | 'images'>('characters');
     
     const characterList = Array.from(characters.values());
 
@@ -97,7 +107,8 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({ isOpen, charact
 
     if (!isOpen) return null;
 
-    const TabButton: React.FC<{ tabName: 'characters' | 'variables'; label: string }> = ({ tabName, label }) => (
+    type TabName = 'characters' | 'variables' | 'images';
+    const TabButton: React.FC<{ tabName: TabName; label: string }> = ({ tabName, label }) => (
         <button
             onClick={() => setActiveTab(tabName)}
             className={`px-4 py-2 text-sm font-bold rounded-md transition-colors ${activeTab === tabName ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
@@ -116,6 +127,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({ isOpen, charact
                 <div className="flex items-center space-x-2">
                     <TabButton tabName="characters" label="Characters" />
                     <TabButton tabName="variables" label="Variables" />
+                    <TabButton tabName="images" label="Images" />
                 </div>
             </div>
 
@@ -176,6 +188,13 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({ isOpen, charact
                         variables={variables}
                         onAddVariable={onAddVariable}
                         onFindUsages={onFindVariableUsages}
+                    />
+                )}
+                {activeTab === 'images' && (
+                    <ImageManager 
+                        images={images}
+                        onImportImages={onImportImages}
+                        isImportEnabled={isFileSystemApiSupported}
                     />
                 )}
             </div>
