@@ -5,7 +5,6 @@ import ImageManager from './ImageManager';
 import AudioManager from './AudioManager';
 
 interface StoryElementsPanelProps {
-    isOpen: boolean;
     // Character props
     characters: Map<string, Character>;
     characterUsage: Map<string, number>;
@@ -88,7 +87,6 @@ const CharacterEditor: React.FC<{
 };
 
 const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({ 
-    isOpen, 
     characters, characterUsage, onAddCharacter, onUpdateCharacter, onFindCharacterUsages, 
     variables, onAddVariable, onFindVariableUsages,
     images, onImportImages,
@@ -111,8 +109,6 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
         setEditingChar(undefined);
     };
 
-    if (!isOpen) return null;
-
     type TabName = 'characters' | 'variables' | 'images' | 'audio';
     const TabButton: React.FC<{ tabName: TabName; label: string }> = ({ tabName, label }) => (
         <button
@@ -124,7 +120,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     );
 
     return (
-        <aside className="w-96 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col z-10">
+        <aside className="w-full h-full bg-white dark:bg-gray-800 flex flex-col z-10">
             <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                 <h2 className="text-xl font-bold">Story Elements</h2>
             </div>

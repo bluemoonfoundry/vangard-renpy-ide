@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import StoryCanvas from './components/StoryCanvas';
 import EditorModal from './components/EditorModal';
@@ -136,6 +137,7 @@ const App: React.FC = () => {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   const saveTimeoutRef = useRef<number | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(384);
   const [findUsagesHighlightIds, setFindUsagesHighlightIds] = useState<Set<string> | null>(null);
   const [directoryHandle, setDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [dirtyBlockIds, setDirtyBlockIds] = useState<Set<string>>(new Set());
@@ -787,6 +789,31 @@ const App: React.FC = () => {
     }
   };
 
+  const handleResizeStart = useCallback((startEvent: React.PointerEvent) => {
+    startEvent.preventDefault();
+    document.body.style.cursor = 'ew-resize';
+    const startX = startEvent.clientX;
+    const startWidth = sidebarWidth;
+    const MIN_SIDEBAR_WIDTH = 320;
+    const MAX_SIDEBAR_WIDTH = 800;
+
+    const handleMouseMove = (moveEvent: PointerEvent) => {
+        const dx = moveEvent.clientX - startX;
+        const newWidth = startWidth - dx; // Dragging left increases width
+        const clampedWidth = Math.max(MIN_SIDEBAR_WIDTH, Math.min(newWidth, MAX_SIDEBAR_WIDTH));
+        setSidebarWidth(clampedWidth);
+    };
+
+    const handleMouseUp = () => {
+        document.body.style.cursor = '';
+        window.removeEventListener('pointermove', handleMouseMove);
+        window.removeEventListener('pointerup', handleMouseUp);
+    };
+
+    window.addEventListener('pointermove', handleMouseMove);
+    window.addEventListener('pointerup', handleMouseUp);
+  }, [sidebarWidth]);
+
 
   const editingBlock = liveBlocks.find(b => b.id === editingBlockId);
   
@@ -879,22 +906,31 @@ const App: React.FC = () => {
             dirtyBlockIds={dirtyBlockIds}
           />
         </div>
-        <StoryElementsPanel 
-            isOpen={isSidebarOpen}
-            characters={analysisResult.characters}
-            characterUsage={analysisResult.characterUsage}
-            onAddCharacter={handleAddCharacter}
-            onUpdateCharacter={handleUpdateCharacter}
-            onFindCharacterUsages={handleFindCharacterUsages}
-            variables={analysisResult.variables}
-            onAddVariable={handleAddVariable}
-            onFindVariableUsages={handleFindVariableUsages}
-            images={images}
-            onImportImages={() => imageImportInputRef.current?.click()}
-            audios={audios}
-            onImportAudios={() => audioImportInputRef.current?.click()}
-            isFileSystemApiSupported={isFileSystemApiSupported && !!directoryHandle}
-        />
+        {isSidebarOpen && (
+            <>
+                <div 
+                    className="flex-shrink-0 w-1.5 cursor-ew-resize bg-gray-200 dark:bg-gray-700 hover:bg-indigo-500 active:bg-indigo-600 transition-colors duration-200 select-none"
+                    onPointerDown={handleResizeStart}
+                ></div>
+                <div className="flex-shrink-0" style={{ width: `${sidebarWidth}px` }}>
+                    <StoryElementsPanel 
+                        characters={analysisResult.characters}
+                        characterUsage={analysisResult.characterUsage}
+                        onAddCharacter={handleAddCharacter}
+                        onUpdateCharacter={handleUpdateCharacter}
+                        onFindCharacterUsages={handleFindCharacterUsages}
+                        variables={analysisResult.variables}
+                        onAddVariable={handleAddVariable}
+                        onFindVariableUsages={handleFindVariableUsages}
+                        images={images}
+                        onImportImages={() => imageImportInputRef.current?.click()}
+                        audios={audios}
+                        onImportAudios={() => audioImportInputRef.current?.click()}
+                        isFileSystemApiSupported={isFileSystemApiSupported && !!directoryHandle}
+                    />
+                </div>
+            </>
+        )}
         <input
             type="file"
             ref={imageImportInputRef}
