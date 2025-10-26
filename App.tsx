@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import StoryCanvas from './components/StoryCanvas';
 import EditorModal from './components/EditorModal';
@@ -258,7 +259,18 @@ const App: React.FC = () => {
     if (definitionBlock) {
       dirtyIds.add(definitionBlock.id);
       const oldDefRegex = new RegExp(`^\\s*define\\s+${oldTag}\\s*=\\s*Character\\s*\\(.*?\\)$`, "m");
-      const newDefString = `define ${newChar.tag} = Character('${newChar.name}', color="${newChar.color}")`;
+      
+      const args = [`'${newChar.name}'`];
+      if (newChar.color) {
+          args.push(`color="${newChar.color}"`);
+      }
+      if (newChar.otherArgs) {
+          Object.entries(newChar.otherArgs).forEach(([key, value]) => {
+              args.push(`${key}=${value}`);
+          });
+      }
+      const newDefString = `define ${newChar.tag} = Character(${args.join(', ')})`;
+
       const newContent = definitionBlock.content.replace(oldDefRegex, newDefString);
       newBlocks = newBlocks.map(b => b.id === definitionBlock.id ? { ...b, content: newContent } : b);
     }

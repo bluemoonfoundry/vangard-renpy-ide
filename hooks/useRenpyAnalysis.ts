@@ -4,7 +4,6 @@ import type { Block, Link, RenpyAnalysisResult, LabelLocation, JumpLocation, Cha
 const LABEL_REGEX = /^\s*label\s+([a-zA-Z0-9_]+):/;
 const JUMP_CALL_REGEX = /\b(jump|call)\s+([a-zA-Z0-9_]+)/g;
 const MENU_REGEX = /^\s*menu:/;
-const COLOR_REGEX = /color\s*=\s*['"](#?[a-zA-Z0-9]+)['"]/;
 const DIALOGUE_REGEX = /^\s*([a-zA-Z0-9_]+)\s+"/;
 // This regex now uses a negative lookahead `(?!Character\s*\()` to specifically exclude lines that are Character definitions.
 const DEFINE_DEFAULT_REGEX = /^\s*(define|default)\s+([a-zA-Z0-9_.]+)\s*=\s*(?!Character\s*\()(.+)/;
@@ -23,6 +22,47 @@ const stringToColor = (str: string) => {
   }
   return PALETTE[Math.abs(hash) % PALETTE.length];
 };
+
+function parseCharacterArgs(argsString: string): { positional: string[]; kwargs: Record<string, string> } {
+  const args: string[] = [];
+  let parenLevel = 0;
+  let inString: false | '"' | "'" = false;
+  let currentArg = '';
+  for (let i = 0; i < argsString.length; i++) {
+    const char = argsString[i];
+    if (inString) {
+      if (char === inString && argsString[i-1] !== '\\') {
+        inString = false;
+      }
+    } else {
+      if (char === '"' || char === "'") inString = char;
+      if (char === '(') parenLevel++;
+      if (char === ')') parenLevel--;
+    }
+    
+    if (char === ',' && parenLevel === 0 && !inString) {
+      args.push(currentArg.trim());
+      currentArg = '';
+    } else {
+      currentArg += char;
+    }
+  }
+  args.push(currentArg.trim());
+
+  const positional: string[] = [];
+  const kwargs: Record<string, string> = {};
+
+  for (const arg of args.filter(a => a)) {
+    const match = arg.match(/^\s*([a-zA-Z0-9_]+)\s*=\s*([\s\S]+)\s*$/);
+    if (match) {
+      kwargs[match[1]] = match[2];
+    } else {
+      positional.push(arg);
+    }
+  }
+
+  return { positional, kwargs };
+}
 
 export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
   const result: RenpyAnalysisResult = {
@@ -44,17 +84,31 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
   // First pass: find all labels, characters, and variable definitions
   blocks.forEach(block => {
     // Find Characters first from the whole content to support multiline definitions
-    const CHARACTER_REGEX_G = /^\s*define\s+([a-zA-Z0-9_]+)\s*=\s*Character\s*\(\s*['"](.+?)['"]([\s\S]*?)\)/gm;
+    const CHARACTER_REGEX_G = /^\s*define\s+([a-zA-Z0-9_]+)\s*=\s*Character\s*\(([\s\S]*?)\)/gm;
     for (const match of block.content.matchAll(CHARACTER_REGEX_G)) {
-      const args = match[3];
-      const colorMatch = args.match(COLOR_REGEX);
-      const character: Character = {
-        tag: match[1],
-        name: match[2],
-        color: colorMatch ? colorMatch[1] : stringToColor(match[1]),
-        definedInBlockId: block.id,
-      };
-      result.characters.set(character.tag, character);
+        const tag = match[1];
+        const argsString = match[2];
+        const { positional, kwargs } = parseCharacterArgs(argsString);
+
+        const rawName = kwargs.name || (positional.length > 0 ? positional[0] : null);
+        const name = (rawName && rawName.toLowerCase() !== 'none') ? rawName.replace(/['"]/g, '') : tag;
+        const color = kwargs.color ? kwargs.color.replace(/['"]/g, '') : null;
+
+        const otherArgs: Record<string, string> = {};
+        Object.entries(kwargs).forEach(([key, value]) => {
+            if (key !== 'name' && key !== 'color') {
+                otherArgs[key] = value;
+            }
+        });
+
+        const character: Character = {
+            tag,
+            name,
+            color: color || stringToColor(tag),
+            definedInBlockId: block.id,
+            otherArgs,
+        };
+        result.characters.set(character.tag, character);
     }
     
     // Then process line-by-line for labels and variables

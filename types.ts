@@ -28,6 +28,7 @@ export interface Character {
   tag: string;
   color: string;
   definedInBlockId: string;
+  otherArgs?: Record<string, string>;
 }
 
 export interface Variable {

@@ -49,13 +49,15 @@ const CharacterEditor: React.FC<{
             setTagError('This tag is already in use.');
             return;
         }
+        
+        const finalChar: Character = {
+            ...(isEditing && character ? character : { definedInBlockId: '', otherArgs: {} }),
+            name: name.trim() || 'Unnamed',
+            tag: tag,
+            color: color,
+        };
 
-        onSave({ 
-            name: name.trim() || 'Unnamed', 
-            tag, 
-            color, 
-            definedInBlockId: character?.definedInBlockId || ''
-        }, character?.tag);
+        onSave(finalChar, character?.tag);
     };
 
     React.useEffect(() => {
@@ -147,9 +149,9 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                                     {characterList.map((char: Character) => {
                                         const usage = characterUsage.get(char.tag) || 0;
                                         return (
-                                            <li key={char.tag} className="p-2 rounded-md bg-gray-50 dark:bg-gray-700/50 flex items-center justify-between">
-                                                <div className="flex items-center space-x-3 min-w-0">
-                                                    <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: char.color }} />
+                                            <li key={char.tag} className="p-2 rounded-md bg-gray-50 dark:bg-gray-700/50 flex items-start justify-between">
+                                                <div className="flex items-start space-x-3 min-w-0">
+                                                    <div className="w-4 h-4 rounded-full flex-shrink-0 mt-1" style={{ backgroundColor: char.color }} />
                                                     <div className="flex-grow min-w-0">
                                                         <div className="flex items-center space-x-2">
                                                             <p className="font-semibold truncate" title={char.name}>{char.name}</p>
@@ -158,6 +160,15 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                                                             </span>
                                                         </div>
                                                         <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">{char.tag}</p>
+                                                        {char.otherArgs && Object.keys(char.otherArgs).length > 0 && (
+                                                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex flex-wrap gap-x-2 gap-y-1">
+                                                                {Object.entries(char.otherArgs).map(([key, value]) => (
+                                                                    <div key={key} className="font-mono bg-gray-200 dark:bg-gray-600 rounded px-1.5 py-0.5" title={`${key}=${value}`}>
+                                                                        <span className="font-semibold">{key}</span>=<span className="opacity-80 truncate">{value}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center space-x-1 flex-shrink-0">
