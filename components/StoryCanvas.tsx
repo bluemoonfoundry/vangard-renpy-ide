@@ -13,7 +13,7 @@ interface StoryCanvasProps {
   updateGroupPositions: (updates: { id: string, position: Position }[]) => void;
   onInteractionEnd: () => void;
   deleteBlock: (id: string) => void;
-  onOpenEditor: (id: string) => void;
+  onOpenEditor: (id: string, line?: number) => void;
   selectedBlockIds: string[];
   setSelectedBlockIds: (ids: string[] | ((prev: string[]) => string[])) => void;
   selectedGroupIds: string[];
@@ -21,6 +21,8 @@ interface StoryCanvasProps {
   findUsagesHighlightIds: Set<string> | null;
   clearFindUsages: () => void;
   dirtyBlockIds: Set<string>;
+  canvasFilters: { story: boolean; screens: boolean };
+  setCanvasFilters: React.Dispatch<React.SetStateAction<{ story: boolean; screens: boolean }>>;
 }
 
 const getBlockById = (blocks: Block[], id: string) => blocks.find(b => b.id === id);
@@ -134,7 +136,7 @@ type InteractionState =
   | { type: 'resizing-block'; block: Block; }
   | { type: 'resizing-group'; group: BlockGroup; };
 
-const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResult, updateBlock, updateGroup, updateBlockPositions, updateGroupPositions, onInteractionEnd, deleteBlock, onOpenEditor, selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, findUsagesHighlightIds, clearFindUsages, dirtyBlockIds }) => {
+const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResult, updateBlock, updateGroup, updateBlockPositions, updateGroupPositions, onInteractionEnd, deleteBlock, onOpenEditor, selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, findUsagesHighlightIds, clearFindUsages, dirtyBlockIds, canvasFilters, setCanvasFilters }) => {
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [rubberBandRect, setRubberBandRect] = useState<Rect | null>(null);
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
@@ -142,7 +144,14 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
   const canvasRef = useRef<HTMLDivElement>(null);
   const interactionState = useRef<InteractionState>({ type: 'idle' });
   const pointerStartPos = useRef<Position>({ x: 0, y: 0 });
-  const [flashingBlockId, setFlashingBlockId] = useState<string | null>(null);
+
+  const screenBlockIds = useMemo(() => {
+    const ids = new Set<string>();
+    analysisResult.screens.forEach(screen => {
+      ids.add(screen.definedInBlockId);
+    });
+    return ids;
+  }, [analysisResult.screens]);
 
   const adjacencyMap = useMemo(() => {
     const adj = new Map<string, string[]>();
@@ -197,26 +206,11 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
     };
   }, [transform.x, transform.y, transform.scale]);
 
-  const handleNavigateToBlock = useCallback((target: LabelLocation) => {
-    if (!canvasRef.current) return;
-    const targetBlock = getBlockById(blocks, target.blockId);
-    if (!targetBlock) return;
-    setFlashingBlockId(target.blockId);
-    setTimeout(() => setFlashingBlockId(null), 1500);
-    const rect = canvasRef.current.getBoundingClientRect();
-    const newScale = 1;
-    const targetX = targetBlock.position.x + targetBlock.width / 2;
-    const targetY = targetBlock.position.y + targetBlock.height / 2;
-    const newX = rect.width / 2 - targetX * newScale;
-    const newY = rect.height / 2 - targetY * newScale;
-    setTransform({ x: newX, y: newY, scale: newScale });
-  }, [blocks]);
-
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     const targetEl = e.target as HTMLElement;
     
-    if (targetEl.closest('.arrow-interaction-group')) {
+    if (targetEl.closest('.arrow-interaction-group') || targetEl.closest('.filter-panel')) {
       return;
     }
 
@@ -421,7 +415,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
   };
   
   const handleWheel = (e: React.WheelEvent) => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || (e.target as HTMLElement).closest('.filter-panel')) return;
     e.preventDefault();
     const rect = canvasRef.current.getBoundingClientRect();
     const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -441,14 +435,31 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
     backgroundPosition: `${transform.x}px ${transform.y}px`,
   };
   
+  const visibleBlocks = useMemo(() => {
+    return blocks.filter(block => {
+        const isScreen = screenBlockIds.has(block.id);
+        if (isScreen && canvasFilters.screens) return true;
+        if (!isScreen && canvasFilters.story) return true;
+        return false;
+    });
+  }, [blocks, canvasFilters, screenBlockIds]);
+
+  const visibleBlockIds = useMemo(() => new Set(visibleBlocks.map(b => b.id)), [visibleBlocks]);
+
+  const visibleLinks = useMemo(() => {
+      return analysisResult.links.filter(link => 
+          visibleBlockIds.has(link.sourceId) && visibleBlockIds.has(link.targetId)
+      );
+  }, [analysisResult.links, visibleBlockIds]);
+
   const svgBounds = useMemo(() => {
-    if (blocks.length === 0) {
+    if (visibleBlocks.length === 0) {
       return { top: 0, left: 0, width: 0, height: 0 };
     }
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
-    blocks.forEach(block => {
+    visibleBlocks.forEach(block => {
       minX = Math.min(minX, block.position.x);
       minY = Math.min(minY, block.position.y);
       maxX = Math.max(maxX, block.position.x + block.width);
@@ -463,7 +474,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
       width: (maxX - minX) + PADDING * 2,
       height: (maxY - minY) + PADDING * 2,
     };
-  }, [blocks]);
+  }, [visibleBlocks]);
 
   return (
     <div
@@ -473,6 +484,18 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
       onPointerDown={handlePointerDown}
       onWheel={handleWheel}
     >
+        <div className="filter-panel absolute top-4 right-4 z-20 bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 flex flex-col space-y-2">
+            <h4 className="text-sm font-semibold text-center px-2">View Filters</h4>
+            <label className="flex items-center space-x-2 cursor-pointer text-sm">
+                <input type="checkbox" checked={canvasFilters.story} onChange={e => setCanvasFilters(f => ({ ...f, story: e.target.checked }))} className="h-4 w-4 rounded focus:ring-indigo-500" style={{ accentColor: 'rgb(79 70 229)' }} />
+                <span>Story Blocks</span>
+            </label>
+            <label className="flex items-center space-x-2 cursor-pointer text-sm">
+                <input type="checkbox" checked={canvasFilters.screens} onChange={e => setCanvasFilters(f => ({ ...f, screens: e.target.checked }))} className="h-4 w-4 rounded focus:ring-teal-500" style={{ accentColor: 'rgb(13 148 136)' }} />
+                <span>Screen Blocks</span>
+            </label>
+        </div>
+
       <div
         className="absolute top-0 left-0"
         style={{
@@ -504,7 +527,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
             </marker>
           </defs>
           <g transform={`translate(${-svgBounds.left}, ${-svgBounds.top})`}>
-            {analysisResult.links.map((link, index) => {
+            {visibleLinks.map((link, index) => {
               const sourceBlock = getBlockById(blocks, link.sourceId);
               const targetBlock = getBlockById(blocks, link.targetId);
               if (!sourceBlock || !targetBlock) return null;
@@ -531,17 +554,16 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
           );
         })}
 
-        {blocks.map((block) => {
+        {visibleBlocks.map((block) => {
           const isDimmed = (highlightedPath !== null && !highlightedPath.has(block.id)) || 
                           (findUsagesHighlightIds !== null && !findUsagesHighlightIds.has(block.id));
           const isUsageHighlighted = findUsagesHighlightIds?.has(block.id) ?? false;
+          const isScreenBlock = screenBlockIds.has(block.id);
           return (
             <CodeBlock
               key={block.id}
               block={block}
               analysisResult={analysisResult}
-              flashingBlockId={flashingBlockId}
-              onNavigateToBlock={handleNavigateToBlock}
               updateBlock={updateBlock}
               deleteBlock={deleteBlock}
               onOpenEditor={onOpenEditor}
@@ -553,6 +575,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
               isDimmed={isDimmed}
               isUsageHighlighted={isUsageHighlighted}
               isDirty={dirtyBlockIds.has(block.id)}
+              isScreenBlock={isScreenBlock}
             />
           );
         })}

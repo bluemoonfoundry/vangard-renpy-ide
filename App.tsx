@@ -1,14 +1,13 @@
 
 
-
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import StoryCanvas from './components/StoryCanvas';
-import EditorModal from './components/EditorModal';
+import EditorView from './components/EditorView';
 import ConfirmModal from './components/ConfirmModal';
 import StoryElementsPanel from './components/StoryElementsPanel';
 import { useRenpyAnalysis, performRenpyAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
-import type { Block, Position, BlockGroup, Link, Character, Variable, RenpyImage, RenpyAudio } from './types';
+import type { Block, Position, BlockGroup, Link, Character, Variable, RenpyImage, RenpyAudio, EditorTab, RenpyScreen } from './types';
 import JSZip from 'jszip';
 
 // Add all necessary FS API types to the global scope to fix compilation issues
@@ -55,6 +54,7 @@ const SAVE_KEY_GROUPS = 'renpy-visual-editor-groups';
 
 function uuidv4() {
   return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c =>
+    // FIX: Corrected typo from UintArray to Uint8Array
     (Number(c) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(c) / 4).toString(16)
   );
 }
@@ -125,10 +125,8 @@ const App: React.FC = () => {
     setLiveGroups(historyState.groups);
   }, [historyState]);
 
-  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
-  const [initialScrollLine, setInitialScrollLine] = useState<number | undefined>(undefined);
   const [theme, setTheme] = useState<Theme>('system');
   const [isClearConfirmVisible, setIsClearConfirmVisible] = useState(false);
   const [analysisTrigger, setAnalysisTrigger] = useState(0);
@@ -148,8 +146,21 @@ const App: React.FC = () => {
   const [audios, setAudios] = useState<RenpyAudio[]>([]);
   const imageImportInputRef = useRef<HTMLInputElement>(null);
   const audioImportInputRef = useRef<HTMLInputElement>(null);
+  const [openTabs, setOpenTabs] = useState<EditorTab[]>([{ id: 'canvas', type: 'canvas' }]);
+  const [activeTabId, setActiveTabId] = useState<string>('canvas');
+  const [dirtyEditors, setDirtyEditors] = useState<Set<string>>(new Set());
+  const [saveTrigger, setSaveTrigger] = useState(0);
+  const [canvasFilters, setCanvasFilters] = useState({ story: true, screens: true });
 
   const analysisResult = useRenpyAnalysis(liveBlocks, analysisTrigger);
+
+  const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId) ?? openTabs[0], [openTabs, activeTabId]);
+  const activeEditorBlock = useMemo(() => {
+    if (activeTab?.type === 'editor') {
+      return liveBlocks.find(b => b.id === activeTab.blockId);
+    }
+    return undefined;
+  }, [activeTab, liveBlocks]);
 
   const commitChange = useCallback((newState: AppState, dirtyIds: string[] = []) => {
     setLiveBlocks(newState.blocks);
@@ -205,11 +216,81 @@ const App: React.FC = () => {
         return newDirty;
     });
     setSelectedBlockIds([]);
+    // Also close any open tabs for deleted blocks
+    setOpenTabs(tabs => tabs.filter(t => t.blockId ? !ids.includes(t.blockId) : true));
+
   }, [liveBlocks, liveGroups, commitChange]);
+
+  const handleOpenEditorTab = useCallback((blockId: string, line?: number) => {
+    const existingTab = openTabs.find(t => t.blockId === blockId);
+    if (existingTab) {
+        setActiveTabId(existingTab.id);
+        if (line) {
+            setOpenTabs(tabs => tabs.map(t => 
+                t.id === existingTab.id ? { ...t, scrollRequest: { line, key: Date.now() } } : t
+            ));
+        }
+    } else {
+        const newTab: EditorTab = { id: blockId, type: 'editor', blockId };
+        if (line) {
+            newTab.scrollRequest = { line, key: Date.now() };
+        }
+        setOpenTabs(tabs => [...tabs, newTab]);
+        setActiveTabId(newTab.id);
+    }
+  }, [openTabs]);
+
+  const handleCloseTab = (tabIdToClose: string) => {
+      const blockId = openTabs.find(t => t.id === tabIdToClose)?.blockId;
+      if (blockId && dirtyEditors.has(blockId)) {
+        if (!window.confirm("This tab has unsaved changes. Are you sure you want to close it? Changes will be lost.")) {
+            return;
+        }
+      }
+
+      const tabIndex = openTabs.findIndex(t => t.id === tabIdToClose);
+      if (tabIndex === -1) return;
+
+      if (activeTabId === tabIdToClose) {
+          const nextTab = openTabs[tabIndex - 1] || openTabs.find(t => t.id !== tabIdToClose);
+          setActiveTabId(nextTab ? nextTab.id : 'canvas');
+      }
+
+      setOpenTabs(tabs => tabs.filter(t => t.id !== tabIdToClose));
+      if (blockId) {
+        setDirtyEditors(prev => {
+            const newDirty = new Set(prev);
+            newDirty.delete(blockId);
+            return newDirty;
+        });
+      }
+  };
   
-  const handleOpenEditor = useCallback((id: string, line?: number) => {
-    setEditingBlockId(id);
-    setInitialScrollLine(line);
+  const handleSaveActiveEditor = useCallback(() => {
+    if (activeTab?.type === 'editor') {
+      setSaveTrigger(t => t + 1);
+    }
+  }, [activeTab]);
+
+  const handleSaveBlockContent = useCallback((blockId: string, content: string) => {
+    if (liveBlocks.find(b => b.id === blockId)?.content === content) return;
+
+    const newBlocks = liveBlocks.map((block) => block.id === blockId ? { ...block, content } : block );
+    commitChange({ blocks: newBlocks, groups: liveGroups }, [blockId]);
+    setDirtyEditors(prev => {
+      const newDirty = new Set(prev);
+      newDirty.delete(blockId);
+      return newDirty;
+    });
+  }, [liveBlocks, liveGroups, commitChange]);
+
+  const handleEditorDirtyChange = useCallback((blockId: string, isDirty: boolean) => {
+    setDirtyEditors(prev => {
+        const newDirty = new Set(prev);
+        if (isDirty) newDirty.add(blockId);
+        else newDirty.delete(blockId);
+        return newDirty;
+    });
   }, []);
 
   const addBlock = useCallback(() => {
@@ -223,25 +304,45 @@ const App: React.FC = () => {
     commitChange({ blocks: [...liveBlocks, newBlock], groups: liveGroups }, [newBlock.id]);
     setSelectedBlockIds([newBlock.id]);
     setSelectedGroupIds([]);
-  }, [liveBlocks, liveGroups, commitChange]);
+    handleOpenEditorTab(newBlock.id);
+  }, [liveBlocks, liveGroups, commitChange, handleOpenEditorTab]);
 
   const handleAddCharacter = useCallback((char: Omit<Character, 'definedInBlockId'>) => {
-    const definitionString = `define ${char.tag} = Character('${char.name}', color="${char.color}")`;
-    let definitionsBlock = liveBlocks.find(b => b.title?.toLowerCase().includes('definitions'));
+    const args = [`'${char.name}'`];
+    if (char.color) {
+        args.push(`color="${char.color}"`);
+    }
+    if (char.otherArgs) {
+        Object.entries(char.otherArgs).forEach(([key, value]) => {
+            args.push(`${key}=${value}`);
+        });
+    }
+    
+    let definitionString = `define ${char.tag} = Character(${args.join(', ')})`;
+    if (char.profile) {
+      definitionString = `# profile: ${char.profile}\n${definitionString}`;
+    }
+
+    let charactersBlock = liveBlocks.find(b => b.filePath === 'characters.rpy');
     let newBlocks = [...liveBlocks];
     let dirtyId: string;
 
-    if (definitionsBlock) {
-      dirtyId = definitionsBlock.id;
+    if (charactersBlock) {
+      dirtyId = charactersBlock.id;
       newBlocks = newBlocks.map(b => 
-        b.id === definitionsBlock!.id
-          ? { ...b, content: b.content + '\n' + definitionString }
+        b.id === charactersBlock!.id
+          ? { ...b, content: b.content.trim() + '\n\n' + definitionString }
           : b
       );
     } else {
       const newBlock: Block = {
-        id: uuidv4(), title: "Character Definitions", content: definitionString,
-        position: { x: 20, y: 20 }, width: 350, height: 100,
+        id: uuidv4(),
+        title: "Characters",
+        content: definitionString,
+        position: { x: 20, y: 20 },
+        width: 350,
+        height: 100,
+        filePath: 'characters.rpy',
       };
       dirtyId = newBlock.id;
       newBlocks.push(newBlock);
@@ -258,7 +359,7 @@ const App: React.FC = () => {
     const definitionBlock = newBlocks.find(b => b.id === oldChar.definedInBlockId);
     if (definitionBlock) {
       dirtyIds.add(definitionBlock.id);
-      const oldDefRegex = new RegExp(`^\\s*define\\s+${oldTag}\\s*=\\s*Character\\s*\\(.*?\\)$`, "m");
+      const oldDefRegex = new RegExp(`(?:^\\s*#\\s*profile:.*$\\r?\\n)?^\\s*define\\s+${oldTag}\\s*=\\s*Character\\s*\\(.*?\\)$`, "m");
       
       const args = [`'${newChar.name}'`];
       if (newChar.color) {
@@ -269,7 +370,11 @@ const App: React.FC = () => {
               args.push(`${key}=${value}`);
           });
       }
-      const newDefString = `define ${newChar.tag} = Character(${args.join(', ')})`;
+      
+      let newDefString = `define ${newChar.tag} = Character(${args.join(', ')})`;
+      if (newChar.profile) {
+          newDefString = `# profile: ${newChar.profile}\n${newDefString}`;
+      }
 
       const newContent = definitionBlock.content.replace(oldDefRegex, newDefString);
       newBlocks = newBlocks.map(b => b.id === definitionBlock.id ? { ...b, content: newContent } : b);
@@ -278,7 +383,7 @@ const App: React.FC = () => {
     if (oldTag !== newChar.tag) {
       const dialogueLineRegex = new RegExp(`^(\\s*)(${oldTag})(\\s+((?:".*?")|(?:'.*?')))$`, "gm");
       newBlocks = newBlocks.map(b => {
-        // FIX: Corrected typo from `dialogdialogueLineRegex` to `dialogueLineRegex`.
+        // FIX: Corrected typo from dialogialogueLineRegex to dialogueLineRegex
         if (b.content.match(dialogueLineRegex)) {
           dirtyIds.add(b.id);
           return { ...b, content: b.content.replace(dialogueLineRegex, `$1${newChar.tag}$3`) };
@@ -295,6 +400,7 @@ const App: React.FC = () => {
       if (lines.some(line => line.tag === tag)) blockIds.add(blockId);
     }
     setFindUsagesHighlightIds(blockIds);
+    setActiveTabId('canvas');
   }, [analysisResult.dialogueLines]);
   
   const handleAddVariable = useCallback((variable: Omit<Variable, 'definedInBlockId' | 'line'>) => {
@@ -324,7 +430,34 @@ const App: React.FC = () => {
     const usages = analysisResult.variableUsages.get(variableName) || [];
     usages.forEach(usage => blockIds.add(usage.blockId));
     setFindUsagesHighlightIds(blockIds);
+    setActiveTabId('canvas');
   }, [analysisResult.variables, analysisResult.variableUsages]);
+
+  const handleAddScreen = useCallback((screenName: string) => {
+    const screenContent = `screen ${screenName}():\n    # Add screen language statements here.\n    frame:\n        xalign 0.5\n        yalign 0.5\n        vbox:\n            spacing 10\n            text "Screen: ${screenName}"\n            textbutton "Return" action Return()`;
+
+    const newBlock: Block = {
+        id: uuidv4(),
+        title: `Screen: ${screenName}`,
+        content: screenContent,
+        position: { x: 40, y: 40 },
+        width: 350,
+        height: 200,
+        filePath: `screens/${screenName}.rpy`,
+    };
+    
+    commitChange({ blocks: [...liveBlocks, newBlock], groups: liveGroups }, [newBlock.id]);
+    setSelectedBlockIds([newBlock.id]);
+    setSelectedGroupIds([]);
+    handleOpenEditorTab(newBlock.id);
+  }, [liveBlocks, liveGroups, commitChange, handleOpenEditorTab]);
+
+  const handleFindScreenDefinition = useCallback((screenName: string) => {
+      const screen = analysisResult.screens.get(screenName);
+      if (screen) {
+          handleOpenEditorTab(screen.definedInBlockId, screen.line);
+      }
+  }, [analysisResult.screens, handleOpenEditorTab]);
 
     const updateBlock = useCallback((id: string, newBlockData: Partial<Block>) => {
     const newBlocks = liveBlocks.map((block) =>
@@ -344,6 +477,7 @@ const App: React.FC = () => {
 
       if (isCtrlOrCmd && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); } 
       else if (isCtrlOrCmd && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); } 
+      else if (isCtrlOrCmd && e.key.toLowerCase() === 's') { e.preventDefault(); handleSaveActiveEditor(); }
       else if ((selectedBlockIds.length > 0 || selectedGroupIds.length > 0) && (e.key === 'Delete' || e.key === 'Backspace')) {
         e.preventDefault();
         if (selectedBlockIds.length > 0) deleteBlocks(selectedBlockIds);
@@ -352,7 +486,7 @@ const App: React.FC = () => {
             commitChange({ blocks: liveBlocks, groups: newGroups });
             setSelectedGroupIds([]);
         }
-      } else if (selectedBlockIds.length === 1 && e.key === 'f') { e.preventDefault(); handleOpenEditor(selectedBlockIds[0]); } 
+      } else if (selectedBlockIds.length === 1 && e.key === 'f') { e.preventDefault(); handleOpenEditorTab(selectedBlockIds[0]); } 
       else if (e.key === 'n') { e.preventDefault(); addBlock(); } 
       else if (e.key === 'g' && !e.shiftKey) {
           e.preventDefault();
@@ -390,7 +524,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedBlockIds, selectedGroupIds, deleteBlocks, handleOpenEditor, addBlock, liveBlocks, liveGroups, commitChange, undo, redo]);
+  }, [selectedBlockIds, selectedGroupIds, deleteBlocks, handleOpenEditorTab, addBlock, liveBlocks, liveGroups, commitChange, undo, redo, handleSaveActiveEditor]);
 
   const toggleTheme = () => {
     const themes: Theme[] = ['system', 'light', 'dark'];
@@ -577,13 +711,20 @@ const App: React.FC = () => {
                 await writable.close();
                 successfullySavedIds.add(blockId);
             } else {
-                const title = block.title || analysisResult.firstLabels[block.id] || `RenPy_Block_${block.id.slice(0, 8)}`;
-                const filename = `${title.replace(/[^a-z0-9_-]/gi, '_')}.rpy`;
-                const newFileHandle = await directoryHandle.getFileHandle(filename, { create: true });
+                const filename = block.filePath || `${(block.title || analysisResult.firstLabels[block.id] || `RenPy_Block_${block.id.slice(0, 8)}`).replace(/[^a-z0-9_-]/gi, '_')}.rpy`;
+                const pathParts = filename.split('/');
+                let currentDir = directoryHandle;
+                // Create subdirectories if they don't exist
+                for (let i = 0; i < pathParts.length - 1; i++) {
+                    currentDir = await currentDir.getDirectoryHandle(pathParts[i], { create: true });
+                }
+                const newFileHandle = await currentDir.getFileHandle(pathParts[pathParts.length - 1], { create: true });
+                
                 const writable = await newFileHandle.createWritable();
                 await writable.write(block.content);
                 await writable.close();
-                updatedBlocks[blockIndex] = { ...block, fileHandle: newFileHandle };
+                
+                updatedBlocks[blockIndex] = { ...block, fileHandle: newFileHandle, filePath: filename };
                 successfullySavedIds.add(blockId);
             }
         } catch (err) {
@@ -711,24 +852,6 @@ const App: React.FC = () => {
     }
   }, [liveBlocks, liveGroups, setHistory, historyState.blocks]);
 
-  const handleCloseEditor = useCallback(() => {
-    setEditingBlockId(null);
-    setInitialScrollLine(undefined);
-  }, []);
-
-  const handleSaveAndCloseEditor = useCallback((content: string) => {
-    if (editingBlockId) {
-       const newBlocks = liveBlocks.map((block) => block.id === editingBlockId ? { ...block, content } : block );
-      commitChange({ blocks: newBlocks, groups: liveGroups }, [editingBlockId]);
-    }
-    handleCloseEditor();
-  }, [editingBlockId, liveBlocks, liveGroups, commitChange, handleCloseEditor]);
-
-  const handleSwitchFocusBlock = useCallback((blockId: string, line: number) => {
-    setEditingBlockId(blockId);
-    setInitialScrollLine(line);
-  }, []);
-  
   const handleRefreshAnalysis = () => setAnalysisTrigger(c => c + 1);
   
   const handleImportImages = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -825,9 +948,6 @@ const App: React.FC = () => {
     window.addEventListener('pointermove', handleMouseMove);
     window.addEventListener('pointerup', handleMouseUp);
   }, [sidebarWidth]);
-
-
-  const editingBlock = liveBlocks.find(b => b.id === editingBlockId);
   
   const ThemeIcon = () => {
     if (theme === 'light') return <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
@@ -897,26 +1017,76 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-grow flex relative">
-        <div className="flex-grow relative">
-          <StoryCanvas
-            blocks={liveBlocks}
-            groups={liveGroups}
-            analysisResult={analysisResult}
-            updateBlock={updateBlock}
-            updateGroup={updateGroup}
-            updateBlockPositions={updateBlockPositions}
-            updateGroupPositions={updateGroupPositions}
-            onInteractionEnd={onInteractionEnd}
-            deleteBlock={(id) => deleteBlocks([id])}
-            onOpenEditor={handleOpenEditor}
-            selectedBlockIds={selectedBlockIds}
-            setSelectedBlockIds={setSelectedBlockIds}
-            selectedGroupIds={selectedGroupIds}
-            setSelectedGroupIds={setSelectedGroupIds}
-            findUsagesHighlightIds={findUsagesHighlightIds}
-            clearFindUsages={() => setFindUsagesHighlightIds(null)}
-            dirtyBlockIds={dirtyBlockIds}
-          />
+        <div className="flex-grow flex flex-col relative">
+           <div role="tablist" className="flex-shrink-0 flex items-center bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+             {openTabs.map(tab => {
+                const block = tab.blockId ? liveBlocks.find(b => b.id === tab.blockId) : null;
+                const title = tab.type === 'canvas' ? 'Story Canvas' : (block?.title || analysisResult.firstLabels[block!.id] || block?.filePath || "Untitled Block");
+                const isTabActive = tab.id === activeTabId;
+                const isTabDirty = tab.blockId ? dirtyEditors.has(tab.blockId) : false;
+
+                return (
+                   <button 
+                     key={tab.id} 
+                     role="tab"
+                     aria-selected={isTabActive}
+                     onClick={() => setActiveTabId(tab.id)}
+                     className={`flex items-center space-x-2 px-4 py-2 text-sm border-r border-gray-200 dark:border-gray-700 transition-colors duration-150 ${isTabActive ? 'bg-white dark:bg-gray-800 font-semibold' : 'bg-transparent hover:bg-gray-200 dark:hover:bg-gray-800/50 text-gray-600 dark:text-gray-400'}`}
+                   >
+                     <span className="truncate" title={title}>{title}{isTabDirty && '*'}</span>
+                     {tab.type === 'editor' && (
+                       <button
+                         onClick={(e) => { e.stopPropagation(); handleCloseTab(tab.id); }}
+                         className="p-0.5 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600"
+                         aria-label={`Close tab ${title}`}
+                       >
+                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                       </button>
+                     )}
+                   </button>
+                );
+             })}
+           </div>
+           <div className="flex-grow relative min-h-0">
+             {activeTab?.type === 'canvas' && (
+                <StoryCanvas
+                  blocks={liveBlocks}
+                  groups={liveGroups}
+                  analysisResult={analysisResult}
+                  updateBlock={updateBlock}
+                  updateGroup={updateGroup}
+                  updateBlockPositions={updateBlockPositions}
+                  updateGroupPositions={updateGroupPositions}
+                  onInteractionEnd={onInteractionEnd}
+                  deleteBlock={(id) => deleteBlocks([id])}
+                  onOpenEditor={handleOpenEditorTab}
+                  selectedBlockIds={selectedBlockIds}
+                  setSelectedBlockIds={setSelectedBlockIds}
+                  selectedGroupIds={selectedGroupIds}
+                  setSelectedGroupIds={setSelectedGroupIds}
+                  findUsagesHighlightIds={findUsagesHighlightIds}
+                  clearFindUsages={() => setFindUsagesHighlightIds(null)}
+                  dirtyBlockIds={dirtyBlockIds}
+                  canvasFilters={canvasFilters}
+                  setCanvasFilters={setCanvasFilters}
+                />
+             )}
+             {activeTab?.type === 'editor' && activeEditorBlock && (
+               <div className="absolute inset-0">
+                 <EditorView
+                    key={activeEditorBlock.id}
+                    block={activeEditorBlock}
+                    analysisResult={analysisResult}
+                    onSave={handleSaveBlockContent}
+                    onSwitchFocusBlock={handleOpenEditorTab}
+                    onDirtyChange={handleEditorDirtyChange}
+                    editorTheme={effectiveTheme}
+                    saveTrigger={saveTrigger}
+                    initialScrollRequest={activeTab.scrollRequest}
+                 />
+               </div>
+             )}
+           </div>
         </div>
         {isSidebarOpen && (
             <>
@@ -934,6 +1104,9 @@ const App: React.FC = () => {
                         variables={analysisResult.variables}
                         onAddVariable={handleAddVariable}
                         onFindVariableUsages={handleFindVariableUsages}
+                        screens={analysisResult.screens}
+                        onAddScreen={handleAddScreen}
+                        onFindScreenDefinition={handleFindScreenDefinition}
                         images={images}
                         onImportImages={() => imageImportInputRef.current?.click()}
                         audios={audios}
@@ -961,17 +1134,6 @@ const App: React.FC = () => {
         />
       </main>
 
-       {editingBlock && (
-        <EditorModal
-          block={editingBlock}
-          analysisResult={analysisResult}
-          initialScrollLine={initialScrollLine}
-          onSwitchFocusBlock={handleSwitchFocusBlock}
-          onSave={handleSaveAndCloseEditor}
-          onClose={handleCloseEditor}
-          editorTheme={effectiveTheme}
-        />
-      )}
       {isClearConfirmVisible && (
         <ConfirmModal
           title="Clear Canvas"
@@ -983,7 +1145,8 @@ const App: React.FC = () => {
             setIsClearConfirmVisible(false);
             setDirectoryHandle(null);
             setDirtyBlockIds(new Set());
-            // Clear local storage as well
+            setOpenTabs([{ id: 'canvas', type: 'canvas' }]);
+            setActiveTabId('canvas');
             localStorage.removeItem(SAVE_KEY_BLOCKS);
             localStorage.removeItem(SAVE_KEY_GROUPS);
           }}

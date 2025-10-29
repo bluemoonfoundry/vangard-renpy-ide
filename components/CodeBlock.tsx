@@ -4,8 +4,6 @@ import type { Block, RenpyAnalysisResult, LabelLocation } from '../types';
 interface CodeBlockProps {
   block: Block;
   analysisResult: RenpyAnalysisResult;
-  flashingBlockId: string | null;
-  onNavigateToBlock: (target: LabelLocation) => void;
   updateBlock: (id: string, newBlockData: Partial<Block>) => void;
   deleteBlock: (id: string) => void;
   onOpenEditor: (id: string) => void;
@@ -17,13 +15,12 @@ interface CodeBlockProps {
   isDimmed: boolean;
   isUsageHighlighted: boolean;
   isDirty: boolean;
+  isScreenBlock: boolean;
 }
 
 const CodeBlock: React.FC<CodeBlockProps> = ({ 
   block, 
   analysisResult, 
-  flashingBlockId,
-  onNavigateToBlock,
   updateBlock, 
   deleteBlock, 
   onOpenEditor,
@@ -35,6 +32,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
   isDimmed,
   isUsageHighlighted,
   isDirty,
+  isScreenBlock,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
@@ -94,26 +92,31 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
   const lineCount = useMemo(() => block.content.split('\n').length, [block.content]);
   
   const hasInvalidJumps = blockInvalidJumps.length > 0;
-  const isFlashing = flashingBlockId === block.id;
 
   const borderClass = isSelected 
-    ? 'border-indigo-500 dark:border-indigo-400' 
+    ? isScreenBlock ? 'border-teal-500 dark:border-teal-400' : 'border-indigo-500 dark:border-indigo-400' 
     : isUsageHighlighted
     ? 'border-sky-500 dark:border-sky-400'
     : hasInvalidJumps 
     ? 'border-red-500' 
+    : isScreenBlock
+    ? 'border-teal-500/50 dark:border-teal-400/50'
     : 'border-gray-200 dark:border-gray-700';
   
   const shadowClass = isDragging
-    ? 'shadow-indigo-500/50'
+    ? isScreenBlock ? 'shadow-teal-500/50' : 'shadow-indigo-500/50'
     : isUsageHighlighted
     ? 'shadow-sky-500/50'
     : '';
 
+  const headerClass = isScreenBlock
+    ? 'bg-teal-100 dark:bg-teal-900/50'
+    : 'bg-gray-100 dark:bg-gray-700';
+
   return (
     <div
       data-block-id={block.id}
-      className={`code-block-wrapper absolute bg-white dark:bg-gray-800 rounded-lg shadow-2xl border-2 ${borderClass} ${shadowClass} flex flex-col transition-all duration-200 ${isFlashing ? 'flash-block' : ''} ${isDimmed ? 'opacity-30' : ''}`}
+      className={`code-block-wrapper absolute bg-white dark:bg-gray-800 rounded-lg shadow-2xl border-2 ${borderClass} ${shadowClass} flex flex-col transition-all duration-200 ${isDimmed ? 'opacity-30' : ''}`}
       style={{
         left: block.position.x,
         top: block.position.y,
@@ -123,9 +126,10 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
       }}
       onDoubleClick={() => onOpenEditor(block.id)}
     >
-      <div className="drag-handle h-8 bg-gray-100 dark:bg-gray-700 rounded-t-md flex items-center px-3 justify-between cursor-grab">
+      <div className={`drag-handle h-8 ${headerClass} rounded-t-md flex items-center px-3 justify-between cursor-grab`}>
         <div className="flex items-center space-x-2 flex-grow min-w-0">
           <div className="flex items-center space-x-1 flex-shrink-0">
+            {isScreenBlock && <div title="Screen Block"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-teal-500" viewBox="0 0 20 20" fill="currentColor"><path d="M3.5 2A1.5 1.5 0 002 3.5v9A1.5 1.5 0 003.5 14h9a1.5 1.5 0 001.5-1.5v-9A1.5 1.5 0 0012.5 2h-9zM4 4.5a.5.5 0 01.5-.5h7a.5.5 0 01.5.5v2a.5.5 0 01-.5.5h-7a.5.5 0 01-.5-.5v-2zM4.5 9a.5.5 0 00-.5.5v2a.5.5 0 00.5.5h7a.5.5 0 00.5-.5v-2a.5.5 0 00-.5-.5h-7z" /></svg></div>}
             {isRoot && <div title="Root Block (Story Start)"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg></div>}
             {isBranching && <div title="Branching Block (Menu/Multiple Jumps)"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500" viewBox="0 0 20 20" fill="currentColor"><path d="M15 4a1 1 0 00-1.447-.894l-5 2.5a1 1 0 000 1.789l5 2.5A1 1 0 0015 9V4zM5 4a1 1 0 00-1.447-.894l-5 2.5a1 1 0 000 1.789l5 2.5A1 1 0 005 9V4z" opacity=".5"/><path d="M15 11a1 1 0 00-1.447-.894l-5 2.5a1 1 0 000 1.789l5 2.5A1 1 0 0015 16v-5z" /></svg></div>}
             {isLeaf && <div title="Leaf Block (Story End)"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg></div>}
@@ -140,13 +144,13 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
           </div>
         </div>
         <div className="flex items-center space-x-2 pl-2 flex-shrink-0">
-           <button onClick={() => onOpenEditor(block.id)} className="text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white" title="Focus Mode"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 0h-4m4 0l-5-5" /></svg></button>
+           <button onClick={() => onOpenEditor(block.id)} className="text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white" title="Open in Tab"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-1 1h-2a1 1 0 01-1-1v-3.586L3.293 6.707A1 1 0 013 6V3zm3.146 2.146a.5.5 0 01.708 0l2.5 2.5a.5.5 0 010 .708l-2.5 2.5a.5.5 0 01-.708-.708L7.793 8 6.146 6.354a.5.5 0 010-.708z" clipRule="evenodd" /></svg></button>
            <button onClick={() => deleteBlock(block.id)} className="text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white" title="Delete Block"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
         </div>
       </div>
       <div
         className="flex-grow p-3 text-sm text-gray-700 dark:text-gray-300 space-y-2 overflow-y-auto cursor-pointer"
-        title="Double-click to edit"
+        title="Double-click to open in a new tab"
       >
         {blockLabels.length > 0 && (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

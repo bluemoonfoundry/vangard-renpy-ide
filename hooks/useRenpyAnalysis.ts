@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
-import type { Block, Link, RenpyAnalysisResult, LabelLocation, JumpLocation, Character, DialogueLine, Variable, VariableUsage } from '../types';
+import type { Block, Link, RenpyAnalysisResult, LabelLocation, JumpLocation, Character, DialogueLine, Variable, VariableUsage, RenpyScreen } from '../types';
 
 const LABEL_REGEX = /^\s*label\s+([a-zA-Z0-9_]+):/;
 const JUMP_CALL_REGEX = /\b(jump|call)\s+([a-zA-Z0-9_]+)/g;
 const MENU_REGEX = /^\s*menu:/;
 const DIALOGUE_REGEX = /^\s*([a-zA-Z0-9_]+)\s+"/;
+const SCREEN_REGEX = /^\s*screen\s+([a-zA-Z0-9_]+)\s*(\(.*\))?:/;
 // This regex now uses a negative lookahead `(?!Character\s*\()` to specifically exclude lines that are Character definitions.
 const DEFINE_DEFAULT_REGEX = /^\s*(define|default)\s+([a-zA-Z0-9_.]+)\s*=\s*(?!Character\s*\()(.+)/;
 
@@ -79,6 +80,7 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
     characterUsage: new Map(),
     variables: new Map(),
     variableUsages: new Map(),
+    screens: new Map(),
   };
 
   // First pass: find all labels, characters, and variable definitions
@@ -93,6 +95,19 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
         const rawName = kwargs.name || (positional.length > 0 ? positional[0] : null);
         const name = (rawName && rawName.toLowerCase() !== 'none') ? rawName.replace(/['"]/g, '') : tag;
         const color = kwargs.color ? kwargs.color.replace(/['"]/g, '') : null;
+        
+        let profile: string | undefined;
+        if (match.index > 0) {
+            const precedingContent = block.content.substring(0, match.index);
+            const precedingLines = precedingContent.split('\n');
+            let lastLine = precedingLines.pop()?.trim();
+            while (lastLine === '' && precedingLines.length > 0) {
+              lastLine = precedingLines.pop()?.trim();
+            }
+            if (lastLine && lastLine.startsWith('# profile:')) {
+              profile = lastLine.substring('# profile:'.length).trim();
+            }
+        }
 
         const otherArgs: Record<string, string> = {};
         Object.entries(kwargs).forEach(([key, value]) => {
@@ -105,6 +120,7 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
             tag,
             name,
             color: color || stringToColor(tag),
+            profile,
             definedInBlockId: block.id,
             otherArgs,
         };
@@ -131,6 +147,18 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
           result.firstLabels[block.id] = labelName;
           isFirstLabelInBlock = false;
         }
+      }
+
+      // Find Screens
+      const screenMatch = line.match(SCREEN_REGEX);
+      if (screenMatch) {
+          const screen: RenpyScreen = {
+              name: screenMatch[1],
+              parameters: screenMatch[2] ? screenMatch[2].trim() : '',
+              definedInBlockId: block.id,
+              line: index + 1,
+          };
+          result.screens.set(screen.name, screen);
       }
       
       // Find Variables (which now correctly ignores Character definitions)

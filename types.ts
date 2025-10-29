@@ -27,6 +27,7 @@ export interface Character {
   name: string;
   tag: string;
   color: string;
+  profile?: string;
   definedInBlockId: string;
   otherArgs?: Record<string, string>;
 }
@@ -35,6 +36,13 @@ export interface Variable {
   name: string;
   type: 'define' | 'default';
   initialValue: string;
+  definedInBlockId: string;
+  line: number;
+}
+
+export interface RenpyScreen {
+  name: string;
+  parameters: string;
   definedInBlockId: string;
   line: number;
 }
@@ -110,4 +118,15 @@ export interface RenpyAnalysisResult {
   // Variable analysis
   variables: Map<string, Variable>;
   variableUsages: Map<string, VariableUsage[]>;
+  // Screen analysis
+  screens: Map<string, RenpyScreen>;
+}
+
+// Defines an open tab in the main editor view
+export interface EditorTab {
+  id: string; // unique ID for the tab, can be block.id or 'canvas'
+  type: 'canvas' | 'editor';
+  blockId?: string;
+  // Used to trigger a scroll-to-line event in the editor component
+  scrollRequest?: { line: number; key: number };
 }
