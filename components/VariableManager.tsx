@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import type { Variable, RenpyAnalysisResult } from '../types';
 
@@ -75,6 +76,7 @@ const VariableManager: React.FC<VariableManagerProps> = ({ analysisResult, onAdd
         if (!filterStoryVars) {
             return allVars;
         }
+        // FIX: Add explicit type for `v` in filter to resolve `unknown` type error.
         return allVars.filter((v: Variable) => storyBlockIds.has(v.definedInBlockId));
     }, [variables, filterStoryVars, storyBlockIds]);
 
@@ -87,6 +89,7 @@ const VariableManager: React.FC<VariableManagerProps> = ({ analysisResult, onAdd
                 grouped.defaulted.push(variable);
             }
         }
+        // FIX: Add explicit types for `a` and `b` in sort to resolve `unknown` type error.
         grouped.defined.sort((a: Variable, b: Variable) => a.name.localeCompare(b.name));
         grouped.defaulted.sort((a: Variable, b: Variable) => a.name.localeCompare(b.name));
         return grouped;

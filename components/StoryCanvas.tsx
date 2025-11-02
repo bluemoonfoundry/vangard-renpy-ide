@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import CodeBlock from './CodeBlock';
 import GroupContainer from './GroupContainer';
 import type { Block, Position, RenpyAnalysisResult, LabelLocation, BlockGroup, Link } from '../types';
@@ -21,8 +21,9 @@ interface StoryCanvasProps {
   findUsagesHighlightIds: Set<string> | null;
   clearFindUsages: () => void;
   dirtyBlockIds: Set<string>;
-  canvasFilters: { story: boolean; screens: boolean };
-  setCanvasFilters: React.Dispatch<React.SetStateAction<{ story: boolean; screens: boolean }>>;
+  canvasFilters: { story: boolean; screens: boolean; config: boolean };
+  setCanvasFilters: React.Dispatch<React.SetStateAction<{ story: boolean; screens: boolean; config: boolean }>>;
+  centerOnBlockRequest: { blockId: string, key: number } | null;
 }
 
 const getBlockById = (blocks: Block[], id: string) => blocks.find(b => b.id === id);
@@ -136,7 +137,7 @@ type InteractionState =
   | { type: 'resizing-block'; block: Block; }
   | { type: 'resizing-group'; group: BlockGroup; };
 
-const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResult, updateBlock, updateGroup, updateBlockPositions, updateGroupPositions, onInteractionEnd, deleteBlock, onOpenEditor, selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, findUsagesHighlightIds, clearFindUsages, dirtyBlockIds, canvasFilters, setCanvasFilters }) => {
+const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResult, updateBlock, updateGroup, updateBlockPositions, updateGroupPositions, onInteractionEnd, deleteBlock, onOpenEditor, selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, findUsagesHighlightIds, clearFindUsages, dirtyBlockIds, canvasFilters, setCanvasFilters, centerOnBlockRequest }) => {
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [rubberBandRect, setRubberBandRect] = useState<Rect | null>(null);
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
@@ -144,6 +145,35 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
   const canvasRef = useRef<HTMLDivElement>(null);
   const interactionState = useRef<InteractionState>({ type: 'idle' });
   const pointerStartPos = useRef<Position>({ x: 0, y: 0 });
+  const [flashingBlockId, setFlashingBlockId] = useState<string | null>(null);
+  const lastHandledRequestKey = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!centerOnBlockRequest || !canvasRef.current) return;
+    if (centerOnBlockRequest.key === lastHandledRequestKey.current) return;
+
+    const { blockId } = centerOnBlockRequest;
+    const block = getBlockById(blocks, blockId);
+    const canvasEl = canvasRef.current;
+
+    if (block && canvasEl) {
+        const canvasRect = canvasEl.getBoundingClientRect();
+        const targetX = block.position.x + block.width / 2;
+        const targetY = block.position.y + block.height / 2;
+
+        const newX = (canvasRect.width / 2) - (targetX * transform.scale);
+        const newY = (canvasRect.height / 2) - (targetY * transform.scale);
+        
+        setTransform(t => ({ ...t, x: newX, y: newY }));
+
+        setFlashingBlockId(blockId);
+        const timer = setTimeout(() => setFlashingBlockId(null), 1500);
+        
+        lastHandledRequestKey.current = centerOnBlockRequest.key;
+
+        return () => clearTimeout(timer);
+    }
+  }, [centerOnBlockRequest, blocks, transform.scale]);
 
   const adjacencyMap = useMemo(() => {
     const adj = new Map<string, string[]>();
@@ -429,12 +459,16 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
   
   const visibleBlocks = useMemo(() => {
     return blocks.filter(block => {
+        const isStory = analysisResult.storyBlockIds.has(block.id);
         const isScreen = analysisResult.screenOnlyBlockIds.has(block.id);
+        const isConfig = analysisResult.configBlockIds.has(block.id);
+
+        if (isStory && canvasFilters.story) return true;
         if (isScreen && canvasFilters.screens) return true;
-        if (!isScreen && canvasFilters.story) return true;
+        if (isConfig && canvasFilters.config) return true;
         return false;
     });
-  }, [blocks, canvasFilters, analysisResult.screenOnlyBlockIds]);
+  }, [blocks, canvasFilters, analysisResult]);
 
   const visibleBlockIds = useMemo(() => new Set(visibleBlocks.map(b => b.id)), [visibleBlocks]);
 
@@ -485,6 +519,10 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
             <label className="flex items-center space-x-2 cursor-pointer text-sm">
                 <input type="checkbox" checked={canvasFilters.screens} onChange={e => setCanvasFilters(f => ({ ...f, screens: e.target.checked }))} className="h-4 w-4 rounded focus:ring-teal-500" style={{ accentColor: 'rgb(13 148 136)' }} />
                 <span>Screen Blocks</span>
+            </label>
+             <label className="flex items-center space-x-2 cursor-pointer text-sm">
+                <input type="checkbox" checked={canvasFilters.config} onChange={e => setCanvasFilters(f => ({ ...f, config: e.target.checked }))} className="h-4 w-4 rounded focus:ring-red-500" style={{ accentColor: 'rgb(239 68 68)' }} />
+                <span>Config Blocks</span>
             </label>
         </div>
 
@@ -551,6 +589,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
                           (findUsagesHighlightIds !== null && !findUsagesHighlightIds.has(block.id));
           const isUsageHighlighted = findUsagesHighlightIds?.has(block.id) ?? false;
           const isScreenBlock = analysisResult.screenOnlyBlockIds.has(block.id);
+          const isConfigBlock = analysisResult.configBlockIds.has(block.id);
           return (
             <CodeBlock
               key={block.id}
@@ -568,6 +607,8 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
               isUsageHighlighted={isUsageHighlighted}
               isDirty={dirtyBlockIds.has(block.id)}
               isScreenBlock={isScreenBlock}
+              isConfigBlock={isConfigBlock}
+              isFlashing={flashingBlockId === block.id}
             />
           );
         })}

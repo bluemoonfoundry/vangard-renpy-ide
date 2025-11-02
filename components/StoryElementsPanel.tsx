@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import type { Character, Variable, RenpyImage, RenpyAudio, RenpyScreen, RenpyAnalysisResult } from '../types';
+
+import React, { useState, useMemo } from 'react';
+import type { Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, RenpyScreen, RenpyAnalysisResult } from '../types';
 import VariableManager from './VariableManager';
 import ImageManager from './ImageManager';
 import AudioManager from './AudioManager';
@@ -18,9 +19,15 @@ interface StoryElementsPanelProps {
     // Screen callbacks
     onAddScreen: (screenName: string) => void;
     onFindScreenDefinition: (screenName: string) => void;
-    // Media props & callbacks
-    images: RenpyImage[];
-    onImportImages: () => void;
+    // Image props & callbacks
+    projectImages: Map<string, ProjectImage>;
+    imageMetadata: Map<string, ImageMetadata>;
+    scanDirectories: Map<string, FileSystemDirectoryHandle>;
+    onAddScanDirectory: () => void;
+    onCopyImagesToProject: (sourceFilePaths: string[]) => void;
+    onUpdateImageMetadata: (filePath: string, newMetadata: ImageMetadata) => void;
+    onOpenImageEditor: (filePath: string) => void;
+    // Audio props & callbacks
     audios: RenpyAudio[];
     onImportAudios: () => void;
     isFileSystemApiSupported: boolean;
@@ -117,23 +124,23 @@ const CharacterEditor: React.FC<{
             </div>
             <div>
                 <label className="text-sm font-medium">Profile / Notes</label>
-                <textarea value={profile} onChange={e => setProfile(e.target.value)} placeholder="A cheerful and optimistic young artist..." rows={3} className="w-full mt-1 p-2 rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500 text-sm"></textarea>
+                <textarea value={profile} onChange={e => setProfile(e.target.value)} placeholder="A cheerful and optimistic young artist..." rows={3} className="w-full mt-1 p-2 rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500" />
             </div>
-             <div>
-                <label className="text-sm font-medium">Additional Arguments</label>
+            <div>
+                <label className="text-sm font-medium">Other Arguments</label>
                 <div className="space-y-2 mt-1">
                     {otherArgs.map((arg) => (
                         <div key={arg.id} className="flex items-center space-x-2">
-                            <input type="text" value={arg.key} onChange={e => handleArgChange(arg.id, 'key', e.target.value)} placeholder="e.g., image" className="w-1/3 p-2 rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500 text-sm" />
+                            <input type="text" value={arg.key} onChange={e => handleArgChange(arg.id, 'key', e.target.value)} placeholder="key" className="w-1/3 p-2 rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm" />
                             <span className="text-gray-500">=</span>
-                            <input type="text" value={arg.value} onChange={e => handleArgChange(arg.id, 'value', e.target.value)} placeholder={'e.g., "eileen_side"'} className="flex-grow p-2 rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500 text-sm" />
-                            <button onClick={() => handleRemoveArg(arg.id)} className="p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full" title="Remove argument">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <input type="text" value={arg.value} onChange={e => handleArgChange(arg.id, 'value', e.target.value)} placeholder="value" className="flex-grow p-2 rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm" />
+                            <button onClick={() => handleRemoveArg(arg.id)} className="p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 12H6" /></svg>
                             </button>
                         </div>
                     ))}
-                    <button onClick={handleAddArg} className="px-3 py-1 text-sm text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded font-semibold">+ Add Argument</button>
                 </div>
+                <button onClick={handleAddArg} className="mt-2 text-sm text-indigo-600 dark:text-indigo-400 hover:underline">+ Add Argument</button>
             </div>
             <div className="flex justify-end space-x-2 pt-2">
                 <button onClick={onCancel} className="px-4 py-2 rounded bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-sm font-bold">Cancel</button>
@@ -143,123 +150,115 @@ const CharacterEditor: React.FC<{
     );
 };
 
-const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({ 
+type Tab = 'characters' | 'variables' | 'images' | 'audio' | 'screens' | 'snippets';
+
+const TabButton: React.FC<{
+  label: string;
+  count?: number;
+  isActive: boolean;
+  onClick: () => void;
+}> = ({ label, count, isActive, onClick }) => (
+  <button
+    onClick={onClick}
+    className={`flex-1 text-center py-2 px-1 text-sm font-semibold border-b-2 transition-colors duration-200 ${
+      isActive
+        ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+        : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100'
+    }`}
+  >
+    {label} {typeof count !== 'undefined' && `(${count})`}
+  </button>
+);
+
+const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     analysisResult,
-    onAddCharacter, onUpdateCharacter, onFindCharacterUsages, 
+    onAddCharacter, onUpdateCharacter, onFindCharacterUsages,
     onAddVariable, onFindVariableUsages,
     onAddScreen, onFindScreenDefinition,
-    images, onImportImages,
-    audios, onImportAudios,
-    isFileSystemApiSupported
+    projectImages, imageMetadata, onAddScanDirectory, scanDirectories, onCopyImagesToProject, onUpdateImageMetadata, onOpenImageEditor,
+    audios, onImportAudios, isFileSystemApiSupported,
 }) => {
-    type TabName = 'characters' | 'variables' | 'screens' | 'images' | 'audio' | 'snippets';
-
-    const { characters, characterUsage, screens } = analysisResult;
+    const [activeTab, setActiveTab] = useState<Tab>('characters');
+    const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
     const [mode, setMode] = useState<'list' | 'add' | 'edit'>('list');
-    const [editingChar, setEditingChar] = useState<Character | undefined>(undefined);
-    const [activeTab, setActiveTab] = useState<TabName>('characters');
-    
-    const characterList = Array.from(characters.values());
 
-    const handleSave = (char: Character, oldTag?: string) => {
-        if (mode === 'edit' && oldTag) {
-            onUpdateCharacter(oldTag, char);
-        } else {
-            onAddCharacter(char);
-        }
-        setMode('list');
-        setEditingChar(undefined);
+    const { characters, characterUsage } = analysisResult;
+    // FIX: Add explicit types for `a` and `b` in sort to resolve `unknown` type error.
+    const characterList = Array.from(characters.values()).sort((a: Character, b: Character) => a.name.localeCompare(b.name));
+
+    const handleEditCharacter = (char: Character) => {
+        setEditingCharacter(char);
+        setMode('edit');
     };
 
-    const TabButton: React.FC<{ tabName: TabName; label: string }> = ({ tabName, label }) => (
-        <button
-            onClick={() => setActiveTab(tabName)}
-            className={`px-4 py-2 text-sm font-bold rounded-md transition-colors ${activeTab === tabName ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-        >
-            {label}
-        </button>
-    );
+    const handleCancelEdit = () => {
+        setEditingCharacter(null);
+        setMode('list');
+    };
+
+    const handleSaveCharacter = (charData: Character, oldTag?: string) => {
+        if (mode === 'edit' && oldTag) {
+            onUpdateCharacter(oldTag, charData);
+        } else {
+            onAddCharacter(charData);
+        }
+        setMode('list');
+    };
 
     return (
-        <aside className="w-full h-full bg-white dark:bg-gray-800 flex flex-col z-10">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="h-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex flex-col">
+            <header className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
                 <h2 className="text-xl font-bold">Story Elements</h2>
-            </div>
-
-            <div className="p-2 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex items-center space-x-2 flex-wrap">
-                    <TabButton tabName="characters" label="Characters" />
-                    <TabButton tabName="variables" label="Variables" />
-                    <TabButton tabName="screens" label="Screens" />
-                    <TabButton tabName="images" label="Images" />
-                    <TabButton tabName="audio" label="Audio" />
-                    <TabButton tabName="snippets" label="Snippets" />
-                </div>
-            </div>
-
-            <div className="flex-grow p-4 space-y-4 overflow-y-auto">
+            </header>
+            <nav className="flex-shrink-0 flex border-b border-gray-200 dark:border-gray-700">
+                <TabButton label="Characters" count={characterList.length} isActive={activeTab === 'characters'} onClick={() => setActiveTab('characters')} />
+                <TabButton label="Variables" count={analysisResult.variables.size} isActive={activeTab === 'variables'} onClick={() => setActiveTab('variables')} />
+                <TabButton label="Images" count={projectImages.size} isActive={activeTab === 'images'} onClick={() => setActiveTab('images')} />
+                <TabButton label="Audio" count={audios.length} isActive={activeTab === 'audio'} onClick={() => setActiveTab('audio')} />
+                <TabButton label="Screens" count={analysisResult.screens.size} isActive={activeTab === 'screens'} onClick={() => setActiveTab('screens')} />
+                <TabButton label="Snippets" isActive={activeTab === 'snippets'} onClick={() => setActiveTab('snippets')} />
+            </nav>
+            <main className="flex-grow p-4 overflow-y-auto">
                 {activeTab === 'characters' && (
-                     <>
+                    <>
                         {mode === 'list' && (
-                            <>
+                            <div className="space-y-3">
                                 <div className="flex justify-between items-center">
                                     <h3 className="font-semibold">Characters ({characterList.length})</h3>
                                     <button onClick={() => setMode('add')} className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold">+ Add</button>
                                 </div>
                                 <ul className="space-y-2">
-                                    {characterList.map((char: Character) => {
-                                        const usage = characterUsage.get(char.tag) || 0;
-                                        return (
-                                            <li key={char.tag} className="p-2 rounded-md bg-gray-50 dark:bg-gray-700/50 flex flex-col">
-                                                <div className="w-full flex items-start justify-between">
-                                                    <div className="flex items-start space-x-3 min-w-0">
-                                                        <div className="w-4 h-4 rounded-full flex-shrink-0 mt-1" style={{ backgroundColor: char.color }} />
-                                                        <div className="flex-grow min-w-0">
-                                                            <div className="flex items-center space-x-2">
-                                                                <p className="font-semibold truncate" title={char.name}>{char.name}</p>
-                                                                <span className="flex-shrink-0 text-xs font-mono bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-full px-2 py-0.5">
-                                                                    {usage}
-                                                                </span>
-                                                            </div>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">{char.tag}</p>
-                                                            {char.otherArgs && Object.keys(char.otherArgs).length > 0 && (
-                                                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex flex-wrap gap-x-2 gap-y-1">
-                                                                    {Object.entries(char.otherArgs).map(([key, value]) => (
-                                                                        <div key={key} className="font-mono bg-gray-200 dark:bg-gray-600 rounded px-1.5 py-0.5" title={`${key}=${value}`}>
-                                                                            <span className="font-semibold">{key}</span>=<span className="opacity-80 truncate">{value}</span>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center space-x-1 flex-shrink-0">
-                                                        <button onClick={() => onFindCharacterUsages(char.tag)} title="Find Usages" className="p-1 text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 rounded">
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                                        </button>
-                                                        <button onClick={() => { setEditingChar(char); setMode('edit'); }} title="Edit" className="p-1 text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 rounded">
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" /></svg>
-                                                        </button>
-                                                    </div>
+                                    {/* FIX: Add explicit type for `char` in map to resolve `unknown` type error. */}
+                                    {characterList.map((char: Character) => (
+                                        <li key={char.tag} className="p-2 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                                            <div className="flex items-center space-x-3 min-w-0">
+                                                <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: char.color }}></div>
+                                                <div className="min-w-0">
+                                                    <p className="font-semibold truncate">{char.name}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 font-mono truncate">{char.tag}</p>
                                                 </div>
-                                                {char.profile && (
-                                                    <details className="w-full mt-2 text-sm">
-                                                        <summary className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none">Show Profile</summary>
-                                                        <p className="text-gray-700 dark:text-gray-300 mt-1 p-2 bg-gray-100 dark:bg-gray-600/50 rounded whitespace-pre-wrap">{char.profile}</p>
-                                                    </details>
-                                                )}
-                                            </li>
-                                        );
-                                    })}
+                                            </div>
+                                            <div className="flex items-center space-x-1 flex-shrink-0 pl-2">
+                                                <span className="text-xs text-gray-400 dark:text-gray-500 mr-2">({characterUsage.get(char.tag) || 0} lines)</span>
+                                                <button onClick={() => onFindCharacterUsages(char.tag)} title="Find Usages" className="p-1 text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 rounded">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                                </button>
+                                                <button onClick={() => handleEditCharacter(char)} title="Edit Character" className="p-1 text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 rounded">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" /></svg>
+                                                </button>
+                                            </div>
+                                        </li>
+                                    ))}
                                     {characterList.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No characters defined yet.</p>}
                                 </ul>
-                            </>
+                            </div>
                         )}
                         {(mode === 'add' || mode === 'edit') && (
                             <CharacterEditor
-                                character={editingChar}
-                                onSave={handleSave}
-                                onCancel={() => { setMode('list'); setEditingChar(undefined); }}
+                                character={editingCharacter || undefined}
+                                onSave={handleSaveCharacter}
+                                onCancel={handleCancelEdit}
+                                // FIX: Add explicit type for `c` in map to resolve `unknown` type error.
                                 existingTags={characterList.map((c: Character) => c.tag)}
                             />
                         )}
@@ -272,32 +271,37 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                         onFindUsages={onFindVariableUsages}
                     />
                 )}
-                {activeTab === 'screens' && (
-                    <ScreenManager
-                        screens={screens}
-                        onAddScreen={onAddScreen}
-                        onFindDefinition={onFindScreenDefinition}
-                    />
-                )}
                 {activeTab === 'images' && (
-                    <ImageManager 
-                        images={images}
-                        onImportImages={onImportImages}
-                        isImportEnabled={isFileSystemApiSupported}
+                    <ImageManager
+                        images={Array.from(projectImages.values())}
+                        metadata={imageMetadata}
+                        scanDirectories={Array.from(scanDirectories.keys())}
+                        onAddScanDirectory={onAddScanDirectory}
+                        onCopyImagesToProject={onCopyImagesToProject}
+                        onOpenImageEditor={onOpenImageEditor}
+                        isFileSystemApiSupported={isFileSystemApiSupported}
                     />
                 )}
                 {activeTab === 'audio' && (
-                    <AudioManager 
+                    <AudioManager
                         audios={audios}
                         onImportAudios={onImportAudios}
                         isImportEnabled={isFileSystemApiSupported}
                     />
                 )}
+                {activeTab === 'screens' && (
+                    <ScreenManager
+                        screens={analysisResult.screens}
+                        onAddScreen={onAddScreen}
+                        // FIX: Pass the correct prop `onFindScreenDefinition` to `onFindDefinition`.
+                        onFindDefinition={onFindScreenDefinition}
+                    />
+                )}
                 {activeTab === 'snippets' && (
                     <SnippetManager />
                 )}
-            </div>
-        </aside>
+            </main>
+        </div>
     );
 };
 

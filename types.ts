@@ -1,3 +1,4 @@
+
 export interface Position {
   x: number;
   y: number;
@@ -47,17 +48,20 @@ export interface RenpyScreen {
   line: number;
 }
 
-export interface RenpyImage {
-  tag: string; // "bg park" or "eileen happy"
-  attributes: string[]; // ["park"] or ["happy"]
-  fileName: string; // "park.jpg" or "eileen_happy.png"
-  filePath: string; // "images/bg/park.jpg"
-  dataUrl: string; // "data:image/jpeg;base64,..."
+export interface ProjectImage {
+  filePath: string; // A unique path for the image, e.g., "ScannedDir/subdir/img.png" or "game/images/img.png"
+  fileName: string;
+  dataUrl: string;
+  // FIX: Allow fileHandle to be null for images loaded from zip files.
+  fileHandle: FileSystemFileHandle | null;
+  isInProject: boolean; // True if it's inside game/images
+  projectFilePath?: string; // The path within the project if copied, e.g., "game/images/img.png"
 }
 
-export interface ImageGroup {
-  name: string; // "bg" or "characters/eileen"
-  images: RenpyImage[];
+export interface ImageMetadata {
+  renpyName: string; 
+  tags: string[];
+  projectSubfolder?: string; // e.g. "characters/eileen" for game/images/characters/eileen
 }
 
 export interface RenpyAudio {
@@ -113,6 +117,7 @@ export interface RenpyAnalysisResult {
   branchingBlockIds: Set<string>;
   screenOnlyBlockIds: Set<string>;
   storyBlockIds: Set<string>;
+  configBlockIds: Set<string>;
   // Character and dialogue analysis
   characters: Map<string, Character>;
   dialogueLines: Map<string, DialogueLine[]>;
@@ -127,8 +132,9 @@ export interface RenpyAnalysisResult {
 // Defines an open tab in the main editor view
 export interface EditorTab {
   id: string; // unique ID for the tab, can be block.id or 'canvas'
-  type: 'canvas' | 'editor';
+  type: 'canvas' | 'editor' | 'image';
   blockId?: string;
+  filePath?: string; // Used for image tabs
   // Used to trigger a scroll-to-line event in the editor component
   scrollRequest?: { line: number; key: number };
 }

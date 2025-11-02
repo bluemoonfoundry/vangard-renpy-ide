@@ -77,6 +77,7 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
     branchingBlockIds: new Set(),
     screenOnlyBlockIds: new Set(),
     storyBlockIds: new Set(),
+    configBlockIds: new Set(),
     characters: new Map(),
     dialogueLines: new Map(),
     characterUsage: new Map(),
@@ -285,19 +286,29 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
     }
   });
 
-  // Final pass: Identify screen-only and story blocks
+  // Final pass: Identify screen-only, story, and config blocks
   const screenDefiningBlockIds = new Set(Array.from(result.screens.values()).map(s => s.definedInBlockId));
   const labelDefiningBlockIds = new Set(Object.values(result.labels).map(l => l.blockId));
   
   const storyBlockIds = new Set(labelDefiningBlockIds);
-  // Explicitly mark the dedicated variables file as a story block
-  const variablesBlock = blocks.find(b => b.filePath === 'variables.rpy');
-  if (variablesBlock) {
-    storyBlockIds.add(variablesBlock.id);
-  }
+  // Explicitly mark dedicated files as story blocks so they don't get filtered as config
+  const specialStoryFileNames = ['game/variables.rpy', 'game/characters.rpy'];
+  blocks.forEach(block => {
+      if (block.filePath && specialStoryFileNames.includes(block.filePath)) {
+          storyBlockIds.add(block.id);
+      }
+  });
 
   result.storyBlockIds = storyBlockIds;
   result.screenOnlyBlockIds = new Set([...screenDefiningBlockIds].filter(id => !storyBlockIds.has(id)));
+
+  const configBlockIds = new Set<string>();
+  blocks.forEach(block => {
+    if (!result.storyBlockIds.has(block.id) && !screenDefiningBlockIds.has(block.id)) {
+        configBlockIds.add(block.id);
+    }
+  });
+  result.configBlockIds = configBlockIds;
 
   return result;
 };

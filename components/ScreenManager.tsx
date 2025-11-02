@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import type { RenpyScreen } from '../types';
 
@@ -55,6 +56,7 @@ const ScreenEditor: React.FC<{
 const ScreenManager: React.FC<ScreenManagerProps> = ({ screens, onAddScreen, onFindDefinition }) => {
     const [mode, setMode] = useState<'list' | 'add'>('list');
     
+    // FIX: Add explicit types for `a` and `b` in sort to resolve `unknown` type error.
     const screenList = Array.from(screens.values()).sort((a: RenpyScreen, b: RenpyScreen) => a.name.localeCompare(b.name));
 
     const handleSave = (screenName: string) => {
