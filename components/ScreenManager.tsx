@@ -55,7 +55,7 @@ const ScreenEditor: React.FC<{
 const ScreenManager: React.FC<ScreenManagerProps> = ({ screens, onAddScreen, onFindDefinition }) => {
     const [mode, setMode] = useState<'list' | 'add'>('list');
     
-    const screenList = Array.from(screens.values()).sort((a,b) => a.name.localeCompare(b.name));
+    const screenList = Array.from(screens.values()).sort((a: RenpyScreen, b: RenpyScreen) => a.name.localeCompare(b.name));
 
     const handleSave = (screenName: string) => {
         onAddScreen(screenName);
@@ -72,7 +72,8 @@ const ScreenManager: React.FC<ScreenManagerProps> = ({ screens, onAddScreen, onF
                     </div>
                     
                     <ul className="space-y-2 mt-4">
-                        {screenList.map(screen => (
+                        {/* Fix: Add explicit type for 'screen' to resolve 'unknown' type error. */}
+                        {screenList.map((screen: RenpyScreen) => (
                             <li key={screen.name} className="p-2 rounded-md bg-gray-50 dark:bg-gray-700/50 flex items-center justify-between">
                                 <div className="flex-grow min-w-0">
                                     <p className="font-semibold font-mono text-sm truncate" title={screen.name}>{screen.name}</p>

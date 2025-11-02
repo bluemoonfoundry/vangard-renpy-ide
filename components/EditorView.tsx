@@ -21,7 +21,7 @@ const EditorView: React.FC<EditorViewProps> = ({
   onSwitchFocusBlock,
   onSave, 
   onDirtyChange,
-  saveTrigger,
+  saveTrigger, 
   editorTheme 
 }) => {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);

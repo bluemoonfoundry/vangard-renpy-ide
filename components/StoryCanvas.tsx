@@ -101,7 +101,7 @@ const Arrow: React.FC<{
           <path
               d={pathData}
               stroke="#4f46e5"
-              strokeWidth="2"
+              strokeWidth="3"
               fill="none"
               markerEnd="url(#arrowhead)"
               className="pointer-events-none"
@@ -144,14 +144,6 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
   const canvasRef = useRef<HTMLDivElement>(null);
   const interactionState = useRef<InteractionState>({ type: 'idle' });
   const pointerStartPos = useRef<Position>({ x: 0, y: 0 });
-
-  const screenBlockIds = useMemo(() => {
-    const ids = new Set<string>();
-    analysisResult.screens.forEach(screen => {
-      ids.add(screen.definedInBlockId);
-    });
-    return ids;
-  }, [analysisResult.screens]);
 
   const adjacencyMap = useMemo(() => {
     const adj = new Map<string, string[]>();
@@ -437,12 +429,12 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
   
   const visibleBlocks = useMemo(() => {
     return blocks.filter(block => {
-        const isScreen = screenBlockIds.has(block.id);
+        const isScreen = analysisResult.screenOnlyBlockIds.has(block.id);
         if (isScreen && canvasFilters.screens) return true;
         if (!isScreen && canvasFilters.story) return true;
         return false;
     });
-  }, [blocks, canvasFilters, screenBlockIds]);
+  }, [blocks, canvasFilters, analysisResult.screenOnlyBlockIds]);
 
   const visibleBlockIds = useMemo(() => new Set(visibleBlocks.map(b => b.id)), [visibleBlocks]);
 
@@ -515,15 +507,15 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
           <defs>
             <marker
               id="arrowhead"
-              viewBox="-10 0 10 7"
-              markerWidth="10"
-              markerHeight="7"
+              viewBox="-14 0 14 10"
+              markerWidth="14"
+              markerHeight="10"
               refX="0"
-              refY="3.5"
+              refY="5"
               orient="auto"
               markerUnits="userSpaceOnUse"
             >
-              <polygon points="-10 0, 0 3.5, -10 7" fill="#4f46e5" />
+              <polygon points="-14 0, 0 5, -14 10" fill="#4f46e5" />
             </marker>
           </defs>
           <g transform={`translate(${-svgBounds.left}, ${-svgBounds.top})`}>
@@ -558,7 +550,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
           const isDimmed = (highlightedPath !== null && !highlightedPath.has(block.id)) || 
                           (findUsagesHighlightIds !== null && !findUsagesHighlightIds.has(block.id));
           const isUsageHighlighted = findUsagesHighlightIds?.has(block.id) ?? false;
-          const isScreenBlock = screenBlockIds.has(block.id);
+          const isScreenBlock = analysisResult.screenOnlyBlockIds.has(block.id);
           return (
             <CodeBlock
               key={block.id}

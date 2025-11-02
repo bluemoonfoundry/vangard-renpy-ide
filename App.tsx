@@ -1,13 +1,12 @@
-
-
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import StoryCanvas from './components/StoryCanvas';
 import EditorView from './components/EditorView';
 import ConfirmModal from './components/ConfirmModal';
 import StoryElementsPanel from './components/StoryElementsPanel';
+import FileExplorerPanel from './components/FileExplorerPanel';
 import { useRenpyAnalysis, performRenpyAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
-import type { Block, Position, BlockGroup, Link, Character, Variable, RenpyImage, RenpyAudio, EditorTab, RenpyScreen } from './types';
+import type { Block, Position, BlockGroup, Link, Character, Variable, RenpyImage, RenpyAudio, EditorTab, RenpyScreen, FileSystemTreeNode } from './types';
 import JSZip from 'jszip';
 
 // Add all necessary FS API types to the global scope to fix compilation issues
@@ -54,7 +53,6 @@ const SAVE_KEY_GROUPS = 'renpy-visual-editor-groups';
 
 function uuidv4() {
   return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c =>
-    // FIX: Corrected typo from UintArray to Uint8Array
     (Number(c) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(c) / 4).toString(16)
   );
 }
@@ -62,6 +60,63 @@ function uuidv4() {
 type Theme = 'system' | 'light' | 'dark';
 type SaveStatus = 'saving' | 'saved' | 'error';
 type AppState = { blocks: Block[], groups: BlockGroup[] };
+
+const WelcomeScreen: React.FC<{
+  onOpenFolder: () => void;
+  onStartInBrowser: () => void;
+  onUpload: () => void;
+  isFileSystemApiSupported: boolean;
+}> = ({ onOpenFolder, onStartInBrowser, onUpload, isFileSystemApiSupported }) => {
+  return (
+    <div className="fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 max-w-2xl w-full text-center border border-gray-200 dark:border-gray-700 transform transition-all animate-fade-in-up">
+        <style>{`
+          @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .animate-fade-in-up {
+            animation: fade-in-up 0.5s ease-out forwards;
+          }
+        `}</style>
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Welcome!</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-8">
+          Visually create and connect your Ren'Py story blocks. Get started by opening your project folder.
+        </p>
+        <div className="space-y-4">
+          <button
+            onClick={onOpenFolder}
+            disabled={!isFileSystemApiSupported}
+            title={isFileSystemApiSupported ? "Open a local Ren'Py project folder" : "Your browser does not support the File System Access API."}
+            className="w-full text-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-lg transition duration-200 flex items-center justify-center space-x-3"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
+            <span>Open Project Folder</span>
+          </button>
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={onUpload}
+              className="w-full bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center space-x-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M4 16h12v2H4v-2zm4-12v8H4l6-6 6 6h-4V4H8z"/></svg>
+              <span>Upload .zip Project</span>
+            </button>
+            <button
+              onClick={onStartInBrowser}
+              className="w-full bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center space-x-2"
+            >
+               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" /></svg>
+               <span>Continue in Browser</span>
+            </button>
+          </div>
+        </div>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-6">
+          Using <strong>Open Project Folder</strong> is recommended for the best experience, allowing you to save directly to your files.
+        </p>
+      </div>
+    </div>
+  );
+};
 
 
 // Wrap the file system API check in a try-catch block to prevent runtime errors
@@ -107,6 +162,77 @@ const parseImageFileName = (fileName: string, filePath: string): { tag: string; 
     return { tag, attributes };
 };
 
+// Helper function to build a file tree from a list of paths
+function buildFileTreeFromPaths(paths: string[]): FileSystemTreeNode {
+    const root: FileSystemTreeNode = { name: 'Project', path: '', children: [] };
+
+    paths.forEach(path => {
+        let currentNode = root;
+        const parts = path.split('/');
+        parts.forEach((part, index) => {
+            if (!currentNode.children) {
+                currentNode.children = [];
+            }
+            let childNode = currentNode.children.find(child => child.name === part);
+            if (!childNode) {
+                const isDir = index < parts.length - 1;
+                childNode = {
+                    name: part,
+                    path: parts.slice(0, index + 1).join('/'),
+                    ...(isDir && { children: [] }),
+                };
+                currentNode.children.push(childNode);
+            }
+            currentNode = childNode;
+        });
+    });
+    
+    // Sort children at each level (directories first, then alphabetically)
+    const sortChildren = (node: FileSystemTreeNode) => {
+        if (node.children) {
+            node.children.sort((a, b) => {
+                if (a.children && !b.children) return -1;
+                if (!a.children && b.children) return 1;
+                return a.name.localeCompare(b.name);
+            });
+            node.children.forEach(sortChildren);
+        }
+    };
+    sortChildren(root);
+
+    return root;
+}
+
+// Helper function to build a file tree from a FileSystemDirectoryHandle
+async function buildTreeFromHandle(dirHandle: FileSystemDirectoryHandle): Promise<FileSystemTreeNode> {
+    const root: FileSystemTreeNode = { name: dirHandle.name, path: '', children: [] };
+    
+    async function traverse(handle: FileSystemDirectoryHandle, node: FileSystemTreeNode) {
+        const children: FileSystemTreeNode[] = [];
+        for await (const entry of handle.values()) {
+            const newPath = node.path ? `${node.path}/${entry.name}` : entry.name;
+            if (entry.kind === 'directory') {
+                const dirNode: FileSystemTreeNode = { name: entry.name, path: newPath, children: [] };
+                await traverse(entry, dirNode);
+                children.push(dirNode);
+            } else {
+                children.push({ name: entry.name, path: newPath });
+            }
+        }
+        // Sort children
+        children.sort((a, b) => {
+            if (a.children && !b.children) return -1;
+            if (!a.children && b.children) return 1;
+            return a.name.localeCompare(b.name);
+        });
+        node.children = children;
+    }
+
+    await traverse(dirHandle, root);
+    return root;
+}
+
+
 const App: React.FC = () => {
   const { 
     state: historyState, 
@@ -135,8 +261,10 @@ const App: React.FC = () => {
   );
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   const saveTimeoutRef = useRef<number | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [sidebarWidth, setSidebarWidth] = useState(384);
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(384);
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState(256);
   const [findUsagesHighlightIds, setFindUsagesHighlightIds] = useState<Set<string> | null>(null);
   const [directoryHandle, setDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [dirtyBlockIds, setDirtyBlockIds] = useState<Set<string>>(new Set());
@@ -151,6 +279,15 @@ const App: React.FC = () => {
   const [dirtyEditors, setDirtyEditors] = useState<Set<string>>(new Set());
   const [saveTrigger, setSaveTrigger] = useState(0);
   const [canvasFilters, setCanvasFilters] = useState({ story: true, screens: true });
+  const [isWelcomeScreenVisible, setIsWelcomeScreenVisible] = useState(false);
+  const [fileTree, setFileTree] = useState<FileSystemTreeNode | null>(null);
+
+  useEffect(() => {
+    // If there's nothing in storage and no folder is open, show welcome.
+    if (!directoryHandle && historyState.blocks.length === 0 && historyState.groups.length === 0) {
+      setIsWelcomeScreenVisible(true);
+    }
+  }, []); // Empty dependency array means this runs only once on mount.
 
   const analysisResult = useRenpyAnalysis(liveBlocks, analysisTrigger);
 
@@ -383,7 +520,6 @@ const App: React.FC = () => {
     if (oldTag !== newChar.tag) {
       const dialogueLineRegex = new RegExp(`^(\\s*)(${oldTag})(\\s+((?:".*?")|(?:'.*?')))$`, "gm");
       newBlocks = newBlocks.map(b => {
-        // FIX: Corrected typo from dialogialogueLineRegex to dialogueLineRegex
         if (b.content.match(dialogueLineRegex)) {
           dirtyIds.add(b.id);
           return { ...b, content: b.content.replace(dialogueLineRegex, `$1${newChar.tag}$3`) };
@@ -405,20 +541,30 @@ const App: React.FC = () => {
   
   const handleAddVariable = useCallback((variable: Omit<Variable, 'definedInBlockId' | 'line'>) => {
     const definitionString = `${variable.type} ${variable.name} = ${variable.initialValue}`;
-    let definitionsBlock = liveBlocks.find(b => b.title?.toLowerCase().includes('definitions'));
+    
+    let variablesBlock = liveBlocks.find(b => b.filePath === 'variables.rpy');
     let newBlocks = [...liveBlocks];
     let dirtyId: string;
 
-    if (definitionsBlock) {
-      dirtyId = definitionsBlock.id;
-      newBlocks = newBlocks.map(b => b.id === definitionsBlock!.id ? { ...b, content: b.content + '\n' + definitionString } : b);
+    if (variablesBlock) {
+        dirtyId = variablesBlock.id;
+        newBlocks = newBlocks.map(b => 
+            b.id === variablesBlock!.id 
+            ? { ...b, content: b.content.trim() + '\n' + definitionString } 
+            : b
+        );
     } else {
-      const newBlock: Block = {
-        id: uuidv4(), title: "Variable Definitions", content: definitionString,
-        position: { x: 20, y: 150 }, width: 350, height: 100,
-      };
-      dirtyId = newBlock.id;
-      newBlocks.push(newBlock);
+        const newBlock: Block = {
+            id: uuidv4(),
+            title: "Variables",
+            content: definitionString,
+            position: { x: 40, y: 180 },
+            width: 350,
+            height: 100,
+            filePath: 'variables.rpy',
+        };
+        dirtyId = newBlock.id;
+        newBlocks.push(newBlock);
     }
     commitChange({ blocks: newBlocks, groups: liveGroups }, [dirtyId]);
   }, [liveBlocks, liveGroups, commitChange]);
@@ -469,57 +615,63 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const activeEl = document.activeElement;
-      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.getAttribute('role') === 'textbox')) return;
-
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const isCtrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
 
-      if (isCtrlOrCmd && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); } 
-      else if (isCtrlOrCmd && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); } 
-      else if (isCtrlOrCmd && e.key.toLowerCase() === 's') { e.preventDefault(); handleSaveActiveEditor(); }
-      else if ((selectedBlockIds.length > 0 || selectedGroupIds.length > 0) && (e.key === 'Delete' || e.key === 'Backspace')) {
+      if (isCtrlOrCmd && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        if (selectedBlockIds.length > 0) deleteBlocks(selectedBlockIds);
-        if (selectedGroupIds.length > 0) {
-            const newGroups = liveGroups.filter(g => !selectedGroupIds.includes(g.id));
-            commitChange({ blocks: liveBlocks, groups: newGroups });
-            setSelectedGroupIds([]);
+        handleSaveActiveEditor();
+      } else {
+        const activeEl = document.activeElement;
+        if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.getAttribute('role') === 'textbox')) {
+          return;
         }
-      } else if (selectedBlockIds.length === 1 && e.key === 'f') { e.preventDefault(); handleOpenEditorTab(selectedBlockIds[0]); } 
-      else if (e.key === 'n') { e.preventDefault(); addBlock(); } 
-      else if (e.key === 'g' && !e.shiftKey) {
+
+        if (isCtrlOrCmd && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); } 
+        else if (isCtrlOrCmd && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); } 
+        else if ((selectedBlockIds.length > 0 || selectedGroupIds.length > 0) && (e.key === 'Delete' || e.key === 'Backspace')) {
           e.preventDefault();
+          if (selectedBlockIds.length > 0) deleteBlocks(selectedBlockIds);
           if (selectedGroupIds.length > 0) {
+              const newGroups = liveGroups.filter(g => !selectedGroupIds.includes(g.id));
+              commitChange({ blocks: liveBlocks, groups: newGroups });
+              setSelectedGroupIds([]);
+          }
+        } else if (selectedBlockIds.length === 1 && e.key === 'f') { e.preventDefault(); handleOpenEditorTab(selectedBlockIds[0]); } 
+        else if (e.key === 'n') { e.preventDefault(); addBlock(); } 
+        else if (e.key === 'g' && !e.shiftKey) {
+            e.preventDefault();
+            if (selectedGroupIds.length > 0) {
+              const blockIdsFromUngrouped = liveGroups.filter(g => selectedGroupIds.includes(g.id)).flatMap(g => g.blockIds);
+              const newGroups = liveGroups.filter(g => !selectedGroupIds.includes(g.id));
+              commitChange({ blocks: liveBlocks, groups: newGroups });
+              setSelectedGroupIds([]);
+              setSelectedBlockIds(Array.from(new Set(blockIdsFromUngrouped)));
+            } else if (selectedBlockIds.length >= 2) {
+              const selected = liveBlocks.filter(b => selectedBlockIds.includes(b.id));
+              const PADDING = 40;
+              let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+              selected.forEach(b => {
+                  minX = Math.min(minX, b.position.x); minY = Math.min(minY, b.position.y);
+                  maxX = Math.max(maxX, b.position.x + b.width); maxY = Math.max(maxY, b.position.y + b.height);
+              });
+              const newGroup: BlockGroup = {
+                  id: uuidv4(), title: "New Group", position: { x: minX - PADDING, y: minY - PADDING },
+                  width: (maxX - minX) + PADDING * 2, height: (maxY - minY) + PADDING * 2, blockIds: selectedBlockIds
+              };
+              commitChange({ blocks: liveBlocks, groups: [...liveGroups, newGroup] });
+              setSelectedBlockIds([]);
+              setSelectedGroupIds([newGroup.id]);
+            }
+        } else if (e.key === 'G' && e.shiftKey) {
+            if (selectedGroupIds.length === 0) return;
+            e.preventDefault();
             const blockIdsFromUngrouped = liveGroups.filter(g => selectedGroupIds.includes(g.id)).flatMap(g => g.blockIds);
             const newGroups = liveGroups.filter(g => !selectedGroupIds.includes(g.id));
             commitChange({ blocks: liveBlocks, groups: newGroups });
             setSelectedGroupIds([]);
             setSelectedBlockIds(Array.from(new Set(blockIdsFromUngrouped)));
-          } else if (selectedBlockIds.length >= 2) {
-            const selected = liveBlocks.filter(b => selectedBlockIds.includes(b.id));
-            const PADDING = 40;
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            selected.forEach(b => {
-                minX = Math.min(minX, b.position.x); minY = Math.min(minY, b.position.y);
-                maxX = Math.max(maxX, b.position.x + b.width); maxY = Math.max(maxY, b.position.y + b.height);
-            });
-            const newGroup: BlockGroup = {
-                id: uuidv4(), title: "New Group", position: { x: minX - PADDING, y: minY - PADDING },
-                width: (maxX - minX) + PADDING * 2, height: (maxY - minY) + PADDING * 2, blockIds: selectedBlockIds
-            };
-            commitChange({ blocks: liveBlocks, groups: [...liveGroups, newGroup] });
-            setSelectedBlockIds([]);
-            setSelectedGroupIds([newGroup.id]);
-          }
-      } else if (e.key === 'G' && e.shiftKey) {
-          if (selectedGroupIds.length === 0) return;
-          e.preventDefault();
-          const blockIdsFromUngrouped = liveGroups.filter(g => selectedGroupIds.includes(g.id)).flatMap(g => g.blockIds);
-          const newGroups = liveGroups.filter(g => !selectedGroupIds.includes(g.id));
-          commitChange({ blocks: liveBlocks, groups: newGroups });
-          setSelectedGroupIds([]);
-          setSelectedBlockIds(Array.from(new Set(blockIdsFromUngrouped)));
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -640,10 +792,11 @@ const App: React.FC = () => {
     }
     try {
         let rootHandle: FileSystemDirectoryHandle;
-        if (window.showDirectoryPicker) {
-            rootHandle = await window.showDirectoryPicker();
-        } else if (window.aistudio?.showDirectoryPicker) {
+        // Prioritize the AI Studio API if it exists to avoid cross-origin errors.
+        if (window.aistudio?.showDirectoryPicker) {
             rootHandle = await window.aistudio.showDirectoryPicker();
+        } else if (window.showDirectoryPicker) {
+            rootHandle = await window.showDirectoryPicker();
         } else {
             alert("File System Access API could not be initialized.");
             return;
@@ -651,6 +804,9 @@ const App: React.FC = () => {
         setDirectoryHandle(rootHandle);
         setImages([]);
         setAudios([]);
+
+        const tree = await buildTreeFromHandle(rootHandle);
+        setFileTree(tree);
 
         const newBlocks: Block[] = [];
         const findRpyFilesRecursively = async (dirHandle: FileSystemDirectoryHandle, currentPath: string) => {
@@ -686,6 +842,7 @@ const App: React.FC = () => {
         setSelectedBlockIds([]);
         setSelectedGroupIds([]);
         setDirtyBlockIds(new Set());
+        setIsWelcomeScreenVisible(false);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') console.log('User cancelled directory picker.');
       else console.error("Error opening directory:", err);
@@ -785,10 +942,12 @@ const App: React.FC = () => {
       const newBlocks: Block[] = [];
       const newImages: RenpyImage[] = [];
       const newAudios: RenpyAudio[] = [];
+      const filePaths: string[] = [];
       
       for (const relativePath in zip.files) {
         const zipEntry = zip.files[relativePath];
         if (zipEntry.dir) continue;
+        filePaths.push(relativePath);
 
         if (relativePath.endsWith('.rpy')) {
             const content = await zipEntry.async('string');
@@ -807,6 +966,9 @@ const App: React.FC = () => {
         }
       }
       
+      const tree = buildFileTreeFromPaths(filePaths);
+      setFileTree(tree);
+
       setDirectoryHandle(null);
       setDirtyBlockIds(new Set());
       setImages(newImages);
@@ -818,7 +980,7 @@ const App: React.FC = () => {
       commitChange({ blocks: laidOutBlocks, groups: [] });
       setSelectedBlockIds([]);
       setSelectedGroupIds([]);
-
+      setIsWelcomeScreenVisible(false);
     } catch (error) {
       console.error("Error processing zip file:", error);
       alert("Could not process the zip file. It might be corrupted or in an invalid format.");
@@ -853,6 +1015,16 @@ const App: React.FC = () => {
   }, [liveBlocks, liveGroups, setHistory, historyState.blocks]);
 
   const handleRefreshAnalysis = () => setAnalysisTrigger(c => c + 1);
+
+    const handleFileDoubleClick = (filePath: string) => {
+        if (!filePath.endsWith('.rpy')) return;
+        const block = liveBlocks.find(b => b.filePath === filePath);
+        if (block) {
+            handleOpenEditorTab(block.id);
+        } else {
+            console.warn(`Could not find a block for file path: ${filePath}`);
+        }
+    };
   
   const handleImportImages = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -924,11 +1096,11 @@ const App: React.FC = () => {
     }
   };
 
-  const handleResizeStart = useCallback((startEvent: React.PointerEvent) => {
+  const handleRightResizeStart = useCallback((startEvent: React.PointerEvent) => {
     startEvent.preventDefault();
     document.body.style.cursor = 'ew-resize';
     const startX = startEvent.clientX;
-    const startWidth = sidebarWidth;
+    const startWidth = rightSidebarWidth;
     const MIN_SIDEBAR_WIDTH = 320;
     const MAX_SIDEBAR_WIDTH = 800;
 
@@ -936,7 +1108,7 @@ const App: React.FC = () => {
         const dx = moveEvent.clientX - startX;
         const newWidth = startWidth - dx; // Dragging left increases width
         const clampedWidth = Math.max(MIN_SIDEBAR_WIDTH, Math.min(newWidth, MAX_SIDEBAR_WIDTH));
-        setSidebarWidth(clampedWidth);
+        setRightSidebarWidth(clampedWidth);
     };
 
     const handleMouseUp = () => {
@@ -947,7 +1119,32 @@ const App: React.FC = () => {
 
     window.addEventListener('pointermove', handleMouseMove);
     window.addEventListener('pointerup', handleMouseUp);
-  }, [sidebarWidth]);
+  }, [rightSidebarWidth]);
+
+  const handleLeftResizeStart = useCallback((startEvent: React.PointerEvent) => {
+    startEvent.preventDefault();
+    document.body.style.cursor = 'ew-resize';
+    const startX = startEvent.clientX;
+    const startWidth = leftSidebarWidth;
+    const MIN_SIDEBAR_WIDTH = 200;
+    const MAX_SIDEBAR_WIDTH = 600;
+
+    const handleMouseMove = (moveEvent: PointerEvent) => {
+        const dx = moveEvent.clientX - startX;
+        const newWidth = startWidth + dx; // Dragging right increases width
+        const clampedWidth = Math.max(MIN_SIDEBAR_WIDTH, Math.min(newWidth, MAX_SIDEBAR_WIDTH));
+        setLeftSidebarWidth(clampedWidth);
+    };
+
+    const handleMouseUp = () => {
+        document.body.style.cursor = '';
+        window.removeEventListener('pointermove', handleMouseMove);
+        window.removeEventListener('pointerup', handleMouseUp);
+    };
+
+    window.addEventListener('pointermove', handleMouseMove);
+    window.addEventListener('pointerup', handleMouseUp);
+  }, [leftSidebarWidth]);
   
   const ThemeIcon = () => {
     if (theme === 'light') return <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
@@ -971,6 +1168,7 @@ const App: React.FC = () => {
     <div className={`h-screen w-screen flex flex-col font-sans antialiased text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 ${effectiveTheme}`}>
       <header className="flex-shrink-0 h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 z-20">
         <div className="flex items-center space-x-4">
+          <button onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)} className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle Project Explorer"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7" /></svg></button>
           <h1 className="text-xl font-bold">Ren'Py Visual Novel Accelerator</h1>
         </div>
         <div className="flex-grow flex items-center justify-center">
@@ -1012,11 +1210,25 @@ const App: React.FC = () => {
            <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" title="Upload .zip Project"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M4 16h12v2H4v-2zm4-12v8H4l6-6 6 6h-4V4H8z"/></svg></button>
            <button onClick={handleDownloadFiles} className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" title="Download as .zip"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg></button>
            <button onClick={toggleTheme} className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" title={`Switch to ${theme === 'light' ? 'Dark' : theme === 'dark' ? 'System' : 'Light'} Mode`}><ThemeIcon /></button>
-           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle Story Elements Panel"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isSidebarOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} /></svg></button>
+           <button onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)} className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle Story Elements Panel"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isRightSidebarOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} /></svg></button>
         </div>
       </header>
 
       <main className="flex-grow flex relative">
+         {isLeftSidebarOpen && (
+            <>
+                <div className="flex-shrink-0" style={{ width: `${leftSidebarWidth}px` }}>
+                    <FileExplorerPanel
+                        tree={fileTree}
+                        onFileOpen={handleFileDoubleClick}
+                    />
+                </div>
+                <div 
+                    className="flex-shrink-0 w-1.5 cursor-ew-resize bg-gray-200 dark:bg-gray-700 hover:bg-indigo-500 active:bg-indigo-600 transition-colors duration-200 select-none"
+                    onPointerDown={handleLeftResizeStart}
+                ></div>
+            </>
+        )}
         <div className="flex-grow flex flex-col relative">
            <div role="tablist" className="flex-shrink-0 flex items-center bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
              {openTabs.map(tab => {
@@ -1088,23 +1300,20 @@ const App: React.FC = () => {
              )}
            </div>
         </div>
-        {isSidebarOpen && (
+        {isRightSidebarOpen && (
             <>
                 <div 
                     className="flex-shrink-0 w-1.5 cursor-ew-resize bg-gray-200 dark:bg-gray-700 hover:bg-indigo-500 active:bg-indigo-600 transition-colors duration-200 select-none"
-                    onPointerDown={handleResizeStart}
+                    onPointerDown={handleRightResizeStart}
                 ></div>
-                <div className="flex-shrink-0" style={{ width: `${sidebarWidth}px` }}>
+                <div className="flex-shrink-0" style={{ width: `${rightSidebarWidth}px` }}>
                     <StoryElementsPanel 
-                        characters={analysisResult.characters}
-                        characterUsage={analysisResult.characterUsage}
+                        analysisResult={analysisResult}
                         onAddCharacter={handleAddCharacter}
                         onUpdateCharacter={handleUpdateCharacter}
                         onFindCharacterUsages={handleFindCharacterUsages}
-                        variables={analysisResult.variables}
                         onAddVariable={handleAddVariable}
                         onFindVariableUsages={handleFindVariableUsages}
-                        screens={analysisResult.screens}
                         onAddScreen={handleAddScreen}
                         onFindScreenDefinition={handleFindScreenDefinition}
                         images={images}
@@ -1142,6 +1351,7 @@ const App: React.FC = () => {
             commitChange({ blocks: [], groups: [] });
             setImages([]);
             setAudios([]);
+            setFileTree(null);
             setIsClearConfirmVisible(false);
             setDirectoryHandle(null);
             setDirtyBlockIds(new Set());
@@ -1173,6 +1383,14 @@ const App: React.FC = () => {
           Are you sure you want to upload this project? Your current canvas will be cleared. This action cannot be undone.
         </ConfirmModal>
       )}
+      {isWelcomeScreenVisible && (
+          <WelcomeScreen
+            onOpenFolder={handleOpenFolder}
+            onStartInBrowser={() => setIsWelcomeScreenVisible(false)}
+            onUpload={() => fileInputRef.current?.click()}
+            isFileSystemApiSupported={isFileSystemApiSupported}
+          />
+        )}
     </div>
   );
 };

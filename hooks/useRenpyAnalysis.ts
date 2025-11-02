@@ -75,6 +75,8 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
     rootBlockIds: new Set(),
     leafBlockIds: new Set(),
     branchingBlockIds: new Set(),
+    screenOnlyBlockIds: new Set(),
+    storyBlockIds: new Set(),
     characters: new Map(),
     dialogueLines: new Map(),
     characterUsage: new Map(),
@@ -176,6 +178,13 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
     });
   });
 
+  // Filter out variables that are character definitions
+  result.characters.forEach((char) => {
+    if (result.variables.has(char.tag)) {
+      result.variables.delete(char.tag);
+    }
+  });
+
   // Second pass: find jumps, dialogue, and variable usages
   const variableNames = Array.from(result.variables.keys());
   blocks.forEach(block => {
@@ -275,6 +284,20 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
       result.branchingBlockIds.add(block.id);
     }
   });
+
+  // Final pass: Identify screen-only and story blocks
+  const screenDefiningBlockIds = new Set(Array.from(result.screens.values()).map(s => s.definedInBlockId));
+  const labelDefiningBlockIds = new Set(Object.values(result.labels).map(l => l.blockId));
+  
+  const storyBlockIds = new Set(labelDefiningBlockIds);
+  // Explicitly mark the dedicated variables file as a story block
+  const variablesBlock = blocks.find(b => b.filePath === 'variables.rpy');
+  if (variablesBlock) {
+    storyBlockIds.add(variablesBlock.id);
+  }
+
+  result.storyBlockIds = storyBlockIds;
+  result.screenOnlyBlockIds = new Set([...screenDefiningBlockIds].filter(id => !storyBlockIds.has(id)));
 
   return result;
 };

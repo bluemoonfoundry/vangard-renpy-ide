@@ -111,6 +111,8 @@ export interface RenpyAnalysisResult {
   rootBlockIds: Set<string>;
   leafBlockIds: Set<string>;
   branchingBlockIds: Set<string>;
+  screenOnlyBlockIds: Set<string>;
+  storyBlockIds: Set<string>;
   // Character and dialogue analysis
   characters: Map<string, Character>;
   dialogueLines: Map<string, DialogueLine[]>;
@@ -129,4 +131,11 @@ export interface EditorTab {
   blockId?: string;
   // Used to trigger a scroll-to-line event in the editor component
   scrollRequest?: { line: number; key: number };
+}
+
+// Represents a node in the file explorer tree view
+export interface FileSystemTreeNode {
+  name: string;
+  path: string;
+  children?: FileSystemTreeNode[];
 }

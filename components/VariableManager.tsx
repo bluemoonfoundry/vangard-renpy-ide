@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import type { Variable } from '../types';
+import type { Variable, RenpyAnalysisResult } from '../types';
 
 interface VariableManagerProps {
-    variables: Map<string, Variable>;
+    analysisResult: RenpyAnalysisResult;
     onAddVariable: (variable: Omit<Variable, 'definedInBlockId' | 'line'>) => void;
     onFindUsages: (variableName: string) => void;
 }
@@ -65,19 +65,18 @@ const VariableEditor: React.FC<{
 };
 
 
-const VariableManager: React.FC<VariableManagerProps> = ({ variables, onAddVariable, onFindUsages }) => {
+const VariableManager: React.FC<VariableManagerProps> = ({ analysisResult, onAddVariable, onFindUsages }) => {
+    const { variables, storyBlockIds } = analysisResult;
     const [mode, setMode] = useState<'list' | 'add'>('list');
     const [filterStoryVars, setFilterStoryVars] = useState(true);
-
-    const nonStoryVarPrefixes = useMemo(() => ['gui.', 'config.', 'style.', '_'], []);
 
     const filteredVariables = useMemo(() => {
         const allVars = Array.from(variables.values());
         if (!filterStoryVars) {
             return allVars;
         }
-        return allVars.filter((v: Variable) => !nonStoryVarPrefixes.some(prefix => v.name.startsWith(prefix)));
-    }, [variables, filterStoryVars, nonStoryVarPrefixes]);
+        return allVars.filter((v: Variable) => storyBlockIds.has(v.definedInBlockId));
+    }, [variables, filterStoryVars, storyBlockIds]);
 
     const { defined, defaulted } = useMemo(() => {
         const grouped = { defined: [] as Variable[], defaulted: [] as Variable[] };

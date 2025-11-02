@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { Character, Variable, RenpyImage, RenpyAudio, RenpyScreen } from '../types';
+import type { Character, Variable, RenpyImage, RenpyAudio, RenpyScreen, RenpyAnalysisResult } from '../types';
 import VariableManager from './VariableManager';
 import ImageManager from './ImageManager';
 import AudioManager from './AudioManager';
@@ -7,24 +7,20 @@ import SnippetManager from './SnippetManager';
 import ScreenManager from './ScreenManager';
 
 interface StoryElementsPanelProps {
-    // Character props
-    characters: Map<string, Character>;
-    characterUsage: Map<string, number>;
+    analysisResult: RenpyAnalysisResult;
+    // Character callbacks
     onAddCharacter: (char: Omit<Character, 'definedInBlockId'>) => void;
     onUpdateCharacter: (oldTag: string, newChar: Character) => void;
     onFindCharacterUsages: (tag: string) => void;
-    // Variable props
-    variables: Map<string, Variable>;
+    // Variable callbacks
     onAddVariable: (variable: Omit<Variable, 'definedInBlockId' | 'line'>) => void;
     onFindVariableUsages: (variableName: string) => void;
-    // Screen props
-    screens: Map<string, RenpyScreen>;
+    // Screen callbacks
     onAddScreen: (screenName: string) => void;
     onFindScreenDefinition: (screenName: string) => void;
-    // Image props
+    // Media props & callbacks
     images: RenpyImage[];
     onImportImages: () => void;
-    // Audio props
     audios: RenpyAudio[];
     onImportAudios: () => void;
     isFileSystemApiSupported: boolean;
@@ -148,15 +144,17 @@ const CharacterEditor: React.FC<{
 };
 
 const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({ 
-    characters, characterUsage, onAddCharacter, onUpdateCharacter, onFindCharacterUsages, 
-    variables, onAddVariable, onFindVariableUsages,
-    screens, onAddScreen, onFindScreenDefinition,
+    analysisResult,
+    onAddCharacter, onUpdateCharacter, onFindCharacterUsages, 
+    onAddVariable, onFindVariableUsages,
+    onAddScreen, onFindScreenDefinition,
     images, onImportImages,
     audios, onImportAudios,
     isFileSystemApiSupported
 }) => {
     type TabName = 'characters' | 'variables' | 'screens' | 'images' | 'audio' | 'snippets';
 
+    const { characters, characterUsage, screens } = analysisResult;
     const [mode, setMode] = useState<'list' | 'add' | 'edit'>('list');
     const [editingChar, setEditingChar] = useState<Character | undefined>(undefined);
     const [activeTab, setActiveTab] = useState<TabName>('characters');
@@ -269,7 +267,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                 )}
                 {activeTab === 'variables' && (
                     <VariableManager
-                        variables={variables}
+                        analysisResult={analysisResult}
                         onAddVariable={onAddVariable}
                         onFindUsages={onFindVariableUsages}
                     />
