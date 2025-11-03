@@ -1,4 +1,5 @@
 
+
 export interface Position {
   x: number;
   y: number;
@@ -25,13 +26,49 @@ export interface BlockGroup {
 }
 
 export interface Character {
+  // Core attributes
   name: string;
   tag: string;
   color: string;
-  profile?: string;
+  profile?: string; // Notes/description
   definedInBlockId: string;
-  otherArgs?: Record<string, string>;
+
+  // Other Ren'Py Character parameters
+  image?: string;
+
+  // who_ prefix (name label)
+  who_style?: string;
+  who_prefix?: string;
+  who_suffix?: string;
+
+  // what_ prefix (dialogue text)
+  what_color?: string;
+  what_style?: string;
+  what_prefix?: string;
+  what_suffix?: string;
+  
+  // Slow text parameters
+  slow?: boolean;
+  slow_speed?: number;
+  slow_abortable?: boolean;
+  all_at_once?: boolean;
+  
+  // window_ prefix (dialogue window)
+  window_style?: string;
+
+  // Click-to-continue
+  ctc?: string;
+  ctc_position?: 'nestled' | 'fixed';
+
+  // Other behaviors
+  interact?: boolean;
+  afm?: boolean;
+
+  // Raw properties for complex cases
+  what_properties?: string; // Stored as a string representing a Python dict
+  window_properties?: string; // Stored as a string representing a Python dict
 }
+
 
 export interface Variable {
   name: string;
@@ -42,7 +79,7 @@ export interface Variable {
 }
 
 export interface RenpyScreen {
-  name: string;
+  name:string;
   parameters: string;
   definedInBlockId: string;
   line: number;
@@ -65,9 +102,18 @@ export interface ImageMetadata {
 }
 
 export interface RenpyAudio {
+  filePath: string; // A unique path, e.g., "ScannedDir/subdir/sound.ogg" or "game/audio/sound.ogg"
   fileName: string;
-  filePath: string;
   dataUrl: string;
+  fileHandle: FileSystemFileHandle | null;
+  isInProject: boolean; // True if it's inside game/audio
+  projectFilePath?: string; // The path within the project if copied, e.g., "game/audio/sound.ogg"
+}
+
+export interface AudioMetadata {
+  renpyName: string;
+  tags: string[];
+  projectSubfolder?: string; // e.g. "sfx/footsteps" for game/audio/sfx/footsteps
 }
 
 export interface VariableUsage {
@@ -132,9 +178,10 @@ export interface RenpyAnalysisResult {
 // Defines an open tab in the main editor view
 export interface EditorTab {
   id: string; // unique ID for the tab, can be block.id or 'canvas'
-  type: 'canvas' | 'editor' | 'image';
+  type: 'canvas' | 'editor' | 'image' | 'audio' | 'character';
   blockId?: string;
-  filePath?: string; // Used for image tabs
+  filePath?: string; // Used for image and audio tabs
+  characterTag?: string; // Used for character tabs
   // Used to trigger a scroll-to-line event in the editor component
   scrollRequest?: { line: number; key: number };
 }
@@ -144,4 +191,11 @@ export interface FileSystemTreeNode {
   name: string;
   path: string;
   children?: FileSystemTreeNode[];
+}
+
+// A message for the toast notification system
+export interface ToastMessage {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'warning' | 'info';
 }

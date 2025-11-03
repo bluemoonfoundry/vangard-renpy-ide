@@ -4,13 +4,17 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import StoryCanvas from './components/StoryCanvas';
 import EditorView from './components/EditorView';
 import ImageEditorView from './components/ImageEditorView';
+import AudioEditorView from './components/AudioEditorView';
+import CharacterEditorView from './components/CharacterEditorView';
 import ConfirmModal from './components/ConfirmModal';
 import StoryElementsPanel from './components/StoryElementsPanel';
 import FileExplorerPanel from './components/FileExplorerPanel';
+import Toast from './components/Toast';
 import { useRenpyAnalysis, performRenpyAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
-import type { Block, Position, BlockGroup, Link, Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, EditorTab, RenpyScreen, FileSystemTreeNode } from './types';
+import type { Block, Position, BlockGroup, Link, Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, EditorTab, RenpyScreen, FileSystemTreeNode, ToastMessage } from './types';
 import JSZip from 'jszip';
+import { produce } from 'https://aistudiocdn.com/immer@^10.1.1';
 
 // Add all necessary FS API types to the global scope to fix compilation issues
 // and make them available throughout the app, including in the types.ts file.
@@ -39,8 +43,6 @@ declare global {
     removeEntry(name: string, options?: { recursive?: boolean }): Promise<void>;
   }
 
-  // Fix: Define the AIStudio interface to include the method we need.
-  // This will merge with any existing AIStudio interface definition and resolve type conflicts.
   interface AIStudio {
     showDirectoryPicker(): Promise<FileSystemDirectoryHandle>;
   }
@@ -244,63 +246,64 @@ const addNodeToFileTree = (tree: FileSystemTreeNode, path: string, type: 'file' 
     };
     if (checkIfExists(tree, path)) return tree;
 
-    const newTree = JSON.parse(JSON.stringify(tree)); // Deep copy
-    let currentNode = newTree;
-    const parts = path.split('/');
+    return produce(tree, draft => {
+        let currentNode = draft;
+        const parts = path.split('/');
 
-    parts.forEach((part, index) => {
-        if (!currentNode.children) {
-            currentNode.children = [];
-        }
-        let childNode = currentNode.children.find(child => child.name === part);
-        if (!childNode) {
-            const isLastPart = index === parts.length - 1;
-            // A node is a directory if it's not the last part of the path,
-            // OR if it IS the last part and the type is 'folder'.
-            const isDir = !isLastPart || (isLastPart && type === 'folder');
-            
-            childNode = {
-                name: part,
-                path: parts.slice(0, index + 1).join('/'),
-                ...(isDir && { children: [] }),
-            };
-            currentNode.children.push(childNode);
-            // Keep it sorted
-            currentNode.children.sort((a, b) => {
-                if (a.children && !b.children) return -1;
-                if (!a.children && b.children) return 1;
-                return a.name.localeCompare(b.name);
-            });
-        }
-        currentNode = childNode;
+        parts.forEach((part, index) => {
+            if (!currentNode.children) {
+                currentNode.children = [];
+            }
+            let childNode = currentNode.children.find(child => child.name === part);
+            if (!childNode) {
+                const isLastPart = index === parts.length - 1;
+                // A node is a directory if it's not the last part of the path,
+                // OR if it IS the last part and the type is 'folder'.
+                const isDir = !isLastPart || (isLastPart && type === 'folder');
+                
+                childNode = {
+                    name: part,
+                    path: parts.slice(0, index + 1).join('/'),
+                    ...(isDir && { children: [] }),
+                };
+                currentNode.children.push(childNode);
+                // Keep it sorted
+                currentNode.children.sort((a, b) => {
+                    if (a.children && !b.children) return -1;
+                    if (!a.children && b.children) return 1;
+                    return a.name.localeCompare(b.name);
+                });
+            }
+            currentNode = childNode;
+        });
     });
-
-    return newTree;
 };
 
 // Helper to remove a node from the file tree immutably.
 const removeNodeFromFileTree = (tree: FileSystemTreeNode | null, path: string): FileSystemTreeNode | null => {
     if (!tree) return null;
 
-    const newTree = JSON.parse(JSON.stringify(tree)); // Deep copy
-    const parts = path.split('/');
-    let currentNode = newTree;
+    return produce(tree, draft => {
+        const parts = path.split('/');
+        let currentNode = draft;
 
-    // Traverse to the parent directory.
-    for (let i = 0; i < parts.length - 1; i++) {
-        if (!currentNode.children) return newTree; // Path does not exist.
-        const nextNode = currentNode.children.find(child => child.name === parts[i]);
-        if (!nextNode) return newTree; // Path does not exist.
-        currentNode = nextNode;
-    }
+        // Traverse to the parent directory.
+        for (let i = 0; i < parts.length - 1; i++) {
+            if (!currentNode.children) return; // Path does not exist.
+            const nextNode = currentNode.children.find(child => child.name === parts[i]);
+            if (!nextNode) return; // Path does not exist.
+            currentNode = nextNode;
+        }
 
-    // Filter out the target node.
-    if (currentNode.children) {
-        const nodeNameToRemove = parts[parts.length - 1];
-        currentNode.children = currentNode.children.filter(child => child.name !== nodeNameToRemove);
-    }
-
-    return newTree;
+        // Find and remove the target node.
+        if (currentNode.children) {
+            const nodeNameToRemove = parts[parts.length - 1];
+            const index = currentNode.children.findIndex(child => child.name === nodeNameToRemove);
+            if (index > -1) {
+                currentNode.children.splice(index, 1);
+            }
+        }
+    });
 };
 
 
@@ -338,15 +341,16 @@ const App: React.FC = () => {
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(256);
   const [findUsagesHighlightIds, setFindUsagesHighlightIds] = useState<Set<string> | null>(null);
   const [directoryHandle, setDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
-  const [scanDirectories, setScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
+  const [imageScanDirectories, setImageScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
+  const [audioScanDirectories, setAudioScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
   const [dirtyBlockIds, setDirtyBlockIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadConfirm, setUploadConfirm] = useState<{ visible: boolean, file: File | null }>({ visible: false, file: null });
   const [openFolderConfirmVisible, setOpenFolderConfirmVisible] = useState(false);
   const [projectImages, setProjectImages] = useState<Map<string, ProjectImage>>(new Map());
   const [imageMetadata, setImageMetadata] = useState<Map<string, ImageMetadata>>(new Map());
-  const [audios, setAudios] = useState<RenpyAudio[]>([]);
-  const audioImportInputRef = useRef<HTMLInputElement>(null);
+  const [projectAudios, setProjectAudios] = useState<Map<string, RenpyAudio>>(new Map());
+  const [audioMetadata, setAudioMetadata] = useState<Map<string, AudioMetadata>>(new Map());
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([{ id: 'canvas', type: 'canvas' }]);
   const [activeTabId, setActiveTabId] = useState<string>('canvas');
   const [dirtyEditors, setDirtyEditors] = useState<Set<string>>(new Set());
@@ -357,6 +361,16 @@ const App: React.FC = () => {
   const [deleteConfirm, setDeleteConfirm] = useState<{ visible: boolean, blockIds?: string[], filePaths?: string[], message?: string, warning?: string }>({ visible: false });
   const [clipboard, setClipboard] = useState<ClipboardState>(null);
   const [centerOnBlockRequest, setCenterOnBlockRequest] = useState<{ blockId: string, key: number } | null>(null);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts(currentToasts => currentToasts.filter(t => t.id !== id));
+  }, []);
+
+  const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
+    const id = uuidv4();
+    setToasts(currentToasts => [...currentToasts, { id, message, type }]);
+  }, []);
 
   useEffect(() => {
     // If there's nothing in storage and no folder is open, show welcome.
@@ -418,22 +432,19 @@ const App: React.FC = () => {
   
   const requestDelete = useCallback((blockIds: string[], filePaths: string[]) => {
     const allBlockIds = new Set(blockIds);
-    // FIX: Explicitly type `allFilePaths` as a Set of strings to resolve a type inference issue
-    // where `p.split` would fail because `p` was being inferred as `unknown`.
     const allFilePaths = new Set<string>(filePaths || []);
 
     filePaths?.forEach(path => {
-        const block = liveBlocks.find((b: Block) => b.filePath === path);
+        const block = liveBlocks.find(b => b.filePath === path);
         if (block) allBlockIds.add(block.id);
     });
 
     blockIds.forEach(id => {
-        const block = liveBlocks.find((b: Block) => b.id === id);
+        const block = liveBlocks.find(b => b.id === id);
         if (block?.filePath) allFilePaths.add(block.filePath);
     });
     
-    // FIX: Explicitly type `p` as string to resolve type inference issue where it was being treated as `unknown`.
-    const filesInvolved = Array.from(allFilePaths).map((p: string) => p.split('/').pop() || p).join(', ');
+    const filesInvolved = Array.from(allFilePaths).map(p => p.split('/').pop() || p).join(', ');
     const numBlocks = allBlockIds.size;
     
     setDeleteConfirm({
@@ -450,17 +461,16 @@ const App: React.FC = () => {
     const { blockIds, filePaths } = deleteConfirm;
 
     const blockIdsToDelete = new Set(blockIds || []);
-    // FIX: Explicitly type the Set to resolve type inference issues where `path` becomes `unknown`.
     const filePathsToDelete = new Set<string>(filePaths || []);
 
     // If filePaths are given, find corresponding block IDs
     filePathsToDelete.forEach(path => {
-        const block = liveBlocks.find((b: Block) => b.filePath === path);
+        const block = liveBlocks.find(b => b.filePath === path);
         if (block) blockIdsToDelete.add(block.id);
     });
     // If blockIds are given, find corresponding file paths
     blockIdsToDelete.forEach(id => {
-        const block = liveBlocks.find((b: Block) => b.id === id);
+        const block = liveBlocks.find(b => b.id === id);
         if (block?.filePath) filePathsToDelete.add(block.filePath);
     });
 
@@ -484,10 +494,10 @@ const App: React.FC = () => {
     }
     
     const finalBlockIds = Array.from(blockIdsToDelete);
-    const newBlocks = liveBlocks.filter((b: Block) => !finalBlockIds.includes(b.id));
+    const newBlocks = liveBlocks.filter(b => !finalBlockIds.includes(b.id));
     const newGroups = liveGroups
-      .map((group: BlockGroup) => ({ ...group, blockIds: group.blockIds.filter((id: string) => !finalBlockIds.includes(id))}))
-      .filter((group: BlockGroup) => group.blockIds.length > 0);
+      .map(group => ({ ...group, blockIds: group.blockIds.filter(id => !finalBlockIds.includes(id))}))
+      .filter(group => group.blockIds.length > 0);
     
     commitChange({ blocks: newBlocks, groups: newGroups });
 
@@ -542,6 +552,29 @@ const App: React.FC = () => {
     }
   }, [openTabs]);
 
+  const handleOpenAudioTab = useCallback((filePath: string) => {
+    const existingTab = openTabs.find(t => t.filePath === filePath);
+    if (existingTab) {
+        setActiveTabId(existingTab.id);
+    } else {
+        const newTab: EditorTab = { id: filePath, type: 'audio', filePath };
+        setOpenTabs(tabs => [...tabs, newTab]);
+        setActiveTabId(newTab.id);
+    }
+  }, [openTabs]);
+
+  const handleOpenCharacterEditor = useCallback((tag: string) => {
+    const tabId = `char_editor_${tag}`;
+    const existingTab = openTabs.find(t => t.id === tabId);
+    if (existingTab) {
+        setActiveTabId(tabId);
+    } else {
+        const newTab: EditorTab = { id: tabId, type: 'character', characterTag: tag };
+        setOpenTabs(tabs => [...tabs, newTab]);
+        setActiveTabId(newTab.id);
+    }
+  }, [openTabs]);
+
   const handleCloseTab = (tabIdToClose: string) => {
       const tabToClose = openTabs.find(t => t.id === tabIdToClose);
       if (!tabToClose) return;
@@ -579,7 +612,7 @@ const App: React.FC = () => {
   const handleSaveBlockContent = useCallback((blockId: string, content: string) => {
     if (liveBlocks.find(b => b.id === blockId)?.content === content) return;
 
-    const newBlocks = liveBlocks.map((block) => block.id === blockId ? { ...block, content } : block );
+    const newBlocks = liveBlocks.map(block => block.id === blockId ? { ...block, content } : block );
     commitChange({ blocks: newBlocks, groups: liveGroups }, [blockId]);
     setDirtyEditors(prev => {
       const newDirty = new Set(prev);
@@ -600,7 +633,7 @@ const App: React.FC = () => {
   const addBlock = useCallback(() => {
     let filename = 'game/new_story.rpy';
     let counter = 1;
-    const allPaths = new Set(liveBlocks.map((b: Block) => b.filePath));
+    const allPaths = new Set(liveBlocks.map(b => b.filePath));
     while (allPaths.has(filename)) {
         filename = `game/new_story_${counter++}.rpy`;
     }
@@ -622,96 +655,115 @@ const App: React.FC = () => {
     handleOpenEditorTab(newBlock.id);
   }, [liveBlocks, liveGroups, commitChange, handleOpenEditorTab, fileTree]);
 
-  const handleAddCharacter = useCallback((char: Omit<Character, 'definedInBlockId'>) => {
-    const args = [`'${char.name}'`];
-    if (char.color) {
-        args.push(`color="${char.color}"`);
-    }
-    if (char.otherArgs) {
-        Object.entries(char.otherArgs).forEach(([key, value]) => {
-            args.push(`${key}=${value}`);
-        });
-    }
-    
-    let definitionString = `define ${char.tag} = Character(${args.join(', ')})`;
-    if (char.profile) {
-      definitionString = `# profile: ${char.profile}\n${definitionString}`;
-    }
+    const buildCharacterDefinitionString = (char: Character): string => {
+        const args: string[] = [];
+        args.push(`'${char.name}'`); // `name` is positional
 
-    const filePath = 'game/characters.rpy';
-    let charactersBlock = liveBlocks.find(b => b.filePath === filePath);
-    let newBlocks = [...liveBlocks];
-    let dirtyId: string;
+        // Helper to add arg if value is not undefined/null/empty
+        const addArg = (key: string, value: any, isString = true) => {
+            if (value === undefined || value === null || value === '') return;
+            if (isString) args.push(`${key}="${value}"`);
+            else args.push(`${key}=${value}`);
+        };
+        const addBooleanArg = (key: string, value: any) => {
+            if (value === undefined || value === null) return;
+            args.push(`${key}=${value ? 'True' : 'False'}`);
+        };
 
-    if (charactersBlock) {
-      dirtyId = charactersBlock.id;
-      newBlocks = newBlocks.map(b => 
-        b.id === charactersBlock!.id
-          ? { ...b, content: b.content.trim() + '\n\n' + definitionString }
-          : b
-      );
-    } else {
-      const newBlock: Block = {
-        id: uuidv4(),
-        title: "Characters",
-        content: definitionString,
-        position: { x: 20, y: 20 },
-        width: 350,
-        height: 100,
-        filePath: filePath,
-      };
-      dirtyId = newBlock.id;
-      newBlocks.push(newBlock);
-      if (fileTree) {
-        setFileTree(addNodeToFileTree(fileTree, filePath));
-      }
-    }
-    commitChange({ blocks: newBlocks, groups: liveGroups }, [dirtyId]);
-  }, [liveBlocks, liveGroups, commitChange, fileTree]);
+        if (char.color) args.push(`color='${char.color}'`);
+        addArg('image', char.image);
+        addArg('who_style', char.who_style);
+        addArg('who_prefix', char.who_prefix);
+        addArg('who_suffix', char.who_suffix);
+        addArg('what_color', char.what_color, false); // color can be a hex string
+        addArg('what_style', char.what_style);
+        addArg('what_prefix', char.what_prefix);
+        addArg('what_suffix', char.what_suffix);
+        addBooleanArg('slow', char.slow);
+        addArg('slow_speed', char.slow_speed, false);
+        addBooleanArg('slow_abortable', char.slow_abortable);
+        addBooleanArg('all_at_once', char.all_at_once);
+        addArg('window_style', char.window_style);
+        addArg('ctc', char.ctc);
+        addArg('ctc_position', char.ctc_position);
+        addBooleanArg('interact', char.interact);
+        addBooleanArg('afm', char.afm);
+        if (char.what_properties) args.push(`what_properties=${char.what_properties}`);
+        if (char.window_properties) args.push(`window_properties=${char.window_properties}`);
 
-  const handleUpdateCharacter = useCallback((oldTag: string, newChar: Character) => {
-    const oldChar = analysisResult.characters.get(oldTag);
-    if (!oldChar) return;
-    let newBlocks = [...liveBlocks];
-    const dirtyIds = new Set<string>();
-
-    const definitionBlock = newBlocks.find(b => b.id === oldChar.definedInBlockId);
-    if (definitionBlock) {
-      dirtyIds.add(definitionBlock.id);
-      const oldDefRegex = new RegExp(`(?:^\\s*#\\s*profile:.*$\\r?\\n)?^\\s*define\\s+${oldTag}\\s*=\\s*Character\\s*\\(.*?\\)$`, "m");
-      
-      const args = [`'${newChar.name}'`];
-      if (newChar.color) {
-          args.push(`color="${newChar.color}"`);
-      }
-      if (newChar.otherArgs) {
-          Object.entries(newChar.otherArgs).forEach(([key, value]) => {
-              args.push(`${key}=${value}`);
-          });
-      }
-      
-      let newDefString = `define ${newChar.tag} = Character(${args.join(', ')})`;
-      if (newChar.profile) {
-          newDefString = `# profile: ${newChar.profile}\n${newDefString}`;
-      }
-
-      const newContent = definitionBlock.content.replace(oldDefRegex, newDefString);
-      newBlocks = newBlocks.map(b => b.id === definitionBlock.id ? { ...b, content: newContent } : b);
-    }
-
-    if (oldTag !== newChar.tag) {
-      const dialogueLineRegex = new RegExp(`^(\\s*)(${oldTag})(\\s+((?:".*?")|(?:'.*?')))$`, "gm");
-      newBlocks = newBlocks.map(b => {
-// FIX: Correct typo in regex variable name
-        if (b.content.match(dialogueLineRegex)) {
-          dirtyIds.add(b.id);
-          return { ...b, content: b.content.replace(dialogueLineRegex, `$1${newChar.tag}$3`) };
+        let defString = `define ${char.tag} = Character(${args.join(', ')})`;
+        if (char.profile) {
+            defString = `# profile: ${char.profile}\n${defString}`;
         }
-        return b;
-      });
-    }
-    commitChange({ blocks: newBlocks, groups: liveGroups }, Array.from(dirtyIds));
-  }, [liveBlocks, liveGroups, commitChange, analysisResult.characters]);
+        return defString;
+    };
+    
+    const handleSaveCharacter = useCallback((newCharData: Character, oldTag?: string) => {
+        const isNew = !oldTag;
+        let newBlocks = [...liveBlocks];
+        const dirtyIds = new Set<string>();
+        const newDefString = buildCharacterDefinitionString(newCharData);
+
+        if (isNew) {
+            const filePath = 'game/characters.rpy';
+            let charactersBlock = newBlocks.find(b => b.filePath === filePath);
+            if (charactersBlock) {
+                dirtyIds.add(charactersBlock.id);
+                newBlocks = newBlocks.map(b =>
+                    b.id === charactersBlock!.id
+                        ? { ...b, content: b.content.trim() + '\n\n' + newDefString }
+                        : b
+                );
+            } else {
+                const newBlock: Block = {
+                    id: uuidv4(),
+                    title: "Characters",
+                    content: newDefString,
+                    position: { x: 20, y: 20 },
+                    width: 350,
+                    height: 100,
+                    filePath: filePath,
+                };
+                dirtyIds.add(newBlock.id);
+                newBlocks.push(newBlock);
+                if (fileTree) {
+                    setFileTree(addNodeToFileTree(fileTree, filePath));
+                }
+            }
+        } else { // Existing character
+            const oldChar = analysisResult.characters.get(oldTag!);
+            if (!oldChar) return;
+
+            const definitionBlock = newBlocks.find(b => b.id === oldChar.definedInBlockId);
+            if (definitionBlock) {
+                dirtyIds.add(definitionBlock.id);
+                const oldDefRegex = new RegExp(`(?:^\\s*#\\s*profile:.*$\\r?\\n)?^\\s*define\\s+${oldTag}\\s*=\\s*Character\\s*\\([\\s\\S]*?\\)$`, "m");
+                const newContent = definitionBlock.content.replace(oldDefRegex, newDefString);
+                newBlocks = newBlocks.map(b => b.id === definitionBlock.id ? { ...b, content: newContent } : b);
+            }
+
+            // Handle tag rename
+            if (oldTag !== newCharData.tag) {
+                const dialogueLineRegex = new RegExp(`^(\\s*)(${oldTag})(\\s+((?:".*?")|(?:'.*?')))$`, "gm");
+                newBlocks = newBlocks.map(b => {
+                    if (b.content.match(dialogueLineRegex)) {
+                        dirtyIds.add(b.id);
+                        return { ...b, content: b.content.replace(dialogueLineRegex, `$1${newCharData.tag}$3`) };
+                    }
+                    return b;
+                });
+            }
+        }
+        commitChange({ blocks: newBlocks, groups: liveGroups }, Array.from(dirtyIds));
+        
+        // Close the 'new' tab and open one for the real character
+        if (isNew) {
+             const newTabId = `char_editor_${'new_character'}`;
+             setOpenTabs(tabs => tabs.filter(t => t.id !== newTabId));
+             handleOpenCharacterEditor(newCharData.tag);
+        }
+    }, [liveBlocks, liveGroups, commitChange, fileTree, analysisResult.characters, handleOpenCharacterEditor]);
+
 
   const handleFindCharacterUsages = useCallback((tag: string) => {
     const blockIds = new Set<string>();
@@ -797,7 +849,7 @@ const App: React.FC = () => {
   }, [analysisResult.screens, handleOpenEditorTab]);
 
     const updateBlock = useCallback((id: string, newBlockData: Partial<Block>) => {
-    const newBlocks = liveBlocks.map((block) =>
+    const newBlocks = liveBlocks.map(block =>
         block.id === id ? { ...block, ...newBlockData } : block
     );
     setLiveBlocks(newBlocks);
@@ -839,10 +891,10 @@ const App: React.FC = () => {
               setSelectedGroupIds([]);
               setSelectedBlockIds(Array.from(new Set(blockIdsFromUngrouped)));
             } else if (selectedBlockIds.length >= 2) {
-              const selected = liveBlocks.filter((b: Block) => selectedBlockIds.includes(b.id));
+              const selected = liveBlocks.filter(b => selectedBlockIds.includes(b.id));
               const PADDING = 40;
               let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-              selected.forEach((b: Block) => {
+              selected.forEach(b => {
                   minX = Math.min(minX, b.position.x); minY = Math.min(minY, b.position.y);
                   maxX = Math.max(maxX, b.position.x + b.width); maxY = Math.max(maxY, b.position.y + b.height);
               });
@@ -876,11 +928,11 @@ const App: React.FC = () => {
   
   const tidyUpLayout = (blocksToLayout: Block[], links: Link[]): Block[] => {
       if (blocksToLayout.length === 0) return [];
-      const blockMap = new Map(blocksToLayout.map((b: Block) => [b.id, b]));
+      const blockMap = new Map(blocksToLayout.map(b => [b.id, b]));
       const adj = new Map<string, string[]>();
       const inDegree = new Map<string, number>();
-      blocksToLayout.forEach((b: Block) => { adj.set(b.id, []); inDegree.set(b.id, 0); });
-      links.forEach((link: Link) => {
+      blocksToLayout.forEach(b => { adj.set(b.id, []); inDegree.set(b.id, 0); });
+      links.forEach(link => {
           if (adj.has(link.sourceId) && inDegree.has(link.targetId)) {
               adj.get(link.sourceId)!.push(link.targetId);
               inDegree.set(link.targetId, (inDegree.get(link.targetId) || 0) + 1);
@@ -941,23 +993,6 @@ const App: React.FC = () => {
     commitChange({ blocks: newBlocks, groups: liveGroups });
   };
   
-  const processAudioDirectory = async (audioDirHandle: FileSystemDirectoryHandle, currentPath: string): Promise<RenpyAudio[]> => {
-    const loadedAudios: RenpyAudio[] = [];
-    for await (const entry of audioDirHandle.values()) {
-        const newPath = `${currentPath}/${entry.name}`;
-        if (entry.kind === 'file' && /\.(mp3|ogg|wav)$/i.test(entry.name)) {
-            const fileHandle = entry as FileSystemFileHandle;
-            const file = await fileHandle.getFile();
-            const dataUrl = await fileToDataUrl(file);
-            loadedAudios.push({ fileName: entry.name, filePath: newPath, dataUrl });
-        } else if (entry.kind === 'directory') {
-            const subAudios = await processAudioDirectory(entry as FileSystemDirectoryHandle, newPath);
-            loadedAudios.push(...subAudios);
-        }
-    }
-    return loadedAudios;
-  };
-
   const scanDirectoryForImages = async (dirHandle: FileSystemDirectoryHandle, baseName: string, isProjectScan: boolean) => {
     const newImages = new Map<string, ProjectImage>();
      const scan = async (handle: FileSystemDirectoryHandle, currentPath: string) => {
@@ -987,6 +1022,34 @@ const App: React.FC = () => {
     return newImages;
   }
 
+  const scanDirectoryForAudios = async (dirHandle: FileSystemDirectoryHandle, baseName: string, isProjectScan: boolean) => {
+    const newAudios = new Map<string, RenpyAudio>();
+     const scan = async (handle: FileSystemDirectoryHandle, currentPath: string) => {
+        for await (const entry of handle.values()) {
+            const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+            if (entry.kind === 'file' && /\.(mp3|ogg|wav|opus)$/i.test(entry.name)) {
+                const fileHandle = entry as FileSystemFileHandle;
+                const file = await fileHandle.getFile();
+                const dataUrl = await fileToDataUrl(file);
+                const audioKey = `${baseName}/${newPath}`;
+                const renpyAudio: RenpyAudio = {
+                    filePath: audioKey,
+                    fileName: entry.name,
+                    dataUrl,
+                    fileHandle,
+                    isInProject: isProjectScan,
+                    projectFilePath: isProjectScan ? audioKey : undefined,
+                };
+                newAudios.set(audioKey, renpyAudio);
+            } else if (entry.kind === 'directory') {
+                await scan(entry, newPath);
+            }
+        }
+    };
+    await scan(dirHandle, '');
+    return newAudios;
+  }
+
   const loadProjectImages = async (rootHandle: FileSystemDirectoryHandle) => {
     try {
         const gameDir = await rootHandle.getDirectoryHandle('game');
@@ -996,6 +1059,18 @@ const App: React.FC = () => {
     } catch (e) {
         console.warn("Could not find or access 'game/images' directory.", e);
         setProjectImages(new Map());
+    }
+  };
+
+  const loadProjectAudios = async (rootHandle: FileSystemDirectoryHandle) => {
+    try {
+        const gameDir = await rootHandle.getDirectoryHandle('game');
+        const audioDir = await gameDir.getDirectoryHandle('audio');
+        const projectAudiosMap = await scanDirectoryForAudios(audioDir, 'game/audio', true);
+        setProjectAudios(projectAudiosMap);
+    } catch (e) {
+        console.warn("Could not find or access 'game/audio' directory.", e);
+        setProjectAudios(new Map());
     }
   };
 
@@ -1014,9 +1089,19 @@ const App: React.FC = () => {
             }
         }
         setImageMetadata(newImageMetadata);
+
+        const newAudioMetadata = new Map<string, AudioMetadata>();
+        if (settings.audioMetadata) {
+            for (const [filePath, meta] of Object.entries(settings.audioMetadata)) {
+                newAudioMetadata.set(filePath, meta as AudioMetadata);
+            }
+        }
+        setAudioMetadata(newAudioMetadata);
+
     } catch (e) {
         console.log("No project settings file found. A new one will be created if needed.");
         setImageMetadata(new Map());
+        setAudioMetadata(new Map());
     }
   };
 
@@ -1033,7 +1118,7 @@ const App: React.FC = () => {
 
   const handleOpenFolder = async () => {
     if (!isFileSystemApiSupported) {
-        alert("Your browser does not support the File System Access API. Please use a modern browser like Chrome or Edge.");
+        addToast("Your browser does not support the File System Access API. Please use a modern browser like Chrome or Edge.", 'warning');
         return;
     }
     try {
@@ -1044,16 +1129,16 @@ const App: React.FC = () => {
         } else if (window.showDirectoryPicker) {
             rootHandle = await window.showDirectoryPicker();
         } else {
-            alert("File System Access API could not be initialized.");
+            addToast("File System Access API could not be initialized.", 'error');
             return;
         }
         setDirectoryHandle(rootHandle);
-        setAudios([]);
 
         const tree = await buildTreeFromHandle(rootHandle);
         setFileTree(tree);
         
         await loadProjectImages(rootHandle);
+        await loadProjectAudios(rootHandle);
         await loadIdeSettings(rootHandle);
 
         const newBlocks: Block[] = [];
@@ -1068,11 +1153,8 @@ const App: React.FC = () => {
                         id: uuidv4(), content, position: { x: 0, y: 0 }, width: 300, height: 200, filePath: newPath, fileHandle,
                     });
                 } else if (entry.kind === 'directory') {
-                    // Audio scanning is still simple, can be improved later if needed
-                    if (entry.name.toLowerCase() === 'audio') {
-                        const loadedAudios = await processAudioDirectory(entry as FileSystemDirectoryHandle, 'audio');
-                        setAudios(loadedAudios);
-                    } else if (entry.name.toLowerCase() !== 'images') { // Images are handled separately
+                    // Assets are handled by dedicated loaders
+                    if (entry.name.toLowerCase() !== 'images' && entry.name.toLowerCase() !== 'audio') {
                         await findRpyFilesRecursively(entry as FileSystemDirectoryHandle, newPath);
                     }
                 }
@@ -1135,7 +1217,7 @@ const App: React.FC = () => {
             }
         } catch (err) {
             console.error(`Failed to save block ${block.title || block.id}`, err);
-            alert(`Could not save file for block: ${block.title || block.id}. You may need to grant permission again.`);
+            addToast(`Could not save file for block: ${block.title || block.id}. You may need to grant permission again.`, 'error');
         }
     }
     commitChange({ blocks: updatedBlocks, groups: liveGroups });
@@ -1148,7 +1230,7 @@ const App: React.FC = () => {
   };
 
   const handleDownloadFiles = async () => {
-    if (liveBlocks.length === 0) { alert("There are no blocks to download."); return; }
+    if (liveBlocks.length === 0) { addToast("There are no blocks to download.", 'warning'); return; }
     try {
       const zip = new JSZip();
       const usedFilenames = new Map<string, number>();
@@ -1170,7 +1252,7 @@ const App: React.FC = () => {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(link.href);
-    } catch (error) { console.error("Error creating zip file:", error); alert("Could not create the zip file."); }
+    } catch (error) { console.error("Error creating zip file:", error); addToast("Could not create the zip file.", 'error'); }
   };
   
   const handleUploadFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1178,7 +1260,7 @@ const App: React.FC = () => {
     if (!file) return;
 
     if (!file.name.endsWith('.zip')) {
-        alert('Please upload a .zip file containing your Ren\'Py project.');
+        addToast('Please upload a .zip file containing your Ren\'Py project.', 'warning');
         if (fileInputRef.current) fileInputRef.current.value = "";
         return;
     }
@@ -1190,7 +1272,7 @@ const App: React.FC = () => {
       const zip = await JSZip.loadAsync(file);
       const newBlocks: Block[] = [];
       const newImages = new Map<string, ProjectImage>();
-      const newAudios: RenpyAudio[] = [];
+      const newAudios = new Map<string, RenpyAudio>();
       const filePaths: string[] = [];
       
       for (const relativePath in zip.files) {
@@ -1202,19 +1284,17 @@ const App: React.FC = () => {
             const content = await zipEntry.async('string');
             newBlocks.push({ id: uuidv4(), content, position: { x: 0, y: 0 }, width: 300, height: 200, filePath: relativePath });
         } else if (/\.(png|jpe?g|webp)$/i.test(relativePath) && (relativePath.toLowerCase().startsWith('game/images/') || relativePath.toLowerCase().startsWith('images/'))) {
-            // Zip files might not have a consistent root, so we check for both
             const blob = await zipEntry.async('blob');
             const dataUrl = await fileToDataUrl(blob);
             const fileName = relativePath.split('/').pop() || '';
             const filePath = relativePath.toLowerCase().startsWith('game/') ? relativePath : `game/${relativePath}`;
-            // FIX: Use `null` for fileHandle and remove `as any` cast, now that the type supports it.
             newImages.set(filePath, { filePath, fileName, dataUrl, fileHandle: null, isInProject: true, projectFilePath: filePath });
-        } else if (/\.(mp3|ogg|wav)$/i.test(relativePath) && (relativePath.toLowerCase().startsWith('game/audio/') || relativePath.toLowerCase().startsWith('audio/'))) {
+        } else if (/\.(mp3|ogg|wav|opus)$/i.test(relativePath) && (relativePath.toLowerCase().startsWith('game/audio/') || relativePath.toLowerCase().startsWith('audio/'))) {
             const blob = await zipEntry.async('blob');
             const dataUrl = await fileToDataUrl(blob);
             const fileName = relativePath.split('/').pop() || '';
             const filePath = relativePath.toLowerCase().startsWith('game/') ? relativePath : `game/${relativePath}`;
-            newAudios.push({ fileName, filePath, dataUrl });
+            newAudios.set(filePath, { filePath, fileName, dataUrl, fileHandle: null, isInProject: true, projectFilePath: filePath });
         }
       }
       
@@ -1224,8 +1304,9 @@ const App: React.FC = () => {
       setDirectoryHandle(null);
       setDirtyBlockIds(new Set());
       setProjectImages(newImages);
-      setImageMetadata(new Map()); // Metadata is not stored in zip, so reset it
-      setAudios(newAudios);
+      setImageMetadata(new Map());
+      setProjectAudios(newAudios);
+      setAudioMetadata(new Map());
       
       const preliminaryAnalysis = performRenpyAnalysis(newBlocks);
       const laidOutBlocks = tidyUpLayout(newBlocks, preliminaryAnalysis.links);
@@ -1236,7 +1317,7 @@ const App: React.FC = () => {
       setIsWelcomeScreenVisible(false);
     } catch (error) {
       console.error("Error processing zip file:", error);
-      alert("Could not process the zip file. It might be corrupted or in an invalid format.");
+      addToast("Could not process the zip file. It might be corrupted or in an invalid format.", 'error');
     } finally {
       if(fileInputRef.current) fileInputRef.current.value = "";
       setUploadConfirm({ visible: false, file: null });
@@ -1250,7 +1331,7 @@ const App: React.FC = () => {
   }, []);
 
   const updateGroup = useCallback((id: string, newGroupData: Partial<BlockGroup>) => {
-    const newGroups = liveGroups.map((group) => group.id === id ? { ...group, ...newGroupData } : group);
+    const newGroups = liveGroups.map(group => group.id === id ? { ...group, ...newGroupData } : group);
     commitChange({ blocks: liveBlocks, groups: newGroups });
   }, [liveBlocks, liveGroups, commitChange]);
 
@@ -1261,7 +1342,7 @@ const App: React.FC = () => {
 
   const onInteractionEnd = useCallback(() => {
     setHistory({ blocks: liveBlocks, groups: liveGroups });
-    const draggedBlockIds = liveBlocks.filter((b: Block) => b.position !== historyState.blocks.find((hb: Block) => hb.id === b.id)?.position).map((b: Block) => b.id);
+    const draggedBlockIds = liveBlocks.filter(b => b.position !== historyState.blocks.find(hb => hb.id === b.id)?.position).map(b => b.id);
     if(draggedBlockIds.length > 0) {
       setDirtyBlockIds(prev => new Set([...prev, ...draggedBlockIds]));
     }
@@ -1270,12 +1351,15 @@ const App: React.FC = () => {
   const handleRefreshAnalysis = () => setAnalysisTrigger(c => c + 1);
 
     const handleFileDoubleClick = (filePath: string) => {
-        if (!filePath.endsWith('.rpy')) return;
-        const block = liveBlocks.find((b: Block) => b.filePath === filePath);
-        if (block) {
-            handleOpenEditorTab(block.id);
-        } else {
-            console.warn(`Could not find a block for file path: ${filePath}`);
+        if (filePath.endsWith('.rpy')) {
+            const block = liveBlocks.find(b => b.filePath === filePath);
+            if (block) {
+                handleOpenEditorTab(block.id);
+            }
+        } else if (/\.(png|jpe?g|webp)$/i.test(filePath)) {
+            handleOpenImageTab(filePath);
+        } else if (/\.(mp3|ogg|wav|opus)$/i.test(filePath)) {
+            handleOpenAudioTab(filePath);
         }
     };
     
@@ -1294,16 +1378,17 @@ const App: React.FC = () => {
         const fileHandle = await gameDir.getFileHandle(IDE_SETTINGS_FILE, { create: true });
         const writable = await fileHandle.createWritable();
         const settings = {
-            // We can't persist directory handles, but we can save their names as a reference
-            imageScanDirectories: Array.from(scanDirectories.keys()),
+            imageScanDirectories: Array.from(imageScanDirectories.keys()),
             imageMetadata: Object.fromEntries(imageMetadata),
+            audioScanDirectories: Array.from(audioScanDirectories.keys()),
+            audioMetadata: Object.fromEntries(audioMetadata),
         };
         await writable.write(JSON.stringify(settings, null, 2));
         await writable.close();
     } catch (e) {
         console.error("Failed to save IDE settings:", e);
     }
-  }, [directoryHandle, imageMetadata, scanDirectories]);
+  }, [directoryHandle, imageMetadata, imageScanDirectories, audioMetadata, audioScanDirectories]);
 
   const handleUpdateImageMetadata = useCallback(async (projectFilePath: string, newMetadata: ImageMetadata) => {
     const oldMetadata = imageMetadata.get(projectFilePath);
@@ -1329,7 +1414,6 @@ const App: React.FC = () => {
         
         const newPath = `game/images${newSubfolder ? `/${newSubfolder}` : ''}/${fileName}`.replace(/\/+/g, '/').replace(/^\//, '');
 
-        // If path is somehow unchanged, just update metadata
         if (oldPath === newPath) {
              setImageMetadata(prev => {
                 const newMap = new Map(prev);
@@ -1339,15 +1423,13 @@ const App: React.FC = () => {
             return;
         }
 
-        // 1. Read old file
         if (!imageToMove.fileHandle) {
             console.error("Cannot move image without a file handle.", imageToMove);
-            alert("Cannot move image: file handle is missing.");
+            addToast("Cannot move image: file handle is missing.", 'error');
             return;
         }
         const fileContent = await imageToMove.fileHandle.getFile();
 
-        // 2. Create new directory and write file
         let targetDir = await directoryHandle.getDirectoryHandle('game', { create: true });
         targetDir = await targetDir.getDirectoryHandle('images', { create: true });
         
@@ -1363,7 +1445,6 @@ const App: React.FC = () => {
         await writable.write(fileContent);
         await writable.close();
 
-        // 3. Delete old file
         let oldDirParent = directoryHandle;
         const oldDirParts = oldPath.split('/').slice(0, -1);
         for (const part of oldDirParts) {
@@ -1371,7 +1452,6 @@ const App: React.FC = () => {
         }
         await oldDirParent.removeEntry(fileName);
 
-        // 4. Update application state
         const newProjectImages: Map<string, ProjectImage> = new Map(projectImages);
         newProjectImages.delete(oldPath);
         const updatedImage: ProjectImage = {
@@ -1382,30 +1462,24 @@ const App: React.FC = () => {
         };
         newProjectImages.set(newPath, updatedImage);
 
-        // Find the original source image (if it exists) and update its projectFilePath pointer
-// FIX: Explicitly type `img` in find to fix type inference issue, preventing `sourceImage` from becoming `unknown`.
-        const sourceImage = Array.from(newProjectImages.values()).find((img: ProjectImage) => img.projectFilePath === oldPath && img.filePath !== oldPath);
+        const sourceImage = Array.from(newProjectImages.values()).find(img => img.projectFilePath === oldPath && img.filePath !== oldPath);
         if (sourceImage) {
-            // FIX: Explicitly type updatedSourceImage to satisfy ProjectImage type requirements.
             const updatedSourceImage: ProjectImage = { ...sourceImage, projectFilePath: newPath };
             newProjectImages.set(sourceImage.filePath, updatedSourceImage);
         }
         setProjectImages(newProjectImages);
 
-        // Update imageMetadata map
         const newMetadataMap = new Map(imageMetadata);
         newMetadataMap.delete(oldPath);
         newMetadataMap.set(newPath, newMetadata);
         setImageMetadata(newMetadataMap);
         
-        // Update fileTree
         setFileTree(currentTree => {
             if (!currentTree) return null;
             let treeAfterRemoval = removeNodeFromFileTree(currentTree, oldPath);
             return addNodeToFileTree(treeAfterRemoval!, newPath);
         });
 
-        // Update open tabs
         setOpenTabs(tabs => tabs.map(tab => {
             if (tab.type === 'image' && tab.filePath === oldPath) {
                 return { ...tab, id: newPath, filePath: newPath };
@@ -1413,29 +1487,28 @@ const App: React.FC = () => {
             return tab;
         }));
         
-        // Update active tab if it was the one moved
         if (activeTabId === oldPath) {
             setActiveTabId(newPath);
         }
 
     } catch (err) {
         console.error("Failed to move image file:", err);
-        alert(`Could not move the image file. Error: ${(err as Error).message}`);
+        addToast(`Could not move the image file. Error: ${(err as Error).message}`, 'error');
     }
-  }, [directoryHandle, projectImages, imageMetadata, fileTree, activeTabId]);
+  }, [directoryHandle, projectImages, imageMetadata, fileTree, activeTabId, addToast]);
   
   // Trigger save whenever metadata changes
   useEffect(() => {
     if (directoryHandle) {
         handleSaveIdeSettings();
     }
-  }, [imageMetadata, scanDirectories, directoryHandle, handleSaveIdeSettings]);
+  }, [imageMetadata, audioMetadata, imageScanDirectories, audioScanDirectories, directoryHandle, handleSaveIdeSettings]);
 
-  const handleAddScanDirectory = useCallback(async () => {
+  const handleAddImageScanDirectory = useCallback(async () => {
       if (!isFileSystemApiSupported) return;
       try {
         const dirHandle = await window.showDirectoryPicker!();
-        setScanDirectories(prev => new Map(prev).set(dirHandle.name, dirHandle));
+        setImageScanDirectories(prev => new Map(prev).set(dirHandle.name, dirHandle));
         const newImages = await scanDirectoryForImages(dirHandle, dirHandle.name, false);
         setProjectImages(prev => new Map([...prev, ...newImages]));
       } catch (err) {
@@ -1450,20 +1523,15 @@ const App: React.FC = () => {
         const gameDir = await directoryHandle.getDirectoryHandle('game', { create: true });
         const imagesDir = await gameDir.getDirectoryHandle('images', { create: true });
         
-        // FIX: Explicitly type `newImageMap` to ensure type safety.
         const newImageMap: Map<string, ProjectImage> = new Map(projectImages);
         const newMetadataMap = new Map(imageMetadata);
 
         for (const sourcePath of sourceFilePaths) {
-            // FIX: Explicitly type `sourceImage` to resolve type inference issues where it was being treated as `unknown`.
-            const sourceImage: ProjectImage | undefined = newImageMap.get(sourcePath);
+            const sourceImage = newImageMap.get(sourcePath);
             if (!sourceImage || sourceImage.isInProject) continue;
 
-            // FIX: Ensure that an invalid (but truthy) metadata object like `{}` from the map
-            // is handled by checking for a required property before using it.
-// FIX: Add explicit type annotation to `existingMeta` to resolve 'unknown' type error.
-            const existingMeta: ImageMetadata | undefined = newMetadataMap.get(sourceImage.projectFilePath || '');
-            const meta: ImageMetadata = metadataOverride ||
+            const existingMeta = newMetadataMap.get(sourceImage.projectFilePath || '') as ImageMetadata;
+            const meta = metadataOverride ||
               (existingMeta?.renpyName ? existingMeta : undefined) ||
               {
                 renpyName: sourceImage.fileName.split('.').slice(0,-1).join('.'),
@@ -1483,49 +1551,41 @@ const App: React.FC = () => {
             const targetFileName = sourceImage.fileName;
             const targetProjectFilePath = `game/images${subfolder ? `/${subfolder}` : ''}/${targetFileName}`;
 
-            // FIX: Add a check for fileHandle to ensure it exists before use, as it can be null for zipped images.
             if (!sourceImage.fileHandle) {
                 console.warn(`Skipping image copy for ${sourceImage.filePath} because file handle is missing.`);
                 continue;
             }
-            // Copy file content
+
             const file = await sourceImage.fileHandle.getFile();
             const newFileHandle = await targetDir.getFileHandle(targetFileName, { create: true });
             const writable = await newFileHandle.createWritable();
             await writable.write(file);
             await writable.close();
 
-            // Update source image in map
-            // FIX: Explicitly type `updatedSourceImage` to ensure type safety.
-// FIX: Change type annotation to `ProjectImage` to match the object shape and prevent assignment errors.
             const updatedSourceImage: ProjectImage = { ...sourceImage, isInProject: true, projectFilePath: targetProjectFilePath };
             newImageMap.set(sourcePath, updatedSourceImage);
             
-            // Add a new entry for the project asset if it doesn't already exist from the initial scan
             if (!newImageMap.has(targetProjectFilePath)) {
-              // FIX: Explicitly type `projectAssetImage` to ensure type safety.
               const projectAssetImage: ProjectImage = {
                 filePath: targetProjectFilePath,
                 projectFilePath: targetProjectFilePath,
                 fileName: targetFileName,
-                dataUrl: sourceImage.dataUrl, // Can reuse dataUrl
+                dataUrl: sourceImage.dataUrl,
                 fileHandle: newFileHandle,
                 isInProject: true,
               };
               newImageMap.set(targetProjectFilePath, projectAssetImage);
             }
             
-            // Update metadata
             newMetadataMap.set(targetProjectFilePath, meta);
         }
         setProjectImages(newImageMap);
         setImageMetadata(newMetadataMap);
-        // Also update file tree
+
         if (fileTree) {
             let currentTree = fileTree;
             for (const sourcePath of sourceFilePaths) {
-                // FIX: Explicitly type `sourceImage` here as well for consistency and type safety.
-                const sourceImage: ProjectImage | undefined = newImageMap.get(sourcePath);
+                const sourceImage = newImageMap.get(sourcePath);
                 if (sourceImage?.projectFilePath) {
                     currentTree = addNodeToFileTree(currentTree, sourceImage.projectFilePath);
                 }
@@ -1535,44 +1595,178 @@ const App: React.FC = () => {
 
     } catch (e) {
         console.error("Error copying images:", e);
-        alert("Could not copy images. Ensure you have granted permission to the project folder.");
+        addToast("Could not copy images. Ensure you have granted permission to the project folder.", 'error');
     }
-  }, [directoryHandle, projectImages, imageMetadata, fileTree]);
+  }, [directoryHandle, projectImages, imageMetadata, fileTree, addToast]);
 
+  const handleAddAudioScanDirectory = useCallback(async () => {
+      if (!isFileSystemApiSupported) return;
+      try {
+        const dirHandle = await window.showDirectoryPicker!();
+        setAudioScanDirectories(prev => new Map(prev).set(dirHandle.name, dirHandle));
+        const newAudios = await scanDirectoryForAudios(dirHandle, dirHandle.name, false);
+        setProjectAudios(prev => new Map([...prev, ...newAudios]));
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') console.log('User cancelled directory picker.');
+        else console.error("Error picking directory to scan for audio:", err);
+      }
+  }, []);
 
-  const handleImportAudios = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-    if (!directoryHandle) {
-        alert("Please open a project folder first to import audio files directly into it.");
+  const handleCopyAudiosToProject = useCallback(async (sourceFilePaths: string[], metadataOverride?: AudioMetadata) => {
+    if (!directoryHandle) return;
+    try {
+        const gameDir = await directoryHandle.getDirectoryHandle('game', { create: true });
+        const audiosDir = await gameDir.getDirectoryHandle('audio', { create: true });
+        
+        const newAudioMap: Map<string, RenpyAudio> = new Map(projectAudios);
+        const newMetadataMap = new Map(audioMetadata);
+
+        for (const sourcePath of sourceFilePaths) {
+            const sourceAudio = newAudioMap.get(sourcePath);
+            if (!sourceAudio || sourceAudio.isInProject) continue;
+
+            const existingMeta = newMetadataMap.get(sourceAudio.projectFilePath || '');
+            const meta = metadataOverride || (existingMeta?.renpyName ? existingMeta : undefined) || {
+                renpyName: sourceAudio.fileName.split('.').slice(0,-1).join('.'),
+                tags: [],
+                projectSubfolder: existingMeta?.projectSubfolder
+            };
+            const subfolder = meta.projectSubfolder || '';
+
+            let targetDir = audiosDir;
+            if (subfolder) {
+                const subfolderParts = subfolder.split('/');
+                for (const part of subfolderParts) {
+                    if (part) targetDir = await targetDir.getDirectoryHandle(part, { create: true });
+                }
+            }
+            
+            const targetFileName = sourceAudio.fileName;
+            const targetProjectFilePath = `game/audio${subfolder ? `/${subfolder}` : ''}/${targetFileName}`;
+
+            if (!sourceAudio.fileHandle) {
+                console.warn(`Skipping audio copy for ${sourceAudio.filePath} because file handle is missing.`);
+                continue;
+            }
+
+            const file = await sourceAudio.fileHandle.getFile();
+            const newFileHandle = await targetDir.getFileHandle(targetFileName, { create: true });
+            const writable = await newFileHandle.createWritable();
+            await writable.write(file);
+            await writable.close();
+
+            const updatedSourceAudio: RenpyAudio = { ...sourceAudio, isInProject: true, projectFilePath: targetProjectFilePath };
+            newAudioMap.set(sourcePath, updatedSourceAudio);
+            
+            if (!newAudioMap.has(targetProjectFilePath)) {
+              const projectAssetAudio: RenpyAudio = {
+                filePath: targetProjectFilePath,
+                projectFilePath: targetProjectFilePath,
+                fileName: targetFileName,
+                dataUrl: sourceAudio.dataUrl,
+                fileHandle: newFileHandle,
+                isInProject: true,
+              };
+              newAudioMap.set(targetProjectFilePath, projectAssetAudio);
+            }
+            
+            newMetadataMap.set(targetProjectFilePath, meta);
+        }
+        setProjectAudios(newAudioMap);
+        setAudioMetadata(newMetadataMap);
+
+        if (fileTree) {
+            let currentTree = fileTree;
+            for (const sourcePath of sourceFilePaths) {
+                const sourceAudio = newAudioMap.get(sourcePath);
+                if (sourceAudio?.projectFilePath) {
+                    currentTree = addNodeToFileTree(currentTree, sourceAudio.projectFilePath);
+                }
+            }
+            setFileTree(currentTree);
+        }
+
+    } catch (e) {
+        console.error("Error copying audio:", e);
+        addToast("Could not copy audio files. Ensure you have granted permission to the project folder.", 'error');
+    }
+  }, [directoryHandle, projectAudios, audioMetadata, fileTree, addToast]);
+  
+  const handleUpdateAudioMetadata = useCallback(async (projectFilePath: string, newMetadata: AudioMetadata) => {
+    const oldMetadata = audioMetadata.get(projectFilePath);
+    const audioToMove = projectAudios.get(projectFilePath);
+
+    const oldSubfolder = oldMetadata?.projectSubfolder?.trim() || '';
+    const newSubfolder = newMetadata.projectSubfolder?.trim() || '';
+
+    if (!directoryHandle || !audioToMove || !audioToMove.isInProject || oldSubfolder === newSubfolder) {
+        setAudioMetadata(prev => new Map(prev).set(projectFilePath, newMetadata));
         return;
     }
 
     try {
-        const audioDir = await directoryHandle.getDirectoryHandle('audio', { create: true });
-        const newAudios: RenpyAudio[] = [...audios];
+        const oldPath = audioToMove.projectFilePath!;
+        const fileName = audioToMove.fileName;
+        const newPath = `game/audio${newSubfolder ? `/${newSubfolder}` : ''}/${fileName}`.replace(/\/+/g, '/').replace(/^\//, '');
 
-        for (const file of files) {
-            const newFileHandle = await audioDir.getFileHandle(file.name, { create: true });
-            const writable = await newFileHandle.createWritable();
-            await writable.write(file);
-            await writable.close();
-            
-            const dataUrl = await fileToDataUrl(file);
-            const filePath = `audio/${file.name}`;
-            
-            const existingIndex = newAudios.findIndex(aud => aud.filePath === filePath);
-            if (existingIndex > -1) newAudios[existingIndex] = { fileName: file.name, filePath, dataUrl };
-            else newAudios.push({ fileName: file.name, filePath, dataUrl });
+        if (oldPath === newPath) {
+             setAudioMetadata(prev => new Map(prev).set(projectFilePath, newMetadata));
+             return;
         }
-        setAudios(newAudios);
+
+        if (!audioToMove.fileHandle) throw new Error("File handle missing for audio file to move.");
+        
+        const fileContent = await audioToMove.fileHandle.getFile();
+
+        let targetDir = await directoryHandle.getDirectoryHandle('game', { create: true });
+        targetDir = await targetDir.getDirectoryHandle('audio', { create: true });
+        if (newSubfolder) {
+            for (const part of newSubfolder.split('/')) {
+                if (part) targetDir = await targetDir.getDirectoryHandle(part, { create: true });
+            }
+        }
+
+        const newFileHandle = await targetDir.getFileHandle(fileName, { create: true });
+        const writable = await newFileHandle.createWritable();
+        await writable.write(fileContent);
+        await writable.close();
+
+        let oldDirParent = directoryHandle;
+        for (const part of oldPath.split('/').slice(0, -1)) {
+            oldDirParent = await oldDirParent.getDirectoryHandle(part);
+        }
+        await oldDirParent.removeEntry(fileName);
+
+        const newProjectAudios: Map<string, RenpyAudio> = new Map(projectAudios);
+        newProjectAudios.delete(oldPath);
+        const updatedAudio: RenpyAudio = { ...audioToMove, filePath: newPath, projectFilePath: newPath, fileHandle: newFileHandle };
+        newProjectAudios.set(newPath, updatedAudio);
+
+        const sourceAudio = Array.from(newProjectAudios.values()).find(aud => aud.projectFilePath === oldPath && aud.filePath !== oldPath);
+        if (sourceAudio) {
+            newProjectAudios.set(sourceAudio.filePath, { ...sourceAudio, projectFilePath: newPath });
+        }
+        setProjectAudios(newProjectAudios);
+
+        const newMetadataMap = new Map(audioMetadata);
+        newMetadataMap.delete(oldPath);
+        newMetadataMap.set(newPath, newMetadata);
+        setAudioMetadata(newMetadataMap);
+        
+        setFileTree(currentTree => {
+            if (!currentTree) return null;
+            let treeAfterRemoval = removeNodeFromFileTree(currentTree, oldPath);
+            return addNodeToFileTree(treeAfterRemoval!, newPath);
+        });
+
+        setOpenTabs(tabs => tabs.map(tab => tab.type === 'audio' && tab.filePath === oldPath ? { ...tab, id: newPath, filePath: newPath } : tab));
+        if (activeTabId === oldPath) setActiveTabId(newPath);
+
     } catch (err) {
-        console.error("Error importing audio:", err);
-        alert("Could not import audio. You may need to grant file system permissions again.");
-    } finally {
-        if(audioImportInputRef.current) audioImportInputRef.current.value = "";
+        console.error("Failed to move audio file:", err);
+        addToast(`Could not move the audio file. Error: ${(err as Error).message}`, 'error');
     }
-  };
+  }, [directoryHandle, projectAudios, audioMetadata, fileTree, activeTabId, addToast]);
 
   // --- Start File Operations Handlers ---
 
@@ -1602,18 +1796,16 @@ const App: React.FC = () => {
     let currentBlocks = liveBlocks;
     let currentProjectImages = projectImages;
     let currentImageMetadata = imageMetadata;
+    let currentProjectAudios = projectAudios;
+    let currentAudioMetadata = audioMetadata;
     let currentOpenTabs = openTabs;
     let currentActiveTabId = activeTabId;
     let currentClipboard = clipboard;
     
     for(const [oldPath, { newPath }] of updates.entries()) {
-        // Blocks
-        currentBlocks = currentBlocks.map((b: Block) => b.filePath === oldPath ? { ...b, filePath: newPath } : b);
+        currentBlocks = currentBlocks.map(b => b.filePath === oldPath ? { ...b, filePath: newPath } : b);
         
-        // FIX: Rewrite map updates to be immutable and strongly typed to avoid runtime errors and issues with `unknown` types.
-        // Project Images
         const newProjectImages = new Map<string, ProjectImage>();
-        // Using for...of for better type inference
         for (const [key, img] of currentProjectImages.entries()) {
             if (key.startsWith(oldPath)) {
                 const updatedKey = key.replace(oldPath, newPath);
@@ -1628,18 +1820,35 @@ const App: React.FC = () => {
         }
         currentProjectImages = newProjectImages;
 
-        // Image Metadata
         const newImageMetadata = new Map<string, ImageMetadata>();
         currentImageMetadata.forEach((meta, key) => {
-           if (key.startsWith(oldPath)) {
-             newImageMetadata.set(key.replace(oldPath, newPath), meta);
-           } else {
-            newImageMetadata.set(key, meta);
-           }
+           if (key.startsWith(oldPath)) newImageMetadata.set(key.replace(oldPath, newPath), meta);
+           else newImageMetadata.set(key, meta);
         });
         currentImageMetadata = newImageMetadata;
 
-        // Open Tabs
+        const newProjectAudios = new Map<string, RenpyAudio>();
+        for (const [key, aud] of currentProjectAudios.entries()) {
+            if (key.startsWith(oldPath)) {
+                const updatedKey = key.replace(oldPath, newPath);
+                const updatedAud: RenpyAudio = {...aud, filePath: updatedKey, projectFilePath: aud.projectFilePath?.replace(oldPath, newPath)};
+                newProjectAudios.set(updatedKey, updatedAud);
+            } else if (aud.projectFilePath?.startsWith(oldPath)) {
+                const updatedAud: RenpyAudio = {...aud, projectFilePath: aud.projectFilePath.replace(oldPath, newPath) };
+                newProjectAudios.set(key, updatedAud);
+            } else {
+                newProjectAudios.set(key, aud);
+            }
+        }
+        currentProjectAudios = newProjectAudios;
+
+        const newAudioMetadata = new Map<string, AudioMetadata>();
+        currentAudioMetadata.forEach((meta, key) => {
+           if (key.startsWith(oldPath)) newAudioMetadata.set(key.replace(oldPath, newPath), meta);
+           else newAudioMetadata.set(key, meta);
+        });
+        currentAudioMetadata = newAudioMetadata;
+
         currentOpenTabs = currentOpenTabs.map(tab => {
             if (tab.filePath?.startsWith(oldPath)) {
                 const newFilePath = tab.filePath.replace(oldPath, newPath);
@@ -1648,12 +1857,10 @@ const App: React.FC = () => {
             return tab;
         });
         
-        // Active Tab ID
         if (currentActiveTabId.startsWith(oldPath)) {
             currentActiveTabId = currentActiveTabId.replace(oldPath, newPath);
         }
         
-        // Clipboard
         if (currentClipboard?.paths.has(oldPath)) {
             const newPaths = new Set(currentClipboard.paths);
             newPaths.delete(oldPath);
@@ -1665,12 +1872,14 @@ const App: React.FC = () => {
     setLiveBlocks(currentBlocks);
     setProjectImages(currentProjectImages);
     setImageMetadata(currentImageMetadata);
+    setProjectAudios(currentProjectAudios);
+    setAudioMetadata(currentAudioMetadata);
     setOpenTabs(currentOpenTabs);
     setActiveTabId(currentActiveTabId);
     setClipboard(currentClipboard);
     commitChange({ blocks: currentBlocks, groups: liveGroups });
     
-  }, [liveBlocks, liveGroups, projectImages, imageMetadata, openTabs, activeTabId, clipboard, commitChange]);
+  }, [liveBlocks, liveGroups, projectImages, imageMetadata, projectAudios, audioMetadata, openTabs, activeTabId, clipboard, commitChange]);
 
   const handleCreateNode = useCallback(async (parentPath: string, name: string, type: 'file' | 'folder') => {
     if (!directoryHandle || !name) return;
@@ -1705,9 +1914,9 @@ const App: React.FC = () => {
         setFileTree(tree => addNodeToFileTree(tree!, newPath, type));
     } catch (e) {
         console.error("Failed to create node:", e);
-        alert(`Could not create ${type}: ${(e as Error).message}`);
+        addToast(`Could not create ${type}: ${(e as Error).message}`, 'error');
     }
-  }, [directoryHandle, liveBlocks, liveGroups, commitChange, getHandleFromPath, handleOpenEditorTab]);
+  }, [directoryHandle, liveBlocks, liveGroups, commitChange, getHandleFromPath, handleOpenEditorTab, addToast]);
 
   const handleRenameNode = useCallback(async (oldPath: string, newName: string) => {
       if (!directoryHandle) return;
@@ -1760,9 +1969,9 @@ const App: React.FC = () => {
           
       } catch (e) {
           console.error("Failed to rename node:", e);
-          alert(`Could not rename: ${(e as Error).message}`);
+          addToast(`Could not rename: ${(e as Error).message}`, 'error');
       }
-  }, [directoryHandle, getHandleFromPath, updateAllStatePaths]);
+  }, [directoryHandle, getHandleFromPath, updateAllStatePaths, addToast]);
   
     const handleDeleteNode = useCallback((paths: string[]) => {
       requestDelete([], paths);
@@ -1829,9 +2038,9 @@ const App: React.FC = () => {
 
       } catch (e) {
           console.error("Failed to move nodes:", e);
-          alert(`Could not move: ${(e as Error).message}`);
+          addToast(`Could not move: ${(e as Error).message}`, 'error');
       }
-  }, [directoryHandle, getHandleFromPath, updateAllStatePaths]);
+  }, [directoryHandle, getHandleFromPath, updateAllStatePaths, addToast]);
   
     const handlePaste = useCallback(async (targetFolderPath: string) => {
         if (!clipboard || !directoryHandle) return;
@@ -1912,10 +2121,10 @@ const App: React.FC = () => {
 
         } catch (e) {
             console.error("Failed to paste nodes:", e);
-            alert(`Could not paste: ${(e as Error).message}`);
+            addToast(`Could not paste: ${(e as Error).message}`, 'error');
         }
 
-    }, [clipboard, directoryHandle, getHandleFromPath, handleMoveNode, fileTree, liveBlocks, liveGroups, commitChange]);
+    }, [clipboard, directoryHandle, getHandleFromPath, handleMoveNode, fileTree, liveBlocks, liveGroups, commitChange, addToast]);
   
   // --- End File Operations Handlers ---
 
@@ -2037,6 +2246,12 @@ const App: React.FC = () => {
       )}
 
       <input type="file" ref={fileInputRef} onChange={handleUploadFileSelect} accept=".zip" style={{ display: 'none' }} />
+      
+      <div aria-live="assertive" className="fixed bottom-4 right-4 z-[60] w-full max-w-sm flex flex-col space-y-2 items-end">
+        {toasts.map(toast => (
+            <Toast key={toast.id} toast={toast} onDismiss={dismissToast} />
+        ))}
+      </div>
 
       <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 flex items-center justify-between px-4 z-30 shadow-sm">
         <div className="flex items-center space-x-4">
@@ -2101,6 +2316,8 @@ const App: React.FC = () => {
                             {tab.type === 'canvas' && 'Canvas'}
                             {tab.type === 'editor' && (liveBlocks.find(b => b.id === tab.blockId)?.title || liveBlocks.find(b => b.id === tab.blockId)?.filePath?.split('/').pop() || 'Editor')}
                             {tab.type === 'image' && (tab.filePath?.split('/').pop() || 'Image')}
+                            {tab.type === 'audio' && (tab.filePath?.split('/').pop() || 'Audio')}
+                            {tab.type === 'character' && (tab.characterTag === 'new_character' ? 'New Character' : analysisResult.characters.get(tab.characterTag!)?.name || 'Character')}
                         </span>
                         {tab.type !== 'canvas' && (
                             <button onClick={(e) => { e.stopPropagation(); handleCloseTab(tab.id); }} className="ml-3 p-0.5 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600">
@@ -2159,6 +2376,27 @@ const App: React.FC = () => {
                     }
                     return <div>Image not found.</div>;
                  })()}
+                 {activeTab.type === 'audio' && activeTab.filePath && (() => {
+                    const audio = projectAudios.get(activeTab.filePath!);
+                    if (audio) {
+                        return <AudioEditorView 
+                            audio={audio} 
+                            metadata={audioMetadata.get(audio.projectFilePath || '')}
+                            onUpdateMetadata={handleUpdateAudioMetadata}
+                            onCopyToProject={(sourcePath, metadata) => handleCopyAudiosToProject([sourcePath], metadata)}
+                        />;
+                    }
+                    return <div>Audio not found.</div>;
+                 })()}
+                 {activeTab.type === 'character' && activeTab.characterTag && (
+                    <CharacterEditorView
+                      character={activeTab.characterTag === 'new_character' ? undefined : analysisResult.characters.get(activeTab.characterTag)}
+                      onSave={handleSaveCharacter}
+                      existingTags={Array.from(analysisResult.characters.keys())}
+                      projectImages={Array.from(projectImages.values())}
+                      imageMetadata={imageMetadata}
+                    />
+                 )}
             </div>
         </div>
 
@@ -2168,8 +2406,7 @@ const App: React.FC = () => {
           <aside className="flex-shrink-0" style={{ width: rightSidebarWidth }}>
             <StoryElementsPanel
                 analysisResult={analysisResult}
-                onAddCharacter={handleAddCharacter}
-                onUpdateCharacter={handleUpdateCharacter}
+                onOpenCharacterEditor={handleOpenCharacterEditor}
                 onFindCharacterUsages={handleFindCharacterUsages}
                 onAddVariable={handleAddVariable}
                 onFindVariableUsages={handleFindVariableUsages}
@@ -2177,16 +2414,20 @@ const App: React.FC = () => {
                 onFindScreenDefinition={handleFindScreenDefinition}
                 projectImages={projectImages}
                 imageMetadata={imageMetadata}
-                onAddScanDirectory={handleAddScanDirectory}
-                scanDirectories={scanDirectories}
+                onAddImageScanDirectory={handleAddImageScanDirectory}
+                imageScanDirectories={imageScanDirectories}
                 onCopyImagesToProject={(paths) => handleCopyImagesToProject(paths)}
                 onUpdateImageMetadata={handleUpdateImageMetadata}
                 onOpenImageEditor={handleOpenImageTab}
-                audios={audios}
-                onImportAudios={() => audioImportInputRef.current?.click()}
+                projectAudios={projectAudios}
+                audioMetadata={audioMetadata}
+                onAddAudioScanDirectory={handleAddAudioScanDirectory}
+                audioScanDirectories={audioScanDirectories}
+                onCopyAudiosToProject={(paths) => handleCopyAudiosToProject(paths)}
+                onUpdateAudioMetadata={handleUpdateAudioMetadata}
+                onOpenAudioEditor={handleOpenAudioTab}
                 isFileSystemApiSupported={isFileSystemApiSupported}
              />
-             <input type="file" ref={audioImportInputRef} onChange={handleImportAudios} accept="audio/*" multiple style={{ display: 'none' }} />
           </aside>
         )}
       </main>

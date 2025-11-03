@@ -13,7 +13,8 @@
     "react-dom": "^19.2.0",
     "@monaco-editor/react": "^4.6.0",
     "monaco-editor": "^0.50.0",
-    "jszip": "^3.10.1"
+    "jszip": "^3.10.1",
+    "immer": "^10.1.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

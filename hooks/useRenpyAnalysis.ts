@@ -24,6 +24,16 @@ const stringToColor = (str: string) => {
   return PALETTE[Math.abs(hash) % PALETTE.length];
 };
 
+// Helper to remove quotes from a string value
+const unquote = (s: string | undefined): string | undefined => {
+    if (!s) return undefined;
+    const trimmed = s.trim();
+    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+        return trimmed.slice(1, -1);
+    }
+    return trimmed;
+};
+
 function parseCharacterArgs(argsString: string): { positional: string[]; kwargs: Record<string, string> } {
   const args: string[] = [];
   let parenLevel = 0;
@@ -96,8 +106,8 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
         const { positional, kwargs } = parseCharacterArgs(argsString);
 
         const rawName = kwargs.name || (positional.length > 0 ? positional[0] : null);
-        const name = (rawName && rawName.toLowerCase() !== 'none') ? rawName.replace(/['"]/g, '') : tag;
-        const color = kwargs.color ? kwargs.color.replace(/['"]/g, '') : null;
+        const name = (rawName && rawName.toLowerCase() !== 'none') ? unquote(rawName) || tag : tag;
+        const color = unquote(kwargs.color);
         
         let profile: string | undefined;
         if (match.index > 0) {
@@ -112,20 +122,31 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
             }
         }
 
-        const otherArgs: Record<string, string> = {};
-        Object.entries(kwargs).forEach(([key, value]) => {
-            if (key !== 'name' && key !== 'color') {
-                otherArgs[key] = value;
-            }
-        });
-
         const character: Character = {
             tag,
             name,
             color: color || stringToColor(tag),
             profile,
             definedInBlockId: block.id,
-            otherArgs,
+            image: unquote(kwargs.image),
+            who_style: unquote(kwargs.who_style),
+            who_prefix: unquote(kwargs.who_prefix),
+            who_suffix: unquote(kwargs.who_suffix),
+            what_color: unquote(kwargs.what_color),
+            what_style: unquote(kwargs.what_style),
+            what_prefix: unquote(kwargs.what_prefix),
+            what_suffix: unquote(kwargs.what_suffix),
+            slow: kwargs.slow === 'True' ? true : kwargs.slow === 'False' ? false : undefined,
+            slow_speed: kwargs.slow_speed ? parseInt(kwargs.slow_speed, 10) : undefined,
+            slow_abortable: kwargs.slow_abortable === 'True' ? true : kwargs.slow_abortable === 'False' ? false : undefined,
+            all_at_once: kwargs.all_at_once === 'True' ? true : kwargs.all_at_once === 'False' ? false : undefined,
+            window_style: unquote(kwargs.window_style),
+            ctc: unquote(kwargs.ctc),
+            ctc_position: unquote(kwargs.ctc_position) as 'nestled' | 'fixed' | undefined,
+            interact: kwargs.interact === 'True' ? true : kwargs.interact === 'False' ? false : undefined,
+            afm: kwargs.afm === 'True' ? true : kwargs.afm === 'False' ? false : undefined,
+            what_properties: kwargs.what_properties,
+            window_properties: kwargs.window_properties,
         };
         result.characters.set(character.tag, character);
     }

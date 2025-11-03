@@ -1,118 +1,177 @@
+
 import React, { useState, useMemo } from 'react';
-import type { RenpyAudio } from '../types';
+import type { RenpyAudio, AudioMetadata } from '../types';
+import AudioContextMenu from './AudioContextMenu';
 
 interface AudioManagerProps {
   audios: RenpyAudio[];
-  onImportAudios: () => void;
-  isImportEnabled: boolean;
+  metadata: Map<string, AudioMetadata>;
+  scanDirectories: string[];
+  onAddScanDirectory: () => void;
+  onCopyAudiosToProject: (sourceFilePaths: string[]) => void;
+  onOpenAudioEditor: (filePath: string) => void;
+  isFileSystemApiSupported: boolean;
 }
 
-const AudioManager: React.FC<AudioManagerProps> = ({ audios, onImportAudios, isImportEnabled }) => {
+const AudioItem: React.FC<{
+  audio: RenpyAudio;
+  isSelected: boolean;
+  onSelect: (filePath: string, isSelected: boolean) => void;
+  onDoubleClick: (filePath: string) => void;
+  onContextMenu: (event: React.MouseEvent, audio: RenpyAudio) => void;
+}> = ({ audio, isSelected, onSelect, onDoubleClick, onContextMenu }) => {
+  const borderClass = audio.isInProject ? 'border-red-500 dark:border-red-400' : 'border-transparent';
+  const selectionClass = isSelected ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-indigo-400 ring-offset-gray-50 dark:ring-offset-gray-900' : '';
+
+  return (
+    <div
+      className={`relative p-2 bg-gray-200 dark:bg-gray-700 rounded-md cursor-pointer group transition-all duration-150 border-2 ${borderClass} ${selectionClass} flex items-center space-x-2`}
+      title={audio.filePath}
+      onClick={() => onSelect(audio.filePath, isSelected)}
+      onDoubleClick={() => onDoubleClick(audio.filePath)}
+      onContextMenu={(e) => onContextMenu(e, audio)}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 dark:text-gray-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" /></svg>
+      <p className="text-sm font-mono truncate">{audio.fileName}</p>
+    </div>
+  );
+};
+
+const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirectories, onAddScanDirectory, onCopyAudiosToProject, onOpenAudioEditor, isFileSystemApiSupported }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedAudio, setSelectedAudio] = useState<RenpyAudio | null>(null);
-  const [expandedFolders, setExpandedFolders] = useState<{ [key: string]: boolean }>({});
-  const [copiedPath, setCopiedPath] = useState<string | null>(null);
+  const [selectedSource, setSelectedSource] = useState('all');
+  const [selectedAudioPaths, setSelectedAudioPaths] = useState(new Set<string>());
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; audio: RenpyAudio } | null>(null);
+
+  const sources = useMemo(() => {
+    return ['Project (game/audio)', ...scanDirectories];
+  }, [scanDirectories]);
 
   const filteredAudios = useMemo(() => {
-    if (!searchTerm) return audios;
-    return audios.filter(aud => aud.fileName.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [audios, searchTerm]);
+    let visibleAudios = audios;
 
-  const audiosByFolder = useMemo(() => {
-    const folders = new Map<string, RenpyAudio[]>();
-    filteredAudios.forEach(audio => {
-      const pathParts = audio.filePath.split('/');
-      const folderPath = pathParts.slice(1, -1).join('/'); // remove "audio/" and filename
-      if (!folders.has(folderPath)) {
-        folders.set(folderPath, []);
+    if (selectedSource !== 'all') {
+      if (selectedSource === 'Project (game/audio)') {
+        visibleAudios = visibleAudios.filter(aud => aud.isInProject);
+      } else {
+        visibleAudios = visibleAudios.filter(aud => aud.filePath.startsWith(`${selectedSource}/`));
       }
-      folders.get(folderPath)!.push(audio);
-    });
-    return Array.from(folders.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [filteredAudios]);
-  
-  // Initially expand all folders
-  React.useEffect(() => {
-    const initialExpansionState: { [key: string]: boolean } = {};
-    audiosByFolder.forEach(([folderPath]) => {
-      initialExpansionState[folderPath] = true;
-    });
-    setExpandedFolders(initialExpansionState);
-  }, [audios]); // Re-run only when the base audios change
+    }
 
-  const toggleFolder = (folderPath: string) => {
-    setExpandedFolders(prev => ({ ...prev, [folderPath]: !prev[folderPath] }));
+    if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
+      visibleAudios = visibleAudios.filter(aud =>
+        aud.fileName.toLowerCase().includes(lowerSearch) ||
+        (metadata.get(aud.projectFilePath || '')?.renpyName || '').toLowerCase().includes(lowerSearch) ||
+        (metadata.get(aud.projectFilePath || '')?.tags || []).some(tag => tag.toLowerCase().includes(lowerSearch))
+      );
+    }
+    return visibleAudios;
+  }, [audios, metadata, searchTerm, selectedSource]);
+
+  const handleSelectAudio = (filePath: string, isCurrentlySelected: boolean) => {
+    setSelectedAudioPaths(prev => {
+      const newSet = new Set(prev);
+      if (isCurrentlySelected) {
+        newSet.delete(filePath);
+      } else {
+        newSet.add(filePath);
+      }
+      return newSet;
+    });
   };
-  
-  const handleCopyCommand = (filePath: string) => {
-    const command = `play audio "${filePath}"`;
+
+  const handleCopySelected = () => {
+    onCopyAudiosToProject(Array.from(selectedAudioPaths));
+    setSelectedAudioPaths(new Set());
+  };
+
+  const handleContextMenu = (event: React.MouseEvent, audio: RenpyAudio) => {
+    event.preventDefault();
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      audio,
+    });
+  };
+
+  const getRenpyAudioTag = (audio: RenpyAudio): string => {
+    const meta = metadata.get(audio.projectFilePath || audio.filePath);
+    const name = meta?.renpyName || audio.fileName.split('.').slice(0, -1).join('.');
+    const tags = (meta?.tags || []).join(' ');
+    return `${name}${tags ? ` ${tags}` : ''}`.trim().replace(/\s+/g, ' ');
+  };
+
+  const handleContextMenuSelect = (type: 'play' | 'queue') => {
+    if (!contextMenu) return;
+    const filePath = contextMenu.audio.projectFilePath || contextMenu.audio.filePath;
+    const command = `${type} audio "${filePath}"`;
     navigator.clipboard.writeText(command);
-    setCopiedPath(filePath);
-    setTimeout(() => setCopiedPath(null), 1500);
+    setContextMenu(null);
   };
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="font-semibold">Audio Gallery ({audios.length})</h3>
-        <button 
-          onClick={onImportAudios}
-          disabled={!isImportEnabled}
-          title={isImportEnabled ? "Import new audio files" : "Open a project folder to enable audio imports"}
-          className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold disabled:bg-gray-400 disabled:cursor-not-allowed"
-        >
-          + Import
-        </button>
-      </div>
-      <input
-        type="text"
-        placeholder="Search audio files..."
-        value={searchTerm}
-        onChange={e => setSearchTerm(e.target.value)}
-        className="w-full mb-4 p-2 rounded bg-gray-100 dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500"
-      />
-      <div className="flex-grow overflow-y-auto -mr-4 pr-4 space-y-4">
-        {audiosByFolder.map(([folderPath, folderAudios]) => {
-          const isExpanded = expandedFolders[folderPath] ?? false;
-          return (
-            <div key={folderPath}>
-              <button onClick={() => toggleFolder(folderPath)} className="w-full text-left font-semibold text-gray-600 dark:text-gray-400 mb-2 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 mr-2 transition-transform ${isExpanded ? 'rotate-90' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
-                {folderPath || '(root)'}
-              </button>
-              {isExpanded && (
-                <ul className="space-y-1 pl-2">
-                    {folderAudios.map(audio => (
-                        <li key={audio.filePath} className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between cursor-pointer" onClick={() => setSelectedAudio(audio)}>
-                            <div className="flex items-center space-x-2 min-w-0">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" /></svg>
-                                <span className="text-sm font-mono truncate">{audio.fileName}</span>
-                            </div>
-                             <button 
-                                onClick={(e) => { e.stopPropagation(); handleCopyCommand(audio.filePath); }}
-                                title="Copy 'play' command" 
-                                className="px-2 py-1 text-xs font-semibold rounded bg-gray-200 dark:bg-gray-600 hover:bg-indigo-100 dark:hover:bg-indigo-800"
-                            >
-                                {copiedPath === audio.filePath ? 'Copied!' : 'Copy'}
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-              )}
-            </div>
-          );
-        })}
-        {audios.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No audio files found in project.</p>}
-        {audios.length > 0 && filteredAudios.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No audio files match your search.</p>}
-      </div>
-      {selectedAudio && (
-        <div className="mt-4 p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 rounded-b-md -mx-4 -mb-4">
-          <h4 className="font-semibold mb-2">Preview</h4>
-          <p className="text-sm font-semibold font-mono mb-2">{selectedAudio.fileName}</p>
-          <audio controls src={selectedAudio.dataUrl} className="w-full">
-            Your browser does not support the audio element.
-          </audio>
+      <div className="flex-shrink-0 space-y-4">
+        <div>
+          <h3 className="font-semibold mb-2">Audio Sources</h3>
+          <div className="space-y-2">
+            <select value={selectedSource} onChange={e => setSelectedSource(e.target.value)} className="w-full p-2 rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500">
+              <option value="all">All Sources</option>
+              {sources.map(source => <option key={source} value={source}>{source}</option>)}
+            </select>
+            <button
+              onClick={onAddScanDirectory}
+              disabled={!isFileSystemApiSupported}
+              title={isFileSystemApiSupported ? "Add external folder to scan for audio" : "Open a project folder to enable this feature"}
+              className="w-full px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
+              <span>Add Directory to Scan</span>
+            </button>
+          </div>
         </div>
+        <div className="flex items-center space-x-2">
+          <input
+            type="text"
+            placeholder="Search audio by name or tag..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="flex-grow p-2 rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500"
+          />
+          <button
+            onClick={handleCopySelected}
+            disabled={selectedAudioPaths.size === 0}
+            className="px-3 py-2 rounded bg-green-600 hover:bg-green-700 text-white text-sm font-bold disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            Copy to Project ({selectedAudioPaths.size})
+          </button>
+        </div>
+      </div>
+      <div className="flex-grow overflow-y-auto -mr-4 pr-4 pt-4">
+        <div className="space-y-2">
+          {filteredAudios.map(audio => (
+            <AudioItem
+              key={audio.filePath}
+              audio={audio}
+              isSelected={selectedAudioPaths.has(audio.filePath)}
+              onSelect={handleSelectAudio}
+              onDoubleClick={onOpenAudioEditor}
+              onContextMenu={handleContextMenu}
+            />
+          ))}
+        </div>
+        {audios.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No audio found. Add a source directory to get started.</p>}
+        {audios.length > 0 && filteredAudios.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No audio files match your filter.</p>}
+      </div>
+      {contextMenu && (
+        <AudioContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          filePath={contextMenu.audio.projectFilePath || contextMenu.audio.filePath}
+          onSelect={handleContextMenuSelect}
+          onClose={() => setContextMenu(null)}
+        />
       )}
     </div>
   );
