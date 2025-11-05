@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo } from 'react';
 import type { Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, RenpyScreen, RenpyAnalysisResult } from '../types';
 import VariableManager from './VariableManager';
@@ -24,6 +25,7 @@ interface StoryElementsPanelProps {
     imageMetadata: Map<string, ImageMetadata>;
     imageScanDirectories: Map<string, FileSystemDirectoryHandle>;
     onAddImageScanDirectory: () => void;
+    onRemoveImageScanDirectory: (dirName: string) => void;
     onCopyImagesToProject: (sourceFilePaths: string[]) => void;
     onUpdateImageMetadata: (filePath: string, newMetadata: ImageMetadata) => void;
     onOpenImageEditor: (filePath: string) => void;
@@ -32,6 +34,7 @@ interface StoryElementsPanelProps {
     audioMetadata: Map<string, AudioMetadata>;
     audioScanDirectories: Map<string, FileSystemDirectoryHandle>;
     onAddAudioScanDirectory: () => void;
+    onRemoveAudioScanDirectory: (dirName: string) => void;
     onCopyAudiosToProject: (sourceFilePaths: string[]) => void;
     onUpdateAudioMetadata: (filePath: string, newMetadata: AudioMetadata) => void;
     onOpenAudioEditor: (filePath: string) => void;
@@ -63,8 +66,8 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     onOpenCharacterEditor, onFindCharacterUsages,
     onAddVariable, onFindVariableUsages,
     onAddScreen, onFindScreenDefinition,
-    projectImages, imageMetadata, onAddImageScanDirectory: onAddImageScanDirectory, imageScanDirectories, onCopyImagesToProject, onUpdateImageMetadata, onOpenImageEditor,
-    projectAudios, audioMetadata, onAddAudioScanDirectory, audioScanDirectories, onCopyAudiosToProject, onUpdateAudioMetadata, onOpenAudioEditor,
+    projectImages, imageMetadata, onAddImageScanDirectory, onRemoveImageScanDirectory, imageScanDirectories, onCopyImagesToProject, onUpdateImageMetadata, onOpenImageEditor,
+    projectAudios, audioMetadata, onAddAudioScanDirectory, onRemoveAudioScanDirectory, audioScanDirectories, onCopyAudiosToProject, onUpdateAudioMetadata, onOpenAudioEditor,
     isFileSystemApiSupported,
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('characters');
@@ -130,6 +133,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                         metadata={imageMetadata}
                         scanDirectories={Array.from(imageScanDirectories.keys())}
                         onAddScanDirectory={onAddImageScanDirectory}
+                        onRemoveScanDirectory={onRemoveImageScanDirectory}
                         onCopyImagesToProject={onCopyImagesToProject}
                         onOpenImageEditor={onOpenImageEditor}
                         isFileSystemApiSupported={isFileSystemApiSupported}
@@ -141,6 +145,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                         metadata={audioMetadata}
                         scanDirectories={Array.from(audioScanDirectories.keys())}
                         onAddScanDirectory={onAddAudioScanDirectory}
+                        onRemoveScanDirectory={onRemoveAudioScanDirectory}
                         onCopyAudiosToProject={onCopyAudiosToProject}
                         onOpenAudioEditor={onOpenAudioEditor}
                         isFileSystemApiSupported={isFileSystemApiSupported}

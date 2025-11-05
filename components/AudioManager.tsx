@@ -1,5 +1,7 @@
 
-import React, { useState, useMemo } from 'react';
+
+
+import React, { useState, useMemo, useEffect } from 'react';
 import type { RenpyAudio, AudioMetadata } from '../types';
 import AudioContextMenu from './AudioContextMenu';
 
@@ -8,6 +10,7 @@ interface AudioManagerProps {
   metadata: Map<string, AudioMetadata>;
   scanDirectories: string[];
   onAddScanDirectory: () => void;
+  onRemoveScanDirectory: (dirName: string) => void;
   onCopyAudiosToProject: (sourceFilePaths: string[]) => void;
   onOpenAudioEditor: (filePath: string) => void;
   isFileSystemApiSupported: boolean;
@@ -37,15 +40,21 @@ const AudioItem: React.FC<{
   );
 };
 
-const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirectories, onAddScanDirectory, onCopyAudiosToProject, onOpenAudioEditor, isFileSystemApiSupported }) => {
+const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirectories, onAddScanDirectory, onRemoveScanDirectory, onCopyAudiosToProject, onOpenAudioEditor, isFileSystemApiSupported }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSource, setSelectedSource] = useState('all');
   const [selectedAudioPaths, setSelectedAudioPaths] = useState(new Set<string>());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; audio: RenpyAudio } | null>(null);
 
   const sources = useMemo(() => {
-    return ['Project (game/audio)', ...scanDirectories];
+    return ['all', 'Project (game/audio)', ...scanDirectories];
   }, [scanDirectories]);
+
+  useEffect(() => {
+    if (!sources.includes(selectedSource)) {
+        setSelectedSource('all');
+    }
+  }, [sources, selectedSource]);
 
   const filteredAudios = useMemo(() => {
     let visibleAudios = audios;
@@ -115,23 +124,37 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
       <div className="flex-shrink-0 space-y-4">
         <div>
           <h3 className="font-semibold mb-2">Audio Sources</h3>
-          <div className="space-y-2">
-            <select value={selectedSource} onChange={e => setSelectedSource(e.target.value)} className="w-full p-2 rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500">
-              <option value="all">All Sources</option>
-              {sources.map(source => <option key={source} value={source}>{source}</option>)}
-            </select>
-            <button
+          <div className="space-y-1">
+             {sources.map(source => (
+                    <div
+                        key={source}
+                        onClick={() => setSelectedSource(source)}
+                        className={`flex items-center justify-between p-2 rounded cursor-pointer text-sm ${selectedSource === source ? 'bg-indigo-100 dark:bg-indigo-900/50 font-semibold' : 'hover:bg-gray-100 dark:hover:bg-gray-700/50'}`}
+                    >
+                        <span className="truncate">{source}</span>
+                        {source !== 'all' && source !== 'Project (game/audio)' && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onRemoveScanDirectory(source); }}
+                                className="p-1 rounded-full hover:bg-red-200 dark:hover:bg-red-800/50 text-gray-500 dark:text-gray-400 hover:text-red-700 dark:hover:text-red-300"
+                                title={`Remove ${source}`}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                            </button>
+                        )}
+                    </div>
+                ))}
+          </div>
+           <button
               onClick={onAddScanDirectory}
               disabled={!isFileSystemApiSupported}
               title={isFileSystemApiSupported ? "Add external folder to scan for audio" : "Open a project folder to enable this feature"}
-              className="w-full px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              className="w-full mt-2 px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
               <span>Add Directory to Scan</span>
             </button>
-          </div>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 mt-4">
           <input
             type="text"
             placeholder="Search audio by name or tag..."
