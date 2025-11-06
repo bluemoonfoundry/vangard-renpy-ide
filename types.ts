@@ -173,6 +173,8 @@ export interface RenpyAnalysisResult {
   variableUsages: Map<string, VariableUsage[]>;
   // Screen analysis
   screens: Map<string, RenpyScreen>;
+  // Content summary for UI hints
+  blockTypes: Map<string, Set<string>>;
 }
 
 // Defines an open tab in the main editor view

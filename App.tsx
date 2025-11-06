@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import Toolbar from './components/Toolbar';
 import StoryCanvas from './components/StoryCanvas';
@@ -365,6 +367,7 @@ const App: React.FC = () => {
   const [centerOnBlockRequest, setCenterOnBlockRequest] = useState<{ blockId: string, key: number } | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [loadingState, setLoadingState] = useState<{ visible: boolean, progress: number, message: string }>({ visible: false, progress: 0, message: '' });
+  const [saveRequestCounter, setSaveRequestCounter] = useState(0);
 
   const dismissToast = useCallback((id: string) => {
     setToasts(currentToasts => currentToasts.filter(t => t.id !== id));
@@ -888,7 +891,7 @@ const App: React.FC = () => {
     setDirtyBlockIds(prev => new Set(prev).add(id));
   };
 
-  const handleSave = useCallback(async () => {
+  const handleSaveToDisk = useCallback(async () => {
     if (!directoryHandle || dirtyBlockIds.size === 0) return;
     setSaveStatus('saving');
     
@@ -941,17 +944,26 @@ const App: React.FC = () => {
     }, [directoryHandle, dirtyBlockIds, liveBlocks, liveGroups, commitChange, analysisResult.firstLabels, addToast]);
 
   const handleGlobalSave = useCallback(() => {
-    // First, trigger a save for any active editor to ensure its content is moved into the main state
+    // Step 1: Trigger active editor to commit its content to the main state.
+    // This will move its ID from dirtyEditors to dirtyBlockIds.
     handleSaveActiveEditor();
     
-    // If we are in file system mode, save all dirty blocks to disk.
-    // A small delay allows the state update from the editor to be processed before saving.
+    // Step 2: Schedule the disk-saving part of the operation for the next
+    // event loop tick. This allows React to process and apply the state
+    // updates from Step 1 before we proceed.
     if (directoryHandle) {
-      setTimeout(() => {
-        handleSave();
-      }, 100); // 100ms should be enough for the state to update.
+        setTimeout(() => setSaveRequestCounter(c => c + 1), 0);
     }
-  }, [handleSaveActiveEditor, directoryHandle, handleSave]);
+  }, [handleSaveActiveEditor, directoryHandle]);
+
+  // This effect orchestrates saving to disk. It's triggered after a delay
+  // by handleGlobalSave, ensuring that any state updates from committing the
+  // active editor have been processed before handleSaveToDisk is called.
+  useEffect(() => {
+    if (saveRequestCounter > 0) {
+        handleSaveToDisk();
+    }
+  }, [saveRequestCounter, handleSaveToDisk]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1594,7 +1606,8 @@ const App: React.FC = () => {
 
             // FIX: Remove incorrect 'as ImageMetadata' cast. .get() can return undefined,
             // and the subsequent code with optional chaining already handles this case correctly.
-            const existingMeta = newMetadataMap.get(sourceImage.projectFilePath || '');
+            // FIX: Explicitly cast existingMeta to the correct type to resolve TypeScript inference issues.
+            const existingMeta = newMetadataMap.get(sourceImage.projectFilePath || '') as ImageMetadata | undefined;
             const meta = metadataOverride ||
               (existingMeta?.renpyName ? existingMeta : undefined) ||
               {
@@ -1685,7 +1698,8 @@ const App: React.FC = () => {
             const sourceAudio = newAudioMap.get(sourcePath);
             if (!sourceAudio || sourceAudio.isInProject) continue;
 
-            const existingMeta = newMetadataMap.get(sourceAudio.projectFilePath || '');
+            // FIX: Explicitly cast existingMeta to the correct type to resolve TypeScript inference issues.
+            const existingMeta = newMetadataMap.get(sourceAudio.projectFilePath || '') as AudioMetadata | undefined;
             const meta = metadataOverride || (existingMeta?.renpyName ? existingMeta : undefined) || {
                 renpyName: sourceAudio.fileName.split('.').slice(0,-1).join('.'),
                 tags: [],
@@ -2269,6 +2283,7 @@ const App: React.FC = () => {
       <Toolbar
         directoryHandle={directoryHandle}
         dirtyBlockIds={dirtyBlockIds}
+        dirtyEditors={dirtyEditors}
         saveStatus={saveStatus}
         canUndo={canUndo}
         canRedo={canRedo}

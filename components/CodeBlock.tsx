@@ -20,6 +20,13 @@ interface CodeBlockProps {
   isFlashing: boolean;
 }
 
+const LabelIcon: React.FC = () => <div title="Contains Labels"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A1 1 0 012 10V5a1 1 0 011-1h5a1 1 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg></div>;
+const DialogueIcon: React.FC = () => <div title="Contains Dialogue/Narration"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a6 6 0 00-6 6v3.586l-1.707 1.707A1 1 0 003 15h14a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" /></svg></div>;
+const MenuIcon: React.FC = () => <div title="Contains Menus/Choices"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" /></svg></div>;
+const JumpIcon: React.FC = () => <div title="Contains Jumps/Calls"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" /></svg></div>;
+const PythonIcon: React.FC = () => <div title="Contains Python code"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6.28 5.22a.75.75 0 010 1.06L3.56 9l2.72 2.72a.75.75 0 01-1.06 1.06L1.47 9.53a.75.75 0 010-1.06l3.75-3.75a.75.75 0 011.06 0zm7.44 0a.75.75 0 011.06 0l3.75 3.75a.75.75 0 010 1.06L14.78 14l-2.72-2.72a.75.75 0 011.06-1.06L16.44 9l-2.72-2.72a.75.75 0 010-1.06z" clipRule="evenodd" /></svg></div>;
+
+
 const CodeBlock: React.FC<CodeBlockProps> = ({ 
   block, 
   analysisResult, 
@@ -42,7 +49,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
   const [titleValue, setTitleValue] = useState('');
   const titleInputRef = useRef<HTMLInputElement>(null);
   
-  const { firstLabels, invalidJumps, labels, dialogueLines, characters } = analysisResult;
+  const { firstLabels, invalidJumps, labels, dialogueLines, characters, blockTypes } = analysisResult;
   
   const getFilename = (path?: string) => path?.split('/').pop()?.replace(/\.rpy$/, '');
   const displayedTitle = block.title ?? getFilename(block.filePath) ?? firstLabels[block.id] ?? "Ren'Py Block";
@@ -95,6 +102,10 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
 
   const lineCount = useMemo(() => block.content.split('\n').length, [block.content]);
   
+  const blockContentSummary = useMemo(() => {
+    return blockTypes.get(block.id) || new Set<string>();
+  }, [blockTypes, block.id]);
+
   const hasInvalidJumps = blockInvalidJumps.length > 0;
 
   const borderClass = isSelected 
@@ -181,6 +192,20 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
                 <p className="text-xs italic truncate">{blockCharacters.join(', ')}</p>
             </div>
         )}
+        
+        {blockContentSummary.size > 0 && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 border-t border-gray-200 dark:border-gray-700/50 mt-2">
+              <strong className="font-semibold text-gray-500 dark:text-gray-400 text-xs flex-shrink-0">CONTAINS</strong>
+              <div className="flex flex-wrap items-center gap-2 text-gray-500 dark:text-gray-400">
+                  {blockContentSummary.has('label') && <LabelIcon />}
+                  {blockContentSummary.has('dialogue') && <DialogueIcon />}
+                  {blockContentSummary.has('menu') && <MenuIcon />}
+                  {blockContentSummary.has('jump') && <JumpIcon />}
+                  {blockContentSummary.has('python') && <PythonIcon />}
+              </div>
+          </div>
+        )}
+
         <div className="text-xs text-gray-400 dark:text-gray-500 pt-1 absolute bottom-2 left-3">
             {lineCount} lines
         </div>

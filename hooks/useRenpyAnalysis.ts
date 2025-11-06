@@ -5,6 +5,7 @@ const LABEL_REGEX = /^\s*label\s+([a-zA-Z0-9_]+):/;
 const JUMP_CALL_REGEX = /\b(jump|call)\s+([a-zA-Z0-9_]+)/g;
 const MENU_REGEX = /^\s*menu:/;
 const DIALOGUE_REGEX = /^\s*([a-zA-Z0-9_]+)\s+"/;
+const NARRATION_REGEX = /^\s*"(?!:)/; // Matches "narration" but not "choice": or e "dialogue"
 const SCREEN_REGEX = /^\s*screen\s+([a-zA-Z0-9_]+)\s*(\(.*\))?:/;
 // This regex now uses a negative lookahead `(?!Character\s*\()` to specifically exclude lines that are Character definitions.
 const DEFINE_DEFAULT_REGEX = /^\s*(define|default)\s+([a-zA-Z0-9_.]+)\s*=\s*(?!Character\s*\()(.+)/;
@@ -94,6 +95,7 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
     variables: new Map(),
     variableUsages: new Map(),
     screens: new Map(),
+    blockTypes: new Map(),
   };
 
   // First pass: find all labels, characters, and variable definitions
@@ -211,10 +213,16 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
   const variableNames = Array.from(result.variables.keys());
   blocks.forEach(block => {
     result.jumps[block.id] = [];
+    const blockTypes = new Set<string>();
+    if (block.content.includes('python:')) {
+        blockTypes.add('python');
+    }
+
     const lines = block.content.split('\n');
     lines.forEach((line, index) => {
       // Find Jumps/Calls
       for (const match of line.matchAll(JUMP_CALL_REGEX)) {
+        blockTypes.add('jump');
         const targetLabel = match[2];
         if (!targetLabel || match.index === undefined) continue;
 
@@ -247,14 +255,28 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
         }
       }
       
-      // Find Dialogue
+      // Find Labels (for blockTypes)
+      if (LABEL_REGEX.test(line)) {
+        blockTypes.add('label');
+      }
+
+      // Find Menus (for blockTypes)
+      if (MENU_REGEX.test(line)) {
+        blockTypes.add('menu');
+      }
+
+      // Find Dialogue & Narration
       const dialogueMatch = line.match(DIALOGUE_REGEX);
       if (dialogueMatch && result.characters.has(dialogueMatch[1])) {
+        blockTypes.add('dialogue');
         const tag = dialogueMatch[1];
         if (!result.dialogueLines.has(block.id)) {
           result.dialogueLines.set(block.id, []);
         }
         result.dialogueLines.get(block.id)!.push({ line: index + 1, tag });
+      } else if (NARRATION_REGEX.test(line)) {
+        // It's narration, just mark the block type, don't add to character analysis
+        blockTypes.add('dialogue');
       }
 
       // Find Variable Usages
@@ -275,6 +297,10 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
         }
       });
     });
+
+    if (blockTypes.size > 0) {
+      result.blockTypes.set(block.id, blockTypes);
+    }
   });
 
   // Third pass: Calculate character usage

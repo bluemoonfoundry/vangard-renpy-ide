@@ -1,5 +1,6 @@
 
-import React from 'react';
+
+import React, { useMemo } from 'react';
 
 type SaveStatus = 'saving' | 'saved' | 'error';
 type Theme = 'system' | 'light' | 'dark';
@@ -7,6 +8,7 @@ type Theme = 'system' | 'light' | 'dark';
 interface ToolbarProps {
   directoryHandle: FileSystemDirectoryHandle | null;
   dirtyBlockIds: Set<string>;
+  dirtyEditors: Set<string>;
   saveStatus: SaveStatus;
   canUndo: boolean;
   canRedo: boolean;
@@ -46,6 +48,7 @@ const ToolbarButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { 
 const Toolbar: React.FC<ToolbarProps> = ({
   directoryHandle,
   dirtyBlockIds,
+  dirtyEditors,
   saveStatus,
   canUndo,
   canRedo,
@@ -65,6 +68,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
   isRightSidebarOpen,
   setIsRightSidebarOpen,
 }) => {
+
+  const totalUnsavedCount = useMemo(() => {
+    return new Set([...dirtyBlockIds, ...dirtyEditors]).size;
+  }, [dirtyBlockIds, dirtyEditors]);
 
   const SaveStatusIndicator: React.FC = () => {
     switch (saveStatus) {
@@ -132,36 +139,32 @@ const Toolbar: React.FC<ToolbarProps> = ({
        
         <ToolbarButton
             onClick={handleSave}
-            disabled={!directoryHandle || dirtyBlockIds.size === 0}
+            disabled={!directoryHandle || totalUnsavedCount === 0}
             title={
                 !directoryHandle
                 ? 'Open a project folder to enable saving to files'
-                : dirtyBlockIds.size === 0
+                : totalUnsavedCount === 0
                 ? 'No changes to save'
-                : `Save All (${dirtyBlockIds.size} unsaved)`
+                : `Save All (${totalUnsavedCount} unsaved)`
             }
         >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H9.5a1 1 0 0 0-1 1v4.5h2a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5H7a.5.5 0 0 1-.5-.5v-2a.5.5 0 0 1 .5-.5h2V2H2z"/>
+                <path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H9.5a1 1 0 0 0-1 1v4.5h2a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5-.5H7a.5.5 0 0 1-.5-.5v-2a.5.5 0 0 1 .5-.5h2V2H2z"/>
                 <path d="M4.5 12a.5.5 0 0 1-.5-.5v-2a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5h-3z"/>
             </svg>
         </ToolbarButton>
 
         <SaveStatusIndicator />
 
-        {!directoryHandle && (
-            <>
-                <ToolbarButton onClick={handleDownloadFiles} title="Download Project as .zip">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-                </ToolbarButton>
-                <ToolbarButton onClick={onUploadClick} title="Upload a .zip project">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M4 16h12v2H4v-2zm4-12v8H4l6-6 6 6h-4V4H8z"/></svg>
-                </ToolbarButton>
-                <ToolbarButton onClick={() => setIsClearConfirmVisible(true)} title="Clear entire canvas">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
-                </ToolbarButton>
-            </>
-        )}
+        <ToolbarButton onClick={handleDownloadFiles} title="Download Project as .zip">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+        </ToolbarButton>
+        <ToolbarButton onClick={onUploadClick} title="Upload a .zip project">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M4 16h12v2H4v-2zm4-12v8H4l6-6 6 6h-4V4H8z"/></svg>
+        </ToolbarButton>
+        <ToolbarButton onClick={() => setIsClearConfirmVisible(true)} title="Clear entire canvas">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+        </ToolbarButton>
         <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
         <ToolbarButton onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)} title="Toggle Left Sidebar">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm4 2a1 1 0 011-1h6a1 1 0 110 2H8a1 1 0 01-1-1z" clipRule="evenodd" /></svg>
