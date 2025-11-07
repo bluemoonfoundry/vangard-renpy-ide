@@ -5,7 +5,13 @@ The Ren'Py Visual Novel Accelerator is a powerful, web-based visual editor desig
 This tool is perfect for writers, designers, and programmers who want a more intuitive and organized way to manage complex branching narratives.
 
 > [!CAUTION]
-> Full disclosure: Sections of this codebase have been developed with the help of Gemini Build, a generative AI code assisstant. 
+> Full disclosure: Sections of this codebase have been developed with the help of Gemini Build, a generative AI code assisstant.
+
+
+> [!TIP]
+> The demo folder contains the a simple Ren'py example project. Click the "Open Folder" button and select the "demo" folder to load it into the app. 
+
+
 
 ## Key Features
 
@@ -107,13 +113,6 @@ The top toolbar provides access to global actions and tools.
 | **Clear Canvas**    | Deletes all blocks and groups from the canvas.                                                           |                    |
 | **Toggle Sidebars** | Shows or hides the left and right sidebars.                                                              |                    |
 | **Toggle Theme**    | Cycles between System, Light, Dark, Solarized Light, Solarized Dark, Colorful, and Colorful Light themes.|                    |
-
-
-
-> [!TIP]
-> The demo folder contains the a simple Ren'py example project. Click the "Open Folder" button and select the "demo" folder to load it into the app. 
-
-
 
 #### The Canvases
 
