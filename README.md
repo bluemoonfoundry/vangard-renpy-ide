@@ -31,11 +31,11 @@ This tool is perfect for writers, designers, and programmers who want a more int
 
 **Comprehensive Project Management**: 
  - A built-in file explorer allows you to create, rename, move, and delete files and folders in your project.
- - File System Integration. Works directly with your local project folders for a seamless development experience (recommended).
+ - Works directly with your local project folders for a seamless development experience (recommended).
 
 **Story Element Management**: 
  - A dedicated panel to view, create, and manage Characters, Variables, Images, Audio, and Screens.
- - Asset PipelinE. Scan external directories for images and audio, and easily copy them into your project.
+ - Scan external directories for images and audio, and easily copy them into your project.
 
 <img width="2552" height="1357" alt="Screenshot 2025-11-06 214627" src="https://github.com/user-attachments/assets/51826acc-ba89-4c90-9a09-229d6d21e19e" />
 
@@ -92,7 +92,7 @@ On first launch, you'll see a welcome screen with three options:
 
 ### The Main Interface
 
-The application is divided into three main sections: the Project Explorer on the left, the main view (Canvas/Editor) in the center, and the Story Elements panel on the right. The left and right sidebars can be resized by dragging the handles on their inner edges.
+The application is divided into three main sections: the Project Explorer on the left, the main view (Canvas/Editor) in the center, and the Story Elements panel on the right. The left and right sidebars can be hidden or unhidden using the toggle buttons on the upper right, to the left of the Settings gear icon.
 
 #### Toolbar
 
