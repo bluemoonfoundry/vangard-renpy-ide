@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { Block, Link, RenpyAnalysisResult, LabelLocation, JumpLocation, Character, DialogueLine, Variable, VariableUsage, RenpyScreen } from '../types';
+import type { Block, Link, RenpyAnalysisResult, LabelLocation, JumpLocation, Character, DialogueLine, Variable, VariableUsage, RenpyScreen, LabelNode, RouteLink, IdentifiedRoute } from '../types';
 
 const LABEL_REGEX = /^\s*label\s+([a-zA-Z0-9_]+):/;
 const JUMP_CALL_REGEX = /\b(jump|call)\s+([a-zA-Z0-9_]+)/g;
@@ -96,7 +96,12 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
     variableUsages: new Map(),
     screens: new Map(),
     blockTypes: new Map(),
+    labelNodes: new Map(),
+    routeLinks: [],
+    identifiedRoutes: [],
   };
+
+  const blockLabelInfo = new Map<string, { label: string; startLine: number; endLine: number; hasTerminal: boolean; hasReturn: boolean; }[]>();
 
   // First pass: find all labels, characters, and variable definitions
   blocks.forEach(block => {
@@ -223,12 +228,14 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
       // Find Jumps/Calls
       for (const match of line.matchAll(JUMP_CALL_REGEX)) {
         blockTypes.add('jump');
+        const jumpType = match[1] as 'jump' | 'call';
         const targetLabel = match[2];
         if (!targetLabel || match.index === undefined) continue;
 
         const jumpLocation: JumpLocation = {
           blockId: block.id,
           target: targetLabel,
+          type: jumpType,
           line: index + 1,
           columnStart: match.index + match[1].length + 2,
           columnEnd: match.index + match[1].length + 2 + targetLabel.length,
@@ -332,6 +339,173 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
       result.branchingBlockIds.add(block.id);
     }
   });
+
+  // Fifth pass: Generate data for Route Canvas
+  // 1. Identify all labels and their line ranges to create nodes.
+  blocks.forEach(block => {
+    const lines = block.content.split('\n');
+    const labelsInBlock: { label: string; startLine: number }[] = [];
+    Object.values(result.labels).forEach(labelLoc => {
+        if (labelLoc.blockId === block.id) {
+            labelsInBlock.push({ label: labelLoc.label, startLine: labelLoc.line });
+        }
+    });
+    labelsInBlock.sort((a, b) => a.startLine - b.startLine);
+
+    const labelInfoForBlock: { label: string; startLine: number; endLine: number; hasTerminal: boolean; hasReturn: boolean; }[] = [];
+    labelsInBlock.forEach(({ label, startLine }, i) => {
+        const endLine = (i + 1 < labelsInBlock.length) ? labelsInBlock[i + 1].startLine - 1 : lines.length;
+        const contentSlice = lines.slice(startLine, endLine).join('\n');
+        const hasTerminal = /\b(jump|call|return)\b/.test(contentSlice);
+        const hasReturn = /\breturn\b/.test(contentSlice);
+
+        labelInfoForBlock.push({ label, startLine, endLine, hasTerminal, hasReturn });
+
+        const nodeId = `${block.id}:${label}`;
+        
+        const node: LabelNode = {
+            id: nodeId,
+            label: label,
+            blockId: block.id,
+            startLine: startLine,
+            position: { x: 0, y: 0 },
+            width: 180,
+            height: 40
+        };
+        result.labelNodes.set(nodeId, node);
+    });
+    blockLabelInfo.set(block.id, labelInfoForBlock);
+  });
+
+  // 2. Create links based on jumps and implicit flow.
+  let routeLinkIdCounter = 0;
+  blocks.forEach(block => {
+    const labelsInBlock = blockLabelInfo.get(block.id) || [];
+    const jumpsInBlock = result.jumps[block.id] || [];
+
+    // Explicit jumps/calls
+    jumpsInBlock.forEach(jump => {
+        const sourceLabel = labelsInBlock.slice().reverse().find(l => l.startLine <= jump.line);
+        if (!sourceLabel) return;
+
+        const targetLabelDef = result.labels[jump.target];
+        if (targetLabelDef) {
+            const sourceNodeId = `${block.id}:${sourceLabel.label}`;
+            const targetNodeId = `${targetLabelDef.blockId}:${targetLabelDef.label}`;
+            result.routeLinks.push({
+                id: `rlink-${routeLinkIdCounter++}`,
+                sourceId: sourceNodeId,
+                targetId: targetNodeId,
+                type: jump.type,
+            });
+        }
+    });
+
+    // Implicit fall-through links
+    for (let i = 0; i < labelsInBlock.length - 1; i++) {
+        const current = labelsInBlock[i];
+        const next = labelsInBlock[i + 1];
+        if (!current.hasTerminal) {
+            const sourceNodeId = `${block.id}:${current.label}`;
+            const targetNodeId = `${block.id}:${next.label}`;
+            result.routeLinks.push({
+                id: `rlink-${routeLinkIdCounter++}`,
+                sourceId: sourceNodeId,
+                targetId: targetNodeId,
+                type: 'implicit'
+            });
+        }
+    }
+  });
+
+  // Sixth pass: Identify all unique routes with improved algorithm
+  const adj = new Map<string, { targetId: string; linkId: string }[]>();
+  const reverseAdj = new Map<string, string[]>();
+  result.labelNodes.forEach(node => {
+    adj.set(node.id, []);
+    reverseAdj.set(node.id, []);
+  });
+
+  result.routeLinks.forEach(link => {
+    adj.get(link.sourceId)?.push({ targetId: link.targetId, linkId: link.id });
+    reverseAdj.get(link.targetId)?.push(link.sourceId);
+  });
+  
+  // 1. Identify Start Nodes: Prioritize the 'start' label.
+  let startNodes: string[] = [];
+  const startLabelLocation = result.labels['start'];
+  if (startLabelLocation) {
+      const startNodeId = `${startLabelLocation.blockId}:start`;
+      if (result.labelNodes.has(startNodeId)) {
+          startNodes.push(startNodeId);
+      }
+  }
+  // Fallback if 'start' label doesn't exist.
+  if (startNodes.length === 0) {
+      startNodes = Array.from(result.labelNodes.keys()).filter(nodeId => (reverseAdj.get(nodeId) || []).length === 0);
+  }
+
+  // 2. Identify End Nodes: A route ends on 'return' or if it's a leaf node.
+  const endNodes = new Set<string>();
+  blockLabelInfo.forEach((labels, blockId) => {
+    labels.forEach(labelInfo => {
+      const nodeId = `${blockId}:${labelInfo.label}`;
+      const isLeafNode = (adj.get(nodeId) || []).length === 0;
+      // A route ends if it's a leaf OR if it contains 'return' but has no other outgoing connections
+      if (isLeafNode || (labelInfo.hasReturn && !labelInfo.hasTerminal)) {
+        endNodes.add(nodeId);
+      }
+    });
+  });
+  
+  const uniqueLabelPaths = new Map<string, string[]>(); // Key: 'node1->node2', Value: [linkId1, linkId2]
+
+  function findPaths(currentNodeId: string, currentLinks: string[], currentNodes: string[], visited: Set<string>) {
+    currentNodes.push(currentNodeId);
+
+    // Cycle detection
+    if (visited.has(currentNodeId)) {
+      currentNodes.pop(); // backtrack
+      return;
+    }
+    visited.add(currentNodeId);
+
+    const isEndpoint = endNodes.has(currentNodeId);
+    const neighbors = adj.get(currentNodeId) || [];
+
+    if (isEndpoint || neighbors.length === 0) {
+        if (currentLinks.length > 0) {
+            const pathKey = currentNodes.join('->');
+            if (!uniqueLabelPaths.has(pathKey)) {
+                uniqueLabelPaths.set(pathKey, [...currentLinks]);
+            }
+        }
+    } else {
+      for (const { targetId, linkId } of neighbors) {
+          currentLinks.push(linkId);
+          findPaths(targetId, currentLinks, currentNodes, visited);
+          currentLinks.pop(); // backtrack link
+      }
+    }
+    
+    visited.delete(currentNodeId);
+    currentNodes.pop(); // backtrack node
+  }
+
+  startNodes.forEach(startNode => {
+    findPaths(startNode, [], [], new Set());
+  });
+  
+  const allPaths = Array.from(uniqueLabelPaths.values());
+  
+  result.identifiedRoutes = allPaths
+    .filter(path => path.length > 0)
+    .map((path, index) => ({
+      id: index,
+      color: PALETTE[index % PALETTE.length],
+      linkIds: new Set(path),
+    }));
+
 
   // Final pass: Identify screen-only, story, and config blocks
   const screenDefiningBlockIds = new Set(Array.from(result.screens.values()).map(s => s.definedInBlockId));

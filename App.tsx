@@ -1,10 +1,8 @@
 
-
-
-
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import Toolbar from './components/Toolbar';
 import StoryCanvas from './components/StoryCanvas';
+import RouteCanvas from './components/RouteCanvas';
 import EditorView from './components/EditorView';
 import ImageEditorView from './components/ImageEditorView';
 import AudioEditorView from './components/AudioEditorView';
@@ -16,9 +14,9 @@ import Toast from './components/Toast';
 import LoadingOverlay from './components/LoadingOverlay';
 import { useRenpyAnalysis, performRenpyAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
-import type { Block, Position, BlockGroup, Link, Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, EditorTab, RenpyScreen, FileSystemTreeNode, ToastMessage } from './types';
+import type { Block, Position, BlockGroup, Link, Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, EditorTab, RenpyScreen, FileSystemTreeNode, ToastMessage, LabelNode, RouteLink, IdentifiedRoute, Theme, IdeSettings } from './types';
 import JSZip from 'jszip';
-import { produce } from 'https://aistudiocdn.com/immer@^10.1.1';
+import { produce } from 'immer';
 
 // Add all necessary FS API types to the global scope to fix compilation issues
 // and make them available throughout the app, including in the types.ts file.
@@ -60,6 +58,7 @@ declare global {
 
 const SAVE_KEY_BLOCKS = 'renpy-visual-editor-blocks';
 const SAVE_KEY_GROUPS = 'renpy-visual-editor-groups';
+const SAVE_KEY_IDE_SETTINGS = 'renpy-visual-editor-settings';
 const IDE_SETTINGS_FILE = 'game/project.ide.json';
 
 function uuidv4() {
@@ -68,7 +67,6 @@ function uuidv4() {
   );
 }
 
-type Theme = 'system' | 'light' | 'dark';
 type SaveStatus = 'saving' | 'saved' | 'error';
 type AppState = { blocks: Block[], groups: BlockGroup[] };
 export type ClipboardState = { type: 'copy' | 'cut'; paths: Set<string> } | null;
@@ -156,6 +154,19 @@ const loadInitialState = (): AppState => {
     console.error("Failed to load state from local storage", e);
     return { blocks: [], groups: [] };
   }
+};
+
+const loadIdeSettingsFromStorage = (): Partial<IdeSettings> => {
+    try {
+        const saved = localStorage.getItem(SAVE_KEY_IDE_SETTINGS);
+        if (saved) {
+            return JSON.parse(saved);
+        }
+    } catch (e) {
+        console.error("Failed to load IDE settings from local storage", e);
+        localStorage.removeItem(SAVE_KEY_IDE_SETTINGS);
+    }
+    return {};
 };
 
 const fileToDataUrl = (file: File | Blob): Promise<string> => {
@@ -329,9 +340,12 @@ const App: React.FC = () => {
     setLiveGroups(historyState.groups);
   }, [historyState]);
 
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const initialSettings = useRef(loadIdeSettingsFromStorage());
+
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
-  const [theme, setTheme] = useState<Theme>('system');
+  const [theme, setTheme] = useState<Theme>(initialSettings.current.theme || 'system');
   const [isClearConfirmVisible, setIsClearConfirmVisible] = useState(false);
   const [analysisTrigger, setAnalysisTrigger] = useState(0);
   const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(
@@ -339,10 +353,10 @@ const App: React.FC = () => {
   );
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   const saveTimeoutRef = useRef<number | null>(null);
-  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
-  const [rightSidebarWidth, setRightSidebarWidth] = useState(384);
-  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
-  const [leftSidebarWidth, setLeftSidebarWidth] = useState(256);
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(initialSettings.current.isRightSidebarOpen ?? true);
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(initialSettings.current.rightSidebarWidth || 384);
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(initialSettings.current.isLeftSidebarOpen ?? true);
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState(initialSettings.current.leftSidebarWidth || 256);
   const [findUsagesHighlightIds, setFindUsagesHighlightIds] = useState<Set<string> | null>(null);
   const [directoryHandle, setDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [imageScanDirectories, setImageScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
@@ -355,8 +369,8 @@ const App: React.FC = () => {
   const [imageMetadata, setImageMetadata] = useState<Map<string, ImageMetadata>>(new Map());
   const [projectAudios, setProjectAudios] = useState<Map<string, RenpyAudio>>(new Map());
   const [audioMetadata, setAudioMetadata] = useState<Map<string, AudioMetadata>>(new Map());
-  const [openTabs, setOpenTabs] = useState<EditorTab[]>([{ id: 'canvas', type: 'canvas' }]);
-  const [activeTabId, setActiveTabId] = useState<string>('canvas');
+  const [openTabs, setOpenTabs] = useState<EditorTab[]>(initialSettings.current.openTabs || [{ id: 'canvas', type: 'canvas' }]);
+  const [activeTabId, setActiveTabId] = useState<string>(initialSettings.current.activeTabId || 'canvas');
   const [dirtyEditors, setDirtyEditors] = useState<Set<string>>(new Set());
   const [saveTrigger, setSaveTrigger] = useState(0);
   const [canvasFilters, setCanvasFilters] = useState({ story: true, screens: true, config: false });
@@ -368,6 +382,69 @@ const App: React.FC = () => {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [loadingState, setLoadingState] = useState<{ visible: boolean, progress: number, message: string }>({ visible: false, progress: 0, message: '' });
   const [saveRequestCounter, setSaveRequestCounter] = useState(0);
+  const [labelNodes, setLabelNodes] = useState<LabelNode[] | null>(null);
+  const [routeLinks, setRouteLinks] = useState<RouteLink[] | null>(null);
+  const [identifiedRoutes, setIdentifiedRoutes] = useState<IdentifiedRoute[] | null>(null);
+  const [resizingHandle, setResizingHandle] = useState<'left' | 'right' | null>(null);
+
+  useEffect(() => {
+    setSettingsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!settingsLoaded || directoryHandle) return; // Only save to local storage in browser-only mode
+
+    const tabsToSave = openTabs.filter(t => t.type !== 'route-canvas');
+    if (tabsToSave.length === 0) {
+        tabsToSave.push({ id: 'canvas', type: 'canvas' });
+    }
+    const currentActiveTabId = tabsToSave.some(t => t.id === activeTabId) ? activeTabId : 'canvas';
+
+    const settings: IdeSettings = {
+        theme,
+        isLeftSidebarOpen,
+        leftSidebarWidth,
+        isRightSidebarOpen,
+        rightSidebarWidth,
+        openTabs: tabsToSave,
+        activeTabId: currentActiveTabId,
+    };
+    try {
+        localStorage.setItem(SAVE_KEY_IDE_SETTINGS, JSON.stringify(settings));
+    } catch (e) {
+        console.error("Failed to save IDE settings:", e);
+    }
+  }, [
+    theme, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, 
+    rightSidebarWidth, openTabs, activeTabId, settingsLoaded, directoryHandle
+  ]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+        if (resizingHandle === 'left') {
+            setLeftSidebarWidth(w => Math.max(200, Math.min(e.clientX, 600)));
+        } else if (resizingHandle === 'right') {
+            setRightSidebarWidth(w => Math.max(200, Math.min(window.innerWidth - e.clientX, 800)));
+        }
+    };
+    const handleMouseUp = () => {
+        setResizingHandle(null);
+    };
+
+    if (resizingHandle) {
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    };
+  }, [resizingHandle]);
 
   const dismissToast = useCallback((id: string) => {
     setToasts(currentToasts => currentToasts.filter(t => t.id !== id));
@@ -421,14 +498,15 @@ const App: React.FC = () => {
     return undefined;
   }, [activeTab, liveBlocks]);
 
-  const commitChange = useCallback((newState: AppState, dirtyIds: string[] = []) => {
-    setLiveBlocks(newState.blocks);
-    setLiveGroups(newState.groups);
-    setHistory(newState);
+  const commitChange = useCallback((newState: Partial<AppState>, dirtyIds: string[] = []) => {
+    const updatedState = { ...historyState, ...newState };
+    setLiveBlocks(updatedState.blocks);
+    setLiveGroups(updatedState.groups);
+    setHistory(updatedState);
     if (dirtyIds.length > 0) {
       setDirtyBlockIds(prev => new Set([...prev, ...dirtyIds]));
     }
-  }, [setHistory]);
+  }, [setHistory, historyState]);
 
   useEffect(() => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -454,13 +532,41 @@ const App: React.FC = () => {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
-  const effectiveTheme = theme === 'system' ? systemTheme : theme;
+  const editorThemeForMonaco = useMemo(() => {
+      const currentTheme = theme === 'system' ? systemTheme : theme;
+      const darkThemes: Theme[] = ['dark', 'solarized-dark', 'colorful'];
+      return darkThemes.includes(currentTheme) ? 'dark' : 'light';
+  }, [theme, systemTheme]);
 
   useEffect(() => {
     const root = window.document.documentElement;
-    if (effectiveTheme === 'dark') root.classList.add('dark');
-    else root.classList.remove('dark');
-  }, [effectiveTheme]);
+    const finalTheme = theme === 'system' ? systemTheme : theme;
+    
+    // Remove all possible theme classes before adding the correct one.
+    root.classList.remove('dark', 'theme-solarized-light', 'theme-solarized-dark', 'theme-colorful', 'theme-colorful-light');
+
+    // Add the correct class(es) for the final theme.
+    switch (finalTheme) {
+        case 'dark':
+            root.classList.add('dark');
+            break;
+        case 'solarized-light':
+            root.classList.add('theme-solarized-light');
+            break;
+        case 'solarized-dark':
+            root.classList.add('dark', 'theme-solarized-dark');
+            break;
+        case 'colorful':
+            root.classList.add('dark', 'theme-colorful');
+            break;
+        case 'colorful-light':
+            root.classList.add('theme-colorful-light');
+            break;
+        case 'light':
+            // No class needed for default light theme
+            break;
+    }
+  }, [theme, systemTheme]);
   
   const requestDelete = useCallback((blockIds: string[], filePaths: string[]) => {
     const allBlockIds = new Set(blockIds);
@@ -627,6 +733,13 @@ const App: React.FC = () => {
           setActiveTabId(nextTab ? nextTab.id : 'canvas');
       }
 
+      // Clear Route Canvas state if its tab is closed, to free up memory
+      if (tabIdToClose === 'route-canvas') {
+          setLabelNodes(null);
+          setRouteLinks(null);
+          setIdentifiedRoutes(null);
+      }
+
       setOpenTabs(tabs => tabs.filter(t => t.id !== tabIdToClose));
       if (tabToClose.type === 'editor' && tabToClose.blockId) {
         setDirtyEditors(prev => {
@@ -647,13 +760,13 @@ const App: React.FC = () => {
     if (liveBlocks.find(b => b.id === blockId)?.content === content) return;
 
     const newBlocks = liveBlocks.map(block => block.id === blockId ? { ...block, content } : block );
-    commitChange({ blocks: newBlocks, groups: liveGroups }, [blockId]);
+    commitChange({ blocks: newBlocks }, [blockId]);
     setDirtyEditors(prev => {
       const newDirty = new Set(prev);
       newDirty.delete(blockId);
       return newDirty;
     });
-  }, [liveBlocks, liveGroups, commitChange]);
+  }, [liveBlocks, commitChange]);
 
   const handleEditorDirtyChange = useCallback((blockId: string, isDirty: boolean) => {
     setDirtyEditors(prev => {
@@ -680,14 +793,14 @@ const App: React.FC = () => {
       height: 120,
       filePath: filename,
     };
-    commitChange({ blocks: [...liveBlocks, newBlock], groups: liveGroups }, [newBlock.id]);
+    commitChange({ blocks: [...liveBlocks, newBlock] }, [newBlock.id]);
     if (fileTree) {
         setFileTree(addNodeToFileTree(fileTree, filename));
     }
     setSelectedBlockIds([newBlock.id]);
     setSelectedGroupIds([]);
     handleOpenEditorTab(newBlock.id);
-  }, [liveBlocks, liveGroups, commitChange, handleOpenEditorTab, fileTree]);
+  }, [liveBlocks, commitChange, handleOpenEditorTab, fileTree]);
 
     const buildCharacterDefinitionString = (char: Character): string => {
         const args: string[] = [];
@@ -788,7 +901,7 @@ const App: React.FC = () => {
                 });
             }
         }
-        commitChange({ blocks: newBlocks, groups: liveGroups }, Array.from(dirtyIds));
+        commitChange({ blocks: newBlocks }, Array.from(dirtyIds));
         
         // Close the 'new' tab and open one for the real character
         if (isNew) {
@@ -796,7 +909,7 @@ const App: React.FC = () => {
              setOpenTabs(tabs => tabs.filter(t => t.id !== newTabId));
              handleOpenCharacterEditor(newCharData.tag);
         }
-    }, [liveBlocks, liveGroups, commitChange, fileTree, analysisResult.characters, handleOpenCharacterEditor]);
+    }, [liveBlocks, commitChange, fileTree, analysisResult.characters, handleOpenCharacterEditor]);
 
 
   const handleFindCharacterUsages = useCallback((tag: string) => {
@@ -839,8 +952,8 @@ const App: React.FC = () => {
             setFileTree(addNodeToFileTree(fileTree, filePath));
         }
     }
-    commitChange({ blocks: newBlocks, groups: liveGroups }, [dirtyId]);
-  }, [liveBlocks, liveGroups, commitChange, fileTree]);
+    commitChange({ blocks: newBlocks }, [dirtyId]);
+  }, [liveBlocks, commitChange, fileTree]);
 
   const handleFindVariableUsages = useCallback((variableName: string) => {
     const blockIds = new Set<string>();
@@ -866,14 +979,14 @@ const App: React.FC = () => {
         filePath: filePath,
     };
     
-    commitChange({ blocks: [...liveBlocks, newBlock], groups: liveGroups }, [newBlock.id]);
+    commitChange({ blocks: [...liveBlocks, newBlock] }, [newBlock.id]);
     if (fileTree) {
         setFileTree(addNodeToFileTree(fileTree, filePath));
     }
     setSelectedBlockIds([newBlock.id]);
     setSelectedGroupIds([]);
     handleOpenEditorTab(newBlock.id);
-  }, [liveBlocks, liveGroups, commitChange, handleOpenEditorTab, fileTree]);
+  }, [liveBlocks, commitChange, handleOpenEditorTab, fileTree]);
 
   const handleFindScreenDefinition = useCallback((screenName: string) => {
       const screen = analysisResult.screens.get(screenName);
@@ -934,14 +1047,14 @@ const App: React.FC = () => {
             addToast(`Could not save file for block: ${block.title || block.id}. You may need to grant permission again.`, 'error');
         }
     }
-    commitChange({ blocks: updatedBlocks, groups: liveGroups });
+    commitChange({ blocks: updatedBlocks });
     setDirtyBlockIds(prev => {
         const newDirty = new Set(prev);
         successfullySavedIds.forEach(id => newDirty.delete(id));
         return newDirty;
     });
     setSaveStatus('saved');
-    }, [directoryHandle, dirtyBlockIds, liveBlocks, liveGroups, commitChange, analysisResult.firstLabels, addToast]);
+    }, [directoryHandle, dirtyBlockIds, liveBlocks, commitChange, analysisResult.firstLabels, addToast]);
 
   const handleGlobalSave = useCallback(() => {
     // Step 1: Trigger active editor to commit its content to the main state.
@@ -986,7 +1099,7 @@ const App: React.FC = () => {
           if (selectedBlockIds.length > 0) requestDelete(selectedBlockIds, []);
           if (selectedGroupIds.length > 0) {
               const newGroups = liveGroups.filter(g => !selectedGroupIds.includes(g.id));
-              commitChange({ blocks: liveBlocks, groups: newGroups });
+              commitChange({ groups: newGroups });
               setSelectedGroupIds([]);
           }
         } else if (selectedBlockIds.length === 1 && e.key === 'f') { e.preventDefault(); handleOpenEditorTab(selectedBlockIds[0]); } 
@@ -996,7 +1109,7 @@ const App: React.FC = () => {
             if (selectedGroupIds.length > 0) {
               const blockIdsFromUngrouped = liveGroups.filter(g => selectedGroupIds.includes(g.id)).flatMap(g => g.blockIds);
               const newGroups = liveGroups.filter(g => !selectedGroupIds.includes(g.id));
-              commitChange({ blocks: liveBlocks, groups: newGroups });
+              commitChange({ groups: newGroups });
               setSelectedGroupIds([]);
               setSelectedBlockIds(Array.from(new Set(blockIdsFromUngrouped)));
             } else if (selectedBlockIds.length >= 2) {
@@ -1011,7 +1124,7 @@ const App: React.FC = () => {
                   id: uuidv4(), title: "New Group", position: { x: minX - PADDING, y: minY - PADDING },
                   width: (maxX - minX) + PADDING * 2, height: (maxY - minY) + PADDING * 2, blockIds: selectedBlockIds
               };
-              commitChange({ blocks: liveBlocks, groups: [...liveGroups, newGroup] });
+              commitChange({ groups: [...liveGroups, newGroup] });
               setSelectedBlockIds([]);
               setSelectedGroupIds([newGroup.id]);
             }
@@ -1020,7 +1133,7 @@ const App: React.FC = () => {
             e.preventDefault();
             const blockIdsFromUngrouped = liveGroups.filter(g => selectedGroupIds.includes(g.id)).flatMap(g => g.blockIds);
             const newGroups = liveGroups.filter(g => !selectedGroupIds.includes(g.id));
-            commitChange({ blocks: liveBlocks, groups: newGroups });
+            commitChange({ groups: newGroups });
             setSelectedGroupIds([]);
             setSelectedBlockIds(Array.from(new Set(blockIdsFromUngrouped)));
         }
@@ -1031,7 +1144,7 @@ const App: React.FC = () => {
   }, [selectedBlockIds, selectedGroupIds, requestDelete, handleOpenEditorTab, addBlock, liveBlocks, liveGroups, commitChange, undo, redo, handleGlobalSave]);
 
   const toggleTheme = () => {
-    const themes: Theme[] = ['system', 'light', 'dark'];
+    const themes: Theme[] = ['system', 'light', 'dark', 'solarized-light', 'solarized-dark', 'colorful', 'colorful-light'];
     setTheme(themes[(themes.indexOf(theme) + 1) % themes.length]);
   };
   
@@ -1099,7 +1212,7 @@ const App: React.FC = () => {
   
   const handleTidyUp = () => {
     const newBlocks = tidyUpLayout(liveBlocks, analysisResult.links);
-    commitChange({ blocks: newBlocks, groups: liveGroups });
+    commitChange({ blocks: newBlocks });
   };
   
   const scanDirectoryForImages = async (dirHandle: FileSystemDirectoryHandle, baseName: string, isProjectScan: boolean) => {
@@ -1223,6 +1336,72 @@ const App: React.FC = () => {
     }
   };
 
+  const tidyUpLabelLayout = (nodes: LabelNode[], links: RouteLink[]): LabelNode[] => {
+      if (nodes.length === 0) return [];
+      const nodeMap = new Map(nodes.map(n => [n.id, n]));
+      const adj = new Map<string, string[]>();
+      const inDegree = new Map<string, number>();
+      
+      nodes.forEach(n => { adj.set(n.id, []); inDegree.set(n.id, 0); });
+      
+      links.forEach(link => {
+          if (adj.has(link.sourceId) && inDegree.has(link.targetId)) {
+              adj.get(link.sourceId)!.push(link.targetId);
+              inDegree.set(link.targetId, (inDegree.get(link.targetId) || 0) + 1);
+          }
+      });
+
+      const queue: string[] = [];
+      inDegree.forEach((degree, id) => { if (degree === 0) queue.push(id); });
+      if (queue.length === 0 && nodes.length > 0) {
+          const nonZero = Array.from(inDegree.entries()).sort(([,a],[,b]) => a - b);
+          if (nonZero.length > 0) queue.push(nonZero[0][0]);
+      }
+
+      const layers: string[][] = [];
+      const visited = new Set<string>();
+      while(queue.length > 0){
+          const layerSize = queue.length;
+          const currentLayer: string[] = [];
+          for(let i=0; i<layerSize; i++){
+              const u = queue.shift()!;
+              if(visited.has(u)) continue;
+              visited.add(u);
+              currentLayer.push(u);
+              for(const v of adj.get(u) || []){
+                  inDegree.set(v, inDegree.get(v)! - 1);
+                  if(inDegree.get(v)! === 0) queue.push(v);
+              }
+          }
+          if (currentLayer.length > 0) layers.push(currentLayer);
+      }
+      if (nodes.length > visited.size) layers.push(nodes.filter(n => !visited.has(n.id)).map(n => n.id));
+
+      const PADDING_X = 100, PADDING_Y = 50;
+      let currentX = 0;
+      const newNodes = [...nodes];
+      for (const layer of layers) {
+          let maxLayerWidth = 0, currentLayerHeight = 0;
+          layer.forEach(id => {
+              const node = nodeMap.get(id);
+              if (node) { maxLayerWidth = Math.max(maxLayerWidth, node.width); currentLayerHeight += node.height; }
+          });
+          currentLayerHeight += Math.max(0, layer.length - 1) * PADDING_Y;
+          let currentY = -currentLayerHeight / 2;
+          for (const id of layer) {
+              const node = nodeMap.get(id);
+              const nodeIndex = newNodes.findIndex(b => b.id === id);
+              if (node && nodeIndex !== -1) {
+                  const xPos = currentX + (maxLayerWidth - node.width) / 2;
+                  newNodes[nodeIndex] = { ...node, position: { x: xPos, y: currentY } };
+                  currentY += node.height + PADDING_Y;
+              }
+          }
+          currentX += maxLayerWidth + PADDING_X;
+      }
+      return newNodes;
+  };
+
   const handleOpenFolder = async () => {
     setLoadingState({ visible: true, progress: 0, message: 'Opening project folder...' });
     try {
@@ -1270,7 +1449,7 @@ const App: React.FC = () => {
 
         setLoadingState(s => ({ ...s, progress: 90, message: 'Arranging canvas...' }));
         const laidOutBlocks = tidyUpLayout(newBlocks, preliminaryAnalysis.links);
-
+        
         commitChange({ blocks: laidOutBlocks, groups: [] });
         setSelectedBlockIds([]);
         setSelectedGroupIds([]);
@@ -1412,7 +1591,7 @@ const App: React.FC = () => {
   const updateGroup = (id: string, newGroupData: Partial<BlockGroup>) => {
     setLiveGroups(prevGroups => {
         const newGroups = prevGroups.map(group => group.id === id ? { ...group, ...newGroupData } : group);
-        commitChange({ blocks: liveBlocks, groups: newGroups });
+        commitChange({ groups: newGroups });
         return newGroups;
     });
   };
@@ -1430,6 +1609,44 @@ const App: React.FC = () => {
     }
   }, [liveBlocks, liveGroups, setHistory, historyState.blocks]);
 
+  const updateLabelNodePositions = (updates: { id: string; position: Position }[]) => {
+    if (!labelNodes) return;
+    const updatesMap = new Map(updates.map(u => [u.id, u.position]));
+    // FIX: Incorrect state setter `setLiveNodes` has been corrected to `setLabelNodes`.
+    setLabelNodes(prevNodes =>
+      prevNodes!.map(node => (updatesMap.has(node.id) ? { ...node, position: updatesMap.get(node.id)! } : node))
+    );
+  };
+
+  const handleAnalyzeRoutes = async () => {
+    setLoadingState({ visible: true, progress: 0, message: 'Preparing route data...' });
+    await new Promise(res => setTimeout(res, 50)); // Allow UI to update
+
+    setLoadingState(s => ({ ...s, progress: 30, message: 'Arranging label nodes...' }));
+    await new Promise(res => setTimeout(res, 50));
+
+    // This is the potentially slow part
+    const laidOutLabelNodes = tidyUpLabelLayout(
+      Array.from(analysisResult.labelNodes.values()),
+      analysisResult.routeLinks
+    );
+
+    setLoadingState(s => ({ ...s, progress: 80, message: 'Finalizing canvas...' }));
+    await new Promise(res => setTimeout(res, 50));
+    
+    setLabelNodes(laidOutLabelNodes);
+    setRouteLinks(analysisResult.routeLinks);
+    setIdentifiedRoutes(analysisResult.identifiedRoutes);
+
+    // Open tab if not already open
+    if (!openTabs.some(t => t.id === 'route-canvas')) {
+      setOpenTabs(tabs => [...tabs, { id: 'route-canvas', type: 'route-canvas' }]);
+    }
+    setActiveTabId('route-canvas');
+    
+    setLoadingState({ visible: false, progress: 0, message: '' });
+  };
+  
   const handleRefreshAnalysis = () => setAnalysisTrigger(c => c + 1);
 
     const handleFileDoubleClick = (filePath: string) => {
@@ -2042,9 +2259,9 @@ const App: React.FC = () => {
     setOpenTabs(currentOpenTabs);
     setActiveTabId(currentActiveTabId);
     setClipboard(currentClipboard);
-    commitChange({ blocks: currentBlocks, groups: liveGroups });
+    commitChange({ blocks: currentBlocks });
     
-  }, [liveBlocks, liveGroups, projectImages, imageMetadata, projectAudios, audioMetadata, openTabs, activeTabId, clipboard, commitChange]);
+  }, [liveBlocks, projectImages, imageMetadata, projectAudios, audioMetadata, openTabs, activeTabId, clipboard, commitChange]);
 
   const handleCreateNode = useCallback(async (parentPath: string, name: string, type: 'file' | 'folder') => {
     if (!directoryHandle || !name) return;
@@ -2072,7 +2289,7 @@ const App: React.FC = () => {
                     filePath: newPath,
                     fileHandle: newFileHandle
                 };
-                commitChange({ blocks: [...liveBlocks, newBlock], groups: liveGroups }, [newBlock.id]);
+                commitChange({ blocks: [...liveBlocks, newBlock] }, [newBlock.id]);
                 handleOpenEditorTab(newBlock.id);
             }
         }
@@ -2081,7 +2298,7 @@ const App: React.FC = () => {
         console.error("Failed to create node:", e);
         addToast(`Could not create ${type}: ${(e as Error).message}`, 'error');
     }
-  }, [directoryHandle, liveBlocks, liveGroups, commitChange, getHandleFromPath, handleOpenEditorTab, addToast]);
+  }, [directoryHandle, liveBlocks, commitChange, getHandleFromPath, handleOpenEditorTab, addToast]);
 
   const handleRenameNode = useCallback(async (oldPath: string, newName: string) => {
       if (!directoryHandle) return;
@@ -2291,6 +2508,7 @@ const App: React.FC = () => {
         redo={redo}
         addBlock={addBlock}
         handleTidyUp={handleTidyUp}
+        onAnalyzeRoutes={handleAnalyzeRoutes}
         requestOpenFolder={requestOpenFolder}
         handleSave={handleGlobalSave}
         handleDownloadFiles={handleDownloadFiles}
@@ -2306,21 +2524,30 @@ const App: React.FC = () => {
       <input type="file" ref={fileInputRef} onChange={handleUploadFileSelect} style={{ display: 'none' }} accept=".zip" />
       <div className="flex-grow flex overflow-hidden">
         {isLeftSidebarOpen && (
-          <aside style={{ width: `${leftSidebarWidth}px` }} className="flex-shrink-0 h-full border-r border-gray-200 dark:border-gray-700">
-            <FileExplorerPanel
-              tree={fileTree}
-              onFileOpen={handleFileDoubleClick}
-              onCreateNode={handleCreateNode}
-              onRenameNode={handleRenameNode}
-              onDeleteNode={handleDeleteNode}
-              onMoveNode={handleMoveNode}
-              clipboard={clipboard}
-              onCut={handleCut}
-              onCopy={handleCopy}
-              onPaste={handlePaste}
-              onCenterOnBlock={handleCenterOnBlock}
-            />
-          </aside>
+          <>
+            <aside style={{ width: `${leftSidebarWidth}px` }} className="flex-shrink-0 h-full relative flex">
+                <div className="flex-grow min-w-0 h-full border-r border-gray-200 dark:border-gray-700">
+                    <FileExplorerPanel
+                      tree={fileTree}
+                      onFileOpen={handleFileDoubleClick}
+                      onCreateNode={handleCreateNode}
+                      onRenameNode={handleRenameNode}
+                      onDeleteNode={handleDeleteNode}
+                      onMoveNode={handleMoveNode}
+                      clipboard={clipboard}
+                      onCut={handleCut}
+                      onCopy={handleCopy}
+                      onPaste={handlePaste}
+                      onCenterOnBlock={handleCenterOnBlock}
+                    />
+                </div>
+                <div 
+                    onMouseDown={(e) => { e.preventDefault(); setResizingHandle('left'); }}
+                    className="w-1.5 h-full cursor-col-resize bg-transparent hover:bg-indigo-500 transition-colors absolute right-0 top-0 z-20"
+                    title="Resize sidebar"
+                />
+            </aside>
+          </>
         )}
         <main className="flex-1 flex flex-col min-w-0">
           <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
@@ -2328,7 +2555,8 @@ const App: React.FC = () => {
               {openTabs.map(tab => {
                 const isActive = tab.id === activeTabId;
                 let title = '';
-                if (tab.type === 'canvas') title = 'Canvas';
+                if (tab.type === 'canvas') title = 'Story Canvas';
+                else if (tab.type === 'route-canvas') title = 'Route Canvas';
                 else if (tab.type === 'editor') title = liveBlocks.find(b => b.id === tab.blockId)?.filePath?.split('/').pop() || 'Editor';
                 else if (tab.type === 'image') title = tab.filePath?.split('/').pop() || 'Image';
                 else if (tab.type === 'audio') title = tab.filePath?.split('/').pop() || 'Audio';
@@ -2338,7 +2566,7 @@ const App: React.FC = () => {
                   <div key={tab.id} onClick={() => setActiveTabId(tab.id)} className={`flex items-center space-x-2 px-4 py-2 border-r border-gray-200 dark:border-gray-700 cursor-pointer transition-colors ${isActive ? 'bg-white dark:bg-gray-800 font-semibold' : 'hover:bg-gray-100 dark:hover:bg-gray-800/50'}`}>
                     <span className="text-sm truncate max-w-xs">{title}</span>
                     {tab.type === 'editor' && dirtyEditors.has(tab.blockId!) && <div className="w-2 h-2 rounded-full bg-blue-500" title="Unsaved changes"></div>}
-                    {tab.id !== 'canvas' && <button onClick={e => { e.stopPropagation(); handleCloseTab(tab.id); }} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>}
+                    {tab.type !== 'canvas' && <button onClick={e => { e.stopPropagation(); handleCloseTab(tab.id); }} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>}
                   </div>
                 )
               })}
@@ -2369,6 +2597,15 @@ const App: React.FC = () => {
                 centerOnBlockRequest={centerOnBlockRequest}
               />
             )}
+            {activeTab?.type === 'route-canvas' && labelNodes && routeLinks && identifiedRoutes && (
+              <RouteCanvas
+                labelNodes={labelNodes}
+                routeLinks={routeLinks}
+                identifiedRoutes={identifiedRoutes}
+                updateLabelNodePositions={updateLabelNodePositions}
+                onOpenEditor={handleOpenEditorTab}
+              />
+            )}
             {activeTab?.type === 'editor' && activeEditorBlock && (
               <EditorView
                 key={activeEditorBlock.id}
@@ -2379,7 +2616,7 @@ const App: React.FC = () => {
                 onSave={handleSaveBlockContent}
                 onDirtyChange={handleEditorDirtyChange}
                 saveTrigger={saveTrigger}
-                editorTheme={effectiveTheme}
+                editorTheme={editorThemeForMonaco}
               />
             )}
             {activeTab?.type === 'image' && activeTab.filePath && projectImages.has(activeTab.filePath) && (
@@ -2410,13 +2647,21 @@ const App: React.FC = () => {
           </div>
         </main>
         {isRightSidebarOpen && (
-           <aside style={{ width: `${rightSidebarWidth}px` }} className="flex-shrink-0 h-full border-l border-gray-200 dark:border-gray-700">
+           <>
+            <div 
+                onMouseDown={(e) => { e.preventDefault(); setResizingHandle('right'); }}
+                className="w-1.5 h-full cursor-col-resize bg-transparent hover:bg-indigo-500 transition-colors z-20"
+                title="Resize sidebar"
+            />
+            <aside style={{ width: `${rightSidebarWidth}px` }} className="flex-shrink-0 h-full border-l border-gray-200 dark:border-gray-700">
              <StoryElementsPanel
                analysisResult={analysisResult}
                onOpenCharacterEditor={handleOpenCharacterEditor}
                onFindCharacterUsages={handleFindCharacterUsages}
+               // FIX: Pass the correct handler `handleAddVariable` instead of the undefined `onAddVariable`.
                onAddVariable={handleAddVariable}
                onFindVariableUsages={handleFindVariableUsages}
+               // FIX: Pass the correct handler `handleAddScreen` instead of the undefined `onAddScreen`.
                onAddScreen={handleAddScreen}
                onFindScreenDefinition={handleFindScreenDefinition}
                projectImages={projectImages}
@@ -2438,6 +2683,7 @@ const App: React.FC = () => {
                isFileSystemApiSupported={!!directoryHandle}
              />
            </aside>
+           </>
         )}
       </div>
       {isClearConfirmVisible && (

@@ -1,5 +1,4 @@
 
-
 export interface Position {
   x: number;
   y: number;
@@ -139,6 +138,7 @@ export interface LabelLocation {
 export interface JumpLocation {
   blockId: string;
   target: string;
+  type: 'jump' | 'call';
   line: number;
   columnStart: number;
   columnEnd: number;
@@ -147,6 +147,32 @@ export interface JumpLocation {
 export interface DialogueLine {
   line: number;
   tag: string;
+}
+
+// A node on the Route Canvas, representing a single label.
+export interface LabelNode {
+  id: string; // composite key: `${blockId}:${label}`
+  label: string;
+  blockId: string;
+  startLine: number;
+  position: Position;
+  width: number;
+  height: number;
+}
+
+// A link on the Route Canvas between two labels.
+export interface RouteLink {
+  id: string; // unique identifier for the link
+  sourceId: string; // source LabelNode id
+  targetId: string; // target LabelNode id
+  type: 'jump' | 'call' | 'implicit';
+}
+
+// Represents one complete, unique path through the label graph.
+export interface IdentifiedRoute {
+    id: number;
+    color: string;
+    linkIds: Set<string>;
 }
 
 // A comprehensive result object from the analysis hook
@@ -175,12 +201,16 @@ export interface RenpyAnalysisResult {
   screens: Map<string, RenpyScreen>;
   // Content summary for UI hints
   blockTypes: Map<string, Set<string>>;
+  // Route Canvas data
+  labelNodes: Map<string, LabelNode>;
+  routeLinks: RouteLink[];
+  identifiedRoutes: IdentifiedRoute[];
 }
 
 // Defines an open tab in the main editor view
 export interface EditorTab {
   id: string; // unique ID for the tab, can be block.id or 'canvas'
-  type: 'canvas' | 'editor' | 'image' | 'audio' | 'character';
+  type: 'canvas' | 'route-canvas' | 'editor' | 'image' | 'audio' | 'character';
   blockId?: string;
   filePath?: string; // Used for image and audio tabs
   characterTag?: string; // Used for character tabs
@@ -200,4 +230,16 @@ export interface ToastMessage {
   id: string;
   message: string;
   type: 'success' | 'error' | 'warning' | 'info';
+}
+
+export type Theme = 'system' | 'light' | 'dark' | 'solarized-light' | 'solarized-dark' | 'colorful' | 'colorful-light';
+
+export interface IdeSettings {
+  theme: Theme;
+  isLeftSidebarOpen: boolean;
+  leftSidebarWidth: number;
+  isRightSidebarOpen: boolean;
+  rightSidebarWidth: number;
+  openTabs: EditorTab[];
+  activeTabId: string;
 }
