@@ -105,12 +105,12 @@ The top toolbar provides access to global actions and tools.
 | **Tidy Up Layout**  | Automatically arranges the blocks on the canvas based on the story flow to reduce clutter.               |                    |
 | **Analyze Routes**  | Generates and opens the Route Canvas tab, showing label-to-label connections.                            |                    |
 | **Open Folder**     | Opens a new project folder, replacing the current workspace.                                             |                    |
-| **Save All**        | Saves all unsaved changes to your local files. Only enabled when a project folder is open.               | `Ctrl+S`           |
+| **Save All**        | Saves all unsaved changes to your local files. Only enabled when a project folder is open.               | None, but `Ctrl+S` saves current file in editor. |
 | **Download .zip**   | Downloads all the script files in the current workspace as a `.zip` archive.                             |                    |
 | **Upload .zip**     | Opens a file picker to upload and load a `.zip` project archive.                                         |                    |
 | **Clear Canvas**    | Deletes all blocks and groups from the canvas.                                                           |                    |
 | **Toggle Sidebars** | Shows or hides the left and right sidebars.                                                              |                    |
-| **Toggle Theme**    | Cycles between System, Light, Dark, Solarized Light, Solarized Dark, Colorful, and Colorful Light themes.|                    |
+| **Settings**        | Updates applications settings including the Theme.                                                       |                    |
 
 #### The Canvases
 
