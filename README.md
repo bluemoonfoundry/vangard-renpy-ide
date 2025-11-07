@@ -39,7 +39,7 @@ This tool is perfect for writers, designers, and programmers who want a more int
 
 ---
 
-## Local Development Setup
+## Installation and Setup
 
 This project uses a standard Node.js-based toolchain with Vite for a fast and modern development experience.
 
