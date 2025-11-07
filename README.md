@@ -7,10 +7,8 @@ This tool is perfect for writers, designers, and programmers who want a more int
 > [!CAUTION]
 > Full disclosure: Sections of this codebase have been developed with the help of Gemini Build, a generative AI code assisstant.
 
-
 > [!TIP]
 > The demo folder contains the a simple Ren'py example project. Click the "Open Folder" button and select the "demo" folder to load it into the app. 
-
 
 
 ## Key Features
