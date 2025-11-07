@@ -4,6 +4,9 @@ The Ren'Py Visual Novel Accelerator is a powerful, web-based visual editor desig
 
 This tool is perfect for writers, designers, and programmers who want a more intuitive and organized way to manage complex branching narratives.
 
+> [!CAUTION]
+> Full disclosure: Sections of this codebase have been developed with the help of Gemini Build, a generative AI code assisstant. 
+
 ## Key Features
 
 **Visual Story Canvas**: 
