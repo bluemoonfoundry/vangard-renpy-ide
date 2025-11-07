@@ -105,6 +105,13 @@ The top toolbar provides access to global actions and tools.
 | **Toggle Sidebars** | Shows or hides the left and right sidebars.                                                              |                    |
 | **Toggle Theme**    | Cycles between System, Light, Dark, Solarized Light, Solarized Dark, Colorful, and Colorful Light themes.|                    |
 
+
+
+> [!TIP]
+> The demo folder contains the a simple Ren'py example project. Click the "Open Folder" button and select the "demo" folder to load it into the app. 
+
+
+
 #### The Canvases
 
 The central area is your main workspace for visualizing the story. It can contain multiple tabs, including two special canvas types.
