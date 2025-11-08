@@ -886,7 +886,7 @@ const App: React.FC = () => {
             const definitionBlock = newBlocks.find(b => b.id === oldChar.definedInBlockId);
             if (definitionBlock) {
                 dirtyIds.add(definitionBlock.id);
-                const oldDefRegex = new RegExp(`(?:^\\s*#\\s*profile:.*$\\r?\\n)?^\\s*define\\s+${oldTag}\\s*=\\s*Character\\s*\\([\\s\\S]*?\\)$`, "m");
+                const oldDefRegex = new RegExp(`(?:^\\s*#\\s*profile:.*$\\r?\\n)?^\\s*define\\s+${oldTag}\\s*=\\s*Character\\s*\\(([\\s\\S]*?)\\)`, "m");
                 const newContent = definitionBlock.content.replace(oldDefRegex, newDefString);
                 newBlocks = newBlocks.map(b => b.id === definitionBlock.id ? { ...b, content: newContent } : b);
             }
