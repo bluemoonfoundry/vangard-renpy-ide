@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useMemo } from 'react';
 import type { Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, RenpyScreen, RenpyAnalysisResult } from '../types';
 import VariableManager from './VariableManager';
@@ -39,6 +36,9 @@ interface StoryElementsPanelProps {
     onUpdateAudioMetadata: (filePath: string, newMetadata: AudioMetadata) => void;
     onOpenAudioEditor: (filePath: string) => void;
     isFileSystemApiSupported: boolean;
+    // Hover highlight callbacks
+    onHoverHighlightStart: (key: string, type: 'character' | 'variable') => void;
+    onHoverHighlightEnd: () => void;
 }
 
 type Tab = 'characters' | 'variables' | 'images' | 'audio' | 'screens' | 'snippets';
@@ -69,6 +69,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     projectImages, imageMetadata, onAddImageScanDirectory, onRemoveImageScanDirectory, imageScanDirectories, onCopyImagesToProject, onUpdateImageMetadata, onOpenImageEditor,
     projectAudios, audioMetadata, onAddAudioScanDirectory, onRemoveAudioScanDirectory, audioScanDirectories, onCopyAudiosToProject, onUpdateAudioMetadata, onOpenAudioEditor,
     isFileSystemApiSupported,
+    onHoverHighlightStart, onHoverHighlightEnd
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('characters');
 
@@ -97,7 +98,12 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                         </div>
                         <ul className="space-y-2">
                             {characterList.map((char: Character) => (
-                                <li key={char.tag} className="p-2 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                                <li
+                                  key={char.tag}
+                                  className="p-2 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-between"
+                                  onMouseEnter={() => onHoverHighlightStart(char.tag, 'character')}
+                                  onMouseLeave={onHoverHighlightEnd}
+                                >
                                     <div className="flex items-center space-x-3 min-w-0">
                                         <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: char.color }}></div>
                                         <div className="min-w-0">
@@ -125,6 +131,8 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                         analysisResult={analysisResult}
                         onAddVariable={onAddVariable}
                         onFindUsages={onFindVariableUsages}
+                        onHoverHighlightStart={onHoverHighlightStart}
+                        onHoverHighlightEnd={onHoverHighlightEnd}
                     />
                 )}
                 {activeTab === 'images' && (

@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo } from 'react';
 import type { Variable, RenpyAnalysisResult } from '../types';
 
@@ -7,6 +5,8 @@ interface VariableManagerProps {
     analysisResult: RenpyAnalysisResult;
     onAddVariable: (variable: Omit<Variable, 'definedInBlockId' | 'line'>) => void;
     onFindUsages: (variableName: string) => void;
+    onHoverHighlightStart: (key: string, type: 'character' | 'variable') => void;
+    onHoverHighlightEnd: () => void;
 }
 
 const VariableEditor: React.FC<{
@@ -67,7 +67,7 @@ const VariableEditor: React.FC<{
 };
 
 
-const VariableManager: React.FC<VariableManagerProps> = ({ analysisResult, onAddVariable, onFindUsages }) => {
+const VariableManager: React.FC<VariableManagerProps> = ({ analysisResult, onAddVariable, onFindUsages, onHoverHighlightStart, onHoverHighlightEnd }) => {
     const { variables, storyBlockIds } = analysisResult;
     const [mode, setMode] = useState<'list' | 'add'>('list');
     const [filterStoryVars, setFilterStoryVars] = useState(true);
@@ -104,7 +104,12 @@ const VariableManager: React.FC<VariableManagerProps> = ({ analysisResult, onAdd
             <h4 className="font-semibold text-gray-500 dark:text-gray-400 text-sm mt-4 mb-2">{title}</h4>
             <ul className="space-y-2">
                 {vars.map(variable => (
-                    <li key={variable.name} className="p-2 rounded-md bg-gray-50 dark:bg-gray-700/50 flex items-center justify-between">
+                    <li
+                      key={variable.name}
+                      className="p-2 rounded-md bg-gray-50 dark:bg-gray-700/50 flex items-center justify-between"
+                      onMouseEnter={() => onHoverHighlightStart(variable.name, 'variable')}
+                      onMouseLeave={onHoverHighlightEnd}
+                    >
                         <div className="flex-grow min-w-0">
                             <p className="font-semibold font-mono text-sm truncate" title={variable.name}>{variable.name}</p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={`= ${variable.initialValue}`}>

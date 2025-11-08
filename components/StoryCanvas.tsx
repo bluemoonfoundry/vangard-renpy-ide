@@ -24,6 +24,7 @@ interface StoryCanvasProps {
   canvasFilters: { story: boolean; screens: boolean; config: boolean };
   setCanvasFilters: React.Dispatch<React.SetStateAction<{ story: boolean; screens: boolean; config: boolean }>>;
   centerOnBlockRequest: { blockId: string, key: number } | null;
+  hoverHighlightIds: Set<string> | null;
 }
 
 const getBlockById = (blocks: Block[], id: string) => blocks.find(b => b.id === id);
@@ -137,7 +138,7 @@ type InteractionState =
   | { type: 'resizing-block'; block: Block; }
   | { type: 'resizing-group'; group: BlockGroup; };
 
-const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResult, updateBlock, updateGroup, updateBlockPositions, updateGroupPositions, onInteractionEnd, deleteBlock, onOpenEditor, selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, findUsagesHighlightIds, clearFindUsages, dirtyBlockIds, canvasFilters, setCanvasFilters, centerOnBlockRequest }) => {
+const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResult, updateBlock, updateGroup, updateBlockPositions, updateGroupPositions, onInteractionEnd, deleteBlock, onOpenEditor, selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, findUsagesHighlightIds, clearFindUsages, dirtyBlockIds, canvasFilters, setCanvasFilters, centerOnBlockRequest, hoverHighlightIds }) => {
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [rubberBandRect, setRubberBandRect] = useState<Rect | null>(null);
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
@@ -588,6 +589,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
           const isDimmed = (highlightedPath !== null && !highlightedPath.has(block.id)) || 
                           (findUsagesHighlightIds !== null && !findUsagesHighlightIds.has(block.id));
           const isUsageHighlighted = findUsagesHighlightIds?.has(block.id) ?? false;
+          const isHoverHighlighted = hoverHighlightIds?.has(block.id) ?? false;
           const isScreenBlock = analysisResult.screenOnlyBlockIds.has(block.id);
           const isConfigBlock = analysisResult.configBlockIds.has(block.id);
           return (
@@ -605,6 +607,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
               isBranching={analysisResult.branchingBlockIds.has(block.id)}
               isDimmed={isDimmed}
               isUsageHighlighted={isUsageHighlighted}
+              isHoverHighlighted={isHoverHighlighted}
               isDirty={dirtyBlockIds.has(block.id)}
               isScreenBlock={isScreenBlock}
               isConfigBlock={isConfigBlock}

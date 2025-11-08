@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import Toolbar from './components/Toolbar';
 import StoryCanvas from './components/StoryCanvas';
@@ -12,6 +11,7 @@ import StoryElementsPanel from './components/StoryElementsPanel';
 import FileExplorerPanel from './components/FileExplorerPanel';
 import Toast from './components/Toast';
 import LoadingOverlay from './components/LoadingOverlay';
+import SettingsModal from './components/SettingsModal';
 import { useRenpyAnalysis, performRenpyAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import type { Block, Position, BlockGroup, Link, Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, EditorTab, RenpyScreen, FileSystemTreeNode, ToastMessage, LabelNode, RouteLink, IdentifiedRoute, Theme, IdeSettings } from './types';
@@ -386,6 +386,8 @@ const App: React.FC = () => {
   const [routeLinks, setRouteLinks] = useState<RouteLink[] | null>(null);
   const [identifiedRoutes, setIdentifiedRoutes] = useState<IdentifiedRoute[] | null>(null);
   const [resizingHandle, setResizingHandle] = useState<'left' | 'right' | null>(null);
+  const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
+  const [hoverHighlightIds, setHoverHighlightIds] = useState<Set<string> | null>(null);
 
   useEffect(() => {
     setSettingsLoaded(true);
@@ -965,6 +967,25 @@ const App: React.FC = () => {
     setActiveTabId('canvas');
   }, [analysisResult.variables, analysisResult.variableUsages]);
 
+  const handleHoverHighlightStart = useCallback((key: string, type: 'character' | 'variable') => {
+    const blockIds = new Set<string>();
+    if (type === 'character') {
+      for (const [blockId, lines] of analysisResult.dialogueLines.entries()) {
+        if (lines.some(line => line.tag === key)) blockIds.add(blockId);
+      }
+    } else { // variable
+      const definition = analysisResult.variables.get(key);
+      if (definition) blockIds.add(definition.definedInBlockId);
+      const usages = analysisResult.variableUsages.get(key) || [];
+      usages.forEach(usage => blockIds.add(usage.blockId));
+    }
+    setHoverHighlightIds(blockIds);
+  }, [analysisResult]);
+
+  const handleHoverHighlightEnd = useCallback(() => {
+    setHoverHighlightIds(null);
+  }, []);
+
   const handleAddScreen = useCallback((screenName: string) => {
     const screenContent = `screen ${screenName}():\n    # Add screen language statements here.\n    frame:\n        xalign 0.5\n        yalign 0.5\n        vbox:\n            spacing 10\n            text "Screen: ${screenName}"\n            textbutton "Return" action Return()`;
     
@@ -1143,9 +1164,10 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedBlockIds, selectedGroupIds, requestDelete, handleOpenEditorTab, addBlock, liveBlocks, liveGroups, commitChange, undo, redo, handleGlobalSave]);
 
-  const toggleTheme = () => {
-    const themes: Theme[] = ['system', 'light', 'dark', 'solarized-light', 'solarized-dark', 'colorful', 'colorful-light'];
-    setTheme(themes[(themes.indexOf(theme) + 1) % themes.length]);
+  const handleSettingsChange = (key: string, value: any) => {
+    if (key === 'theme') {
+      setTheme(value as Theme);
+    }
   };
   
   const tidyUpLayout = (blocksToLayout: Block[], links: Link[]): Block[] => {
@@ -2514,8 +2536,7 @@ const App: React.FC = () => {
         handleDownloadFiles={handleDownloadFiles}
         onUploadClick={handleUploadClick}
         setIsClearConfirmVisible={setIsClearConfirmVisible}
-        theme={theme}
-        toggleTheme={toggleTheme}
+        onOpenSettings={() => setIsSettingsModalVisible(true)}
         isLeftSidebarOpen={isLeftSidebarOpen}
         setIsLeftSidebarOpen={setIsLeftSidebarOpen}
         isRightSidebarOpen={isRightSidebarOpen}
@@ -2595,6 +2616,7 @@ const App: React.FC = () => {
                 canvasFilters={canvasFilters}
                 setCanvasFilters={setCanvasFilters}
                 centerOnBlockRequest={centerOnBlockRequest}
+                hoverHighlightIds={hoverHighlightIds}
               />
             )}
             {activeTab?.type === 'route-canvas' && labelNodes && routeLinks && identifiedRoutes && (
@@ -2658,10 +2680,8 @@ const App: React.FC = () => {
                analysisResult={analysisResult}
                onOpenCharacterEditor={handleOpenCharacterEditor}
                onFindCharacterUsages={handleFindCharacterUsages}
-               // FIX: Pass the correct handler `handleAddVariable` instead of the undefined `onAddVariable`.
                onAddVariable={handleAddVariable}
                onFindVariableUsages={handleFindVariableUsages}
-               // FIX: Pass the correct handler `handleAddScreen` instead of the undefined `onAddScreen`.
                onAddScreen={handleAddScreen}
                onFindScreenDefinition={handleFindScreenDefinition}
                projectImages={projectImages}
@@ -2681,6 +2701,8 @@ const App: React.FC = () => {
                onUpdateAudioMetadata={handleUpdateAudioMetadata}
                onOpenAudioEditor={handleOpenAudioTab}
                isFileSystemApiSupported={!!directoryHandle}
+               onHoverHighlightStart={handleHoverHighlightStart}
+               onHoverHighlightEnd={handleHoverHighlightEnd}
              />
            </aside>
            </>
@@ -2723,6 +2745,14 @@ const App: React.FC = () => {
           isFileSystemApiSupported={isFileSystemApiSupported}
         />
       )}
+      {isSettingsModalVisible && (
+        <SettingsModal
+          isOpen={isSettingsModalVisible}
+          onClose={() => setIsSettingsModalVisible(false)}
+          settings={{ theme }}
+          onSettingsChange={handleSettingsChange}
+        />
+       )}
     </div>
   );
 };

@@ -34,6 +34,20 @@
       .flash-block {
         animation: flash-animation 1.5s ease-out;
       }
+      @keyframes pulse-animation {
+        0% { box-shadow: 0 0 0 0px var(--accent-border-hover-pulse); }
+        70% { box-shadow: 0 0 0 15px transparent; }
+        100% { box-shadow: 0 0 0 0px transparent; }
+      }
+      .pulse-block {
+        animation: pulse-animation 1.3s infinite;
+      }
+      html .heatmap-highlight {
+        background-color: rgba(251, 191, 36, 0.2);
+      }
+      html.dark .heatmap-highlight {
+        background-color: rgba(251, 191, 36, 0.25);
+      }
     </style>
     <style>
       /* --- Base Theme Colors (CSS Variables) --- */
@@ -51,6 +65,7 @@
         --accent-text: #6366f1; /* indigo-500 */
         --accent-border: #6366f1; /* indigo-500 */
         --text-on-accent: #ffffff;
+        --accent-border-hover-pulse: rgba(56, 189, 248, 0.6); /* sky-400 */
       }
       .dark {
         --bg-primary: #111827; /* gray-900 */
@@ -66,6 +81,7 @@
         --accent-text: #818cf8; /* indigo-400 */
         --accent-border: #818cf8; /* indigo-400 */
         --text-on-accent: #ffffff;
+        --accent-border-hover-pulse: rgba(14, 165, 233, 0.6); /* sky-500 */
       }
 
       /* Solarized Light: A warm, low-contrast theme */
