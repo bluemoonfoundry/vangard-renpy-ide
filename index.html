@@ -26,6 +26,24 @@
       .dark .renpy-jump-link:hover {
         color: #c7d2fe; /* indigo-200 */
       }
+      .renpy-jump-invalid {
+        color: #ef4444; /* red-500 */
+        text-decoration: underline;
+        text-decoration-style: wavy;
+        cursor: not-allowed;
+      }
+      .dark .renpy-jump-invalid {
+        color: #f87171; /* red-400 */
+      }
+      .renpy-jump-dynamic {
+        color: #22c55e; /* green-500 */
+        text-decoration: underline;
+        text-decoration-style: dotted;
+        cursor: help;
+      }
+      .dark .renpy-jump-dynamic {
+        color: #4ade80; /* green-400 */
+      }
       @keyframes flash-animation {
         0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); }
         70% { box-shadow: 0 0 0 10px rgba(79, 70, 229, 0); }
