@@ -1,4 +1,6 @@
 
+
+
 export interface Position {
   x: number;
   y: number;
@@ -87,7 +89,7 @@ export interface RenpyScreen {
 export interface ProjectImage {
   filePath: string; // A unique path for the image, e.g., "ScannedDir/subdir/img.png" or "game/images/img.png"
   fileName: string;
-  dataUrl: string;
+  dataUrl?: string; // Made optional for lazy loading
   // FIX: Allow fileHandle to be null for images loaded from zip files.
   fileHandle: FileSystemFileHandle | null;
   isInProject: boolean; // True if it's inside game/images
@@ -133,12 +135,14 @@ export interface LabelLocation {
   label: string;
   line: number;
   column: number;
+  type: 'label' | 'menu';
 }
 
 export interface JumpLocation {
   blockId: string;
   target: string;
   type: 'jump' | 'call';
+  isDynamic?: boolean;
   line: number;
   columnStart: number;
   columnEnd: number;

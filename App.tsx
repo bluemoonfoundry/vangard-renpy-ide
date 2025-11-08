@@ -12,7 +12,7 @@ import FileExplorerPanel from './components/FileExplorerPanel';
 import Toast from './components/Toast';
 import LoadingOverlay from './components/LoadingOverlay';
 import SettingsModal from './components/SettingsModal';
-import { useRenpyAnalysis, performRenpyAnalysis } from './hooks/useRenpyAnalysis';
+import { useRenpyAnalysis, performRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import type { Block, Position, BlockGroup, Link, Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, EditorTab, RenpyScreen, FileSystemTreeNode, ToastMessage, LabelNode, RouteLink, IdentifiedRoute, Theme, IdeSettings } from './types';
 import JSZip from 'jszip';
@@ -1244,14 +1244,11 @@ const App: React.FC = () => {
             const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
             if (entry.kind === 'file' && /\.(png|jpe?g|webp)$/i.test(entry.name)) {
                 const fileHandle = entry as FileSystemFileHandle;
-                const file = await fileHandle.getFile();
-                const dataUrl = await fileToDataUrl(file);
                 // The unique key for an image is its base directory name + its relative path
                 const imageKey = `${baseName}/${newPath}`;
                 const projectImage: ProjectImage = {
                     filePath: imageKey,
                     fileName: entry.name,
-                    dataUrl,
                     fileHandle,
                     isInProject: isProjectScan,
                     projectFilePath: isProjectScan ? imageKey : undefined,
@@ -1641,26 +1638,24 @@ const App: React.FC = () => {
   };
 
   const handleAnalyzeRoutes = async () => {
-    setLoadingState({ visible: true, progress: 0, message: 'Preparing route data...' });
-    await new Promise(res => setTimeout(res, 50)); // Allow UI to update
+    setLoadingState({ visible: true, progress: 0, message: 'Analyzing routes...' });
+    await new Promise(res => setTimeout(res, 50));
+
+    const { labelNodes: generatedNodes, routeLinks: generatedLinks, identifiedRoutes: generatedRoutes } = 
+        performRouteAnalysis(liveBlocks, analysisResult.labels, analysisResult.jumps);
 
     setLoadingState(s => ({ ...s, progress: 30, message: 'Arranging label nodes...' }));
     await new Promise(res => setTimeout(res, 50));
-
-    // This is the potentially slow part
-    const laidOutLabelNodes = tidyUpLabelLayout(
-      Array.from(analysisResult.labelNodes.values()),
-      analysisResult.routeLinks
-    );
+    
+    const laidOutLabelNodes = tidyUpLabelLayout(generatedNodes, generatedLinks);
 
     setLoadingState(s => ({ ...s, progress: 80, message: 'Finalizing canvas...' }));
     await new Promise(res => setTimeout(res, 50));
     
     setLabelNodes(laidOutLabelNodes);
-    setRouteLinks(analysisResult.routeLinks);
-    setIdentifiedRoutes(analysisResult.identifiedRoutes);
+    setRouteLinks(generatedLinks);
+    setIdentifiedRoutes(generatedRoutes);
 
-    // Open tab if not already open
     if (!openTabs.some(t => t.id === 'route-canvas')) {
       setOpenTabs(tabs => [...tabs, { id: 'route-canvas', type: 'route-canvas' }]);
     }

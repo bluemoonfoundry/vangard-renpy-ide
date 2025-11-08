@@ -1,9 +1,7 @@
-
-
-
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { ProjectImage, ImageMetadata } from '../types';
 import ImageContextMenu from './ImageContextMenu';
+import ImageThumbnail from './ImageThumbnail';
 
 interface ImageManagerProps {
   images: ProjectImage[];
@@ -16,40 +14,19 @@ interface ImageManagerProps {
   isFileSystemApiSupported: boolean;
 }
 
-const ImageThumbnail: React.FC<{ 
-    image: ProjectImage;
-    isSelected: boolean;
-    onSelect: (filePath: string, isSelected: boolean) => void;
-    onDoubleClick: (filePath: string) => void;
-    onContextMenu: (event: React.MouseEvent, image: ProjectImage) => void;
-}> = ({ image, isSelected, onSelect, onDoubleClick, onContextMenu }) => {
-  const borderClass = image.isInProject 
-    ? 'border-red-500 dark:border-red-400' 
-    : 'border-transparent';
-  
-  const selectionClass = isSelected ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-indigo-400 ring-offset-gray-50 dark:ring-offset-gray-900' : '';
-
-  return (
-    <div
-      className={`relative aspect-square bg-gray-200 dark:bg-gray-700 rounded-md overflow-hidden cursor-pointer group transition-all duration-150 border-2 ${borderClass} ${selectionClass}`}
-      title={image.filePath}
-      onClick={() => onSelect(image.filePath, isSelected)}
-      onDoubleClick={() => onDoubleClick(image.filePath)}
-      onContextMenu={(e) => onContextMenu(e, image)}
-    >
-      <img src={image.dataUrl} alt={image.fileName} className="w-full h-full object-cover" />
-      <div className="absolute inset-0 bg-black bg-opacity-60 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-1">
-        <p className="text-white text-xs font-mono break-all">{image.fileName}</p>
-      </div>
-    </div>
-  );
-};
+const GRID_ITEM_WIDTH = 120;
+const GRID_ITEM_HEIGHT = 120;
+const GAP = 12;
 
 const ImageManager: React.FC<ImageManagerProps> = ({ images, metadata, scanDirectories, onAddScanDirectory, onRemoveScanDirectory, onCopyImagesToProject, onOpenImageEditor, isFileSystemApiSupported }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSource, setSelectedSource] = useState('all');
   const [selectedImagePaths, setSelectedImagePaths] = useState(new Set<string>());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; image: ProjectImage } | null>(null);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [scrollTop, setScrollTop] = useState(0);
 
   const sources = useMemo(() => {
     return ['all', 'Project (game/images)', ...scanDirectories];
@@ -83,6 +60,49 @@ const ImageManager: React.FC<ImageManagerProps> = ({ images, metadata, scanDirec
     }
     return visibleImages;
   }, [images, metadata, searchTerm, selectedSource]);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const resizeObserver = new ResizeObserver(entries => {
+      if (entries[0]) setContainerWidth(entries[0].contentRect.width);
+    });
+    resizeObserver.observe(containerRef.current);
+    // Initial width set
+    setContainerWidth(containerRef.current.clientWidth);
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  const { virtualItems, totalHeight } = useMemo(() => {
+    if (containerWidth === 0 || filteredImages.length === 0) {
+      return { virtualItems: [], totalHeight: 0 };
+    }
+
+    const columns = Math.max(1, Math.floor(containerWidth / GRID_ITEM_WIDTH));
+    const totalHeight = Math.ceil(filteredImages.length / columns) * GRID_ITEM_HEIGHT;
+    
+    const containerHeight = containerRef.current?.clientHeight || 0;
+    const startIndex = Math.floor(scrollTop / GRID_ITEM_HEIGHT) * columns;
+    const endIndex = Math.min(
+      filteredImages.length,
+      startIndex + (Math.ceil(containerHeight / GRID_ITEM_HEIGHT) * columns) + columns // render one extra row for buffer
+    );
+
+    const virtualItems = [];
+    for (let i = startIndex; i < endIndex; i++) {
+        virtualItems.push({
+            image: filteredImages[i],
+            style: {
+                position: 'absolute',
+                top: `${Math.floor(i / columns) * GRID_ITEM_HEIGHT}px`,
+                left: `${(i % columns) * GRID_ITEM_WIDTH}px`,
+                width: `${GRID_ITEM_WIDTH - GAP}px`,
+                height: `${GRID_ITEM_HEIGHT - GAP}px`,
+            } as React.CSSProperties
+        });
+    }
+
+    return { virtualItems, totalHeight };
+  }, [filteredImages, containerWidth, scrollTop]);
 
   const handleSelectImage = (filePath: string, isCurrentlySelected: boolean) => {
       setSelectedImagePaths(prev => {
@@ -181,19 +201,22 @@ const ImageManager: React.FC<ImageManagerProps> = ({ images, metadata, scanDirec
             </button>
         </div>
       </div>
-      <div className="flex-grow overflow-y-auto -mr-4 pr-4 pt-4">
-        <div className="grid grid-cols-3 gap-3">
-            {filteredImages.map(image => (
-                <ImageThumbnail 
-                    key={image.filePath} 
-                    image={image}
-                    isSelected={selectedImagePaths.has(image.filePath)}
-                    onSelect={handleSelectImage}
-                    onDoubleClick={onOpenImageEditor}
-                    onContextMenu={handleContextMenu}
+      <div ref={containerRef} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)} className="flex-grow overflow-y-auto -mr-4 pr-4 pt-4">
+        {containerWidth > 0 && (
+          <div style={{ position: 'relative', height: `${totalHeight}px` }}>
+            {virtualItems.map(({ image, style }) => (
+              <div key={image.filePath} style={style}>
+                <ImageThumbnail
+                  image={image}
+                  isSelected={selectedImagePaths.has(image.filePath)}
+                  onSelect={handleSelectImage}
+                  onDoubleClick={onOpenImageEditor}
+                  onContextMenu={handleContextMenu}
                 />
+              </div>
             ))}
-        </div>
+          </div>
+        )}
         {images.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No images found. Add a source directory to get started.</p>}
         {images.length > 0 && filteredImages.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No images match your filter.</p>}
       </div>

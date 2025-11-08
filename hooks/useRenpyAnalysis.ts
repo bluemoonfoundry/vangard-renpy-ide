@@ -2,8 +2,10 @@ import { useMemo } from 'react';
 import type { Block, Link, RenpyAnalysisResult, LabelLocation, JumpLocation, Character, DialogueLine, Variable, VariableUsage, RenpyScreen, LabelNode, RouteLink, IdentifiedRoute } from '../types';
 
 const LABEL_REGEX = /^\s*label\s+([a-zA-Z0-9_]+):/;
-const JUMP_CALL_REGEX = /\b(jump|call)\s+([a-zA-Z0-9_]+)/g;
+const JUMP_CALL_EXPRESSION_REGEX = /\b(jump|call)\s+expression\s+(?:"([a-zA-Z0-9_]+)"|'([a-zA-Z0-9_]+)'|([a-zA-Z0-9_.]+))/g;
+const JUMP_CALL_STATIC_REGEX = /\b(jump|call)\s+([a-zA-Z0-9_]+)/g;
 const MENU_REGEX = /^\s*menu:/;
+const MENU_LABEL_REGEX = /^\s*menu\s+([a-zA-Z0-9_]+):/;
 const DIALOGUE_REGEX = /^\s*([a-zA-Z0-9_]+)\s+"/;
 const NARRATION_REGEX = /^\s*"(?!:)/; // Matches "narration" but not "choice": or e "dialogue"
 const SCREEN_REGEX = /^\s*screen\s+([a-zA-Z0-9_]+)\s*(\(.*\))?:/;
@@ -101,8 +103,6 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
     identifiedRoutes: [],
   };
 
-  const blockLabelInfo = new Map<string, { label: string; startLine: number; endLine: number; hasTerminal: boolean; hasReturn: boolean; }[]>();
-
   // First pass: find all labels, characters, and variable definitions
   blocks.forEach(block => {
     // Find Characters first from the whole content to support multiline definitions
@@ -171,12 +171,30 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
           label: labelName,
           line: index + 1,
           column: labelMatch[0].indexOf(labelName) + 1,
+          type: 'label',
         };
         result.labels[labelName] = labelLocation;
         
         if (isFirstLabelInBlock) {
           result.firstLabels[block.id] = labelName;
           isFirstLabelInBlock = false;
+        }
+      }
+
+      // Find Labeled Menus (as jump targets)
+      const menuLabelMatch = line.match(MENU_LABEL_REGEX);
+      if (menuLabelMatch && menuLabelMatch[1]) {
+        const menuLabelName = menuLabelMatch[1];
+        // Only add if no actual label with this name exists, to prioritize explicit labels
+        if (!result.labels[menuLabelName]) {
+            const labelLocation: LabelLocation = {
+                blockId: block.id,
+                label: menuLabelName,
+                line: index + 1,
+                column: menuLabelMatch[0].indexOf(menuLabelName) + 1,
+                type: 'menu',
+            };
+            result.labels[menuLabelName] = labelLocation;
         }
       }
 
@@ -225,39 +243,94 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
 
     const lines = block.content.split('\n');
     lines.forEach((line, index) => {
-      // Find Jumps/Calls
-      for (const match of line.matchAll(JUMP_CALL_REGEX)) {
+      // Create a version of the line with string contents removed to prevent false positives.
+      let sanitizedLine = line.replace(/"[^"\\]*(?:\\.[^"\\]*)*"/g, '""').replace(/'[^'\\]*(?:\\.[^'\\]*)*'/g, "''");
+      
+      // Now, remove comments.
+      const commentIndex = sanitizedLine.indexOf('#');
+      if (commentIndex !== -1) {
+        sanitizedLine = sanitizedLine.substring(0, commentIndex);
+      }
+
+      let processedJumpOnLine = false;
+
+      // Find dynamic jumps/calls first
+      for (const match of sanitizedLine.matchAll(JUMP_CALL_EXPRESSION_REGEX)) {
+        processedJumpOnLine = true;
         blockTypes.add('jump');
+
         const jumpType = match[1] as 'jump' | 'call';
-        const targetLabel = match[2];
+        const targetLabel = match[2] || match[3] || match[4]; // double quote, single quote, or variable
         if (!targetLabel || match.index === undefined) continue;
 
+        const isResolvable = !!(match[2] || match[3]); // It's a string literal, we can try to find it
+
         const jumpLocation: JumpLocation = {
-          blockId: block.id,
-          target: targetLabel,
-          type: jumpType,
-          line: index + 1,
-          columnStart: match.index + match[1].length + 2,
-          columnEnd: match.index + match[1].length + 2 + targetLabel.length,
+            blockId: block.id,
+            target: targetLabel,
+            type: jumpType,
+            isDynamic: true,
+            line: index + 1,
+            columnStart: match.index + match[0].indexOf(targetLabel),
+            columnEnd: match.index + match[0].indexOf(targetLabel) + targetLabel.length,
         };
         result.jumps[block.id].push(jumpLocation);
 
-        const targetLabelLocation = result.labels[targetLabel];
-
-        if (targetLabelLocation) {
-          if (block.id !== targetLabelLocation.blockId) {
-            if (!result.links.some(l => l.sourceId === block.id && l.targetId === targetLabelLocation.blockId)) {
-              result.links.push({
-                sourceId: block.id,
-                targetId: targetLabelLocation.blockId,
-                targetLabel: targetLabel,
-              });
+        if (isResolvable) {
+            const targetLabelLocation = result.labels[targetLabel];
+            if (targetLabelLocation) {
+                if (block.id !== targetLabelLocation.blockId) {
+                    if (!result.links.some(l => l.sourceId === block.id && l.targetId === targetLabelLocation.blockId)) {
+                        result.links.push({
+                            sourceId: block.id,
+                            targetId: targetLabelLocation.blockId,
+                            targetLabel: targetLabel,
+                        });
+                    }
+                }
             }
-          }
-        } else {
-          if (!result.invalidJumps[block.id]) result.invalidJumps[block.id] = [];
-          if (!result.invalidJumps[block.id].includes(targetLabel)) {
-            result.invalidJumps[block.id].push(targetLabel);
+            // NOTE: We do NOT add to invalidJumps if it's dynamic, even if the label is not found.
+        }
+      }
+
+      // If no dynamic jump was found, check for a static one
+      if (!processedJumpOnLine) {
+        for (const match of sanitizedLine.matchAll(JUMP_CALL_STATIC_REGEX)) {
+          blockTypes.add('jump');
+          const jumpType = match[1] as 'jump' | 'call';
+          const targetLabel = match[2];
+
+          if (targetLabel === 'expression') continue; // This is a keyword, not a label
+          if (!targetLabel || match.index === undefined) continue;
+
+          const jumpLocation: JumpLocation = {
+            blockId: block.id,
+            target: targetLabel,
+            type: jumpType,
+            isDynamic: false,
+            line: index + 1,
+            columnStart: match.index + match[1].length + 1,
+            columnEnd: match.index + match[1].length + 1 + targetLabel.length,
+          };
+          result.jumps[block.id].push(jumpLocation);
+
+          const targetLabelLocation = result.labels[targetLabel];
+
+          if (targetLabelLocation) {
+            if (block.id !== targetLabelLocation.blockId) {
+              if (!result.links.some(l => l.sourceId === block.id && l.targetId === targetLabelLocation.blockId)) {
+                result.links.push({
+                  sourceId: block.id,
+                  targetId: targetLabelLocation.blockId,
+                  targetLabel: targetLabel,
+                });
+              }
+            }
+          } else {
+            if (!result.invalidJumps[block.id]) result.invalidJumps[block.id] = [];
+            if (!result.invalidJumps[block.id].includes(targetLabel)) {
+              result.invalidJumps[block.id].push(targetLabel);
+            }
           }
         }
       }
@@ -289,7 +362,7 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
       // Find Variable Usages
       variableNames.forEach(varName => {
         const usageRegex = new RegExp(`\\b${varName.replace('.', '\\.')}\\b`);
-        if (usageRegex.test(line)) {
+        if (usageRegex.test(sanitizedLine)) { // Use sanitizedLine here
           const defOnThisLine = result.variables.get(varName)?.definedInBlockId === block.id && result.variables.get(varName)?.line === index + 1;
           
           if (!defOnThisLine) {
@@ -340,173 +413,6 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
     }
   });
 
-  // Fifth pass: Generate data for Route Canvas
-  // 1. Identify all labels and their line ranges to create nodes.
-  blocks.forEach(block => {
-    const lines = block.content.split('\n');
-    const labelsInBlock: { label: string; startLine: number }[] = [];
-    Object.values(result.labels).forEach(labelLoc => {
-        if (labelLoc.blockId === block.id) {
-            labelsInBlock.push({ label: labelLoc.label, startLine: labelLoc.line });
-        }
-    });
-    labelsInBlock.sort((a, b) => a.startLine - b.startLine);
-
-    const labelInfoForBlock: { label: string; startLine: number; endLine: number; hasTerminal: boolean; hasReturn: boolean; }[] = [];
-    labelsInBlock.forEach(({ label, startLine }, i) => {
-        const endLine = (i + 1 < labelsInBlock.length) ? labelsInBlock[i + 1].startLine - 1 : lines.length;
-        const contentSlice = lines.slice(startLine, endLine).join('\n');
-        const hasTerminal = /\b(jump|call|return)\b/.test(contentSlice);
-        const hasReturn = /\breturn\b/.test(contentSlice);
-
-        labelInfoForBlock.push({ label, startLine, endLine, hasTerminal, hasReturn });
-
-        const nodeId = `${block.id}:${label}`;
-        
-        const node: LabelNode = {
-            id: nodeId,
-            label: label,
-            blockId: block.id,
-            startLine: startLine,
-            position: { x: 0, y: 0 },
-            width: 180,
-            height: 40
-        };
-        result.labelNodes.set(nodeId, node);
-    });
-    blockLabelInfo.set(block.id, labelInfoForBlock);
-  });
-
-  // 2. Create links based on jumps and implicit flow.
-  let routeLinkIdCounter = 0;
-  blocks.forEach(block => {
-    const labelsInBlock = blockLabelInfo.get(block.id) || [];
-    const jumpsInBlock = result.jumps[block.id] || [];
-
-    // Explicit jumps/calls
-    jumpsInBlock.forEach(jump => {
-        const sourceLabel = labelsInBlock.slice().reverse().find(l => l.startLine <= jump.line);
-        if (!sourceLabel) return;
-
-        const targetLabelDef = result.labels[jump.target];
-        if (targetLabelDef) {
-            const sourceNodeId = `${block.id}:${sourceLabel.label}`;
-            const targetNodeId = `${targetLabelDef.blockId}:${targetLabelDef.label}`;
-            result.routeLinks.push({
-                id: `rlink-${routeLinkIdCounter++}`,
-                sourceId: sourceNodeId,
-                targetId: targetNodeId,
-                type: jump.type,
-            });
-        }
-    });
-
-    // Implicit fall-through links
-    for (let i = 0; i < labelsInBlock.length - 1; i++) {
-        const current = labelsInBlock[i];
-        const next = labelsInBlock[i + 1];
-        if (!current.hasTerminal) {
-            const sourceNodeId = `${block.id}:${current.label}`;
-            const targetNodeId = `${block.id}:${next.label}`;
-            result.routeLinks.push({
-                id: `rlink-${routeLinkIdCounter++}`,
-                sourceId: sourceNodeId,
-                targetId: targetNodeId,
-                type: 'implicit'
-            });
-        }
-    }
-  });
-
-  // Sixth pass: Identify all unique routes with improved algorithm
-  const adj = new Map<string, { targetId: string; linkId: string }[]>();
-  const reverseAdj = new Map<string, string[]>();
-  result.labelNodes.forEach(node => {
-    adj.set(node.id, []);
-    reverseAdj.set(node.id, []);
-  });
-
-  result.routeLinks.forEach(link => {
-    adj.get(link.sourceId)?.push({ targetId: link.targetId, linkId: link.id });
-    reverseAdj.get(link.targetId)?.push(link.sourceId);
-  });
-  
-  // 1. Identify Start Nodes: Prioritize the 'start' label.
-  let startNodes: string[] = [];
-  const startLabelLocation = result.labels['start'];
-  if (startLabelLocation) {
-      const startNodeId = `${startLabelLocation.blockId}:start`;
-      if (result.labelNodes.has(startNodeId)) {
-          startNodes.push(startNodeId);
-      }
-  }
-  // Fallback if 'start' label doesn't exist.
-  if (startNodes.length === 0) {
-      startNodes = Array.from(result.labelNodes.keys()).filter(nodeId => (reverseAdj.get(nodeId) || []).length === 0);
-  }
-
-  // 2. Identify End Nodes: A route ends on 'return' or if it's a leaf node.
-  const endNodes = new Set<string>();
-  blockLabelInfo.forEach((labels, blockId) => {
-    labels.forEach(labelInfo => {
-      const nodeId = `${blockId}:${labelInfo.label}`;
-      const isLeafNode = (adj.get(nodeId) || []).length === 0;
-      // A route ends if it's a leaf OR if it contains 'return' but has no other outgoing connections
-      if (isLeafNode || (labelInfo.hasReturn && !labelInfo.hasTerminal)) {
-        endNodes.add(nodeId);
-      }
-    });
-  });
-  
-  const uniqueLabelPaths = new Map<string, string[]>(); // Key: 'node1->node2', Value: [linkId1, linkId2]
-
-  function findPaths(currentNodeId: string, currentLinks: string[], currentNodes: string[], visited: Set<string>) {
-    currentNodes.push(currentNodeId);
-
-    // Cycle detection
-    if (visited.has(currentNodeId)) {
-      currentNodes.pop(); // backtrack
-      return;
-    }
-    visited.add(currentNodeId);
-
-    const isEndpoint = endNodes.has(currentNodeId);
-    const neighbors = adj.get(currentNodeId) || [];
-
-    if (isEndpoint || neighbors.length === 0) {
-        if (currentLinks.length > 0) {
-            const pathKey = currentNodes.join('->');
-            if (!uniqueLabelPaths.has(pathKey)) {
-                uniqueLabelPaths.set(pathKey, [...currentLinks]);
-            }
-        }
-    } else {
-      for (const { targetId, linkId } of neighbors) {
-          currentLinks.push(linkId);
-          findPaths(targetId, currentLinks, currentNodes, visited);
-          currentLinks.pop(); // backtrack link
-      }
-    }
-    
-    visited.delete(currentNodeId);
-    currentNodes.pop(); // backtrack node
-  }
-
-  startNodes.forEach(startNode => {
-    findPaths(startNode, [], [], new Set());
-  });
-  
-  const allPaths = Array.from(uniqueLabelPaths.values());
-  
-  result.identifiedRoutes = allPaths
-    .filter(path => path.length > 0)
-    .map((path, index) => ({
-      id: index,
-      color: PALETTE[index % PALETTE.length],
-      linkIds: new Set(path),
-    }));
-
-
   // Final pass: Identify screen-only, story, and config blocks
   const screenDefiningBlockIds = new Set(Array.from(result.screens.values()).map(s => s.definedInBlockId));
   const labelDefiningBlockIds = new Set(Object.values(result.labels).map(l => l.blockId));
@@ -534,8 +440,207 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
   return result;
 };
 
+export const performRouteAnalysis = (
+    blocks: Block[], 
+    labels: RenpyAnalysisResult['labels'], 
+    jumps: RenpyAnalysisResult['jumps']
+): { labelNodes: LabelNode[], routeLinks: RouteLink[], identifiedRoutes: IdentifiedRoute[] } => {
+  const labelNodes = new Map<string, LabelNode>();
+  const routeLinks: RouteLink[] = [];
+  const identifiedRoutes: IdentifiedRoute[] = [];
+  const blockLabelInfo = new Map<string, { label: string; startLine: number; endLine: number; hasTerminal: boolean; hasReturn: boolean; }[]>();
+
+  // 1. Identify all labels and their line ranges to create nodes.
+  blocks.forEach(block => {
+    const lines = block.content.split('\n');
+    const labelsInBlock: { label: string; startLine: number }[] = [];
+    Object.values(labels).forEach(labelLoc => {
+        // Exclude menu labels from route analysis nodes
+        if (labelLoc.blockId === block.id && labelLoc.type !== 'menu') {
+            labelsInBlock.push({ label: labelLoc.label, startLine: labelLoc.line });
+        }
+    });
+    labelsInBlock.sort((a, b) => a.startLine - b.startLine);
+
+    const labelInfoForBlock: { label: string; startLine: number; endLine: number; hasTerminal: boolean; hasReturn: boolean; }[] = [];
+    labelsInBlock.forEach(({ label, startLine }, i) => {
+        const endLine = (i + 1 < labelsInBlock.length) ? labelsInBlock[i + 1].startLine - 1 : lines.length;
+        const contentSlice = lines.slice(startLine, endLine).join('\n');
+        const hasTerminal = /\b(jump|call|return)\b/.test(contentSlice);
+        const hasReturn = /\breturn\b/.test(contentSlice);
+
+        labelInfoForBlock.push({ label, startLine, endLine, hasTerminal, hasReturn });
+
+        const nodeId = `${block.id}:${label}`;
+        
+        const node: LabelNode = {
+            id: nodeId,
+            label: label,
+            blockId: block.id,
+            startLine: startLine,
+            position: { x: 0, y: 0 },
+            width: 180,
+            height: 40
+        };
+        labelNodes.set(nodeId, node);
+    });
+    blockLabelInfo.set(block.id, labelInfoForBlock);
+  });
+
+  // 2. Create links based on jumps and implicit flow.
+  let routeLinkIdCounter = 0;
+  blocks.forEach(block => {
+    const labelsInBlock = blockLabelInfo.get(block.id) || [];
+    const jumpsInBlock = jumps[block.id] || [];
+
+    // Explicit jumps/calls
+    jumpsInBlock.forEach(jump => {
+        const sourceLabel = labelsInBlock.slice().reverse().find(l => l.startLine <= jump.line);
+        if (!sourceLabel) return;
+
+        // For dynamic jumps, only create links if the target is statically analyzable
+        if (jump.isDynamic && !labels[jump.target]) {
+            return;
+        }
+
+        const targetLabelDef = labels[jump.target];
+        if (targetLabelDef && targetLabelDef.type !== 'menu') {
+            const sourceNodeId = `${block.id}:${sourceLabel.label}`;
+            const targetNodeId = `${targetLabelDef.blockId}:${targetLabelDef.label}`;
+            routeLinks.push({
+                id: `rlink-${routeLinkIdCounter++}`,
+                sourceId: sourceNodeId,
+                targetId: targetNodeId,
+                type: jump.type,
+            });
+        }
+    });
+
+    // Implicit fall-through links
+    for (let i = 0; i < labelsInBlock.length - 1; i++) {
+        const current = labelsInBlock[i];
+        const next = labelsInBlock[i + 1];
+        if (!current.hasTerminal) {
+            const sourceNodeId = `${block.id}:${current.label}`;
+            const targetNodeId = `${block.id}:${next.label}`;
+            routeLinks.push({
+                id: `rlink-${routeLinkIdCounter++}`,
+                sourceId: sourceNodeId,
+                targetId: targetNodeId,
+                type: 'implicit'
+            });
+        }
+    }
+  });
+
+  // 3. Identify all unique routes with improved algorithm
+  const adj = new Map<string, { targetId: string; linkId: string }[]>();
+  const reverseAdj = new Map<string, string[]>();
+  labelNodes.forEach(node => {
+    adj.set(node.id, []);
+    reverseAdj.set(node.id, []);
+  });
+
+  routeLinks.forEach(link => {
+    adj.get(link.sourceId)?.push({ targetId: link.targetId, linkId: link.id });
+    reverseAdj.get(link.targetId)?.push(link.sourceId);
+  });
+  
+  let startNodes: string[] = [];
+  const startLabelLocation = labels['start'];
+  if (startLabelLocation && startLabelLocation.type !== 'menu') {
+      const startNodeId = `${startLabelLocation.blockId}:start`;
+      if (labelNodes.has(startNodeId)) {
+          startNodes.push(startNodeId);
+      }
+  }
+  if (startNodes.length === 0) {
+      startNodes = Array.from(labelNodes.keys()).filter(nodeId => (reverseAdj.get(nodeId) || []).length === 0);
+  }
+
+  const endNodes = new Set<string>();
+  blockLabelInfo.forEach((blockLabels, blockId) => {
+    blockLabels.forEach(labelInfo => {
+      const nodeId = `${blockId}:${labelInfo.label}`;
+      const isLeafNode = (adj.get(nodeId) || []).length === 0;
+      if (isLeafNode || (labelInfo.hasReturn && !labelInfo.hasTerminal)) {
+        endNodes.add(nodeId);
+      }
+    });
+  });
+  
+  const uniqueLabelPaths = new Map<string, string[]>();
+
+  function findPaths(currentNodeId: string, currentLinks: string[], currentNodes: string[], visited: Set<string>) {
+    currentNodes.push(currentNodeId);
+
+    if (visited.has(currentNodeId)) {
+      currentNodes.pop();
+      return;
+    }
+    visited.add(currentNodeId);
+
+    const isEndpoint = endNodes.has(currentNodeId);
+    const neighbors = adj.get(currentNodeId) || [];
+
+    if (isEndpoint || neighbors.length === 0) {
+        if (currentLinks.length > 0) {
+            const pathKey = currentNodes.join('->');
+            if (!uniqueLabelPaths.has(pathKey)) {
+                uniqueLabelPaths.set(pathKey, [...currentLinks]);
+            }
+        }
+    } else {
+      for (const { targetId, linkId } of neighbors) {
+          currentLinks.push(linkId);
+          findPaths(targetId, currentLinks, currentNodes, visited);
+          currentLinks.pop();
+      }
+    }
+    
+    visited.delete(currentNodeId);
+    currentNodes.pop();
+  }
+
+  startNodes.forEach(startNode => {
+    findPaths(startNode, [], [], new Set());
+  });
+  
+  const allPaths = Array.from(uniqueLabelPaths.values());
+  
+  identifiedRoutes.push(...allPaths
+    .filter(path => path.length > 0)
+    .map((path, index) => ({
+      id: index,
+      color: PALETTE[index % PALETTE.length],
+      linkIds: new Set(path),
+    })));
+
+    return {
+        labelNodes: Array.from(labelNodes.values()),
+        routeLinks,
+        identifiedRoutes,
+    };
+}
+
 
 export const useRenpyAnalysis = (blocks: Block[], trigger: number): RenpyAnalysisResult => {
-  const analysisResult = useMemo(() => performRenpyAnalysis(blocks), [blocks, trigger]);
+  // Create a memoized key based on block content and IDs. This key will NOT change
+  // when block positions are updated, preventing the expensive analysis from re-running
+  // during drag operations.
+  const analysisKey = useMemo(() => {
+    return blocks.map(b => `${b.id}:${b.content}`).join('||');
+  }, [blocks]);
+
+  const analysisResult = useMemo(() => {
+    // This function is now only re-executed when the content of the blocks
+    // (represented by analysisKey) or a manual trigger changes.
+    // We can safely ignore the exhaustive-deps lint warning here because this is the
+    // specific optimization we want to achieve: avoid re-running on position changes
+    // while still using the up-to-date blocks array for the analysis itself.
+    return performRenpyAnalysis(blocks);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysisKey, trigger]);
+
   return analysisResult;
 };

@@ -57,7 +57,7 @@ const EditorView: React.FC<EditorViewProps> = ({
     if (!monaco.languages.getLanguages().some(({ id }) => id === 'renpy')) {
       monaco.languages.register({ id: 'renpy' });
       monaco.languages.setMonarchTokensProvider('renpy', {
-        keywords: ['label', 'jump', 'call', 'menu', 'scene', 'show', 'hide', 'with', 'define', 'python', 'if', 'elif', 'else', 'return'],
+        keywords: ['label', 'jump', 'call', 'menu', 'scene', 'show', 'hide', 'with', 'define', 'python', 'if', 'elif', 'else', 'return', 'expression'],
         tokenizer: { root: [[/#.*$/, 'comment'], [/"/, 'string', '@string_double'], [/'/, 'string', '@string_single'], [/\b[a-zA-Z_]\w*/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }], [/\b\d+/, 'number'], [/[:=+\-*/!<>]+/, 'operator'], [/[(),.]/, 'punctuation']], string_double: [[/[^\\"]+/, 'string'], [/\\./, 'string.escape'], [/"/, 'string', '@pop']], string_single: [[/[^\\']+/, 'string'], [/\\./, 'string.escape'], [/'/, 'string', '@pop']] },
       });
       monaco.editor.defineTheme('renpy-dark', { base: 'vs-dark', inherit: true, rules: [{ token: 'keyword', foreground: '859900' }, { token: 'string', foreground: '2aa198' }, { token: 'comment', foreground: '586e75', fontStyle: 'italic' }, { token: 'number', foreground: '268bd2' }, { token: 'identifier', foreground: 'd4d4d4' }, { token: 'operator', foreground: '93a1a1' }, { token: 'punctuation', foreground: '93a1a1' }], colors: { 'editor.background': '#252a33' } });
@@ -169,11 +169,21 @@ const EditorView: React.FC<EditorViewProps> = ({
     const { jumps, labels } = analysisResult;
     const blockJumps = jumps[block.id] || [];
     const newDecorations: monaco.editor.IModelDeltaDecoration[] = blockJumps.map(jump => {
-      const isInvalid = !labels[jump.target];
+      const targetExists = !!labels[jump.target];
+      let inlineClassName = 'renpy-jump-link';
+      
+      if (!targetExists) {
+        if (jump.isDynamic) {
+          inlineClassName = 'renpy-jump-dynamic';
+        } else {
+          inlineClassName = 'renpy-jump-invalid';
+        }
+      }
+
       return {
         range: new monaco.Range(jump.line, jump.columnStart, jump.line, jump.columnEnd),
         options: {
-          inlineClassName: isInvalid ? 'renpy-jump-invalid' : 'renpy-jump-link',
+          inlineClassName: inlineClassName,
         }
       };
     });
@@ -183,7 +193,12 @@ const EditorView: React.FC<EditorViewProps> = ({
     editor.onMouseDown((e) => {
         const target = e.target;
         if (target.type !== monaco.editor.MouseTargetType.CONTENT_TEXT || !target.position) return;
-        if (!target.element?.classList.contains('renpy-jump-link')) return;
+        
+        const classList = target.element?.classList;
+        const isJumpLink = classList?.contains('renpy-jump-link') || 
+                           classList?.contains('renpy-jump-dynamic') || 
+                           classList?.contains('renpy-jump-invalid');
+        if (!isJumpLink) return;
 
         const clickedJump = blockJumps.find(j => 
             j.line === target.position!.lineNumber &&
