@@ -1,0 +1,77 @@
+import React from 'react';
+import type { Theme } from '../types';
+
+interface Settings {
+  theme: Theme;
+}
+
+interface SettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  settings: Settings;
+  onSettingsChange: (key: keyof Settings, value: string) => void;
+}
+
+const THEME_OPTIONS: { value: Theme; label: string }[] = [
+    { value: 'system', label: 'System Default' },
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+    { value: 'solarized-light', label: 'Solarized Light' },
+    { value: 'solarized-dark', label: 'Solarized Dark' },
+    { value: 'colorful', label: 'Colorful (Dark)' },
+    { value: 'colorful-light', label: 'Colorful (Light)' },
+];
+
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSettingsChange }) => {
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
+      onClick={onClose}
+      aria-modal="true"
+      role="dialog"
+    >
+      <div
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg m-4 flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <header className="p-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-xl font-bold">Settings</h2>
+        </header>
+        <main className="p-6 space-y-4">
+            <div>
+                <label htmlFor="theme-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Color Theme
+                </label>
+                <select
+                    id="theme-select"
+                    value={settings.theme}
+                    onChange={(e) => onSettingsChange('theme', e.target.value)}
+                    className="w-full mt-1 p-2 rounded bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                    {THEME_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                </select>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    Changes are saved automatically between sessions.
+                </p>
+            </div>
+        </main>
+        <footer className="bg-gray-50 dark:bg-gray-700 p-4 rounded-b-lg flex justify-end items-center space-x-4">
+          <button
+            onClick={onClose}
+            className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 font-bold py-2 px-4 rounded transition duration-200"
+          >
+            Close
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+};
+
+export default SettingsModal;
