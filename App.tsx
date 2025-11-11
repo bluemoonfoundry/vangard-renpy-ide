@@ -335,6 +335,11 @@ const App: React.FC = () => {
   const [liveBlocks, setLiveBlocks] = useState<Block[]>(historyState.blocks);
   const [liveGroups, setLiveGroups] = useState<BlockGroup[]>(historyState.groups);
   
+  // Ref to hold the latest "live" state for callbacks that need it without causing re-renders.
+  const liveStateRef = useRef({ blocks: liveBlocks, groups: liveGroups });
+  // Update the ref on every render so callbacks always have the latest data.
+  liveStateRef.current = { blocks: liveBlocks, groups: liveGroups };
+  
   useEffect(() => {
     setLiveBlocks(historyState.blocks);
     setLiveGroups(historyState.groups);
@@ -1016,14 +1021,14 @@ const App: React.FC = () => {
       }
   }, [analysisResult.screens, handleOpenEditorTab]);
 
-  const updateBlock = (id: string, newBlockData: Partial<Block>) => {
+  const updateBlock = useCallback((id: string, newBlockData: Partial<Block>) => {
     setLiveBlocks(prevBlocks =>
       prevBlocks.map(block =>
         block.id === id ? { ...block, ...newBlockData } : block
       )
     );
     setDirtyBlockIds(prev => new Set(prev).add(id));
-  };
+  }, []);
 
   const handleSaveToDisk = useCallback(async () => {
     if (!directoryHandle || dirtyBlockIds.size === 0) return;
@@ -1602,31 +1607,65 @@ const App: React.FC = () => {
   };
 
 
-  const updateBlockPositions = (updates: { id: string, position: Position }[]) => {
+  const updateBlockPositions = useCallback((updates: { id: string, position: Position }[]) => {
     const updatesMap = new Map(updates.map(u => [u.id, u.position]));
     setLiveBlocks(prevBlocks => prevBlocks.map(block => updatesMap.has(block.id) ? { ...block, position: updatesMap.get(block.id)! } : block));
-  };
+  }, []);
 
-  const updateGroup = (id: string, newGroupData: Partial<BlockGroup>) => {
-    setLiveGroups(prevGroups => {
-        const newGroups = prevGroups.map(group => group.id === id ? { ...group, ...newGroupData } : group);
-        commitChange({ groups: newGroups });
-        return newGroups;
-    });
-  };
+  const updateGroup = useCallback((id: string, newGroupData: Partial<BlockGroup>) => {
+    setLiveGroups(prevGroups => prevGroups.map(group => (group.id === id ? { ...group, ...newGroupData } : group)));
+  }, []);
 
-  const updateGroupPositions = (updates: { id: string, position: Position }[]) => {
+  const updateGroupPositions = useCallback((updates: { id: string, position: Position }[]) => {
     const updatesMap = new Map(updates.map(u => [u.id, u.position]));
     setLiveGroups(prev => prev.map(group => updatesMap.has(group.id) ? { ...group, position: updatesMap.get(group.id)! } : group));
-  };
+  }, []);
 
   const onInteractionEnd = useCallback(() => {
-    setHistory({ blocks: liveBlocks, groups: liveGroups });
-    const draggedBlockIds = liveBlocks.filter(b => b.position !== historyState.blocks.find(hb => hb.id === b.id)?.position).map(b => b.id);
-    if(draggedBlockIds.length > 0) {
-      setDirtyBlockIds(prev => new Set([...prev, ...draggedBlockIds]));
+    // Read the latest live state from the ref
+    const { blocks: currentLiveBlocks, groups: currentLiveGroups } = liveStateRef.current;
+
+    // Use the historyState from the hook's closure, which is the last committed state.
+    const hasChanges =
+      historyState.blocks.length !== currentLiveBlocks.length ||
+      historyState.groups.length !== currentLiveGroups.length ||
+      currentLiveBlocks.some(liveBlock => {
+        const originalBlock = historyState.blocks.find(b => b.id === liveBlock.id);
+        return (
+          !originalBlock ||
+          originalBlock.position.x !== liveBlock.position.x ||
+          originalBlock.position.y !== liveBlock.position.y ||
+          originalBlock.width !== liveBlock.width ||
+          originalBlock.height !== liveBlock.height
+        );
+      }) ||
+      currentLiveGroups.some(liveGroup => {
+        const originalGroup = historyState.groups.find(g => g.id === liveGroup.id);
+        return (
+          !originalGroup ||
+          originalGroup.position.x !== liveGroup.position.x ||
+          originalGroup.position.y !== liveGroup.position.y ||
+          originalGroup.width !== liveGroup.width ||
+          originalGroup.height !== liveGroup.height
+        );
+      });
+
+    if (hasChanges) {
+      setHistory({ blocks: currentLiveBlocks, groups: currentLiveGroups });
+
+      // Determine dirty blocks only from position changes, as other changes (resize) are already marked dirty
+      const draggedBlockIds = currentLiveBlocks
+        .filter(b => {
+          const originalBlock = historyState.blocks.find(hb => hb.id === b.id);
+          return originalBlock && (b.position.x !== originalBlock.position.x || b.position.y !== originalBlock.position.y);
+        })
+        .map(b => b.id);
+
+      if (draggedBlockIds.length > 0) {
+        setDirtyBlockIds(prev => new Set([...prev, ...draggedBlockIds]));
+      }
     }
-  }, [liveBlocks, liveGroups, setHistory, historyState.blocks]);
+  }, [historyState, setHistory]);
 
   const updateLabelNodePositions = (updates: { id: string; position: Position }[]) => {
     if (!labelNodes) return;
