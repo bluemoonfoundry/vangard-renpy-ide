@@ -57,25 +57,31 @@ This project uses a standard Node.js-based toolchain with Vite for a fast and mo
 
 ### Running Locally
 
-1.  **Clone the Repository** (if you haven't already):
+1.  **Clone the Repository** (if you haven't already)
     ```bash
     git clone https://github.com/your-username/renpy-visual-editor.git
     cd renpy-visual-editor
     ```
 
-2.  **Install Dependencies**:
+    OR if you don't have Git, which is totally fair, you can download the ZIP file of the project and extract it to a convenient folder.
+
+    The zip file is downloaded at this link: https://github.com/bluemoonfoundry/vangard-renpy-ide/archive/refs/heads/main.zip
+    or by clicking the "Code" button above and selecting "Download Zip"
+     
+
+3.  **Install Dependencies**:
     Navigate to the project's root directory in your terminal and run `npm install` to download all the necessary packages defined in `package.json`.
     ```bash
     npm install
     ```
 
-3.  **Run the Development Server**:
+4.  **Run the Development Server**:
     Once the dependencies are installed, you can start the Vite development server:
     ```bash
     npm run dev
     ```
 
-4.  **Open in Browser**:
+5.  **Open in Browser**:
     The server will start and print a local URL to the terminal, typically `http://localhost:5173`. Open this URL in your web browser to start the application. The server features Hot Module Replacement (HMR), meaning most changes you make to the code will appear instantly in the browser without a full page reload.
 
 ---
