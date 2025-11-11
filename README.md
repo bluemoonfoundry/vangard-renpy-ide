@@ -65,12 +65,15 @@ This project uses a standard Node.js-based toolchain with Vite for a fast and mo
 
     OR if you don't have Git, which is totally fair, you can download the ZIP file of the project and extract it to a convenient folder.
 
-    The zip file is downloaded at this link: https://github.com/bluemoonfoundry/vangard-renpy-ide/archive/refs/heads/main.zip
-    or by clicking the "Code" button above and selecting "Download Zip"
+    The zip file is downloaded at this link:
+    
+      https://github.com/bluemoonfoundry/vangard-renpy-ide/archive/refs/heads/main.zip
+
+      or by clicking the "Code" button above and selecting "Download Zip"
      
 
 3.  **Install Dependencies**:
-    Navigate to the project's root directory in your terminal and run `npm install` to download all the necessary packages defined in `package.json`.
+    Navigate to the project's root directory in your terminal (such as a Windows Command prompt using Win + R and typing 'cmd' or a Git bash terminal or PowerShell) and run `npm install` to download all the necessary packages defined in `package.json`.
     ```bash
     npm install
     ```
