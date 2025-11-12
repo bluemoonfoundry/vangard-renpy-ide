@@ -59,7 +59,7 @@ declare global {
 const SAVE_KEY_BLOCKS = 'renpy-visual-editor-blocks';
 const SAVE_KEY_GROUPS = 'renpy-visual-editor-groups';
 const SAVE_KEY_IDE_SETTINGS = 'renpy-visual-editor-settings';
-const IDE_SETTINGS_FILE = 'game/project.ide.json';
+const IDE_SETTINGS_FILE = 'project.ide.json';
 
 function uuidv4() {
   return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c =>
@@ -351,6 +351,8 @@ const App: React.FC = () => {
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [theme, setTheme] = useState<Theme>(initialSettings.current.theme || 'system');
+  const [apiKey, setApiKey] = useState<string>(initialSettings.current.apiKey || '');
+  const [enableAiFeatures, setEnableAiFeatures] = useState<boolean>(initialSettings.current.enableAiFeatures ?? true);
   const [isClearConfirmVisible, setIsClearConfirmVisible] = useState(false);
   const [analysisTrigger, setAnalysisTrigger] = useState(0);
   const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(
@@ -393,37 +395,99 @@ const App: React.FC = () => {
   const [resizingHandle, setResizingHandle] = useState<'left' | 'right' | null>(null);
   const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
   const [hoverHighlightIds, setHoverHighlightIds] = useState<Set<string> | null>(null);
+  const settingsSaveTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     setSettingsLoaded(true);
   }, []);
 
-  useEffect(() => {
-    if (!settingsLoaded || directoryHandle) return; // Only save to local storage in browser-only mode
-
-    const tabsToSave = openTabs.filter(t => t.type !== 'route-canvas');
-    if (tabsToSave.length === 0) {
-        tabsToSave.push({ id: 'canvas', type: 'canvas' });
-    }
-    const currentActiveTabId = tabsToSave.some(t => t.id === activeTabId) ? activeTabId : 'canvas';
-
-    const settings: IdeSettings = {
-        theme,
-        isLeftSidebarOpen,
-        leftSidebarWidth,
-        isRightSidebarOpen,
-        rightSidebarWidth,
-        openTabs: tabsToSave,
-        activeTabId: currentActiveTabId,
-    };
+  const handleSaveIdeSettings = useCallback(async () => {
+    if (!directoryHandle) return;
     try {
-        localStorage.setItem(SAVE_KEY_IDE_SETTINGS, JSON.stringify(settings));
+        const gameDir = await directoryHandle.getDirectoryHandle('game', { create: true });
+        const fileHandle = await gameDir.getFileHandle(IDE_SETTINGS_FILE, { create: true });
+        const writable = await fileHandle.createWritable();
+        
+        const tabsToSave = openTabs.filter(t => t.type !== 'route-canvas');
+        if (tabsToSave.length === 0) {
+            tabsToSave.push({ id: 'canvas', type: 'canvas' });
+        }
+        const currentActiveTabId = tabsToSave.some(t => t.id === activeTabId) ? activeTabId : 'canvas';
+
+        const settings = {
+            // UI Settings
+            theme,
+            isLeftSidebarOpen,
+            leftSidebarWidth,
+            isRightSidebarOpen,
+            rightSidebarWidth,
+            openTabs: tabsToSave,
+            activeTabId: currentActiveTabId,
+            apiKey,
+            enableAiFeatures,
+            // Asset Metadata
+            imageScanDirectories: Array.from(imageScanDirectories.keys()),
+            imageMetadata: Object.fromEntries(imageMetadata),
+            audioScanDirectories: Array.from(audioScanDirectories.keys()),
+            audioMetadata: Object.fromEntries(audioMetadata),
+        };
+        await writable.write(JSON.stringify(settings, null, 2));
+        await writable.close();
     } catch (e) {
         console.error("Failed to save IDE settings:", e);
     }
   }, [
-    theme, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, 
-    rightSidebarWidth, openTabs, activeTabId, settingsLoaded, directoryHandle
+      directoryHandle, imageMetadata, imageScanDirectories, audioMetadata, audioScanDirectories,
+      theme, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth, openTabs, activeTabId, apiKey, enableAiFeatures
+  ]);
+  
+  // Debounced effect to save settings to localStorage or project file
+  useEffect(() => {
+    if (!settingsLoaded) return;
+
+    if (settingsSaveTimeoutRef.current) {
+        clearTimeout(settingsSaveTimeoutRef.current);
+    }
+
+    settingsSaveTimeoutRef.current = window.setTimeout(() => {
+      if (directoryHandle) {
+        handleSaveIdeSettings();
+      } else {
+        const tabsToSave = openTabs.filter(t => t.type !== 'route-canvas');
+        if (tabsToSave.length === 0) {
+            tabsToSave.push({ id: 'canvas', type: 'canvas' });
+        }
+        const currentActiveTabId = tabsToSave.some(t => t.id === activeTabId) ? activeTabId : 'canvas';
+
+        const settings: IdeSettings = {
+            theme,
+            isLeftSidebarOpen,
+            leftSidebarWidth,
+            isRightSidebarOpen,
+            rightSidebarWidth,
+            openTabs: tabsToSave,
+            activeTabId: currentActiveTabId,
+            apiKey,
+            enableAiFeatures,
+        };
+        try {
+            localStorage.setItem(SAVE_KEY_IDE_SETTINGS, JSON.stringify(settings));
+        } catch (e) {
+            console.error("Failed to save IDE settings:", e);
+        }
+      }
+    }, 1000);
+
+    return () => {
+        if (settingsSaveTimeoutRef.current) {
+            clearTimeout(settingsSaveTimeoutRef.current);
+        }
+    };
+  }, [
+      theme, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen,
+      rightSidebarWidth, openTabs, activeTabId, apiKey, enableAiFeatures, imageMetadata, audioMetadata,
+      imageScanDirectories, audioScanDirectories, settingsLoaded, directoryHandle,
+      handleSaveIdeSettings
   ]);
 
   useEffect(() => {
@@ -677,14 +741,16 @@ const App: React.FC = () => {
             ));
         }
     } else {
-        const newTab: EditorTab = { id: blockId, type: 'editor', blockId };
+        const block = liveBlocks.find(b => b.id === blockId);
+        if (!block) return;
+        const newTab: EditorTab = { id: blockId, type: 'editor', blockId, filePath: block.filePath };
         if (line) {
             newTab.scrollRequest = { line, key: Date.now() };
         }
         setOpenTabs(tabs => [...tabs, newTab]);
         setActiveTabId(newTab.id);
     }
-  }, [openTabs]);
+  }, [openTabs, liveBlocks]);
   
   const handleOpenImageTab = useCallback((filePath: string) => {
     const editorTabId = 'image_editor';
@@ -1173,6 +1239,12 @@ const App: React.FC = () => {
     if (key === 'theme') {
       setTheme(value as Theme);
     }
+    if (key === 'apiKey') {
+      setApiKey(value as string);
+    }
+    if (key === 'enableAiFeatures') {
+      setEnableAiFeatures(value as boolean);
+    }
   };
   
   const tidyUpLayout = (blocksToLayout: Block[], links: Link[]): Block[] => {
@@ -1318,35 +1390,58 @@ const App: React.FC = () => {
     }
   };
 
-  const loadIdeSettings = async (rootHandle: FileSystemDirectoryHandle) => {
-    try {
-        const gameDir = await rootHandle.getDirectoryHandle('game');
-        const settingsFileHandle = await gameDir.getFileHandle(IDE_SETTINGS_FILE);
-        const file = await settingsFileHandle.getFile();
-        const content = await file.text();
-        const settings = JSON.parse(content);
-        
-        const newImageMetadata = new Map<string, ImageMetadata>();
-        if (settings.imageMetadata) {
-            for (const [filePath, meta] of Object.entries(settings.imageMetadata)) {
-                newImageMetadata.set(filePath, meta as ImageMetadata);
-            }
-        }
-        setImageMetadata(newImageMetadata);
+  const loadIdeSettings = async (rootHandle: FileSystemDirectoryHandle): Promise<Partial<IdeSettings> & { imageMetadata?: Map<string, ImageMetadata>; audioMetadata?: Map<string, AudioMetadata> }> => {
+      try {
+          const gameDir = await rootHandle.getDirectoryHandle('game');
+          const settingsFileHandle = await gameDir.getFileHandle(IDE_SETTINGS_FILE);
+          const file = await settingsFileHandle.getFile();
+          const content = await file.text();
+          const settings = JSON.parse(content);
+          
+          if (settings.theme) setTheme(settings.theme);
+          if (settings.apiKey) setApiKey(settings.apiKey);
+          if (typeof settings.enableAiFeatures === 'boolean') setEnableAiFeatures(settings.enableAiFeatures);
+          if (typeof settings.isLeftSidebarOpen === 'boolean') setIsLeftSidebarOpen(settings.isLeftSidebarOpen);
+          if (typeof settings.leftSidebarWidth === 'number') setLeftSidebarWidth(settings.leftSidebarWidth);
+          if (typeof settings.isRightSidebarOpen === 'boolean') setIsRightSidebarOpen(settings.isRightSidebarOpen);
+          if (typeof settings.rightSidebarWidth === 'number') setRightSidebarWidth(settings.rightSidebarWidth);
 
-        const newAudioMetadata = new Map<string, AudioMetadata>();
-        if (settings.audioMetadata) {
-            for (const [filePath, meta] of Object.entries(settings.audioMetadata)) {
-                newAudioMetadata.set(filePath, meta as AudioMetadata);
-            }
-        }
-        setAudioMetadata(newAudioMetadata);
+          const imageMetadataMap = new Map<string, ImageMetadata>();
+          if (settings.imageMetadata) {
+              for (const [filePath, meta] of Object.entries(settings.imageMetadata)) {
+                  imageMetadataMap.set(filePath, meta as ImageMetadata);
+              }
+          }
+          const audioMetadataMap = new Map<string, AudioMetadata>();
+          if (settings.audioMetadata) {
+              for (const [filePath, meta] of Object.entries(settings.audioMetadata)) {
+                  audioMetadataMap.set(filePath, meta as AudioMetadata);
+              }
+          }
 
-    } catch (e) {
-        console.log("No project settings file found. A new one will be created if needed.");
-        setImageMetadata(new Map());
-        setAudioMetadata(new Map());
-    }
+          return {
+              openTabs: settings.openTabs,
+              activeTabId: settings.activeTabId,
+              imageMetadata: imageMetadataMap,
+              audioMetadata: audioMetadataMap,
+          };
+      } catch (e) {
+          console.log("No project settings file found. A new one will be created if needed.");
+          setTheme('system');
+          setApiKey('');
+          setEnableAiFeatures(true);
+          setIsLeftSidebarOpen(true);
+          setLeftSidebarWidth(256);
+          setIsRightSidebarOpen(true);
+          setRightSidebarWidth(384);
+          
+          return {
+              openTabs: [{ id: 'canvas', type: 'canvas' }],
+              activeTabId: 'canvas',
+              imageMetadata: new Map(),
+              audioMetadata: new Map(),
+          };
+      }
   };
 
   const requestOpenFolder = () => {
@@ -1445,7 +1540,9 @@ const App: React.FC = () => {
         const projectAudiosMap = await loadProjectAudios(rootHandle);
         setProjectAudios(projectAudiosMap);
 
-        await loadIdeSettings(rootHandle);
+        const projectSettings = await loadIdeSettings(rootHandle);
+        setImageMetadata(projectSettings.imageMetadata || new Map());
+        setAudioMetadata(projectSettings.audioMetadata || new Map());
 
         setLoadingState(s => ({ ...s, progress: 50, message: 'Reading script files...' }));
         const newBlocks: Block[] = [];
@@ -1467,6 +1564,51 @@ const App: React.FC = () => {
             }
         };
         await findRpyFilesRecursively(rootHandle, '');
+
+        // Reconcile saved tabs with blocks that were actually loaded
+        const filePathToBlockMap = new Map<string, Block>();
+        newBlocks.forEach(b => {
+            if (b.filePath) filePathToBlockMap.set(b.filePath, b);
+        });
+
+        const validTabs: EditorTab[] = [];
+        // FIX: Explicitly type loadedTabs to ensure correct type inference for oldActiveTab.
+        const loadedTabs: EditorTab[] = projectSettings.openTabs && Array.isArray(projectSettings.openTabs) && projectSettings.openTabs.length > 0
+            ? projectSettings.openTabs
+            : [{ id: 'canvas', type: 'canvas' }];
+        const loadedActiveTabId = projectSettings.activeTabId || 'canvas';
+
+        loadedTabs.forEach(tab => {
+            if (tab.type === 'editor' && tab.filePath) {
+                const correspondingBlock = filePathToBlockMap.get(tab.filePath);
+                if (correspondingBlock) {
+                    // This tab is valid; update its blockId to the new one generated on load.
+                    validTabs.push({ ...tab, id: correspondingBlock.id, blockId: correspondingBlock.id });
+                }
+            } else if (tab.type !== 'editor') {
+                // Keep non-editor tabs like 'canvas', 'image', 'audio', etc.
+                validTabs.push(tab);
+            }
+        });
+
+        if (!validTabs.some(t => t.type === 'canvas')) {
+            validTabs.unshift({ id: 'canvas', type: 'canvas' });
+        }
+
+        // Determine the new active tab
+        let finalActiveTabId = 'canvas';
+        const oldActiveTab = loadedTabs.find(t => t.id === loadedActiveTabId);
+        if (oldActiveTab) {
+            // Find the new version of the previously active tab
+            const newVersionOfActiveTab = validTabs.find(t => (t.filePath && t.filePath === oldActiveTab.filePath && t.type === oldActiveTab.type) || t.id === oldActiveTab.id);
+            if (newVersionOfActiveTab) {
+                finalActiveTabId = newVersionOfActiveTab.id;
+            } else if (validTabs.length > 0) {
+                finalActiveTabId = validTabs[0].id;
+            }
+        }
+        setOpenTabs(validTabs);
+        setActiveTabId(finalActiveTabId);
         
         setLoadingState(s => ({ ...s, progress: 75, message: 'Analyzing story flow...' }));
         const preliminaryAnalysis = performRenpyAnalysis(newBlocks);
@@ -1726,25 +1868,7 @@ const App: React.FC = () => {
         }
     }, [liveBlocks]);
 
-  const handleSaveIdeSettings = useCallback(async () => {
-    if (!directoryHandle) return;
-    try {
-        const gameDir = await directoryHandle.getDirectoryHandle('game', { create: true });
-        const fileHandle = await gameDir.getFileHandle(IDE_SETTINGS_FILE, { create: true });
-        const writable = await fileHandle.createWritable();
-        const settings = {
-            imageScanDirectories: Array.from(imageScanDirectories.keys()),
-            imageMetadata: Object.fromEntries(imageMetadata),
-            audioScanDirectories: Array.from(audioScanDirectories.keys()),
-            audioMetadata: Object.fromEntries(audioMetadata),
-        };
-        await writable.write(JSON.stringify(settings, null, 2));
-        await writable.close();
-    } catch (e) {
-        console.error("Failed to save IDE settings:", e);
-    }
-  }, [directoryHandle, imageMetadata, imageScanDirectories, audioMetadata, audioScanDirectories]);
-
+  
   const handleUpdateImageMetadata = useCallback(async (projectFilePath: string, newMetadata: ImageMetadata) => {
     const oldMetadata = imageMetadata.get(projectFilePath);
     const imageToMove = projectImages.get(projectFilePath);
@@ -1848,13 +1972,6 @@ const App: React.FC = () => {
     }
   }, [directoryHandle, projectImages, imageMetadata, fileTree, activeTabId, addToast]);
   
-  // Trigger save whenever metadata changes
-  useEffect(() => {
-    if (directoryHandle) {
-        handleSaveIdeSettings();
-    }
-  }, [imageMetadata, audioMetadata, imageScanDirectories, audioScanDirectories, directoryHandle, handleSaveIdeSettings]);
-
   const handleAddImageScanDirectory = useCallback(async () => {
       const dirHandle = await pickDirectory();
       if (!dirHandle) return;
@@ -1902,7 +2019,7 @@ const App: React.FC = () => {
             const targetProjectFilePath = `game/images${subfolder ? `/${subfolder}` : ''}/${targetFileName}`;
 
             if (!sourceImage.fileHandle) {
-                console.warn(`Skipping image copy for ${sourceImage.filePath} because file handle is missing.`);
+                console.warn(`Skipping copy of ${sourceImage.fileName} - no file handle available.`);
                 continue;
             }
 
@@ -1912,212 +2029,36 @@ const App: React.FC = () => {
             await writable.write(file);
             await writable.close();
 
-            const updatedSourceImage: ProjectImage = { ...sourceImage, isInProject: true, projectFilePath: targetProjectFilePath };
-            newImageMap.set(sourcePath, updatedSourceImage);
-            
-            if (!newImageMap.has(targetProjectFilePath)) {
-              const projectAssetImage: ProjectImage = {
-                filePath: targetProjectFilePath,
-                projectFilePath: targetProjectFilePath,
-                fileName: targetFileName,
-                dataUrl: sourceImage.dataUrl,
-                fileHandle: newFileHandle,
+            const newImage: ProjectImage = {
+                ...sourceImage,
                 isInProject: true,
-              };
-              newImageMap.set(targetProjectFilePath, projectAssetImage);
-            }
+                projectFilePath: targetProjectFilePath,
+            };
+            newImageMap.set(sourcePath, newImage);
             
+            const projectImageAlreadyExists = Array.from(newImageMap.values()).some(img => img.filePath === targetProjectFilePath);
+            if(!projectImageAlreadyExists) {
+                const projectImage: ProjectImage = {
+                    filePath: targetProjectFilePath,
+                    fileName: targetFileName,
+                    fileHandle: newFileHandle,
+                    isInProject: true,
+                    projectFilePath: targetProjectFilePath,
+                };
+                newImageMap.set(targetProjectFilePath, projectImage);
+            }
+
             newMetadataMap.set(targetProjectFilePath, meta);
+             if (fileTree) {
+                setFileTree(addNodeToFileTree(fileTree, targetProjectFilePath));
+            }
         }
         setProjectImages(newImageMap);
         setImageMetadata(newMetadataMap);
-
-        if (fileTree) {
-            let currentTree = fileTree;
-            for (const sourcePath of sourceFilePaths) {
-                const sourceImage = newImageMap.get(sourcePath);
-                if (sourceImage?.projectFilePath) {
-                    currentTree = addNodeToFileTree(currentTree, sourceImage.projectFilePath);
-                }
-            }
-            setFileTree(currentTree);
-        }
-
-    } catch (e) {
-        console.error("Error copying images:", e);
-        addToast("Could not copy images. Ensure you have granted permission to the project folder.", 'error');
-    }
-  }, [directoryHandle, projectImages, imageMetadata, fileTree, addToast]);
-
-  const handleAddAudioScanDirectory = useCallback(async () => {
-      const dirHandle = await pickDirectory();
-      if (!dirHandle) return;
-
-      setAudioScanDirectories(prev => new Map(prev).set(dirHandle.name, dirHandle));
-      const newAudios = await scanDirectoryForAudios(dirHandle, dirHandle.name, false);
-      setProjectAudios(prev => new Map([...prev, ...newAudios]));
-  }, [pickDirectory]);
-
-  const handleCopyAudiosToProject = useCallback(async (sourceFilePaths: string[], metadataOverride?: AudioMetadata) => {
-    if (!directoryHandle) return;
-    try {
-        const gameDir = await directoryHandle.getDirectoryHandle('game', { create: true });
-        const audiosDir = await gameDir.getDirectoryHandle('audio', { create: true });
-        
-        const newAudioMap: Map<string, RenpyAudio> = new Map(projectAudios);
-        const newMetadataMap = new Map(audioMetadata);
-
-        for (const sourcePath of sourceFilePaths) {
-            const sourceAudio = newAudioMap.get(sourcePath);
-            if (!sourceAudio || sourceAudio.isInProject) continue;
-
-            // FIX: Explicitly cast existingMeta to the correct type to resolve TypeScript inference issues.
-            const existingMeta = newMetadataMap.get(sourceAudio.projectFilePath || '') as AudioMetadata | undefined;
-            const meta = metadataOverride || (existingMeta?.renpyName ? existingMeta : undefined) || {
-                renpyName: sourceAudio.fileName.split('.').slice(0,-1).join('.'),
-                tags: [],
-                projectSubfolder: existingMeta?.projectSubfolder
-            };
-            const subfolder = meta.projectSubfolder || '';
-
-            let targetDir = audiosDir;
-            if (subfolder) {
-                const subfolderParts = subfolder.split('/');
-                for (const part of subfolderParts) {
-                    if (part) targetDir = await targetDir.getDirectoryHandle(part, { create: true });
-                }
-            }
-            
-            const targetFileName = sourceAudio.fileName;
-            const targetProjectFilePath = `game/audio${subfolder ? `/${subfolder}` : ''}/${targetFileName}`;
-
-            if (!sourceAudio.fileHandle) {
-                console.warn(`Skipping audio copy for ${sourceAudio.filePath} because file handle is missing.`);
-                continue;
-            }
-
-            const file = await sourceAudio.fileHandle.getFile();
-            const newFileHandle = await targetDir.getFileHandle(targetFileName, { create: true });
-            const writable = await newFileHandle.createWritable();
-            await writable.write(file);
-            await writable.close();
-
-            const updatedSourceAudio: RenpyAudio = { ...sourceAudio, isInProject: true, projectFilePath: targetProjectFilePath };
-            newAudioMap.set(sourcePath, updatedSourceAudio);
-            
-            if (!newAudioMap.has(targetProjectFilePath)) {
-              const projectAssetAudio: RenpyAudio = {
-                filePath: targetProjectFilePath,
-                projectFilePath: targetProjectFilePath,
-                fileName: targetFileName,
-                dataUrl: sourceAudio.dataUrl,
-                fileHandle: newFileHandle,
-                isInProject: true,
-              };
-              newAudioMap.set(targetProjectFilePath, projectAssetAudio);
-            }
-            
-            newMetadataMap.set(targetProjectFilePath, meta);
-        }
-        setProjectAudios(newAudioMap);
-        setAudioMetadata(newMetadataMap);
-
-        if (fileTree) {
-            let currentTree = fileTree;
-            for (const sourcePath of sourceFilePaths) {
-                const sourceAudio = newAudioMap.get(sourcePath);
-                if (sourceAudio?.projectFilePath) {
-                    currentTree = addNodeToFileTree(currentTree, sourceAudio.projectFilePath);
-                }
-            }
-            setFileTree(currentTree);
-        }
-
-    } catch (e) {
-        console.error("Error copying audio:", e);
-        addToast("Could not copy audio files. Ensure you have granted permission to the project folder.", 'error');
-    }
-  }, [directoryHandle, projectAudios, audioMetadata, fileTree, addToast]);
-  
-  const handleUpdateAudioMetadata = useCallback(async (projectFilePath: string, newMetadata: AudioMetadata) => {
-    const oldMetadata = audioMetadata.get(projectFilePath);
-    const audioToMove = projectAudios.get(projectFilePath);
-
-    const oldSubfolder = oldMetadata?.projectSubfolder?.trim() || '';
-    const newSubfolder = newMetadata.projectSubfolder?.trim() || '';
-
-    if (!directoryHandle || !audioToMove || !audioToMove.isInProject || oldSubfolder === newSubfolder) {
-        setAudioMetadata(prev => new Map(prev).set(projectFilePath, newMetadata));
-        return;
-    }
-
-    try {
-        const oldPath = audioToMove.projectFilePath!;
-        const fileName = audioToMove.fileName;
-        const newPath = `game/audio${newSubfolder ? `/${newSubfolder}` : ''}/${fileName}`.replace(/\/+/g, '/').replace(/^\//, '');
-
-        if (oldPath === newPath) {
-             setAudioMetadata(prev => new Map(prev).set(projectFilePath, newMetadata));
-             return;
-        }
-
-        if (!audioToMove.fileHandle) throw new Error("File handle missing for audio file to move.");
-        
-        const fileContent = await audioToMove.fileHandle.getFile();
-
-        let targetDir = await directoryHandle.getDirectoryHandle('game', { create: true });
-        targetDir = await targetDir.getDirectoryHandle('audio', { create: true });
-        if (newSubfolder) {
-            for (const part of newSubfolder.split('/')) {
-                if (part) targetDir = await targetDir.getDirectoryHandle(part, { create: true });
-            }
-        }
-
-        const newFileHandle = await targetDir.getFileHandle(fileName, { create: true });
-        const writable = await newFileHandle.createWritable();
-        await writable.write(fileContent);
-        await writable.close();
-
-        let oldDirParent = directoryHandle;
-        for (const part of oldPath.split('/').slice(0, -1)) {
-            oldDirParent = await oldDirParent.getDirectoryHandle(part);
-        }
-        await oldDirParent.removeEntry(fileName);
-
-        const newProjectAudios: Map<string, RenpyAudio> = new Map(projectAudios);
-        newProjectAudios.delete(oldPath);
-        const updatedAudio: RenpyAudio = { ...audioToMove, filePath: newPath, projectFilePath: newPath, fileHandle: newFileHandle };
-        newProjectAudios.set(newPath, updatedAudio);
-
-        const sourceAudio = Array.from(newProjectAudios.values()).find(aud => aud.projectFilePath === oldPath && aud.filePath !== oldPath);
-        if (sourceAudio) {
-            newProjectAudios.set(sourceAudio.filePath, { ...sourceAudio, projectFilePath: newPath });
-        }
-        setProjectAudios(newProjectAudios);
-
-        const newMetadataMap = new Map(audioMetadata);
-        newMetadataMap.delete(oldPath);
-        newMetadataMap.set(newPath, newMetadata);
-        setAudioMetadata(newMetadataMap);
-        
-        setFileTree(currentTree => {
-            if (!currentTree) return null;
-            let treeAfterRemoval = removeNodeFromFileTree(currentTree, oldPath);
-            return addNodeToFileTree(treeAfterRemoval!, newPath);
-        });
-
-        setOpenTabs(tabs => tabs.map(tab => {
-            if (tab.id === 'audio_editor' && tab.filePath === oldPath) {
-                return { ...tab, filePath: newPath };
-            }
-            return tab;
-        }));
-
     } catch (err) {
-        console.error("Failed to move audio file:", err);
-        addToast(`Could not move the audio file. Error: ${(err as Error).message}`, 'error');
+        console.error("Failed to copy images to project:", err);
     }
-  }, [directoryHandle, projectAudios, audioMetadata, fileTree, addToast]);
+  }, [directoryHandle, projectImages, imageMetadata, fileTree]);
 
   const handleRemoveImageScanDirectory = useCallback((dirName: string) => {
     setImageScanDirectories(prev => {
@@ -2127,432 +2068,157 @@ const App: React.FC = () => {
     });
     setProjectImages(prev => {
         const newMap = new Map();
-        for (const [key, image] of prev.entries()) {
-            if (image.isInProject || !key.startsWith(`${dirName}/`)) {
-                newMap.set(key, image);
+        for (const [key, value] of prev.entries()) {
+            if (!key.startsWith(`${dirName}/`)) {
+                newMap.set(key, value);
             }
         }
         return newMap;
     });
   }, []);
 
-  const handleRemoveAudioScanDirectory = useCallback((dirName: string) => {
-    setAudioScanDirectories(prev => {
-        const newMap = new Map(prev);
-        newMap.delete(dirName);
-        return newMap;
-    });
-    setProjectAudios(prev => {
-        const newMap = new Map();
-        for (const [key, audio] of prev.entries()) {
-            if (audio.isInProject || !key.startsWith(`${dirName}/`)) {
-                newMap.set(key, audio);
-            }
-        }
-        return newMap;
-    });
-  }, []);
-
-  // Effect for periodic rescanning of all asset sources
-  useEffect(() => {
-    if (!directoryHandle) return;
-
-    const rescanAllAssets = async () => {
-        console.log("Rescanning all asset sources...");
-        const allNewImages = new Map<string, ProjectImage>();
-        const allNewAudios = new Map<string, RenpyAudio>();
-
-        // 1. Rescan project assets
-        const projectImagesMap = await loadProjectImages(directoryHandle);
-        projectImagesMap.forEach((img, key) => allNewImages.set(key, img));
-        const projectAudiosMap = await loadProjectAudios(directoryHandle);
-        projectAudiosMap.forEach((aud, key) => allNewAudios.set(key, aud));
-
-        // 2. Rescan external image directories
-        for (const [name, handle] of imageScanDirectories.entries()) {
-            try {
-                const scannedImages = await scanDirectoryForImages(handle, name, false);
-                scannedImages.forEach((img, key) => allNewImages.set(key, img));
-            } catch (err) {
-                console.error(`Failed to rescan directory ${name}:`, err);
-                addToast(`Could not access image directory "${name}". It has been removed.`, 'warning');
-                // Remove the directory if it's no longer accessible
-                setImageScanDirectories(prev => {
-                    const newMap = new Map(prev);
-                    newMap.delete(name);
-                    return newMap;
-                });
-            }
-        }
-        
-        // 3. Rescan external audio directories
-        for (const [name, handle] of audioScanDirectories.entries()) {
-             try {
-                const scannedAudios = await scanDirectoryForAudios(handle, name, false);
-                scannedAudios.forEach((aud, key) => allNewAudios.set(key, aud));
-            } catch (err) {
-                console.error(`Failed to rescan audio directory ${name}:`, err);
-                addToast(`Could not access audio directory "${name}". It has been removed.`, 'warning');
-                setAudioScanDirectories(prev => {
-                    const newMap = new Map(prev);
-                    newMap.delete(name);
-                    return newMap;
-                });
-            }
-        }
-
-        setProjectImages(allNewImages);
-        setProjectAudios(allNewAudios);
-    };
-
-    const intervalId = setInterval(rescanAllAssets, 30000); // Rescan every 30 seconds
-
-    return () => clearInterval(intervalId);
-  }, [directoryHandle, imageScanDirectories, audioScanDirectories, addToast]);
-
-  // --- Start File Operations Handlers ---
-
-  const getHandleFromPath = useCallback(async (path: string): Promise<FileSystemFileHandle | FileSystemDirectoryHandle | null> => {
-    if (!directoryHandle) return null;
-    const parts = path.split('/').filter(p => p);
-    let currentHandle: FileSystemDirectoryHandle = directoryHandle;
-    for (let i = 0; i < parts.length; i++) {
-        const part = parts[i];
-        if (currentHandle.kind !== 'directory') return null;
-        try {
-            if (i === parts.length - 1) {
-                 try {
-                    return await currentHandle.getFileHandle(part);
-                } catch {
-                    return await currentHandle.getDirectoryHandle(part);
-                }
-            } else {
-                currentHandle = await currentHandle.getDirectoryHandle(part);
-            }
-        } catch (e) { return null; }
-    }
-    return currentHandle;
-  }, [directoryHandle]);
+  const handleUpdateAudioMetadata = useCallback(async (projectFilePath: string, newMetadata: AudioMetadata) => {
+      const oldMetadata = audioMetadata.get(projectFilePath);
+      const audioToMove = projectAudios.get(projectFilePath);
+      const oldSubfolder = oldMetadata?.projectSubfolder?.trim() || '';
+      const newSubfolder = newMetadata.projectSubfolder?.trim() || '';
   
-  const updateAllStatePaths = useCallback((updates: Map<string, { newPath: string; type: 'file' | 'folder' }>) => {
-    let currentBlocks = liveBlocks;
-    let currentProjectImages = projectImages;
-    let currentImageMetadata = imageMetadata;
-    let currentProjectAudios = projectAudios;
-    let currentAudioMetadata = audioMetadata;
-    let currentOpenTabs = openTabs;
-    let currentActiveTabId = activeTabId;
-    let currentClipboard = clipboard;
-    
-    for(const [oldPath, { newPath }] of updates.entries()) {
-        currentBlocks = currentBlocks.map(b => b.filePath === oldPath ? { ...b, filePath: newPath } : b);
-        
-        const newProjectImages = new Map<string, ProjectImage>();
-        for (const [key, img] of currentProjectImages.entries()) {
-            if (key.startsWith(oldPath)) {
-                const updatedKey = key.replace(oldPath, newPath);
-                const updatedImg: ProjectImage = {...img, filePath: updatedKey, projectFilePath: img.projectFilePath?.replace(oldPath, newPath)};
-                newProjectImages.set(updatedKey, updatedImg);
-            } else if (img.projectFilePath?.startsWith(oldPath)) {
-                const updatedImg: ProjectImage = {...img, projectFilePath: img.projectFilePath.replace(oldPath, newPath) };
-                newProjectImages.set(key, updatedImg);
-            } else {
-                newProjectImages.set(key, img);
-            }
-        }
-        currentProjectImages = newProjectImages;
-
-        const newImageMetadata = new Map<string, ImageMetadata>();
-        currentImageMetadata.forEach((meta, key) => {
-           if (key.startsWith(oldPath)) newImageMetadata.set(key.replace(oldPath, newPath), meta);
-           else newImageMetadata.set(key, meta);
-        });
-        currentImageMetadata = newImageMetadata;
-
-        const newProjectAudios = new Map<string, RenpyAudio>();
-        for (const [key, aud] of currentProjectAudios.entries()) {
-            if (key.startsWith(oldPath)) {
-                const updatedKey = key.replace(oldPath, newPath);
-                const updatedAud: RenpyAudio = {...aud, filePath: updatedKey, projectFilePath: aud.projectFilePath?.replace(oldPath, newPath)};
-                newProjectAudios.set(updatedKey, updatedAud);
-            } else if (aud.projectFilePath?.startsWith(oldPath)) {
-                const updatedAud: RenpyAudio = {...aud, projectFilePath: aud.projectFilePath.replace(oldPath, newPath) };
-                newProjectAudios.set(key, aud);
-            } else {
-                newProjectAudios.set(key, aud);
-            }
-        }
-        currentProjectAudios = newProjectAudios;
-
-        const newAudioMetadata = new Map<string, AudioMetadata>();
-        currentAudioMetadata.forEach((meta, key) => {
-           if (key.startsWith(oldPath)) newAudioMetadata.set(key.replace(oldPath, newPath), meta);
-           else newAudioMetadata.set(key, meta);
-        });
-        currentAudioMetadata = newAudioMetadata;
-
-        currentOpenTabs = currentOpenTabs.map(tab => {
-            if (tab.filePath?.startsWith(oldPath)) {
-                const newFilePath = tab.filePath.replace(oldPath, newPath);
-                return { ...tab, filePath: newFilePath };
-            }
-            return tab;
-        });
-        
-        if (currentClipboard?.paths.has(oldPath)) {
-            const newPaths = new Set(currentClipboard.paths);
-            newPaths.delete(oldPath);
-            newPaths.add(newPath);
-            currentClipboard = { ...currentClipboard, paths: newPaths };
-        }
-    }
-    
-    setLiveBlocks(currentBlocks);
-    setProjectImages(currentProjectImages);
-    setImageMetadata(currentImageMetadata);
-    setProjectAudios(currentProjectAudios);
-    setAudioMetadata(currentAudioMetadata);
-    setOpenTabs(currentOpenTabs);
-    setActiveTabId(currentActiveTabId);
-    setClipboard(currentClipboard);
-    commitChange({ blocks: currentBlocks });
-    
-  }, [liveBlocks, projectImages, imageMetadata, projectAudios, audioMetadata, openTabs, activeTabId, clipboard, commitChange]);
-
-  const handleCreateNode = useCallback(async (parentPath: string, name: string, type: 'file' | 'folder') => {
-    if (!directoryHandle || !name) return;
-    const newPath = parentPath ? `${parentPath}/${name}` : name;
-
-    try {
-        let parentDirHandle: FileSystemDirectoryHandle = directoryHandle;
-        if (parentPath) {
-            const handle = await getHandleFromPath(parentPath);
-            if (handle?.kind !== 'directory') throw new Error("Parent path is not a directory");
-            parentDirHandle = handle;
-        }
-
-        if (type === 'folder') {
-            await parentDirHandle.getDirectoryHandle(name, { create: true });
-        } else {
-            const newFileHandle = await parentDirHandle.getFileHandle(name, { create: true });
-            if (name.endsWith('.rpy')) {
-                const newBlock: Block = {
-                    id: uuidv4(),
-                    content: `label ${name.replace('.rpy', '')}_label:\n    # New content for ${name}\n    return`,
-                    position: { x: 50, y: 50 },
-                    width: 300,
-                    height: 120,
-                    filePath: newPath,
-                    fileHandle: newFileHandle
-                };
-                commitChange({ blocks: [...liveBlocks, newBlock] }, [newBlock.id]);
-                handleOpenEditorTab(newBlock.id);
-            }
-        }
-        setFileTree(tree => addNodeToFileTree(tree!, newPath, type));
-    } catch (e) {
-        console.error("Failed to create node:", e);
-        addToast(`Could not create ${type}: ${(e as Error).message}`, 'error');
-    }
-  }, [directoryHandle, liveBlocks, commitChange, getHandleFromPath, handleOpenEditorTab, addToast]);
-
-  const handleRenameNode = useCallback(async (oldPath: string, newName: string) => {
-      if (!directoryHandle) return;
-      const parts = oldPath.split('/');
-      const oldName = parts.pop();
-      if (oldName === newName) return;
-      
-      const parentPath = parts.join('/');
-      const newPath = parentPath ? `${parentPath}/${newName}` : newName;
-
+      if (!directoryHandle || !audioToMove || !audioToMove.isInProject || oldSubfolder === newSubfolder) {
+          setAudioMetadata(prev => new Map(prev).set(projectFilePath, newMetadata));
+          return;
+      }
+  
       try {
-          const oldHandle = await getHandleFromPath(oldPath);
-          if (!oldHandle) throw new Error("Source not found");
-
-          const copyRecursive = async (source: FileSystemDirectoryHandle | FileSystemFileHandle, targetDir: FileSystemDirectoryHandle, newName: string) => {
-              if (source.kind === 'file') {
-                  const file = await source.getFile();
-                  const newFileHandle = await targetDir.getFileHandle(newName, { create: true });
-                  const writable = await newFileHandle.createWritable();
-                  await writable.write(file);
-                  await writable.close();
-              } else {
-                  const newDirHandle = await targetDir.getDirectoryHandle(newName, { create: true });
-                  for await (const entry of source.values()) {
-                      await copyRecursive(entry, newDirHandle, entry.name);
+          const oldPath = audioToMove.projectFilePath!;
+          const fileName = audioToMove.fileName;
+          const newPath = `game/audio${newSubfolder ? `/${newSubfolder}` : ''}/${fileName}`.replace(/\/+/g, '/').replace(/^\//, '');
+          if (oldPath === newPath) {
+              setAudioMetadata(prev => new Map(prev).set(projectFilePath, newMetadata));
+              return;
+          }
+  
+          if (!audioToMove.fileHandle) { throw new Error("File handle missing."); }
+          const fileContent = await audioToMove.fileHandle.getFile();
+  
+          let targetDir = await directoryHandle.getDirectoryHandle('game/audio', { create: true });
+          if (newSubfolder) {
+              for (const part of newSubfolder.split('/')) {
+                  if (part) targetDir = await targetDir.getDirectoryHandle(part, { create: true });
+              }
+          }
+  
+          const newFileHandle = await targetDir.getFileHandle(fileName, { create: true });
+          const writable = await newFileHandle.createWritable();
+          await writable.write(fileContent);
+          await writable.close();
+  
+          let oldDirParent = directoryHandle;
+          for (const part of oldPath.split('/').slice(0, -1)) { oldDirParent = await oldDirParent.getDirectoryHandle(part); }
+          await oldDirParent.removeEntry(fileName);
+  
+          const newProjectAudios = new Map(projectAudios);
+          newProjectAudios.delete(oldPath);
+          const dataUrl = await fileToDataUrl(fileContent);
+          newProjectAudios.set(newPath, { ...audioToMove, filePath: newPath, projectFilePath: newPath, fileHandle: newFileHandle, dataUrl });
+  
+          setProjectAudios(newProjectAudios);
+          const newMetadataMap = new Map(audioMetadata);
+          newMetadataMap.delete(oldPath);
+          newMetadataMap.set(newPath, newMetadata);
+          setAudioMetadata(newMetadataMap);
+  
+          setFileTree(currentTree => {
+              if (!currentTree) return null;
+              let treeAfterRemoval = removeNodeFromFileTree(currentTree, oldPath);
+              return addNodeToFileTree(treeAfterRemoval!, newPath);
+          });
+          setOpenTabs(tabs => tabs.map(tab => tab.id === 'audio_editor' && tab.filePath === oldPath ? { ...tab, filePath: newPath } : tab));
+  
+      } catch (err) {
+          console.error("Failed to move audio file:", err);
+          addToast(`Could not move the audio file. Error: ${(err as Error).message}`, 'error');
+      }
+  }, [directoryHandle, projectAudios, audioMetadata, fileTree, addToast]);
+  
+  const handleAddAudioScanDirectory = useCallback(async () => {
+      const dirHandle = await pickDirectory();
+      if (!dirHandle) return;
+      setAudioScanDirectories(prev => new Map(prev).set(dirHandle.name, dirHandle));
+      const newAudios = await scanDirectoryForAudios(dirHandle, dirHandle.name, false);
+      setProjectAudios(prev => new Map([...prev, ...newAudios]));
+  }, [pickDirectory]);
+  
+  const handleCopyAudiosToProject = useCallback(async (sourceFilePaths: string[], metadataOverride?: AudioMetadata) => {
+      if (!directoryHandle) return;
+      try {
+          let targetDir = await directoryHandle.getDirectoryHandle('game/audio', { create: true });
+          const newAudioMap = new Map(projectAudios);
+          const newMetadataMap = new Map(audioMetadata);
+  
+          for (const sourcePath of sourceFilePaths) {
+              const sourceAudio = newAudioMap.get(sourcePath);
+              if (!sourceAudio || sourceAudio.isInProject || !sourceAudio.fileHandle) continue;
+  
+              const meta = metadataOverride || { renpyName: sourceAudio.fileName.split('.').slice(0, -1).join('.'), tags: [], projectSubfolder: '' };
+              const subfolder = meta.projectSubfolder || '';
+  
+              if (subfolder) {
+                  let currentDir = targetDir;
+                  for (const part of subfolder.split('/')) {
+                      if (part) currentDir = await currentDir.getDirectoryHandle(part, { create: true });
                   }
               }
-          };
-
-          let parentHandle = directoryHandle;
-          if (parentPath) {
-              const handle = await getHandleFromPath(parentPath);
-              if (handle?.kind !== 'directory') throw new Error("Parent not found");
-              parentHandle = handle;
-          }
-          
-          await copyRecursive(oldHandle, parentHandle, newName);
-          await parentHandle.removeEntry(oldName, { recursive: true });
-
-          // Update state
-          const type = oldHandle.kind === 'directory' ? 'folder' : 'file';
-          const pathUpdates = new Map<string, { newPath: string; type: 'file' | 'folder' }>();
-          pathUpdates.set(oldPath, { newPath, type });
-          updateAllStatePaths(pathUpdates);
-          
-          setFileTree(tree => {
-              const treeAfterRemove = removeNodeFromFileTree(tree!, oldPath);
-              return addNodeToFileTree(treeAfterRemove!, newPath, type);
-          });
-          
-      } catch (e) {
-          console.error("Failed to rename node:", e);
-          addToast(`Could not rename: ${(e as Error).message}`, 'error');
-      }
-  }, [directoryHandle, getHandleFromPath, updateAllStatePaths, addToast]);
   
-    const handleDeleteNode = useCallback((paths: string[]) => {
-      requestDelete([], paths);
-  }, [requestDelete]);
-
-  const handleCut = useCallback((paths: string[]) => setClipboard({ type: 'cut', paths: new Set(paths) }), []);
-  const handleCopy = useCallback((paths: string[]) => setClipboard({ type: 'copy', paths: new Set(paths) }), []);
-
-  const handleMoveNode = useCallback(async (sourcePaths: string[], targetFolderPath: string) => {
-      if (!directoryHandle) return;
-
-      const copyRecursive = async (sourceHandle: FileSystemDirectoryHandle | FileSystemFileHandle, targetDirHandle: FileSystemDirectoryHandle, newName?: string) => {
-          const name = newName || sourceHandle.name;
-          if (sourceHandle.kind === 'file') {
-              const file = await sourceHandle.getFile();
-              const newFileHandle = await targetDirHandle.getFileHandle(name, { create: true });
+              const targetFileName = sourceAudio.fileName;
+              const targetProjectFilePath = `game/audio${subfolder ? `/${subfolder}` : ''}/${targetFileName}`;
+  
+              const file = await sourceAudio.fileHandle.getFile();
+              const newFileHandle = await targetDir.getFileHandle(targetFileName, { create: true });
               const writable = await newFileHandle.createWritable();
               await writable.write(file);
               await writable.close();
-          } else {
-              const newDirHandle = await targetDirHandle.getDirectoryHandle(name, { create: true });
-              for await (const entry of (sourceHandle as FileSystemDirectoryHandle).values()) {
-                  await copyRecursive(entry, newDirHandle);
+  
+              newAudioMap.set(sourcePath, { ...sourceAudio, isInProject: true, projectFilePath: targetProjectFilePath });
+  
+              const projectAudioAlreadyExists = Array.from(newAudioMap.values()).some(aud => aud.filePath === targetProjectFilePath);
+              if (!projectAudioAlreadyExists) {
+                  const dataUrl = await fileToDataUrl(file);
+                  newAudioMap.set(targetProjectFilePath, { filePath: targetProjectFilePath, fileName: targetFileName, fileHandle: newFileHandle, dataUrl, isInProject: true, projectFilePath: targetProjectFilePath });
               }
+  
+              newMetadataMap.set(targetProjectFilePath, meta);
+              if (fileTree) setFileTree(addNodeToFileTree(fileTree, targetProjectFilePath));
           }
-      };
-
-      const targetDirHandle = targetFolderPath ? await getHandleFromPath(targetFolderPath) as FileSystemDirectoryHandle : directoryHandle;
-      if (!targetDirHandle || targetDirHandle.kind !== 'directory') {
-          addToast('Invalid target folder.', 'error');
-          return;
+          setProjectAudios(newAudioMap);
+          setAudioMetadata(newMetadataMap);
+      } catch (err) {
+          console.error("Failed to copy audios to project:", err);
       }
-
-      const pathUpdates = new Map<string, { newPath: string; type: 'file' | 'folder' }>();
-
-      for (const sourcePath of sourcePaths) {
-          if (targetFolderPath.startsWith(sourcePath)) {
-            addToast("Cannot move a folder into itself.", 'warning');
-            continue;
-          }
-
-          const sourceHandle = await getHandleFromPath(sourcePath);
-          if (!sourceHandle) continue;
-
-          await copyRecursive(sourceHandle, targetDirHandle);
-
-          const parentPath = sourcePath.substring(0, sourcePath.lastIndexOf('/'));
-          const parentHandle = parentPath ? await getHandleFromPath(parentPath) as FileSystemDirectoryHandle : directoryHandle;
-          await parentHandle.removeEntry(sourceHandle.name, { recursive: true });
-
-          const newPath = `${targetFolderPath}/${sourceHandle.name}`;
-          pathUpdates.set(sourcePath, { newPath, type: sourceHandle.kind === 'directory' ? 'folder' : 'file' });
-      }
-
-      if (pathUpdates.size > 0) {
-        updateAllStatePaths(pathUpdates);
-
-        setFileTree(tree => {
-            if (!tree) return null;
-            let newTree = tree;
-            for (const [oldPath, { newPath, type }] of pathUpdates.entries()) {
-                newTree = removeNodeFromFileTree(newTree, oldPath)!;
-                newTree = addNodeToFileTree(newTree, newPath, type);
-            }
-            return newTree;
-        });
-      }
-
-  }, [directoryHandle, getHandleFromPath, addToast, updateAllStatePaths]);
-
-  const handlePaste = useCallback(async (targetFolderPath: string) => {
-    if (!clipboard || !directoryHandle) return;
-    
-    const targetDirHandle = targetFolderPath ? await getHandleFromPath(targetFolderPath) as FileSystemDirectoryHandle : directoryHandle;
-    if (!targetDirHandle || targetDirHandle.kind !== 'directory') {
-        addToast('Invalid paste target.', 'error');
-        return;
-    }
-
-    const copyRecursive = async (sourceHandle: FileSystemDirectoryHandle | FileSystemFileHandle, targetDirHandle: FileSystemDirectoryHandle) => {
-        const name = sourceHandle.name;
-        if (sourceHandle.kind === 'file') {
-            const file = await sourceHandle.getFile();
-            const newFileHandle = await targetDirHandle.getFileHandle(name, { create: true });
-            const writable = await newFileHandle.createWritable();
-            await writable.write(file);
-            await writable.close();
-        } else {
-            const newDirHandle = await targetDirHandle.getDirectoryHandle(name, { create: true });
-            for await (const entry of (sourceHandle as FileSystemDirectoryHandle).values()) {
-                await copyRecursive(entry, newDirHandle);
-            }
-        }
-    };
-
-    const pathUpdates = new Map<string, { newPath: string; type: 'file' | 'folder' }>();
-
-    for (const sourcePath of clipboard.paths) {
-        const sourceHandle = await getHandleFromPath(sourcePath);
-        if (!sourceHandle) continue;
-
-        if (targetFolderPath.startsWith(sourcePath)) {
-            addToast('Cannot paste a folder into itself.', 'warning');
-            continue;
-        }
-
-        await copyRecursive(sourceHandle, targetDirHandle);
-        const newPath = `${targetFolderPath}/${sourceHandle.name}`;
-        
-        if (clipboard.type === 'cut') {
-            const parentPath = sourcePath.substring(0, sourcePath.lastIndexOf('/'));
-            const parentHandle = parentPath ? await getHandleFromPath(parentPath) as FileSystemDirectoryHandle : directoryHandle;
-            await parentHandle.removeEntry(sourceHandle.name, { recursive: true });
-            pathUpdates.set(sourcePath, { newPath, type: sourceHandle.kind === 'directory' ? 'folder' : 'file' });
-        }
-    }
-
-    if (pathUpdates.size > 0) {
-        updateAllStatePaths(pathUpdates);
-
-        setFileTree(tree => {
-            if (!tree) return null;
-            let newTree = tree;
-            for (const [oldPath, { newPath, type }] of pathUpdates.entries()) {
-                newTree = removeNodeFromFileTree(newTree, oldPath)!;
-                newTree = addNodeToFileTree(newTree, newPath, type);
-            }
-            return newTree;
-        });
-    }
-
-    if (clipboard.type === 'cut') {
-        setClipboard(null);
-    } else {
-        // For copy operations, we need to refresh the file tree to show the new files.
-        // A more optimized approach would be to just add the new nodes, but a full
-        // refresh is simpler and safer given the available helpers.
-        buildTreeFromHandle(directoryHandle).then(setFileTree);
-    }
-  }, [clipboard, directoryHandle, getHandleFromPath, addToast, updateAllStatePaths]);
+  }, [directoryHandle, projectAudios, audioMetadata, fileTree]);
+  
+  const handleRemoveAudioScanDirectory = useCallback((dirName: string) => {
+      setAudioScanDirectories(prev => { const newMap = new Map(prev); newMap.delete(dirName); return newMap; });
+      setProjectAudios(prev => {
+          const newMap = new Map();
+          for (const [key, value] of prev.entries()) { if (!key.startsWith(`${dirName}/`)) newMap.set(key, value); }
+          return newMap;
+      });
+  }, []);
   
   return (
-    <div className={`w-screen h-screen flex flex-col font-sans text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800`}>
+    <div className={`h-screen w-screen bg-gray-100 dark:bg-gray-900 flex flex-col font-sans text-gray-900 dark:text-gray-100`}>
+      {isWelcomeScreenVisible && (
+        <WelcomeScreen 
+            onOpenFolder={() => handleOpenFolder()}
+            onStartInBrowser={() => {
+              setIsWelcomeScreenVisible(false);
+              addBlock();
+            }}
+            onUpload={() => fileInputRef.current?.click()}
+            isFileSystemApiSupported={isFileSystemApiSupported}
+        />
+      )}
+      {loadingState.visible && <LoadingOverlay progress={loadingState.progress} message={loadingState.message} />}
       <Toolbar
         directoryHandle={directoryHandle}
         dirtyBlockIds={dirtyBlockIds}
@@ -2576,217 +2242,269 @@ const App: React.FC = () => {
         isRightSidebarOpen={isRightSidebarOpen}
         setIsRightSidebarOpen={setIsRightSidebarOpen}
       />
-      <input type="file" ref={fileInputRef} onChange={handleUploadFileSelect} style={{ display: 'none' }} accept=".zip" />
-      <div className="flex-grow flex overflow-hidden">
-        {isLeftSidebarOpen && (
-          <>
-            <aside style={{ width: `${leftSidebarWidth}px` }} className="flex-shrink-0 h-full relative flex">
-                <div className="flex-grow min-w-0 h-full border-r border-gray-200 dark:border-gray-700">
-                    <FileExplorerPanel
-                      tree={fileTree}
-                      onFileOpen={handleFileDoubleClick}
-                      onCreateNode={handleCreateNode}
-                      onRenameNode={handleRenameNode}
-                      onDeleteNode={handleDeleteNode}
-                      onMoveNode={handleMoveNode}
-                      clipboard={clipboard}
-                      onCut={handleCut}
-                      onCopy={handleCopy}
-                      onPaste={handlePaste}
-                      onCenterOnBlock={handleCenterOnBlock}
-                    />
-                </div>
-                <div 
-                    onMouseDown={(e) => { e.preventDefault(); setResizingHandle('left'); }}
-                    className="w-1.5 h-full cursor-col-resize bg-transparent hover:bg-indigo-500 transition-colors absolute right-0 top-0 z-20"
-                    title="Resize sidebar"
-                />
-            </aside>
-          </>
-        )}
-        <main className="flex-1 flex flex-col min-w-0">
-          <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
-            <div className="flex items-center">
-              {openTabs.map(tab => {
-                const isActive = tab.id === activeTabId;
-                let title = '';
-                if (tab.type === 'canvas') title = 'Story Canvas';
-                else if (tab.type === 'route-canvas') title = 'Route Canvas';
-                else if (tab.type === 'editor') title = liveBlocks.find(b => b.id === tab.blockId)?.filePath?.split('/').pop() || 'Editor';
-                else if (tab.type === 'image') title = tab.filePath?.split('/').pop() || 'Image';
-                else if (tab.type === 'audio') title = tab.filePath?.split('/').pop() || 'Audio';
-                else if (tab.type === 'character') title = tab.characterTag === 'new_character' ? 'New Character' : (analysisResult.characters.get(tab.characterTag!)?.name || tab.characterTag || 'Character');
-                
-                return (
-                  <div key={tab.id} onClick={() => setActiveTabId(tab.id)} className={`flex items-center space-x-2 px-4 py-2 border-r border-gray-200 dark:border-gray-700 cursor-pointer transition-colors ${isActive ? 'bg-white dark:bg-gray-800 font-semibold' : 'hover:bg-gray-100 dark:hover:bg-gray-800/50'}`}>
-                    <span className="text-sm truncate max-w-xs">{title}</span>
-                    {tab.type === 'editor' && dirtyEditors.has(tab.blockId!) && <div className="w-2 h-2 rounded-full bg-blue-500" title="Unsaved changes"></div>}
-                    {tab.type !== 'canvas' && <button onClick={e => { e.stopPropagation(); handleCloseTab(tab.id); }} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>}
-                  </div>
-                )
-              })}
+      <div className="flex-grow flex min-h-0 relative">
+        <aside 
+            className={`flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out ${isLeftSidebarOpen ? 'w-64' : 'w-0'}`}
+            style={{ width: isLeftSidebarOpen ? leftSidebarWidth : 0 }}
+        >
+            {isLeftSidebarOpen && <FileExplorerPanel 
+                tree={fileTree} 
+                onFileOpen={handleFileDoubleClick}
+                onCreateNode={() => {}}
+                onRenameNode={() => {}}
+                onDeleteNode={(paths) => requestDelete([], paths)}
+                onMoveNode={() => {}}
+                clipboard={clipboard}
+                onCut={() => {}}
+                onCopy={() => {}}
+                onPaste={() => {}}
+                onCenterOnBlock={handleCenterOnBlock}
+            />}
+        </aside>
+        <div 
+            onMouseDown={() => setResizingHandle('left')}
+            className={`w-1.5 flex-shrink-0 cursor-col-resize hover:bg-indigo-400/50 transition-colors ${resizingHandle === 'left' ? 'bg-indigo-400' : ''}`}
+            style={{ display: isLeftSidebarOpen ? 'block' : 'none' }}
+        />
+
+        <main className="flex-grow min-w-0 flex flex-col relative bg-gray-100 dark:bg-gray-900">
+            {/* TABS */}
+            <div className="h-10 flex-shrink-0 bg-gray-200 dark:bg-gray-700/50 flex items-end space-x-1 px-2 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
+                {openTabs.map(tab => {
+                    const isActive = tab.id === activeTabId;
+                    const block = liveBlocks.find(b => b.id === tab.blockId);
+                    const isDirty = (tab.type === 'editor' && tab.blockId) ? dirtyEditors.has(tab.blockId) : false;
+                    let title = 'Canvas';
+                    if (tab.type === 'route-canvas') title = 'Route Canvas';
+                    else if (tab.type === 'image') title = tab.filePath?.split('/').pop() || 'Image';
+                    else if (tab.type === 'audio') title = tab.filePath?.split('/').pop() || 'Audio';
+                    else if (tab.type === 'character') title = `Char: ${tab.characterTag}`;
+                    else if (block) title = block.title || block.filePath?.split('/').pop() || analysisResult.firstLabels[block.id] || 'Untitled Block';
+                    
+                    return (
+                        <div key={tab.id}
+                             onClick={() => setActiveTabId(tab.id)}
+                             className={`px-3 py-1.5 rounded-t-md flex items-center space-x-2 cursor-pointer ${isActive ? 'bg-white dark:bg-gray-800' : 'bg-gray-100/50 dark:bg-gray-800/40 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                        >
+                            <span className={`text-sm ${isActive ? 'font-semibold' : ''}`}>{title}</span>
+                             {isDirty && <div className="w-2 h-2 bg-blue-500 rounded-full" title="Unsaved changes"></div>}
+                            <button onClick={(e) => { e.stopPropagation(); handleCloseTab(tab.id); }} className="p-0.5 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                            </button>
+                        </div>
+                    );
+                })}
             </div>
-          </div>
-          <div className="flex-grow relative">
-            {activeTab?.type === 'canvas' && (
-              <StoryCanvas
-                blocks={liveBlocks}
-                groups={liveGroups}
-                analysisResult={analysisResult}
-                updateBlock={updateBlock}
-                updateGroup={updateGroup}
-                updateBlockPositions={updateBlockPositions}
-                updateGroupPositions={updateGroupPositions}
-                onInteractionEnd={onInteractionEnd}
-                deleteBlock={(id: string) => requestDelete([id], [])}
-                onOpenEditor={handleOpenEditorTab}
-                selectedBlockIds={selectedBlockIds}
-                setSelectedBlockIds={setSelectedBlockIds}
-                selectedGroupIds={selectedGroupIds}
-                setSelectedGroupIds={setSelectedGroupIds}
-                findUsagesHighlightIds={findUsagesHighlightIds}
-                clearFindUsages={() => setFindUsagesHighlightIds(null)}
-                dirtyBlockIds={dirtyBlockIds}
-                canvasFilters={canvasFilters}
-                setCanvasFilters={setCanvasFilters}
-                centerOnBlockRequest={centerOnBlockRequest}
-                hoverHighlightIds={hoverHighlightIds}
-              />
-            )}
-            {activeTab?.type === 'route-canvas' && labelNodes && routeLinks && identifiedRoutes && (
-              <RouteCanvas
-                labelNodes={labelNodes}
-                routeLinks={routeLinks}
-                identifiedRoutes={identifiedRoutes}
-                updateLabelNodePositions={updateLabelNodePositions}
-                onOpenEditor={handleOpenEditorTab}
-              />
-            )}
-            {activeTab?.type === 'editor' && activeEditorBlock && (
-              <EditorView
-                key={activeEditorBlock.id}
-                block={activeEditorBlock}
-                analysisResult={analysisResult}
-                initialScrollRequest={activeTab.scrollRequest}
-                onSwitchFocusBlock={handleOpenEditorTab}
-                onSave={handleSaveBlockContent}
-                onDirtyChange={handleEditorDirtyChange}
-                saveTrigger={saveTrigger}
-                editorTheme={editorThemeForMonaco}
-              />
-            )}
-            {activeTab?.type === 'image' && activeTab.filePath && projectImages.has(activeTab.filePath) && (
-                <ImageEditorView
-                    image={projectImages.get(activeTab.filePath)!}
-                    metadata={imageMetadata.get(projectImages.get(activeTab.filePath)!.projectFilePath || '')}
-                    onUpdateMetadata={handleUpdateImageMetadata}
-                    onCopyToProject={(sourcePath, metadata) => handleCopyImagesToProject([sourcePath], metadata)}
-                />
-            )}
-             {activeTab?.type === 'audio' && activeTab.filePath && projectAudios.has(activeTab.filePath) && (
-                <AudioEditorView
-                    audio={projectAudios.get(activeTab.filePath)!}
-                    metadata={audioMetadata.get(projectAudios.get(activeTab.filePath)!.projectFilePath || '')}
-                    onUpdateMetadata={handleUpdateAudioMetadata}
-                    onCopyToProject={(sourcePath, metadata) => handleCopyAudiosToProject([sourcePath], metadata)}
-                />
-            )}
-             {activeTab?.type === 'character' && activeTab.characterTag && (
-                <CharacterEditorView
-                    character={activeTab.characterTag === 'new_character' ? undefined : analysisResult.characters.get(activeTab.characterTag)}
-                    onSave={handleSaveCharacter}
-                    existingTags={Array.from(analysisResult.characters.keys())}
-                    projectImages={Array.from(projectImages.values())}
-                    imageMetadata={imageMetadata}
-                />
-             )}
-          </div>
+            
+            {/* CONTENT */}
+            <div className="flex-grow min-h-0 relative">
+                 {openTabs.map(tab => (
+                    <div key={tab.id} className={`absolute inset-0 ${activeTabId === tab.id ? 'z-10' : 'z-0'}`} style={{ visibility: activeTabId === tab.id ? 'visible' : 'hidden' }}>
+                        {tab.type === 'canvas' && (
+                          <StoryCanvas
+                            blocks={liveBlocks}
+                            groups={liveGroups}
+                            analysisResult={analysisResult}
+                            updateBlock={updateBlock}
+                            updateGroup={updateGroup}
+                            updateBlockPositions={updateBlockPositions}
+                            updateGroupPositions={updateGroupPositions}
+                            onInteractionEnd={onInteractionEnd}
+                            deleteBlock={(id) => requestDelete([id], [])}
+                            onOpenEditor={handleOpenEditorTab}
+                            selectedBlockIds={selectedBlockIds}
+                            setSelectedBlockIds={setSelectedBlockIds}
+                            selectedGroupIds={selectedGroupIds}
+                            setSelectedGroupIds={setSelectedGroupIds}
+                            findUsagesHighlightIds={findUsagesHighlightIds}
+                            clearFindUsages={() => setFindUsagesHighlightIds(null)}
+                            dirtyBlockIds={dirtyBlockIds}
+                            canvasFilters={canvasFilters}
+                            setCanvasFilters={setCanvasFilters}
+                            centerOnBlockRequest={centerOnBlockRequest}
+                            hoverHighlightIds={hoverHighlightIds}
+                          />
+                        )}
+                        {tab.type === 'route-canvas' && labelNodes && routeLinks && (
+                          <RouteCanvas
+                            labelNodes={labelNodes}
+                            routeLinks={routeLinks}
+                            identifiedRoutes={identifiedRoutes ?? []}
+                            updateLabelNodePositions={updateLabelNodePositions}
+                            onOpenEditor={handleOpenEditorTab}
+                          />
+                        )}
+                        {tab.type === 'editor' && tab.blockId && (() => {
+                            const block = liveBlocks.find(b => b.id === tab.blockId);
+                            return block ? (
+                                <EditorView 
+                                    block={block} 
+                                    blocks={liveBlocks}
+                                    analysisResult={analysisResult}
+                                    onSwitchFocusBlock={handleOpenEditorTab}
+                                    onSave={handleSaveBlockContent}
+                                    onDirtyChange={handleEditorDirtyChange}
+                                    saveTrigger={saveTrigger}
+                                    editorTheme={editorThemeForMonaco}
+                                    initialScrollRequest={tab.scrollRequest}
+                                    apiKey={apiKey}
+                                    enableAiFeatures={enableAiFeatures}
+                                />
+                            ) : null;
+                        })()}
+                        {tab.type === 'image' && tab.filePath && (() => {
+                            const image = projectImages.get(tab.filePath);
+                            return image ? (
+                                <ImageEditorView 
+                                    image={image}
+                                    metadata={imageMetadata.get(image.projectFilePath || image.filePath)}
+                                    onUpdateMetadata={handleUpdateImageMetadata}
+                                    onCopyToProject={(sourcePath, meta) => handleCopyImagesToProject([sourcePath], meta)}
+                                />
+                            ) : null;
+                        })()}
+                        {tab.type === 'audio' && tab.filePath && (() => {
+                            const audio = projectAudios.get(tab.filePath);
+                            return audio ? (
+                                <AudioEditorView
+                                    audio={audio}
+                                    metadata={audioMetadata.get(audio.projectFilePath || audio.filePath)}
+                                    onUpdateMetadata={handleUpdateAudioMetadata}
+                                    onCopyToProject={(sourcePath, meta) => handleCopyAudiosToProject([sourcePath], meta)}
+                                />
+                            ) : null;
+                        })()}
+                         {tab.type === 'character' && tab.characterTag && (
+                            <CharacterEditorView
+                                character={tab.characterTag === 'new_character' ? undefined : analysisResult.characters.get(tab.characterTag)}
+                                onSave={handleSaveCharacter}
+                                existingTags={Array.from(analysisResult.characters.keys())}
+                                projectImages={Array.from(projectImages.values())}
+                                imageMetadata={imageMetadata}
+                            />
+                        )}
+                    </div>
+                ))}
+            </div>
         </main>
-        {isRightSidebarOpen && (
-           <>
-            <div 
-                onMouseDown={(e) => { e.preventDefault(); setResizingHandle('right'); }}
-                className="w-1.5 h-full cursor-col-resize bg-transparent hover:bg-indigo-500 transition-colors z-20"
-                title="Resize sidebar"
-            />
-            <aside style={{ width: `${rightSidebarWidth}px` }} className="flex-shrink-0 h-full border-l border-gray-200 dark:border-gray-700">
-             <StoryElementsPanel
-               analysisResult={analysisResult}
-               onOpenCharacterEditor={handleOpenCharacterEditor}
-               onFindCharacterUsages={handleFindCharacterUsages}
-               onAddVariable={handleAddVariable}
-               onFindVariableUsages={handleFindVariableUsages}
-               onAddScreen={handleAddScreen}
-               onFindScreenDefinition={handleFindScreenDefinition}
-               projectImages={projectImages}
-               imageMetadata={imageMetadata}
-               imageScanDirectories={imageScanDirectories}
-               onAddImageScanDirectory={handleAddImageScanDirectory}
-               onRemoveImageScanDirectory={handleRemoveImageScanDirectory}
-               onCopyImagesToProject={(paths) => handleCopyImagesToProject(paths)}
-               onUpdateImageMetadata={handleUpdateImageMetadata}
-               onOpenImageEditor={handleOpenImageTab}
-               projectAudios={projectAudios}
-               audioMetadata={audioMetadata}
-               audioScanDirectories={audioScanDirectories}
-               onAddAudioScanDirectory={handleAddAudioScanDirectory}
-               onRemoveAudioScanDirectory={handleRemoveAudioScanDirectory}
-               onCopyAudiosToProject={(paths) => handleCopyAudiosToProject(paths)}
-               onUpdateAudioMetadata={handleUpdateAudioMetadata}
-               onOpenAudioEditor={handleOpenAudioTab}
-               isFileSystemApiSupported={!!directoryHandle}
-               onHoverHighlightStart={handleHoverHighlightStart}
-               onHoverHighlightEnd={handleHoverHighlightEnd}
-             />
-           </aside>
-           </>
-        )}
+
+        <div 
+            onMouseDown={() => setResizingHandle('right')}
+            className={`w-1.5 flex-shrink-0 cursor-col-resize hover:bg-indigo-400/50 transition-colors ${resizingHandle === 'right' ? 'bg-indigo-400' : ''}`}
+            style={{ display: isRightSidebarOpen ? 'block' : 'none' }}
+        />
+        <aside 
+            className={`flex-shrink-0 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out ${isRightSidebarOpen ? 'w-96' : 'w-0'}`}
+            style={{ width: isRightSidebarOpen ? rightSidebarWidth : 0 }}
+        >
+          {isRightSidebarOpen && <StoryElementsPanel
+            analysisResult={analysisResult}
+            onOpenCharacterEditor={handleOpenCharacterEditor}
+            onFindCharacterUsages={handleFindCharacterUsages}
+            onAddVariable={handleAddVariable}
+            onFindVariableUsages={handleFindVariableUsages}
+            onAddScreen={handleAddScreen}
+            onFindScreenDefinition={handleFindScreenDefinition}
+            projectImages={projectImages}
+            imageMetadata={imageMetadata}
+            imageScanDirectories={imageScanDirectories}
+            onAddImageScanDirectory={handleAddImageScanDirectory}
+            onRemoveImageScanDirectory={handleRemoveImageScanDirectory}
+            onCopyImagesToProject={handleCopyImagesToProject}
+            onUpdateImageMetadata={handleUpdateImageMetadata}
+            onOpenImageEditor={handleOpenImageTab}
+            projectAudios={projectAudios}
+            audioMetadata={audioMetadata}
+            audioScanDirectories={audioScanDirectories}
+            onAddAudioScanDirectory={handleAddAudioScanDirectory}
+            onRemoveAudioScanDirectory={handleRemoveAudioScanDirectory}
+            onCopyAudiosToProject={handleCopyAudiosToProject}
+            onUpdateAudioMetadata={handleUpdateAudioMetadata}
+            onOpenAudioEditor={handleOpenAudioTab}
+            isFileSystemApiSupported={!!directoryHandle}
+            onHoverHighlightStart={handleHoverHighlightStart}
+            onHoverHighlightEnd={handleHoverHighlightEnd}
+          />}
+        </aside>
       </div>
+
       {isClearConfirmVisible && (
-        <ConfirmModal title="Clear Canvas" onConfirm={() => { commitChange({blocks: [], groups: []}); setIsClearConfirmVisible(false); }} onClose={() => setIsClearConfirmVisible(false)}>
-          Are you sure you want to delete all blocks? This action cannot be undone.
+        <ConfirmModal
+          title="Clear Canvas"
+          onConfirm={() => {
+            commitChange({ blocks: [], groups: [] });
+            setFileTree(null);
+            setDirectoryHandle(null);
+            setIsClearConfirmVisible(false);
+          }}
+          onClose={() => setIsClearConfirmVisible(false)}
+        >
+          Are you sure you want to delete all blocks and groups from the canvas? This action cannot be undone.
         </ConfirmModal>
       )}
-       {uploadConfirm.visible && (
-        <ConfirmModal title="Upload Project" onConfirm={() => processUploadedFile(uploadConfirm.file!)} onClose={() => setUploadConfirm({ visible: false, file: null })} confirmText="Upload & Replace" confirmClassName="bg-indigo-600 hover:bg-indigo-700">
-          Uploading a new project will replace any content currently in the browser. Are you sure you want to continue?
+      {uploadConfirm.visible && (
+        <ConfirmModal
+            title="Upload Project"
+            confirmText="Upload and Replace"
+            confirmClassName="bg-indigo-600 hover:bg-indigo-700"
+            onConfirm={() => processUploadedFile(uploadConfirm.file!)}
+            onClose={() => {
+                if(fileInputRef.current) fileInputRef.current.value = "";
+                setUploadConfirm({ visible: false, file: null });
+            }}
+        >
+            Uploading a new project will replace your current workspace. Any unsaved changes will be lost. Are you sure?
         </ConfirmModal>
       )}
-       {openFolderConfirmVisible && (
-        <ConfirmModal title="Open New Project" onConfirm={() => { setOpenFolderConfirmVisible(false); handleOpenFolder(); }} onClose={() => setOpenFolderConfirmVisible(false)} confirmText="Open & Replace" confirmClassName="bg-indigo-600 hover:bg-indigo-700">
-          Opening a new project folder will replace your current workspace. Any unsaved changes will be lost.
-        </ConfirmModal>
+      {openFolderConfirmVisible && (
+          <ConfirmModal
+              title="Open New Project"
+              confirmText="Open and Replace"
+              confirmClassName="bg-indigo-600 hover:bg-indigo-700"
+              onConfirm={() => {
+                  setOpenFolderConfirmVisible(false);
+                  handleOpenFolder();
+              }}
+              onClose={() => setOpenFolderConfirmVisible(false)}
+          >
+              Opening a new project folder will replace your current workspace. Any unsaved changes will be lost. Are you sure?
+          </ConfirmModal>
       )}
        {deleteConfirm.visible && (
-        <ConfirmModal title="Confirm Deletion" onConfirm={handleConfirmDelete} onClose={() => setDeleteConfirm({ visible: false })} confirmText="Delete">
-          <p>{deleteConfirm.message}</p>
-          {deleteConfirm.warning && <p className="mt-2 font-bold text-red-500">{deleteConfirm.warning}</p>}
+        <ConfirmModal
+            title="Confirm Deletion"
+            confirmText="Delete"
+            confirmClassName="bg-red-600 hover:bg-red-700"
+            onConfirm={handleConfirmDelete}
+            onClose={() => setDeleteConfirm({ visible: false })}
+        >
+            <p>{deleteConfirm.message}</p>
+            {deleteConfirm.warning && <p className="mt-2 font-semibold text-yellow-600 dark:text-yellow-400">{deleteConfirm.warning}</p>}
         </ConfirmModal>
       )}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end space-y-2">
-        {toasts.map(toast => (
-          <Toast key={toast.id} toast={toast} onDismiss={dismissToast} />
-        ))}
-      </div>
-       {loadingState.visible && (
-          <LoadingOverlay progress={loadingState.progress} message={loadingState.message} />
-      )}
-       {isWelcomeScreenVisible && (
-        <WelcomeScreen
-          onOpenFolder={() => { setIsWelcomeScreenVisible(false); requestOpenFolder(); }}
-          onStartInBrowser={() => setIsWelcomeScreenVisible(false)}
-          onUpload={() => { setIsWelcomeScreenVisible(false); handleUploadClick(); }}
-          isFileSystemApiSupported={isFileSystemApiSupported}
-        />
-      )}
+
       {isSettingsModalVisible && (
-        <SettingsModal
-          isOpen={isSettingsModalVisible}
-          onClose={() => setIsSettingsModalVisible(false)}
-          settings={{ theme }}
-          onSettingsChange={handleSettingsChange}
-        />
-       )}
+          <SettingsModal
+            isOpen={isSettingsModalVisible}
+            onClose={() => setIsSettingsModalVisible(false)}
+            settings={{ theme, apiKey, enableAiFeatures }}
+            onSettingsChange={handleSettingsChange}
+          />
+      )}
+      
+      <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end space-y-2">
+          {toasts.map(toast => (
+              <Toast key={toast.id} toast={toast} onDismiss={dismissToast} />
+          ))}
+      </div>
+      
+      <input
+        type="file"
+        ref={fileInputRef}
+        className="hidden"
+        accept=".zip"
+        onChange={handleUploadFileSelect}
+      />
     </div>
   );
 };

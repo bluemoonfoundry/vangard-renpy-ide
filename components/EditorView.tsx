@@ -1,10 +1,12 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type { Block, RenpyAnalysisResult } from '../types';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import GenerateContentModal from './GenerateContentModal';
 
 interface EditorViewProps {
   block: Block;
+  blocks: Block[];
   analysisResult: RenpyAnalysisResult;
   initialScrollRequest?: { line: number; key: number };
   onSwitchFocusBlock: (blockId: string, line: number) => void;
@@ -12,20 +14,26 @@ interface EditorViewProps {
   onDirtyChange: (blockId: string, isDirty: boolean) => void;
   saveTrigger: number;
   editorTheme: 'light' | 'dark';
+  apiKey?: string;
+  enableAiFeatures: boolean;
 }
 
 const EditorView: React.FC<EditorViewProps> = ({ 
   block, 
+  blocks,
   analysisResult,
   initialScrollRequest,
   onSwitchFocusBlock,
   onSave, 
   onDirtyChange,
   saveTrigger, 
-  editorTheme 
+  editorTheme,
+  apiKey,
+  enableAiFeatures
 }) => {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
+  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
 
   useEffect(() => {
     if (saveTrigger > 0 && editorRef.current) {
@@ -51,6 +59,18 @@ const EditorView: React.FC<EditorViewProps> = ({
         }, 100); // A small delay ensures the editor is fully ready.
     }
   }, [initialScrollRequest]);
+
+  const handleInsertContent = (content: string) => {
+    if (!editorRef.current) return;
+    const editor = editorRef.current;
+    const selection = editor.getSelection();
+    if (selection) {
+      const id = { major: 1, minor: 1 };
+      const op = { identifier: id, range: selection, text: content, forceMoveMarkers: true };
+      editor.executeEdits('gemini-insert', [op]);
+      editor.focus();
+    }
+  };
 
   const handleEditorWillMount: BeforeMount = (monaco) => {
     // This setup only needs to run once per application load.
@@ -228,7 +248,20 @@ const EditorView: React.FC<EditorViewProps> = ({
   };
 
   return (
-    <div className="w-full h-full p-1 bg-white dark:bg-gray-800">
+    <div className="w-full h-full p-1 bg-white dark:bg-gray-800 relative">
+        {enableAiFeatures && (
+            <div className="absolute top-3 right-3 z-10">
+                <button
+                  onClick={() => setIsGenerateModalOpen(true)}
+                  disabled={!apiKey}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-3 rounded-md text-sm flex items-center space-x-2 shadow-lg disabled:bg-indigo-400 disabled:cursor-not-allowed"
+                  title={!apiKey ? "Please enter your Gemini API key in Settings to enable AI features" : "Generate content with AI"}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 00-1 1v1.5H3a1 1 0 000 2h1v1.5a1 1 0 002 0V6h1.5a1 1 0 000-2H6V2.5a1 1 0 00-1-1zm10 0a1 1 0 00-1 1v1.5h-1a1 1 0 100 2h1v1.5a1 1 0 102 0V6h1.5a1 1 0 100-2H16V2.5a1 1 0 00-1-1zM5 10a1 1 0 00-1 1v1.5H3a1 1 0 100 2h1v1.5a1 1 0 102 0V14h1.5a1 1 0 100-2H6v-1.5a1 1 0 00-1-1zm10 0a1 1 0 00-1 1v1.5h-1a1 1 0 100 2h1v1.5a1 1 0 102 0V14h1.5a1 1 0 100-2H16v-1.5a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                  <span>Generate</span>
+                </button>
+            </div>
+        )}
         <Editor
             key={block.id}
             height="100%"
@@ -246,6 +279,27 @@ const EditorView: React.FC<EditorViewProps> = ({
                 padding: { top: 10 },
             }}
         />
+        {isGenerateModalOpen && (
+            <GenerateContentModal
+                isOpen={isGenerateModalOpen}
+                onClose={() => setIsGenerateModalOpen(false)}
+                onInsertContent={handleInsertContent}
+                apiKey={apiKey}
+                currentBlockId={block.id}
+                blocks={blocks}
+                analysisResult={analysisResult}
+                getCurrentContext={() => {
+                    if (!editorRef.current) return '';
+                    const editor = editorRef.current;
+                    const position = editor.getPosition();
+                    if (!position) return '';
+                    const model = editor.getModel();
+                    if (!model) return '';
+                    // Get content up to the beginning of the current line
+                    return model.getValueInRange(new monaco.Range(1, 1, position.lineNumber, 1));
+                }}
+            />
+        )}
     </div>
   );
 };

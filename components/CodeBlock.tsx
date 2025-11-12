@@ -28,7 +28,7 @@ const JumpIcon: React.FC = () => <div title="Contains Jumps/Calls"><svg xmlns="h
 const PythonIcon: React.FC = () => <div title="Contains Python code"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6.28 5.22a.75.75 0 010 1.06L3.56 9l2.72 2.72a.75.75 0 01-1.06 1.06L1.47 9.53a.75.75 0 010-1.06l3.75-3.75a.75.75 0 011.06 0zm7.44 0a.75.75 0 011.06 0l3.75 3.75a.75.75 0 010 1.06L14.78 14l-2.72-2.72a.75.75 0 011.06-1.06L16.44 9l-2.72-2.72a.75.75 0 010-1.06z" clipRule="evenodd" /></svg></div>;
 
 
-const CodeBlock: React.FC<CodeBlockProps> = ({ 
+const CodeBlock: React.FC<CodeBlockProps> = React.memo(({ 
   block, 
   analysisResult, 
   updateBlock, 
@@ -221,6 +221,6 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
       <div className="resize-handle absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize" style={{ zIndex: 2 }} />
     </div>
   );
-};
+});
 
 export default CodeBlock;

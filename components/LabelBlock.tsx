@@ -8,7 +8,7 @@ interface LabelBlockProps {
   isDragging: boolean;
 }
 
-const LabelBlock: React.FC<LabelBlockProps> = ({ 
+const LabelBlock: React.FC<LabelBlockProps> = React.memo(({ 
   node, 
   onOpenEditor,
   isSelected,
@@ -42,6 +42,6 @@ const LabelBlock: React.FC<LabelBlockProps> = ({
         </span>
     </div>
   );
-};
+});
 
 export default LabelBlock;

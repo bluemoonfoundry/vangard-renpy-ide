@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/genai": "^0.12.0",
     "@monaco-editor/react": "^4.6.0",
     "immer": "^10.1.1",
     "jszip": "^3.10.1",
