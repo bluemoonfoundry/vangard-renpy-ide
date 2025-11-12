@@ -26,6 +26,9 @@ interface StoryElementsPanelProps {
     onCopyImagesToProject: (sourceFilePaths: string[]) => void;
     onUpdateImageMetadata: (filePath: string, newMetadata: ImageMetadata) => void;
     onOpenImageEditor: (filePath: string) => void;
+    imagesLastScanned: number | null;
+    isRefreshingImages: boolean;
+    onRefreshImages: () => void;
     // Audio props & callbacks
     projectAudios: Map<string, RenpyAudio>;
     audioMetadata: Map<string, AudioMetadata>;
@@ -35,6 +38,9 @@ interface StoryElementsPanelProps {
     onCopyAudiosToProject: (sourceFilePaths: string[]) => void;
     onUpdateAudioMetadata: (filePath: string, newMetadata: AudioMetadata) => void;
     onOpenAudioEditor: (filePath: string) => void;
+    audiosLastScanned: number | null;
+    isRefreshingAudios: boolean;
+    onRefreshAudios: () => void;
     isFileSystemApiSupported: boolean;
     // Hover highlight callbacks
     onHoverHighlightStart: (key: string, type: 'character' | 'variable') => void;
@@ -66,8 +72,8 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     onOpenCharacterEditor, onFindCharacterUsages,
     onAddVariable, onFindVariableUsages,
     onAddScreen, onFindScreenDefinition,
-    projectImages, imageMetadata, onAddImageScanDirectory, onRemoveImageScanDirectory, imageScanDirectories, onCopyImagesToProject, onUpdateImageMetadata, onOpenImageEditor,
-    projectAudios, audioMetadata, onAddAudioScanDirectory, onRemoveAudioScanDirectory, audioScanDirectories, onCopyAudiosToProject, onUpdateAudioMetadata, onOpenAudioEditor,
+    projectImages, imageMetadata, onAddImageScanDirectory, onRemoveImageScanDirectory, imageScanDirectories, onCopyImagesToProject, onUpdateImageMetadata, onOpenImageEditor, imagesLastScanned, isRefreshingImages, onRefreshImages,
+    projectAudios, audioMetadata, onAddAudioScanDirectory, onRemoveAudioScanDirectory, audioScanDirectories, onCopyAudiosToProject, onUpdateAudioMetadata, onOpenAudioEditor, audiosLastScanned, isRefreshingAudios, onRefreshAudios,
     isFileSystemApiSupported,
     onHoverHighlightStart, onHoverHighlightEnd
 }) => {
@@ -145,6 +151,9 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                         onCopyImagesToProject={onCopyImagesToProject}
                         onOpenImageEditor={onOpenImageEditor}
                         isFileSystemApiSupported={isFileSystemApiSupported}
+                        lastScanned={imagesLastScanned}
+                        isRefreshing={isRefreshingImages}
+                        onRefresh={onRefreshImages}
                     />
                 )}
                 {activeTab === 'audio' && (
@@ -157,6 +166,9 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                         onCopyAudiosToProject={onCopyAudiosToProject}
                         onOpenAudioEditor={onOpenAudioEditor}
                         isFileSystemApiSupported={isFileSystemApiSupported}
+                        lastScanned={audiosLastScanned}
+                        isRefreshing={isRefreshingAudios}
+                        onRefresh={onRefreshAudios}
                     />
                 )}
                 {activeTab === 'screens' && (

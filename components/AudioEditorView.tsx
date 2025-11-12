@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import type { RenpyAudio, AudioMetadata } from '../types';
 
@@ -50,8 +49,15 @@ const AudioEditorView: React.FC<AudioEditorViewProps> = ({ audio, metadata, onUp
           </audio>
       </div>
       <aside className="w-full h-80 flex-shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 flex flex-row space-x-8 overflow-y-auto">
-        <div className="flex-1 space-y-4">
-            <h3 className="text-lg font-bold border-b pb-2 border-gray-200 dark:border-gray-700">Audio Properties</h3>
+        <div className="flex-1 space-y-4 max-w-md">
+            <h3 className="text-lg font-bold border-b pb-2 border-gray-200 dark:border-gray-700">File Info</h3>
+            <div className="space-y-2 text-sm">
+                <p><strong className="font-semibold text-gray-500 dark:text-gray-400">Path:</strong> <code className="break-all">{audio.filePath}</code></p>
+                {audio.lastModified && <p><strong className="font-semibold text-gray-500 dark:text-gray-400">Last Modified:</strong> {new Date(audio.lastModified).toLocaleString()}</p>}
+            </div>
+            <div className="pt-4">
+                <h3 className="text-lg font-bold border-b pb-2 border-gray-200 dark:border-gray-700">Ren'Py Definition</h3>
+            </div>
             <div>
                 <label htmlFor="renpyName" className="text-sm font-medium text-gray-700 dark:text-gray-300">Ren'Py Name</label>
                 <input
@@ -83,7 +89,7 @@ const AudioEditorView: React.FC<AudioEditorViewProps> = ({ audio, metadata, onUp
             </div>
         </div>
 
-        <div className="flex-1 space-y-4 border-l border-gray-200 dark:border-gray-700 pl-8">
+        <div className="flex-1 space-y-4 border-l border-gray-200 dark:border-gray-700 pl-8 max-w-md">
             <h3 className="text-lg font-bold border-b pb-2 border-gray-200 dark:border-gray-700">Project Settings</h3>
              <div>
                 <label htmlFor="subfolder" className="text-sm font-medium text-gray-700 dark:text-gray-300">Project Subfolder</label>

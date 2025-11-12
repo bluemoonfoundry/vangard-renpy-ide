@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import type { ProjectImage, ImageMetadata } from '../types';
 
@@ -99,6 +98,7 @@ const ImageEditorView: React.FC<ImageEditorViewProps> = ({ image, metadata, onUp
         
         <div className="space-y-3">
             <MetadataRow label="File Path" value={image.filePath} />
+            {image.lastModified && <MetadataRow label="Last Modified" value={new Date(image.lastModified).toLocaleString()} />}
             <MetadataRow label="Dimensions" value={dimensions ? `${dimensions.w} x ${dimensions.h} px` : 'Loading...'} />
             <MetadataRow label="File Size" value={fileSize !== null ? formatBytes(fileSize) : 'Loading...'} />
             <MetadataRow label="File Type" value={mimeType || 'N/A'} />

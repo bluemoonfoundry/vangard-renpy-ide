@@ -397,6 +397,10 @@ const App: React.FC = () => {
   const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
   const [hoverHighlightIds, setHoverHighlightIds] = useState<Set<string> | null>(null);
   const settingsSaveTimeoutRef = useRef<number | null>(null);
+  const [imagesLastScanned, setImagesLastScanned] = useState<number | null>(null);
+  const [isRefreshingImages, setIsRefreshingImages] = useState(false);
+  const [audiosLastScanned, setAudiosLastScanned] = useState<number | null>(null);
+  const [isRefreshingAudios, setIsRefreshingAudios] = useState(false);
 
   // Since the Gemini SDK doesn't support dynamically listing models, we'll use a curated list.
   const availableModels = useMemo(() => ['gemini-2.5-flash', 'gemini-2.5-pro'], []);
@@ -1330,6 +1334,7 @@ const App: React.FC = () => {
             const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
             if (entry.kind === 'file' && /\.(png|jpe?g|webp)$/i.test(entry.name)) {
                 const fileHandle = entry as FileSystemFileHandle;
+                const file = await fileHandle.getFile();
                 // The unique key for an image is its base directory name + its relative path
                 const imageKey = `${baseName}/${newPath}`;
                 const projectImage: ProjectImage = {
@@ -1338,6 +1343,7 @@ const App: React.FC = () => {
                     fileHandle,
                     isInProject: isProjectScan,
                     projectFilePath: isProjectScan ? imageKey : undefined,
+                    lastModified: file.lastModified,
                 };
                 newImages.set(imageKey, projectImage);
             } else if (entry.kind === 'directory') {
@@ -1366,6 +1372,7 @@ const App: React.FC = () => {
                     fileHandle,
                     isInProject: isProjectScan,
                     projectFilePath: isProjectScan ? audioKey : undefined,
+                    lastModified: file.lastModified,
                 };
                 newAudios.set(audioKey, renpyAudio);
             } else if (entry.kind === 'directory') {
@@ -1548,8 +1555,10 @@ const App: React.FC = () => {
         setLoadingState(s => ({ ...s, progress: 25, message: 'Loading project assets...' }));
         const projectImagesMap = await loadProjectImages(rootHandle);
         setProjectImages(projectImagesMap);
+        if (projectImagesMap.size > 0) setImagesLastScanned(Date.now());
         const projectAudiosMap = await loadProjectAudios(rootHandle);
         setProjectAudios(projectAudiosMap);
+        if (projectAudiosMap.size > 0) setAudiosLastScanned(Date.now());
 
         const projectSettings = await loadIdeSettings(rootHandle);
         setImageMetadata(projectSettings.imageMetadata || new Map());
@@ -1718,13 +1727,13 @@ const App: React.FC = () => {
             const dataUrl = await fileToDataUrl(blob);
             const fileName = relativePath.split('/').pop() || '';
             const filePath = relativePath.toLowerCase().startsWith('game/') ? relativePath : `game/${relativePath}`;
-            newImages.set(filePath, { filePath, fileName, dataUrl, fileHandle: null, isInProject: true, projectFilePath: filePath });
+            newImages.set(filePath, { filePath, fileName, dataUrl, fileHandle: null, isInProject: true, projectFilePath: filePath, lastModified: zipEntry.date.getTime() });
         } else if (/\.(mp3|ogg|wav|opus)$/i.test(relativePath) && (relativePath.toLowerCase().startsWith('game/audio/') || relativePath.toLowerCase().startsWith('audio/'))) {
             const blob = await zipEntry.async('blob');
             const dataUrl = await fileToDataUrl(blob);
             const fileName = relativePath.split('/').pop() || '';
             const filePath = relativePath.toLowerCase().startsWith('game/') ? relativePath : `game/${relativePath}`;
-            newAudios.set(filePath, { filePath, fileName, dataUrl, fileHandle: null, isInProject: true, projectFilePath: filePath });
+            newAudios.set(filePath, { filePath, fileName, dataUrl, fileHandle: null, isInProject: true, projectFilePath: filePath, lastModified: zipEntry.date.getTime() });
         }
       }
       
@@ -1735,8 +1744,10 @@ const App: React.FC = () => {
       setDirectoryHandle(null);
       setDirtyBlockIds(new Set());
       setProjectImages(newImages);
+      if (newImages.size > 0) setImagesLastScanned(Date.now());
       setImageMetadata(new Map());
       setProjectAudios(newAudios);
+      if (newAudios.size > 0) setAudiosLastScanned(Date.now());
       setAudioMetadata(new Map());
       
       setLoadingState(s => ({ ...s, progress: 75, message: 'Analyzing story flow...' }));
@@ -2055,6 +2066,7 @@ const App: React.FC = () => {
                     fileHandle: newFileHandle,
                     isInProject: true,
                     projectFilePath: targetProjectFilePath,
+                    lastModified: file.lastModified,
                 };
                 newImageMap.set(targetProjectFilePath, projectImage);
             }
@@ -2087,6 +2099,28 @@ const App: React.FC = () => {
         return newMap;
     });
   }, []);
+
+  const handleRefreshImages = useCallback(async () => {
+    if (!directoryHandle) return;
+    setIsRefreshingImages(true);
+    try {
+        const allImages = new Map<string, ProjectImage>();
+        const projectImagesMap = await loadProjectImages(directoryHandle);
+        projectImagesMap.forEach((img, key) => allImages.set(key, img));
+
+        for (const [name, handle] of imageScanDirectories.entries()) {
+            const scannedImages = await scanDirectoryForImages(handle, name, false);
+            scannedImages.forEach((img, key) => allImages.set(key, img));
+        }
+        setProjectImages(allImages);
+        setImagesLastScanned(Date.now());
+    } catch (e) {
+        console.error("Failed to refresh images:", e);
+        addToast("Failed to refresh images.", 'error');
+    } finally {
+        setIsRefreshingImages(false);
+    }
+  }, [directoryHandle, imageScanDirectories, addToast]);
 
   const handleUpdateAudioMetadata = useCallback(async (projectFilePath: string, newMetadata: AudioMetadata) => {
       const oldMetadata = audioMetadata.get(projectFilePath);
@@ -2130,7 +2164,7 @@ const App: React.FC = () => {
           const newProjectAudios = new Map(projectAudios);
           newProjectAudios.delete(oldPath);
           const dataUrl = await fileToDataUrl(fileContent);
-          newProjectAudios.set(newPath, { ...audioToMove, filePath: newPath, projectFilePath: newPath, fileHandle: newFileHandle, dataUrl });
+          newProjectAudios.set(newPath, { ...audioToMove, filePath: newPath, projectFilePath: newPath, fileHandle: newFileHandle, dataUrl, lastModified: fileContent.lastModified });
   
           setProjectAudios(newProjectAudios);
           const newMetadataMap = new Map(audioMetadata);
@@ -2194,7 +2228,7 @@ const App: React.FC = () => {
               const projectAudioAlreadyExists = Array.from(newAudioMap.values()).some(aud => aud.filePath === targetProjectFilePath);
               if (!projectAudioAlreadyExists) {
                   const dataUrl = await fileToDataUrl(file);
-                  newAudioMap.set(targetProjectFilePath, { filePath: targetProjectFilePath, fileName: targetFileName, fileHandle: newFileHandle, dataUrl, isInProject: true, projectFilePath: targetProjectFilePath });
+                  newAudioMap.set(targetProjectFilePath, { filePath: targetProjectFilePath, fileName: targetFileName, fileHandle: newFileHandle, dataUrl, isInProject: true, projectFilePath: targetProjectFilePath, lastModified: file.lastModified });
               }
   
               newMetadataMap.set(targetProjectFilePath, meta);
@@ -2215,6 +2249,28 @@ const App: React.FC = () => {
           return newMap;
       });
   }, []);
+
+  const handleRefreshAudios = useCallback(async () => {
+    if (!directoryHandle) return;
+    setIsRefreshingAudios(true);
+    try {
+        const allAudios = new Map<string, RenpyAudio>();
+        const projectAudiosMap = await loadProjectAudios(directoryHandle);
+        projectAudiosMap.forEach((aud, key) => allAudios.set(key, aud));
+
+        for (const [name, handle] of audioScanDirectories.entries()) {
+            const scannedAudios = await scanDirectoryForAudios(handle, name, false);
+            scannedAudios.forEach((aud, key) => allAudios.set(key, aud));
+        }
+        setProjectAudios(allAudios);
+        setAudiosLastScanned(Date.now());
+    } catch (e) {
+        console.error("Failed to refresh audios:", e);
+        addToast("Failed to refresh audios.", 'error');
+    } finally {
+        setIsRefreshingAudios(false);
+    }
+  }, [directoryHandle, audioScanDirectories, addToast]);
   
   return (
     <div className={`h-screen w-screen bg-gray-100 dark:bg-gray-900 flex flex-col font-sans text-gray-900 dark:text-gray-100`}>
@@ -2427,6 +2483,9 @@ const App: React.FC = () => {
             onCopyImagesToProject={handleCopyImagesToProject}
             onUpdateImageMetadata={handleUpdateImageMetadata}
             onOpenImageEditor={handleOpenImageTab}
+            imagesLastScanned={imagesLastScanned}
+            isRefreshingImages={isRefreshingImages}
+            onRefreshImages={handleRefreshImages}
             projectAudios={projectAudios}
             audioMetadata={audioMetadata}
             audioScanDirectories={audioScanDirectories}
@@ -2435,6 +2494,9 @@ const App: React.FC = () => {
             onCopyAudiosToProject={handleCopyAudiosToProject}
             onUpdateAudioMetadata={handleUpdateAudioMetadata}
             onOpenAudioEditor={handleOpenAudioTab}
+            audiosLastScanned={audiosLastScanned}
+            isRefreshingAudios={isRefreshingAudios}
+            onRefreshAudios={handleRefreshAudios}
             isFileSystemApiSupported={!!directoryHandle}
             onHoverHighlightStart={handleHoverHighlightStart}
             onHoverHighlightEnd={handleHoverHighlightEnd}

@@ -95,6 +95,7 @@ export interface ProjectImage {
   fileHandle: FileSystemFileHandle | null;
   isInProject: boolean; // True if it's inside game/images
   projectFilePath?: string; // The path within the project if copied, e.g., "game/images/img.png"
+  lastModified?: number;
 }
 
 export interface ImageMetadata {
@@ -110,6 +111,7 @@ export interface RenpyAudio {
   fileHandle: FileSystemFileHandle | null;
   isInProject: boolean; // True if it's inside game/audio
   projectFilePath?: string; // The path within the project if copied, e.g., "game/audio/sound.ogg"
+  lastModified?: number;
 }
 
 export interface AudioMetadata {
