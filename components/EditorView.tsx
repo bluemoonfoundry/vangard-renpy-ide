@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
-import type { Block, RenpyAnalysisResult } from '../types';
+import type { Block, RenpyAnalysisResult, ToastMessage } from '../types';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import GenerateContentModal from './GenerateContentModal';
 
@@ -18,6 +18,7 @@ interface EditorViewProps {
   enableAiFeatures: boolean;
   availableModels: string[];
   selectedModel: string;
+  addToast: (message: string, type: ToastMessage['type']) => void;
 }
 
 const EditorView: React.FC<EditorViewProps> = ({ 
@@ -33,10 +34,12 @@ const EditorView: React.FC<EditorViewProps> = ({
   apiKey,
   enableAiFeatures,
   availableModels,
-  selectedModel
+  selectedModel,
+  addToast,
 }) => {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
+  const aiFeaturesEnabledContextKey = useRef<monaco.editor.IContextKey<boolean> | null>(null);
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
 
   useEffect(() => {
@@ -63,6 +66,14 @@ const EditorView: React.FC<EditorViewProps> = ({
         }, 100); // A small delay ensures the editor is fully ready.
     }
   }, [initialScrollRequest]);
+
+  // This effect synchronizes the `enableAiFeatures` prop with the Monaco editor's context key.
+  // This ensures the context menu item is correctly shown or hidden when the setting changes.
+  useEffect(() => {
+    if (aiFeaturesEnabledContextKey.current) {
+      aiFeaturesEnabledContextKey.current.set(enableAiFeatures);
+    }
+  }, [enableAiFeatures]);
 
   const handleInsertContent = (content: string) => {
     if (!editorRef.current) return;
@@ -177,6 +188,32 @@ const EditorView: React.FC<EditorViewProps> = ({
     monacoRef.current = monaco;
     editor.focus();
 
+    // Create the context key and store it in the ref so we can update it later.
+    aiFeaturesEnabledContextKey.current = editor.createContextKey('aiFeaturesEnabled', enableAiFeatures);
+
+    // Add the "Generate AI Content" action to the context menu
+    editor.addAction({
+      id: 'generate-ai-content',
+      label: 'Generate AI Content...',
+      keybindings: [
+        monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyI,
+      ],
+      precondition: 'aiFeaturesEnabled',
+      contextMenuGroupId: '1_modification',
+      contextMenuOrder: 1.5,
+      run: () => {
+        // Double-check the feature flag as a failsafe, in addition to the precondition.
+        if (!enableAiFeatures) {
+          return;
+        }
+        if (apiKey) {
+          setIsGenerateModalOpen(true);
+        } else {
+          addToast('Please enter your Gemini API key in Settings to use AI features.', 'warning');
+        }
+      },
+    });
+
     const validateCode = () => {
         if (!monacoRef.current || !editorRef.current) return;
         const code = editorRef.current.getValue();
@@ -253,19 +290,6 @@ const EditorView: React.FC<EditorViewProps> = ({
 
   return (
     <div className="w-full h-full p-1 bg-white dark:bg-gray-800 relative">
-        {enableAiFeatures && (
-            <div className="absolute top-3 right-3 z-10">
-                <button
-                  onClick={() => setIsGenerateModalOpen(true)}
-                  disabled={!apiKey}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-3 rounded-md text-sm flex items-center space-x-2 shadow-lg disabled:bg-indigo-400 disabled:cursor-not-allowed"
-                  title={!apiKey ? "Please enter your Gemini API key in Settings to enable AI features" : "Generate content with AI"}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 00-1 1v1.5H3a1 1 0 000 2h1v1.5a1 1 0 002 0V6h1.5a1 1 0 000-2H6V2.5a1 1 0 00-1-1zm10 0a1 1 0 00-1 1v1.5h-1a1 1 0 100 2h1v1.5a1 1 0 102 0V6h1.5a1 1 0 100-2H16V2.5a1 1 0 00-1-1zM5 10a1 1 0 00-1 1v1.5H3a1 1 0 100 2h1v1.5a1 1 0 102 0V14h1.5a1 1 0 100-2H6v-1.5a1 1 0 00-1-1zm10 0a1 1 0 00-1 1v1.5h-1a1 1 0 100 2h1v1.5a1 1 0 102 0V14h1.5a1 1 0 100-2H16v-1.5a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
-                  <span>Generate</span>
-                </button>
-            </div>
-        )}
         <Editor
             key={block.id}
             height="100%"

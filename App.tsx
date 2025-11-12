@@ -2362,6 +2362,7 @@ const App: React.FC = () => {
                                     enableAiFeatures={enableAiFeatures}
                                     availableModels={availableModels}
                                     selectedModel={selectedModel}
+                                    addToast={addToast}
                                 />
                             ) : null;
                         })()}
