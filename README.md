@@ -5,16 +5,34 @@ The Ren'Py Visual Novel Accelerator is a powerful, web-based visual editor desig
 This tool is perfect for writers, designers, and programmers who want a more intuitive and organized way to manage complex branching narratives.
 
  <!-- It's a good idea to add a screenshot here! -->
+> [!CAUTION]
+> Full disclosure: Sections of this codebase have been developed with the help of Gemini Build, a generative AI code assisstant.
+
+> [!TIP]
+> The demo folder contains the a simple Ren'py example project. Click the "Open Folder" button and select the "demo" folder to load it into the app. 
+
 
 ## Key Features
 
 - **Visual Story Canvas**: Drag, resize, and arrange blocks representing your `.rpy` files.
 - **Automatic Flow Visualization**: Arrows are automatically drawn between blocks to show `jump` and `call` relationships.
+
+<img width="3818" height="2050" alt="Screenshot 2025-11-06 213207" src="https://github.com/user-attachments/assets/a7371ee5-a2b8-4ec3-bf70-5c872b6b3db1" />
+
 - **On-Demand Route Canvas**: Generate a detailed, label-by-label graph of your story's control flow to understand complex branching. This is an opt-in feature to maintain performance on large projects.
 - **Route Path Analysis & Highlighting**: The Route Canvas automatically identifies all unique paths from start to finish. A floating panel allows you to highlight specific routes with distinct colors.
+
+<img width="1857" height="536" alt="Screenshot 2025-11-06 213856" src="https://github.com/user-attachments/assets/3df313ce-210e-456f-a2e7-e3fb30f21229" />
+
 - **Integrated Code Editor**: A full-featured Monaco editor (the engine behind VS Code) is built-in for editing your script files directly within the app.
+
+<img width="3271" height="1411" alt="Screenshot 2025-11-06 213257" src="https://github.com/user-attachments/assets/9c14b534-b031-487f-8c3d-e3f505eb84bc" />
+ 
 - **Comprehensive Project Management**: A built-in file explorer allows you to create, rename, move, and delete files and folders in your project.
 - **Story Element Management**: A dedicated panel to view, create, and manage Characters, Variables, Images, Audio, and Screens.
+
+<img width="2552" height="1357" alt="Screenshot 2025-11-06 214627" src="https://github.com/user-attachments/assets/51826acc-ba89-4c90-9a09-229d6d21e19e" />
+ 
 - **Asset Pipeline**: Scan external directories for images and audio, and easily copy them into your project.
 - **File System Integration**: Works directly with your local project folders for a seamless development experience (recommended).
 - **Browser-Only Mode**: Start creating and prototyping without needing a local project folder, then download your work as a `.zip` file.
