@@ -249,4 +249,5 @@ export interface IdeSettings {
   activeTabId: string;
   apiKey?: string;
   enableAiFeatures?: boolean;
+  selectedModel?: string;
 }

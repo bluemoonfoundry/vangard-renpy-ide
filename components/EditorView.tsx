@@ -16,6 +16,8 @@ interface EditorViewProps {
   editorTheme: 'light' | 'dark';
   apiKey?: string;
   enableAiFeatures: boolean;
+  availableModels: string[];
+  selectedModel: string;
 }
 
 const EditorView: React.FC<EditorViewProps> = ({ 
@@ -29,7 +31,9 @@ const EditorView: React.FC<EditorViewProps> = ({
   saveTrigger, 
   editorTheme,
   apiKey,
-  enableAiFeatures
+  enableAiFeatures,
+  availableModels,
+  selectedModel
 }) => {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
@@ -298,6 +302,8 @@ const EditorView: React.FC<EditorViewProps> = ({
                     // Get content up to the beginning of the current line
                     return model.getValueInRange(new monaco.Range(1, 1, position.lineNumber, 1));
                 }}
+                availableModels={availableModels}
+                selectedModel={selectedModel}
             />
         )}
     </div>

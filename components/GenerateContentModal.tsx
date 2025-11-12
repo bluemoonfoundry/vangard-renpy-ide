@@ -11,6 +11,8 @@ interface GenerateContentModalProps {
   blocks: Block[];
   analysisResult: RenpyAnalysisResult;
   getCurrentContext: () => string;
+  availableModels: string[];
+  selectedModel: string;
 }
 
 const GenerateContentModal: React.FC<GenerateContentModalProps> = ({ 
@@ -21,7 +23,9 @@ const GenerateContentModal: React.FC<GenerateContentModalProps> = ({
   currentBlockId,
   blocks,
   analysisResult,
-  getCurrentContext
+  getCurrentContext,
+  availableModels,
+  selectedModel
 }) => {
   const [prompt, setPrompt] = useState('');
   const [response, setResponse] = useState('');
@@ -29,6 +33,7 @@ const GenerateContentModal: React.FC<GenerateContentModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [includeContext, setIncludeContext] = useState(true);
   const [renpyOnly, setRenpyOnly] = useState(true);
+  const [model, setModel] = useState(selectedModel);
 
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim() || isLoading) return;
@@ -101,7 +106,7 @@ const GenerateContentModal: React.FC<GenerateContentModalProps> = ({
 
       const ai = new GoogleGenAI({ apiKey });
       const genResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: model,
         contents: finalPrompt,
       });
 
@@ -123,7 +128,7 @@ const GenerateContentModal: React.FC<GenerateContentModalProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [prompt, isLoading, apiKey, includeContext, renpyOnly, getCurrentContext, analysisResult, blocks, currentBlockId]);
+  }, [prompt, isLoading, apiKey, includeContext, renpyOnly, getCurrentContext, analysisResult, blocks, currentBlockId, model]);
 
   const handleCopyAndInsert = () => {
     onInsertContent(response);
@@ -175,30 +180,47 @@ const GenerateContentModal: React.FC<GenerateContentModalProps> = ({
             />
           </div>
           <div className="flex items-center justify-between gap-4">
-            <label className="flex items-center space-x-2 cursor-pointer">
-                <input 
-                    type="checkbox" 
-                    checked={includeContext}
-                    onChange={() => setIncludeContext(!includeContext)}
-                    className="h-4 w-4 rounded focus:ring-indigo-500" 
-                    style={{ accentColor: 'rgb(79 70 229)' }}
-                />
-                <span className="text-sm text-gray-600 dark:text-gray-400 select-none">
-                    Include script context
-                </span>
-            </label>
-            <label className="flex items-center space-x-2 cursor-pointer">
-                <input 
-                    type="checkbox" 
-                    checked={renpyOnly}
-                    onChange={() => setRenpyOnly(!renpyOnly)}
-                    className="h-4 w-4 rounded focus:ring-indigo-500"
-                    style={{ accentColor: 'rgb(79 70 229)' }}
-                />
-                <span className="text-sm text-gray-600 dark:text-gray-400 select-none">
-                    Return Ren'Py code only
-                </span>
-            </label>
+            <div className="flex items-center gap-4">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                    <input 
+                        type="checkbox" 
+                        checked={includeContext}
+                        onChange={() => setIncludeContext(!includeContext)}
+                        className="h-4 w-4 rounded focus:ring-indigo-500" 
+                        style={{ accentColor: 'rgb(79 70 229)' }}
+                    />
+                    <span className="text-sm text-gray-600 dark:text-gray-400 select-none">
+                        Include script context
+                    </span>
+                </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                    <input 
+                        type="checkbox" 
+                        checked={renpyOnly}
+                        onChange={() => setRenpyOnly(!renpyOnly)}
+                        className="h-4 w-4 rounded focus:ring-indigo-500"
+                        style={{ accentColor: 'rgb(79 70 229)' }}
+                    />
+                    <span className="text-sm text-gray-600 dark:text-gray-400 select-none">
+                        Return Ren'Py code only
+                    </span>
+                </label>
+            </div>
+            <div className="flex items-center gap-2">
+                <label htmlFor="model-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 flex-shrink-0">
+                    Model
+                </label>
+                <select
+                    id="model-select"
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    className="p-1 rounded bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                >
+                    {availableModels.map(m => (
+                        <option key={m} value={m}>{m}</option>
+                    ))}
+                </select>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

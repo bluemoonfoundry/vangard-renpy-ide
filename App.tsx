@@ -353,6 +353,7 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<Theme>(initialSettings.current.theme || 'system');
   const [apiKey, setApiKey] = useState<string>(initialSettings.current.apiKey || '');
   const [enableAiFeatures, setEnableAiFeatures] = useState<boolean>(initialSettings.current.enableAiFeatures ?? true);
+  const [selectedModel, setSelectedModel] = useState<string>(initialSettings.current.selectedModel || 'gemini-2.5-flash');
   const [isClearConfirmVisible, setIsClearConfirmVisible] = useState(false);
   const [analysisTrigger, setAnalysisTrigger] = useState(0);
   const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(
@@ -397,6 +398,9 @@ const App: React.FC = () => {
   const [hoverHighlightIds, setHoverHighlightIds] = useState<Set<string> | null>(null);
   const settingsSaveTimeoutRef = useRef<number | null>(null);
 
+  // Since the Gemini SDK doesn't support dynamically listing models, we'll use a curated list.
+  const availableModels = useMemo(() => ['gemini-2.5-flash', 'gemini-2.5-pro'], []);
+
   useEffect(() => {
     setSettingsLoaded(true);
   }, []);
@@ -425,6 +429,7 @@ const App: React.FC = () => {
             activeTabId: currentActiveTabId,
             apiKey,
             enableAiFeatures,
+            selectedModel,
             // Asset Metadata
             imageScanDirectories: Array.from(imageScanDirectories.keys()),
             imageMetadata: Object.fromEntries(imageMetadata),
@@ -438,7 +443,7 @@ const App: React.FC = () => {
     }
   }, [
       directoryHandle, imageMetadata, imageScanDirectories, audioMetadata, audioScanDirectories,
-      theme, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth, openTabs, activeTabId, apiKey, enableAiFeatures
+      theme, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth, openTabs, activeTabId, apiKey, enableAiFeatures, selectedModel
   ]);
   
   // Debounced effect to save settings to localStorage or project file
@@ -469,6 +474,7 @@ const App: React.FC = () => {
             activeTabId: currentActiveTabId,
             apiKey,
             enableAiFeatures,
+            selectedModel,
         };
         try {
             localStorage.setItem(SAVE_KEY_IDE_SETTINGS, JSON.stringify(settings));
@@ -485,7 +491,7 @@ const App: React.FC = () => {
     };
   }, [
       theme, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen,
-      rightSidebarWidth, openTabs, activeTabId, apiKey, enableAiFeatures, imageMetadata, audioMetadata,
+      rightSidebarWidth, openTabs, activeTabId, apiKey, enableAiFeatures, selectedModel, imageMetadata, audioMetadata,
       imageScanDirectories, audioScanDirectories, settingsLoaded, directoryHandle,
       handleSaveIdeSettings
   ]);
@@ -1245,6 +1251,9 @@ const App: React.FC = () => {
     if (key === 'enableAiFeatures') {
       setEnableAiFeatures(value as boolean);
     }
+    if (key === 'selectedModel') {
+      setSelectedModel(value as string);
+    }
   };
   
   const tidyUpLayout = (blocksToLayout: Block[], links: Link[]): Block[] => {
@@ -1401,6 +1410,7 @@ const App: React.FC = () => {
           if (settings.theme) setTheme(settings.theme);
           if (settings.apiKey) setApiKey(settings.apiKey);
           if (typeof settings.enableAiFeatures === 'boolean') setEnableAiFeatures(settings.enableAiFeatures);
+          if (settings.selectedModel) setSelectedModel(settings.selectedModel);
           if (typeof settings.isLeftSidebarOpen === 'boolean') setIsLeftSidebarOpen(settings.isLeftSidebarOpen);
           if (typeof settings.leftSidebarWidth === 'number') setLeftSidebarWidth(settings.leftSidebarWidth);
           if (typeof settings.isRightSidebarOpen === 'boolean') setIsRightSidebarOpen(settings.isRightSidebarOpen);
@@ -1430,6 +1440,7 @@ const App: React.FC = () => {
           setTheme('system');
           setApiKey('');
           setEnableAiFeatures(true);
+          setSelectedModel('gemini-2.5-flash');
           setIsLeftSidebarOpen(true);
           setLeftSidebarWidth(256);
           setIsRightSidebarOpen(true);
@@ -2349,6 +2360,8 @@ const App: React.FC = () => {
                                     initialScrollRequest={tab.scrollRequest}
                                     apiKey={apiKey}
                                     enableAiFeatures={enableAiFeatures}
+                                    availableModels={availableModels}
+                                    selectedModel={selectedModel}
                                 />
                             ) : null;
                         })()}
@@ -2487,8 +2500,9 @@ const App: React.FC = () => {
           <SettingsModal
             isOpen={isSettingsModalVisible}
             onClose={() => setIsSettingsModalVisible(false)}
-            settings={{ theme, apiKey, enableAiFeatures }}
+            settings={{ theme, apiKey, enableAiFeatures, selectedModel }}
             onSettingsChange={handleSettingsChange}
+            availableModels={availableModels}
           />
       )}
       

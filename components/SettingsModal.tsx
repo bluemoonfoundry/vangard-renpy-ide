@@ -5,6 +5,7 @@ interface Settings {
   theme: Theme;
   apiKey?: string;
   enableAiFeatures: boolean;
+  selectedModel: string;
 }
 
 interface SettingsModalProps {
@@ -12,6 +13,7 @@ interface SettingsModalProps {
   onClose: () => void;
   settings: Settings;
   onSettingsChange: (key: keyof Settings, value: string | boolean) => void;
+  availableModels: string[];
 }
 
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
@@ -24,7 +26,7 @@ const THEME_OPTIONS: { value: Theme; label: string }[] = [
     { value: 'colorful-light', label: 'Colorful (Light)' },
 ];
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSettingsChange }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSettingsChange, availableModels }) => {
   if (!isOpen) {
     return null;
   }
@@ -75,21 +77,38 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                 </label>
 
                 {settings.enableAiFeatures && (
-                    <div>
-                        <label htmlFor="api-key-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Gemini API Key
-                        </label>
-                        <input
-                            id="api-key-input"
-                            type="password"
-                            value={settings.apiKey || ''}
-                            onChange={(e) => onSettingsChange('apiKey', e.target.value)}
-                            placeholder="Enter your API key"
-                            className="w-full mt-1 p-2 rounded bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500"
-                        />
-                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                            Your API key is stored locally in your browser or in `project.ide.json` and is never sent to any other servers.
-                        </p>
+                    <div className="space-y-4 pl-8">
+                        <div>
+                            <label htmlFor="api-key-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Gemini API Key
+                            </label>
+                            <input
+                                id="api-key-input"
+                                type="password"
+                                value={settings.apiKey || ''}
+                                onChange={(e) => onSettingsChange('apiKey', e.target.value)}
+                                placeholder="Enter your API key"
+                                className="w-full mt-1 p-2 rounded bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                Your API key is stored locally in your browser or in `project.ide.json` and is never sent to any other servers.
+                            </p>
+                        </div>
+                        <div>
+                            <label htmlFor="model-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Default Model
+                            </label>
+                            <select
+                                id="model-select"
+                                value={settings.selectedModel}
+                                onChange={(e) => onSettingsChange('selectedModel', e.target.value)}
+                                className="w-full mt-1 p-2 rounded bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500"
+                            >
+                                {availableModels.map(model => (
+                                    <option key={model} value={model}>{model}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
                 )}
             </div>
