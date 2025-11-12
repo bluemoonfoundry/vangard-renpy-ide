@@ -21,26 +21,31 @@ interface EditorViewProps {
   addToast: (message: string, type: ToastMessage['type']) => void;
 }
 
-const EditorView: React.FC<EditorViewProps> = ({ 
-  block, 
-  blocks,
-  analysisResult,
-  initialScrollRequest,
-  onSwitchFocusBlock,
-  onSave, 
-  onDirtyChange,
-  saveTrigger, 
-  editorTheme,
-  apiKey,
-  enableAiFeatures,
-  availableModels,
-  selectedModel,
-  addToast,
-}) => {
+const EditorView: React.FC<EditorViewProps> = (props) => {
+  const { 
+    block, 
+    blocks,
+    analysisResult,
+    initialScrollRequest,
+    onSwitchFocusBlock,
+    onSave, 
+    onDirtyChange,
+    saveTrigger, 
+    editorTheme,
+    apiKey,
+    enableAiFeatures,
+    availableModels,
+    selectedModel,
+    addToast,
+  } = props;
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
   const aiFeaturesEnabledContextKey = useRef<monaco.editor.IContextKey<boolean> | null>(null);
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+  const propsRef = useRef(props);
+  useEffect(() => {
+    propsRef.current = props;
+  }, [props]);
 
   useEffect(() => {
     if (saveTrigger > 0 && editorRef.current) {
@@ -202,14 +207,16 @@ const EditorView: React.FC<EditorViewProps> = ({
       contextMenuGroupId: '1_modification',
       contextMenuOrder: 1.5,
       run: () => {
-        // Double-check the feature flag as a failsafe, in addition to the precondition.
-        if (!enableAiFeatures) {
+        // Use the ref to get the latest props, avoiding the stale closure.
+        const { enableAiFeatures: currentEnableAi, apiKey: currentApiKey, addToast: currentAddToast } = propsRef.current;
+        
+        if (!currentEnableAi) {
           return;
         }
-        if (apiKey) {
+        if (currentApiKey) {
           setIsGenerateModalOpen(true);
         } else {
-          addToast('Please enter your Gemini API key in Settings to use AI features.', 'warning');
+          currentAddToast('Please enter your Gemini API key in Settings to use AI features.', 'warning');
         }
       },
     });
