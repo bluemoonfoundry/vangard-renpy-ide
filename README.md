@@ -21,6 +21,7 @@ This tool is perfect for writers, designers, and programmers who want a more int
 - **Expanded Theme Support**: Personalize your workspace with multiple themes, including Light, Dark, Solarized, and Colorful variants.
 - **UI State Persistence**: The editor remembers your theme, sidebar layout, and open tabs between sessions for a consistent workflow.
 - **Customizable Layout**: Sidebars are resizable, allowing you to tailor the interface to your needs.
+- **AI Assistant**: Optional AI content generator linked to Google Gemini. Turn on, prompt, copy, edit. 
 
 ---
 
@@ -164,3 +165,57 @@ This powerful panel analyzes your entire project to give you an overview of all 
 - **Snippets Tab**:
   - A handy library of common Ren'Py code patterns for dialogue, logic, visual effects, and more.
   - Find the snippet you need and click **Copy** to paste it into your code.
+
+
+ ### AI-Powered Content Generation ###
+
+Optionally integrate the power of Google's Gemini AI to act as your creative co-writer directly within the editor. This feature helps you overcome writer's block, generate dialogue, write descriptive narration, and even scaffold complex Ren'Py code snippets.
+
+## How to Use ##
+
+### Enable AI Features: ###
+
+- Click the Settings gear icon (⚙️) in the main toolbar.
+- Check the "Enable AI Features (Gemini)" box.
+- You will need a Google Gemini API key. You can get one for free from Google AI Studio.
+- Paste your API key into the provided input field in the Settings modal. Your key is stored securely on your local machine (project.ide.json or browser storage) and is never shared.
+- You can also select your preferred default model (gemini-2.5-flash for speed, gemini-2.5-pro for more complex requests).
+
+### Accessing the Generator: ###
+- While editing any .rpy file, right-click where you want to insert new content.
+- Select Generate AI Content... from the context menu.
+- Alternatively, use the keyboard shortcut Ctrl+Shift+I (Cmd+Shift+I on Mac).
+- A modal window will appear with several options to help you craft the perfect prompt:
+    * In "Your Prompt", describe what you want the AI to write. Be as descriptive as possible! For example:
+
+        "Write a tense dialogue where Eileen confronts Mark about a secret he's been hiding."
+
+    * Include script context (Checked by default): This is a powerful feature that automatically analyzes your story graph. It provides the AI with the content of all script blocks that lead to the one you're currently editing, giving it crucial context about the plot and characters.
+
+    * Return Ren'Py code only (Checked by default): This instructs the AI to return only valid, raw Ren'Py code. It prevents the AI from adding explanatory text or markdown formatting like ```renpy, so the result can be inserted directly into your script.
+
+    * Model Dropdown: Choose the specific Gemini model you want to use for this request, overriding your default setting if needed.
+
+### Generating and Inserting: ###
+- Click Generate. The AI's response will appear in the "Generated Response" box.
+- If you're not satisfied, you can modify your prompt and click Regenerate.
+- Once you have a response you like, click Copy & Insert. The generated text will be placed directly into your script at the cursor's location.
+
+### Example Use Cases: ###
+- Generate Dialogue:
+
+    "Write three lines of witty banter between a cheerful hero and a cynical mage."
+
+- Write Narration:
+    
+    "Describe a mysterious, ancient library in two sentences."
+
+- Create Choices:
+
+    "Generate a Ren'Py menu with three choices for what to do on a day off."
+
+- Scaffold Logic:
+    
+    "Create an if/else statement that checks if the 'player_score' variable is greater than 10."
+
+
