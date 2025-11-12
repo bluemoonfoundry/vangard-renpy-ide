@@ -1,6 +1,7 @@
 
 
 
+
 export interface Position {
   x: number;
   y: number;
@@ -246,4 +247,7 @@ export interface IdeSettings {
   rightSidebarWidth: number;
   openTabs: EditorTab[];
   activeTabId: string;
+  apiKey?: string;
+  enableAiFeatures?: boolean;
+  selectedModel?: string;
 }

@@ -9,7 +9,7 @@ interface GroupContainerProps {
   updateGroup: (id: string, newGroupData: Partial<BlockGroup>) => void;
 }
 
-const GroupContainer: React.FC<GroupContainerProps> = ({ group, isSelected, isDragging, isDimmed, updateGroup }) => {
+const GroupContainer: React.FC<GroupContainerProps> = React.memo(({ group, isSelected, isDragging, isDimmed, updateGroup }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -78,6 +78,6 @@ const GroupContainer: React.FC<GroupContainerProps> = ({ group, isSelected, isDr
       <div className="resize-handle absolute bottom-0 right-0 w-5 h-5 cursor-nwse-resize" style={{ zIndex: 3 }} />
     </div>
   );
-};
+});
 
 export default GroupContainer;

@@ -1,10 +1,12 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
-import type { Block, RenpyAnalysisResult } from '../types';
+import type { Block, RenpyAnalysisResult, ToastMessage } from '../types';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import GenerateContentModal from './GenerateContentModal';
 
 interface EditorViewProps {
   block: Block;
+  blocks: Block[];
   analysisResult: RenpyAnalysisResult;
   initialScrollRequest?: { line: number; key: number };
   onSwitchFocusBlock: (blockId: string, line: number) => void;
@@ -12,20 +14,38 @@ interface EditorViewProps {
   onDirtyChange: (blockId: string, isDirty: boolean) => void;
   saveTrigger: number;
   editorTheme: 'light' | 'dark';
+  apiKey?: string;
+  enableAiFeatures: boolean;
+  availableModels: string[];
+  selectedModel: string;
+  addToast: (message: string, type: ToastMessage['type']) => void;
 }
 
-const EditorView: React.FC<EditorViewProps> = ({ 
-  block, 
-  analysisResult,
-  initialScrollRequest,
-  onSwitchFocusBlock,
-  onSave, 
-  onDirtyChange,
-  saveTrigger, 
-  editorTheme 
-}) => {
+const EditorView: React.FC<EditorViewProps> = (props) => {
+  const { 
+    block, 
+    blocks,
+    analysisResult,
+    initialScrollRequest,
+    onSwitchFocusBlock,
+    onSave, 
+    onDirtyChange,
+    saveTrigger, 
+    editorTheme,
+    apiKey,
+    enableAiFeatures,
+    availableModels,
+    selectedModel,
+    addToast,
+  } = props;
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
+  const aiFeaturesEnabledContextKey = useRef<monaco.editor.IContextKey<boolean> | null>(null);
+  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+  const propsRef = useRef(props);
+  useEffect(() => {
+    propsRef.current = props;
+  }, [props]);
 
   useEffect(() => {
     if (saveTrigger > 0 && editorRef.current) {
@@ -51,6 +71,26 @@ const EditorView: React.FC<EditorViewProps> = ({
         }, 100); // A small delay ensures the editor is fully ready.
     }
   }, [initialScrollRequest]);
+
+  // This effect synchronizes the `enableAiFeatures` prop with the Monaco editor's context key.
+  // This ensures the context menu item is correctly shown or hidden when the setting changes.
+  useEffect(() => {
+    if (aiFeaturesEnabledContextKey.current) {
+      aiFeaturesEnabledContextKey.current.set(enableAiFeatures);
+    }
+  }, [enableAiFeatures]);
+
+  const handleInsertContent = (content: string) => {
+    if (!editorRef.current) return;
+    const editor = editorRef.current;
+    const selection = editor.getSelection();
+    if (selection) {
+      const id = { major: 1, minor: 1 };
+      const op = { identifier: id, range: selection, text: content, forceMoveMarkers: true };
+      editor.executeEdits('gemini-insert', [op]);
+      editor.focus();
+    }
+  };
 
   const handleEditorWillMount: BeforeMount = (monaco) => {
     // This setup only needs to run once per application load.
@@ -153,6 +193,34 @@ const EditorView: React.FC<EditorViewProps> = ({
     monacoRef.current = monaco;
     editor.focus();
 
+    // Create the context key and store it in the ref so we can update it later.
+    aiFeaturesEnabledContextKey.current = editor.createContextKey('aiFeaturesEnabled', enableAiFeatures);
+
+    // Add the "Generate AI Content" action to the context menu
+    editor.addAction({
+      id: 'generate-ai-content',
+      label: 'Generate AI Content...',
+      keybindings: [
+        monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyI,
+      ],
+      precondition: 'aiFeaturesEnabled',
+      contextMenuGroupId: '1_modification',
+      contextMenuOrder: 1.5,
+      run: () => {
+        // Use the ref to get the latest props, avoiding the stale closure.
+        const { enableAiFeatures: currentEnableAi, apiKey: currentApiKey, addToast: currentAddToast } = propsRef.current;
+        
+        if (!currentEnableAi) {
+          return;
+        }
+        if (currentApiKey) {
+          setIsGenerateModalOpen(true);
+        } else {
+          currentAddToast('Please enter your Gemini API key in Settings to use AI features.', 'warning');
+        }
+      },
+    });
+
     const validateCode = () => {
         if (!monacoRef.current || !editorRef.current) return;
         const code = editorRef.current.getValue();
@@ -228,7 +296,7 @@ const EditorView: React.FC<EditorViewProps> = ({
   };
 
   return (
-    <div className="w-full h-full p-1 bg-white dark:bg-gray-800">
+    <div className="w-full h-full p-1 bg-white dark:bg-gray-800 relative">
         <Editor
             key={block.id}
             height="100%"
@@ -246,6 +314,29 @@ const EditorView: React.FC<EditorViewProps> = ({
                 padding: { top: 10 },
             }}
         />
+        {isGenerateModalOpen && (
+            <GenerateContentModal
+                isOpen={isGenerateModalOpen}
+                onClose={() => setIsGenerateModalOpen(false)}
+                onInsertContent={handleInsertContent}
+                apiKey={apiKey}
+                currentBlockId={block.id}
+                blocks={blocks}
+                analysisResult={analysisResult}
+                getCurrentContext={() => {
+                    if (!editorRef.current) return '';
+                    const editor = editorRef.current;
+                    const position = editor.getPosition();
+                    if (!position) return '';
+                    const model = editor.getModel();
+                    if (!model) return '';
+                    // Get content up to the beginning of the current line
+                    return model.getValueInRange(new monaco.Range(1, 1, position.lineNumber, 1));
+                }}
+                availableModels={availableModels}
+                selectedModel={selectedModel}
+            />
+        )}
     </div>
   );
 };
