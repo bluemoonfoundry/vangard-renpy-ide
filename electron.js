@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
@@ -83,11 +83,75 @@ function createWindow() {
     icon: path.join(__dirname, 'vangard-renide-512x512.png')
   });
 
+  const menuTemplate = [
+    ...(process.platform === 'darwin' ? [{
+        label: app.getName(),
+        submenu: [
+          { role: 'about' },
+          { type: 'separator' },
+          { role: 'services' },
+          { type: 'separator' },
+          { role: 'hide' },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit' }
+        ]
+      }] : []),
+    {
+        label: 'File',
+        submenu: [
+            process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' }
+        ]
+    },
+    {
+        label: 'Edit',
+        submenu: [
+            { role: 'undo' },
+            { role: 'redo' },
+            { type: 'separator' },
+            { role: 'cut' },
+            { role: 'copy' },
+            { role: 'paste' },
+        ]
+    },
+    {
+        label: 'View',
+        submenu: [
+            { role: 'reload' },
+            { role: 'forceReload' },
+            { role: 'toggleDevTools' },
+            { type: 'separator' },
+            { 
+              label: 'Story Canvas',
+              click: () => mainWindow.webContents.send('menu-command', { command: 'open-static-tab', type: 'canvas' })
+            },
+            { 
+              label: 'Route Canvas',
+              click: () => mainWindow.webContents.send('menu-command', { command: 'open-static-tab', type: 'route-canvas' })
+            },
+            { type: 'separator' },
+            { role: 'resetZoom' },
+            { role: 'zoomIn' },
+            { role: 'zoomOut' },
+            { type: 'separator' },
+            { role: 'togglefullscreen' }
+        ]
+    },
+    {
+        role: 'window',
+        submenu: [
+            { role: 'minimize' },
+            { role: 'zoom' },
+        ]
+    },
+  ];
+
+  const menu = Menu.buildFromTemplate(menuTemplate);
+  Menu.setApplicationMenu(menu);
+
   // Load the index.html from the Vite build output directory.
   mainWindow.loadFile(path.join(__dirname, 'dist/index.html'));
-
-  // Optional: remove the default menu bar.
-  // mainWindow.setMenu(null);
 }
 
 // This method will be called when Electron has finished

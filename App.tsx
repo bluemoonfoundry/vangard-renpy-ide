@@ -76,6 +76,7 @@ declare global {
       writeFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
       removeEntry: (entryPath: string) => Promise<{ success: boolean; error?: string }>;
       moveFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
+      onMenuCommand: (callback: (args: { command: string, [key: string]: any }) => void) => () => void;
     };
   }
 }
@@ -852,7 +853,7 @@ const App: React.FC = () => {
 
       if (activeTabId === tabIdToClose) {
           const nextTab = openTabs[tabIndex - 1] || openTabs.find(t => t.id !== tabIdToClose);
-          setActiveTabId(nextTab ? nextTab.id : 'canvas');
+          setActiveTabId(nextTab ? nextTab.id : (openTabs.length > 1 ? openTabs[0].id : ''));
       }
 
       // Clear Route Canvas state if its tab is closed, to free up memory
@@ -871,6 +872,17 @@ const App: React.FC = () => {
         });
       }
   };
+
+  const handleOpenStaticTab = useCallback((type: 'canvas' | 'route-canvas') => {
+    const existingTab = openTabs.find(t => t.type === type);
+    if (existingTab) {
+        setActiveTabId(existingTab.id);
+    } else {
+        const newTab: EditorTab = { id: type, type: type };
+        setOpenTabs(tabs => [...tabs, newTab]);
+        setActiveTabId(newTab.id);
+    }
+  }, [openTabs]);
   
   const handleSaveBlockContent = useCallback((blockId: string, content: string) => {
     if (liveBlocks.find(b => b.id === blockId)?.content === content) {
@@ -1615,7 +1627,7 @@ const App: React.FC = () => {
     }
   };
 
-  const tidyUpLabelLayout = (nodes: LabelNode[], links: RouteLink[]): LabelNode[] => {
+  const tidyUpLabelLayout = useCallback((nodes: LabelNode[], links: RouteLink[]): LabelNode[] => {
       if (nodes.length === 0) return [];
       const nodeMap = new Map(nodes.map(n => [n.id, n]));
       const adj = new Map<string, string[]>();
@@ -1679,7 +1691,7 @@ const App: React.FC = () => {
           currentX += maxLayerWidth + PADDING_X;
       }
       return newNodes;
-  };
+  }, []);
 
   const handleOpenFolder = async () => {
     setLoadingState({ visible: true, progress: 0, message: 'Opening project folder...' });
@@ -2061,7 +2073,7 @@ const App: React.FC = () => {
     );
   };
 
-  const handleAnalyzeRoutes = async () => {
+  const handleAnalyzeRoutes = useCallback(async () => {
     setLoadingState({ visible: true, progress: 0, message: 'Analyzing routes...' });
     await new Promise(res => setTimeout(res, 50));
 
@@ -2086,7 +2098,7 @@ const App: React.FC = () => {
     setActiveTabId('route-canvas');
     
     setLoadingState({ visible: false, progress: 0, message: '' });
-  };
+  }, [liveBlocks, analysisResult.labels, analysisResult.jumps, openTabs, tidyUpLabelLayout]);
   
   const handleRefreshAnalysis = () => setAnalysisTrigger(c => c + 1);
 
@@ -2479,6 +2491,55 @@ const App: React.FC = () => {
     }
   }, [directoryHandle, audioScanDirectories, addToast]);
   
+  const appStateAndHandlersRef = useRef({
+    openTabs,
+    setActiveTabId,
+    handleAnalyzeRoutes,
+    handleOpenStaticTab,
+  });
+
+  useEffect(() => {
+    appStateAndHandlersRef.current = {
+      openTabs,
+      setActiveTabId,
+      handleAnalyzeRoutes,
+      handleOpenStaticTab,
+    };
+  });
+
+  useEffect(() => {
+    // This effect runs only once on mount to set up the Electron menu listener.
+    // It uses a ref to access the latest state and handlers to avoid stale closures.
+    if (window.electronAPI?.onMenuCommand) {
+        const cleanup = window.electronAPI.onMenuCommand((args) => {
+            if (args.command === 'open-static-tab' && args.type) {
+                const {
+                    openTabs: currentTabs,
+                    setActiveTabId: currentSetAId,
+                    handleAnalyzeRoutes: currentAnalyzeRoutes,
+                    handleOpenStaticTab: currentOpenStaticTab
+                } = appStateAndHandlersRef.current;
+                
+                const type = args.type as 'canvas' | 'route-canvas';
+                
+                if (type === 'route-canvas') {
+                    const existingTab = currentTabs.find(t => t.type === 'route-canvas');
+                    if (existingTab) {
+                        currentSetAId(existingTab.id);
+                    } else {
+                        currentAnalyzeRoutes();
+                    }
+                } else {
+                    currentOpenStaticTab(type);
+                }
+            }
+        });
+
+        // The cleanup function returned from preload.js is called on component unmount.
+        return cleanup;
+    }
+  }, []); // Empty dependency array is crucial for running this effect only once.
+  
   return (
     <div className={`h-screen w-screen bg-gray-100 dark:bg-gray-900 flex flex-col font-sans text-gray-900 dark:text-gray-100`}>
       {isWelcomeScreenVisible && (
@@ -2516,6 +2577,7 @@ const App: React.FC = () => {
         setIsLeftSidebarOpen={setIsLeftSidebarOpen}
         isRightSidebarOpen={isRightSidebarOpen}
         setIsRightSidebarOpen={setIsRightSidebarOpen}
+        onOpenStaticTab={handleOpenStaticTab}
       />
       <div className="flex-grow flex min-h-0 relative">
         <aside 
@@ -2664,6 +2726,14 @@ const App: React.FC = () => {
                         )}
                     </div>
                 ))}
+                 {openTabs.length === 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center text-center text-gray-500 dark:text-gray-400">
+                        <div>
+                            <h3 className="text-lg font-semibold">All tabs are closed.</h3>
+                            <p>Use the "View" menu in the toolbar to reopen the Story Canvas or other views.</p>
+                        </div>
+                    </div>
+                 )}
             </div>
         </main>
 

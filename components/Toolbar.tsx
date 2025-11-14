@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import type { Theme } from '../types';
 import logo from '../vangard-renide-512x512.png';
 
@@ -27,6 +27,7 @@ interface ToolbarProps {
   setIsLeftSidebarOpen: (open: boolean) => void;
   isRightSidebarOpen: boolean;
   setIsRightSidebarOpen: (open: boolean) => void;
+  onOpenStaticTab: (type: 'canvas' | 'route-canvas') => void;
 }
 
 const ToolbarButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { children: React.ReactNode; }> = ({ children, ...props }) => {
@@ -68,6 +69,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   setIsLeftSidebarOpen,
   isRightSidebarOpen,
   setIsRightSidebarOpen,
+  onOpenStaticTab,
 }) => {
 
   const totalUnsavedCount = useMemo(() => {
@@ -151,7 +153,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
         >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H9.5a1 1 0 0 0-1 1v4.5h2a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5-.5H7a.5.5 0 0 1-.5-.5v-2a.5.5 0 0 1 .5-.5h2V2H2z"/>
-                <path d="M4.5 12a.5.5 0 0 1-.5-.5v-2a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5h-3z"/>
+                <path d="M4.5 12a.5.5 0 0 1-.5-.5v-2a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5-.5h-3z"/>
             </svg>
         </ToolbarButton>
 
