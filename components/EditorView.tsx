@@ -12,13 +12,14 @@ interface EditorViewProps {
   onSwitchFocusBlock: (blockId: string, line: number) => void;
   onSave: (blockId: string, newContent: string) => void;
   onDirtyChange: (blockId: string, isDirty: boolean) => void;
-  saveTrigger: number;
   editorTheme: 'light' | 'dark';
   apiKey?: string;
   enableAiFeatures: boolean;
   availableModels: string[];
   selectedModel: string;
   addToast: (message: string, type: ToastMessage['type']) => void;
+  onEditorMount: (blockId: string, editor: monaco.editor.IStandaloneCodeEditor) => void;
+  onEditorUnmount: (blockId: string) => void;
 }
 
 const EditorView: React.FC<EditorViewProps> = (props) => {
@@ -30,13 +31,14 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     onSwitchFocusBlock,
     onSave, 
     onDirtyChange,
-    saveTrigger, 
     editorTheme,
     apiKey,
     enableAiFeatures,
     availableModels,
     selectedModel,
     addToast,
+    onEditorMount,
+    onEditorUnmount,
   } = props;
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
@@ -48,17 +50,12 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   }, [props]);
 
   useEffect(() => {
-    if (saveTrigger > 0 && editorRef.current) {
-        onSave(block.id, editorRef.current.getValue());
-    }
-  }, [saveTrigger, onSave, block.id]);
-
-  useEffect(() => {
-    // When the component unmounts, ensure dirty state is cleared
+    // When the component unmounts, ensure dirty state is cleared and editor instance is unregistered
     return () => {
         onDirtyChange(block.id, false);
+        onEditorUnmount(block.id);
     };
-  }, [block.id, onDirtyChange]);
+  }, [block.id, onDirtyChange, onEditorUnmount]);
   
   useEffect(() => {
     // This effect handles scrolling the editor to a specific line when requested.
@@ -191,6 +188,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+    onEditorMount(block.id, editor);
     editor.focus();
 
     // Create the context key and store it in the ref so we can update it later.

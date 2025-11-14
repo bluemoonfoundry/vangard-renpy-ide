@@ -1,9 +1,11 @@
 
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import type { FileSystemTreeNode } from '../types';
 import FileExplorerContextMenu from './FileExplorerContextMenu';
-import type { ClipboardState } from '../App';
+// FIX: Corrected import path for ClipboardState
+import type { ClipboardState } from '../types';
 
 const FolderIcon: React.FC<{ isOpen: boolean }> = ({ isOpen }) => (
   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">

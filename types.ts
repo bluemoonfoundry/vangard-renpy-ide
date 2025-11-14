@@ -253,3 +253,5 @@ export interface IdeSettings {
   enableAiFeatures?: boolean;
   selectedModel?: string;
 }
+
+export type ClipboardState = { type: 'copy' | 'cut'; paths: Set<string> } | null;

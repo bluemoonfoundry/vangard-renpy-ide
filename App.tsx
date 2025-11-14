@@ -14,16 +14,25 @@ import LoadingOverlay from './components/LoadingOverlay';
 import SettingsModal from './components/SettingsModal';
 import { useRenpyAnalysis, performRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
-import type { Block, Position, BlockGroup, Link, Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, EditorTab, RenpyScreen, FileSystemTreeNode, ToastMessage, LabelNode, RouteLink, IdentifiedRoute, Theme, IdeSettings } from './types';
+import type { Block, Position, BlockGroup, Link, Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, EditorTab, RenpyScreen, FileSystemTreeNode, ToastMessage, LabelNode, RouteLink, IdentifiedRoute, Theme, IdeSettings, ClipboardState } from './types';
 import JSZip from 'jszip';
 import { produce } from 'immer';
+import logo from './vangard-renide-512x512.png';
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
 // Add all necessary FS API types to the global scope to fix compilation issues
 // and make them available throughout the app, including in the types.ts file.
 declare global {
+  // FIX: Add definition for FileSystemHandlePermissionDescriptor to resolve compilation errors.
+  interface FileSystemHandlePermissionDescriptor {
+    mode?: 'read' | 'readwrite';
+  }
+
   interface FileSystemHandle {
     readonly kind: 'file' | 'directory';
     readonly name: string;
+    queryPermission(descriptor?: FileSystemHandlePermissionDescriptor): Promise<PermissionState>;
+    requestPermission(descriptor?: FileSystemHandlePermissionDescriptor): Promise<PermissionState>;
   }
 
   interface FileSystemWritableFileStream extends WritableStream {
@@ -53,6 +62,21 @@ declare global {
     aistudio?: AIStudio;
     // Add the standard File System Access API method to the window type
     showDirectoryPicker?(): Promise<FileSystemDirectoryHandle>;
+    // Add the Electron API exposed via preload.js
+    electronAPI?: {
+      openDirectory: () => Promise<string | null>;
+      loadProject: (rootPath: string) => Promise<{
+        rootPath: string;
+        files: { path: string; content: string }[];
+        images: { path: string; dataUrl: string; lastModified: number }[];
+        audios: { path: string; dataUrl: string; lastModified: number }[];
+        settings: Partial<IdeSettings & { imageMetadata?: any, audioMetadata?: any }> | null;
+        tree: FileSystemTreeNode;
+      }>;
+      writeFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
+      removeEntry: (entryPath: string) => Promise<{ success: boolean; error?: string }>;
+      moveFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
+    };
   }
 }
 
@@ -69,7 +93,6 @@ function uuidv4() {
 
 type SaveStatus = 'saving' | 'saved' | 'error';
 type AppState = { blocks: Block[], groups: BlockGroup[] };
-export type ClipboardState = { type: 'copy' | 'cut'; paths: Set<string> } | null;
 
 
 const WelcomeScreen: React.FC<{
@@ -80,7 +103,7 @@ const WelcomeScreen: React.FC<{
 }> = ({ onOpenFolder, onStartInBrowser, onUpload, isFileSystemApiSupported }) => {
   return (
     <div className="fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 max-w-2xl w-full text-center border border-gray-200 dark:border-gray-700 transform transition-all animate-fade-in-up">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full border border-gray-200 dark:border-gray-700 transform transition-all animate-fade-in-up flex overflow-hidden">
         <style>{`
           @keyframes fade-in-up {
             from { opacity: 0; transform: translateY(20px); }
@@ -90,49 +113,54 @@ const WelcomeScreen: React.FC<{
             animation: fade-in-up 0.5s ease-out forwards;
           }
         `}</style>
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Welcome!</h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-8">
-          Visually create and connect your Ren'Py story blocks. Get started by opening your project folder.
-        </p>
-        <div className="space-y-4">
-          <button
-            onClick={onOpenFolder}
-            disabled={!isFileSystemApiSupported}
-            title={isFileSystemApiSupported ? "Open a local Ren'Py project folder" : "Your browser does not support the File System Access API."}
-            className="w-full text-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-lg transition duration-200 flex items-center justify-center space-x-3"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
-            <span>Open Project Folder</span>
-          </button>
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={onUpload}
-              className="w-full bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center space-x-2"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M4 16h12v2H4v-2zm4-12v8H4l6-6 6 6h-4V4H8z"/></svg>
-              <span>Upload .zip Project</span>
-            </button>
-            <button
-              onClick={onStartInBrowser}
-              className="w-full bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center space-x-2"
-            >
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" /></svg>
-               <span>Continue in Browser</span>
-            </button>
-          </div>
+        <img src={logo} alt="Logo" className="object-contain bg-gray-50 dark:bg-gray-900/50 p-8" style={{ aspectRatio: '1/1' }} />
+        <div className="flex-grow p-12 text-center flex flex-col justify-center">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Welcome!</h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-8">
+              Visually create and connect your Ren'Py story blocks. Get started by opening your project folder.
+            </p>
+            <div className="space-y-4">
+              <button
+                onClick={onOpenFolder}
+                disabled={!isFileSystemApiSupported}
+                title={isFileSystemApiSupported ? "Open a local Ren'Py project folder" : "Your browser does not support the File System Access API."}
+                className="w-full text-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-lg transition duration-200 flex items-center justify-center space-x-3"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
+                <span>Open Project Folder</span>
+              </button>
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={onUpload}
+                  className="w-full bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center space-x-2"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M4 16h12v2H4v-2zm4-12v8H4l6-6 6 6h-4V4H8z"/></svg>
+                  <span>Upload .zip Project</span>
+                </button>
+                <button
+                  onClick={onStartInBrowser}
+                  className="w-full bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center space-x-2"
+                >
+                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" /></svg>
+                   <span>Continue in Browser</span>
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-6">
+              Using <strong>Open Project Folder</strong> is recommended for the best experience, allowing you to save directly to your files.
+            </p>
         </div>
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-6">
-          Using <strong>Open Project Folder</strong> is recommended for the best experience, allowing you to save directly to your files.
-        </p>
       </div>
     </div>
   );
 };
 
+// Add a more robust check to see if the app is running in an Electron environment.
+const isElectron = !!window.electronAPI;
 
 // Wrap the file system API check in a try-catch block to prevent runtime errors
 // in environments where accessing the APIs might be restricted.
-const isFileSystemApiSupported = (() => {
+const isFileSystemApiSupported = isElectron || (() => {
   try {
     // Check for the standard browser API or the AI Studio specific one.
     return !!(window.showDirectoryPicker || (window.aistudio && window.aistudio.showDirectoryPicker));
@@ -142,8 +170,13 @@ const isFileSystemApiSupported = (() => {
   }
 })();
 
+
 const loadInitialState = (): AppState => {
   try {
+    // In Electron, we always start fresh to prompt for a folder.
+    // Don't load potentially stale data from a previous browser-only session.
+    if (isElectron) return { blocks: [], groups: [] };
+
     const savedBlocks = localStorage.getItem(SAVE_KEY_BLOCKS);
     const savedGroups = localStorage.getItem(SAVE_KEY_GROUPS);
     return {
@@ -323,6 +356,9 @@ const removeNodeFromFileTree = (tree: FileSystemTreeNode | null, path: string): 
 
 
 const App: React.FC = () => {
+  // Use useState's lazy initializer to load from storage only once on initial render.
+  const [initialAppState] = useState(loadInitialState);
+
   const { 
     state: historyState, 
     setState: setHistory, 
@@ -330,7 +366,7 @@ const App: React.FC = () => {
     redo, 
     canUndo, 
     canRedo 
-  } = useHistory<AppState>(loadInitialState());
+  } = useHistory<AppState>(initialAppState);
 
   const [liveBlocks, setLiveBlocks] = useState<Block[]>(historyState.blocks);
   const [liveGroups, setLiveGroups] = useState<BlockGroup[]>(historyState.groups);
@@ -367,6 +403,7 @@ const App: React.FC = () => {
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(initialSettings.current.leftSidebarWidth || 256);
   const [findUsagesHighlightIds, setFindUsagesHighlightIds] = useState<Set<string> | null>(null);
   const [directoryHandle, setDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  const [projectRootPath, setProjectRootPath] = useState<string | null>(null);
   const [imageScanDirectories, setImageScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
   const [audioScanDirectories, setAudioScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
   const [dirtyBlockIds, setDirtyBlockIds] = useState<Set<string>>(new Set());
@@ -380,9 +417,11 @@ const App: React.FC = () => {
   const [openTabs, setOpenTabs] = useState<EditorTab[]>(initialSettings.current.openTabs || [{ id: 'canvas', type: 'canvas' }]);
   const [activeTabId, setActiveTabId] = useState<string>(initialSettings.current.activeTabId || 'canvas');
   const [dirtyEditors, setDirtyEditors] = useState<Set<string>>(new Set());
-  const [saveTrigger, setSaveTrigger] = useState(0);
   const [canvasFilters, setCanvasFilters] = useState({ story: true, screens: true, config: false });
-  const [isWelcomeScreenVisible, setIsWelcomeScreenVisible] = useState(false);
+  // Initialize welcome screen visibility synchronously based on the initial state.
+  const [isWelcomeScreenVisible, setIsWelcomeScreenVisible] = useState(
+    () => initialAppState.blocks.length === 0 && initialAppState.groups.length === 0
+  );
   const [fileTree, setFileTree] = useState<FileSystemTreeNode | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ visible: boolean, blockIds?: string[], filePaths?: string[], message?: string, warning?: string }>({ visible: false });
   const [clipboard, setClipboard] = useState<ClipboardState>(null);
@@ -401,6 +440,9 @@ const App: React.FC = () => {
   const [isRefreshingImages, setIsRefreshingImages] = useState(false);
   const [audiosLastScanned, setAudiosLastScanned] = useState<number | null>(null);
   const [isRefreshingAudios, setIsRefreshingAudios] = useState(false);
+  const editorInstances = useRef(new Map<string, monaco.editor.IStandaloneCodeEditor>());
+  const postSaveCallback = useRef<((blockId: string) => void) | null>(null);
+
 
   // Since the Gemini SDK doesn't support dynamically listing models, we'll use a curated list.
   const availableModels = useMemo(() => ['gemini-2.5-flash', 'gemini-2.5-pro'], []);
@@ -410,12 +452,9 @@ const App: React.FC = () => {
   }, []);
 
   const handleSaveIdeSettings = useCallback(async () => {
-    if (!directoryHandle) return;
+    if (!projectRootPath && !directoryHandle) return;
+
     try {
-        const gameDir = await directoryHandle.getDirectoryHandle('game', { create: true });
-        const fileHandle = await gameDir.getFileHandle(IDE_SETTINGS_FILE, { create: true });
-        const writable = await fileHandle.createWritable();
-        
         const tabsToSave = openTabs.filter(t => t.type !== 'route-canvas');
         if (tabsToSave.length === 0) {
             tabsToSave.push({ id: 'canvas', type: 'canvas' });
@@ -423,30 +462,31 @@ const App: React.FC = () => {
         const currentActiveTabId = tabsToSave.some(t => t.id === activeTabId) ? activeTabId : 'canvas';
 
         const settings = {
-            // UI Settings
-            theme,
-            isLeftSidebarOpen,
-            leftSidebarWidth,
-            isRightSidebarOpen,
-            rightSidebarWidth,
-            openTabs: tabsToSave,
-            activeTabId: currentActiveTabId,
-            apiKey,
-            enableAiFeatures,
-            selectedModel,
-            // Asset Metadata
+            theme, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth,
+            openTabs: tabsToSave, activeTabId: currentActiveTabId,
+            apiKey, enableAiFeatures, selectedModel,
             imageScanDirectories: Array.from(imageScanDirectories.keys()),
             imageMetadata: Object.fromEntries(imageMetadata),
             audioScanDirectories: Array.from(audioScanDirectories.keys()),
             audioMetadata: Object.fromEntries(audioMetadata),
         };
-        await writable.write(JSON.stringify(settings, null, 2));
-        await writable.close();
+        const settingsJson = JSON.stringify(settings, null, 2);
+
+        if (isElectron && projectRootPath) {
+            const filePath = `${projectRootPath}/game/${IDE_SETTINGS_FILE}`;
+            await window.electronAPI!.writeFile(filePath, settingsJson);
+        } else if (directoryHandle) {
+            const gameDir = await directoryHandle.getDirectoryHandle('game', { create: true });
+            const fileHandle = await gameDir.getFileHandle(IDE_SETTINGS_FILE, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(settingsJson);
+            await writable.close();
+        }
     } catch (e) {
         console.error("Failed to save IDE settings:", e);
     }
   }, [
-      directoryHandle, imageMetadata, imageScanDirectories, audioMetadata, audioScanDirectories,
+      isElectron, projectRootPath, directoryHandle, imageMetadata, imageScanDirectories, audioMetadata, audioScanDirectories,
       theme, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth, openTabs, activeTabId, apiKey, enableAiFeatures, selectedModel
   ]);
   
@@ -459,7 +499,7 @@ const App: React.FC = () => {
     }
 
     settingsSaveTimeoutRef.current = window.setTimeout(() => {
-      if (directoryHandle) {
+      if (directoryHandle || projectRootPath) {
         handleSaveIdeSettings();
       } else {
         const tabsToSave = openTabs.filter(t => t.type !== 'route-canvas');
@@ -469,16 +509,9 @@ const App: React.FC = () => {
         const currentActiveTabId = tabsToSave.some(t => t.id === activeTabId) ? activeTabId : 'canvas';
 
         const settings: IdeSettings = {
-            theme,
-            isLeftSidebarOpen,
-            leftSidebarWidth,
-            isRightSidebarOpen,
-            rightSidebarWidth,
-            openTabs: tabsToSave,
-            activeTabId: currentActiveTabId,
-            apiKey,
-            enableAiFeatures,
-            selectedModel,
+            theme, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth,
+            openTabs: tabsToSave, activeTabId: currentActiveTabId,
+            apiKey, enableAiFeatures, selectedModel,
         };
         try {
             localStorage.setItem(SAVE_KEY_IDE_SETTINGS, JSON.stringify(settings));
@@ -494,9 +527,9 @@ const App: React.FC = () => {
         }
     };
   }, [
-      theme, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen,
-      rightSidebarWidth, openTabs, activeTabId, apiKey, enableAiFeatures, selectedModel, imageMetadata, audioMetadata,
-      imageScanDirectories, audioScanDirectories, settingsLoaded, directoryHandle,
+      theme, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth,
+      openTabs, activeTabId, apiKey, enableAiFeatures, selectedModel, imageMetadata, audioMetadata,
+      imageScanDirectories, audioScanDirectories, settingsLoaded, directoryHandle, projectRootPath,
       handleSaveIdeSettings
   ]);
 
@@ -543,6 +576,10 @@ const App: React.FC = () => {
         return null;
     }
     try {
+        if (isElectron) {
+            addToast("This feature is not supported in the desktop app yet.", 'info');
+            return null;
+        }
         if (window.aistudio?.showDirectoryPicker) {
             return await window.aistudio.showDirectoryPicker();
         } else if (window.showDirectoryPicker) {
@@ -561,13 +598,6 @@ const App: React.FC = () => {
         return null;
     }
   }, [addToast]);
-
-  useEffect(() => {
-    // If there's nothing in storage and no folder is open, show welcome.
-    if (!directoryHandle && historyState.blocks.length === 0 && historyState.groups.length === 0) {
-      setIsWelcomeScreenVisible(true);
-    }
-  }, []); // Empty dependency array means this runs only once on mount.
 
   const analysisResult = useRenpyAnalysis(liveBlocks, analysisTrigger);
 
@@ -591,7 +621,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    if (!directoryHandle) { // Only auto-save to localStorage if not using File System API
+    if (!directoryHandle && !projectRootPath) { // Only auto-save to localStorage if not using File System API
       setSaveStatus('saving');
       saveTimeoutRef.current = window.setTimeout(() => {
         try {
@@ -603,7 +633,7 @@ const App: React.FC = () => {
       }, 1000);
     }
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
-  }, [historyState, directoryHandle]);
+  }, [historyState, directoryHandle, projectRootPath]);
 
 
   useEffect(() => {
@@ -671,9 +701,9 @@ const App: React.FC = () => {
         blockIds: Array.from(allBlockIds),
         filePaths: Array.from(allFilePaths),
         message: `Delete ${numBlocks > 0 ? numBlocks + ' block(s)' : ''} and ${allFilePaths.size > 0 ? allFilePaths.size + ' file(s)/folder(s)' : ''}: ${filesInvolved}?`,
-        warning: directoryHandle ? "This will permanently delete items from your project folder." : "This action cannot be undone."
+        warning: (directoryHandle || projectRootPath) ? "This will permanently delete items from your project folder." : "This action cannot be undone."
     });
-  }, [liveBlocks, directoryHandle]);
+  }, [liveBlocks, directoryHandle, projectRootPath]);
 
   const handleConfirmDelete = async () => {
     if (!deleteConfirm.visible) return;
@@ -682,27 +712,37 @@ const App: React.FC = () => {
     const blockIdsToDelete = new Set(blockIds || []);
     const filePathsToDelete = new Set<string>(filePaths || []);
 
-    // If filePaths are given, find corresponding block IDs
     filePathsToDelete.forEach(path => {
         const block = liveBlocks.find(b => b.filePath === path);
         if (block) blockIdsToDelete.add(block.id);
     });
-    // If blockIds are given, find corresponding file paths
     blockIdsToDelete.forEach(id => {
         const block = liveBlocks.find(b => b.id === id);
         if (block?.filePath) filePathsToDelete.add(block.filePath);
     });
 
-    // 1. Delete files from disk if applicable
-    if (directoryHandle && filePathsToDelete.size > 0) {
+    if (isElectron && projectRootPath && filePathsToDelete.size > 0) {
+        for (const path of filePathsToDelete) {
+            const fullPath = `${projectRootPath}/${path}`;
+            try {
+                const result = await window.electronAPI!.removeEntry(fullPath);
+                if (!result.success) {
+                    console.error(`Failed to delete ${path}:`, result.error);
+                    addToast(`Could not delete ${path}`, 'error');
+                }
+            } catch (err) {
+                 console.error(`Failed to delete file ${path} from disk:`, err);
+                 addToast(`Error deleting ${path}`, 'error');
+            }
+        }
+    } else if (directoryHandle && filePathsToDelete.size > 0) {
         for (const path of filePathsToDelete) {
             try {
                 const pathParts = path.split('/');
                 const fileName = pathParts.pop()!;
                 if (!fileName) continue;
                 let currentDir = directoryHandle;
-                 // Traverse to parent directory
-                for (let i = 0; i < pathParts.length; i++) {
+                for (let i = 0; i < pathParts.length - 1; i++) {
                     currentDir = await currentDir.getDirectoryHandle(pathParts[i]);
                 }
                 await currentDir.removeEntry(fileName, { recursive: true });
@@ -720,7 +760,6 @@ const App: React.FC = () => {
     
     commitChange({ blocks: newBlocks, groups: newGroups });
 
-    // Update file tree by removing deleted paths
     if (fileTree && filePathsToDelete.size > 0) {
         let currentTree = fileTree;
         for (const path of filePathsToDelete) {
@@ -833,14 +872,18 @@ const App: React.FC = () => {
       }
   };
   
-  const handleSaveActiveEditor = useCallback(() => {
-    if (activeTab?.type === 'editor') {
-      setSaveTrigger(t => t + 1);
-    }
-  }, [activeTab]);
-
   const handleSaveBlockContent = useCallback((blockId: string, content: string) => {
-    if (liveBlocks.find(b => b.id === blockId)?.content === content) return;
+    if (liveBlocks.find(b => b.id === blockId)?.content === content) {
+        if (postSaveCallback.current) {
+            setTimeout(() => {
+                if (postSaveCallback.current) {
+                    postSaveCallback.current(blockId);
+                    postSaveCallback.current = null;
+                }
+            }, 0);
+        }
+        return;
+    }
 
     const newBlocks = liveBlocks.map(block => block.id === blockId ? { ...block, content } : block );
     commitChange({ blocks: newBlocks }, [blockId]);
@@ -849,7 +892,25 @@ const App: React.FC = () => {
       newDirty.delete(blockId);
       return newDirty;
     });
+
+    if (postSaveCallback.current) {
+        setTimeout(() => {
+            if (postSaveCallback.current) {
+                postSaveCallback.current(blockId);
+                postSaveCallback.current = null;
+            }
+        }, 0);
+    }
   }, [liveBlocks, commitChange]);
+
+  const handleSaveActiveEditor = useCallback(() => {
+    if (activeTab?.type === 'editor' && activeTab.blockId) {
+      const editorInstance = editorInstances.current.get(activeTab.blockId);
+      if (editorInstance) {
+        handleSaveBlockContent(activeTab.blockId, editorInstance.getValue());
+      }
+    }
+  }, [activeTab, handleSaveBlockContent]);
 
   const handleEditorDirtyChange = useCallback((blockId: string, isDirty: boolean) => {
     setDirtyEditors(prev => {
@@ -858,6 +919,14 @@ const App: React.FC = () => {
         else newDirty.delete(blockId);
         return newDirty;
     });
+  }, []);
+
+  const handleEditorMount = useCallback((blockId: string, editor: monaco.editor.IStandaloneCodeEditor) => {
+    editorInstances.current.set(blockId, editor);
+  }, []);
+
+  const handleEditorUnmount = useCallback((blockId: string) => {
+    editorInstances.current.delete(blockId);
   }, []);
 
   const addBlock = useCallback(() => {
@@ -1106,79 +1175,152 @@ const App: React.FC = () => {
     setDirtyBlockIds(prev => new Set(prev).add(id));
   }, []);
 
-  const handleSaveToDisk = useCallback(async () => {
-    if (!directoryHandle || dirtyBlockIds.size === 0) return;
+  const handleSaveToDisk = useCallback(async (idsToSave?: string[]) => {
+    if (!directoryHandle && !projectRootPath) return;
+
+    const blockIdsToProcess = idsToSave ? new Set(idsToSave) : dirtyBlockIds;
+    if (blockIdsToProcess.size === 0) return;
+
     setSaveStatus('saving');
-    
-    const updatedBlocks = [...liveBlocks];
+    let allSavesSuccessful = true;
     const successfullySavedIds = new Set<string>();
 
-    for (const blockId of dirtyBlockIds) {
-        const blockIndex = updatedBlocks.findIndex(b => b.id === blockId);
-        if (blockIndex === -1) continue;
-        const block = updatedBlocks[blockIndex];
+    if (isElectron && projectRootPath) {
+        for (const blockId of blockIdsToProcess) {
+            const block = liveStateRef.current.blocks.find(b => b.id === blockId);
+            if (!block || !block.filePath) continue;
 
+            const fullPath = `${projectRootPath}/${block.filePath}`;
+            try {
+                const result = await window.electronAPI!.writeFile(fullPath, block.content);
+                if (result.success) {
+                    successfullySavedIds.add(blockId);
+                } else {
+                    allSavesSuccessful = false;
+                    addToast(`Could not save file: ${block.filePath}. Error: ${result.error}`, 'error');
+                }
+            } catch (err) {
+                allSavesSuccessful = false;
+                console.error(`Failed to save block ${block.title || block.id}`, err);
+                addToast(`Could not save file: ${block.filePath || block.title || 'Untitled'}`, 'error');
+            }
+        }
+    } else if (directoryHandle) {
         try {
-            if (block.fileHandle) {
-                const writable = await block.fileHandle.createWritable();
-                await writable.write(block.content);
-                await writable.close();
-                successfullySavedIds.add(blockId);
-            } else {
-                let filename = block.filePath || `${(block.title || analysisResult.firstLabels[block.id] || `RenPy_Block_${block.id.slice(0, 8)}`).replace(/[^a-z0-9_-]/gi, '_')}.rpy`;
-                if (!block.filePath) {
-                    filename = `game/${filename}`;
-                }
-                const pathParts = filename.split('/');
-                let currentDir = directoryHandle;
-                // Create subdirectories if they don't exist
-                for (let i = 0; i < pathParts.length - 1; i++) {
-                    currentDir = await currentDir.getDirectoryHandle(pathParts[i], { create: true });
-                }
-                const newFileHandle = await currentDir.getFileHandle(pathParts[pathParts.length - 1], { create: true });
-                
-                const writable = await newFileHandle.createWritable();
-                await writable.write(block.content);
-                await writable.close();
-                
-                updatedBlocks[blockIndex] = { ...block, fileHandle: newFileHandle, filePath: filename };
-                successfullySavedIds.add(blockId);
+            const permissionStatus = await directoryHandle.requestPermission({ mode: 'readwrite' });
+            if (permissionStatus !== 'granted') {
+                addToast('Permission to save files was denied.', 'error');
+                setSaveStatus('error');
+                return;
             }
         } catch (err) {
-            console.error(`Failed to save block ${block.title || block.id}`, err);
-            addToast(`Could not save file for block: ${block.title || block.id}. You may need to grant permission again.`, 'error');
+            if (err instanceof DOMException && err.name === 'AbortError') {
+                 addToast('Save cancelled: permission not granted.', 'warning');
+            } else {
+                console.error("Permission request failed:", err);
+                addToast('Could not get permission to save files.', 'error');
+            }
+            setSaveStatus('error');
+            return;
+        }
+
+        const updatedBlocks = [...liveStateRef.current.blocks];
+        for (const blockId of blockIdsToProcess) {
+            const blockIndex = updatedBlocks.findIndex(b => b.id === blockId);
+            if (blockIndex === -1) continue;
+            const block = updatedBlocks[blockIndex];
+
+            try {
+                if (block.fileHandle) {
+                    const writable = await block.fileHandle.createWritable();
+                    await writable.write(block.content);
+                    await writable.close();
+                    successfullySavedIds.add(blockId);
+                } else {
+                    let filename = block.filePath || `${(block.title || analysisResult.firstLabels[block.id] || `RenPy_Block_${block.id.slice(0, 8)}`).replace(/[^a-z0-9_-]/gi, '_')}.rpy`;
+                    if (!block.filePath) {
+                        filename = `game/${filename}`;
+                    }
+                    const pathParts = filename.split('/');
+                    let currentDir = directoryHandle;
+                    for (let i = 0; i < pathParts.length - 1; i++) {
+                        currentDir = await currentDir.getDirectoryHandle(pathParts[i], { create: true });
+                    }
+                    const newFileHandle = await currentDir.getFileHandle(pathParts[pathParts.length - 1], { create: true });
+                    
+                    const writable = await newFileHandle.createWritable();
+                    await writable.write(block.content);
+                    await writable.close();
+                    
+                    updatedBlocks[blockIndex] = { ...block, fileHandle: newFileHandle, filePath: filename };
+                    successfullySavedIds.add(blockId);
+                }
+            } catch (err) {
+                allSavesSuccessful = false;
+                console.error(`Failed to save block ${block.title || block.id}`, err);
+                addToast(`Could not save file: ${block.filePath || block.title || 'Untitled'}`, 'error');
+            }
+        }
+        // Only commit if file handles were updated.
+        if (Array.from(blockIdsToProcess).some(id => !liveBlocks.find(b => b.id === id)?.fileHandle)) {
+            commitChange({ blocks: updatedBlocks });
         }
     }
-    commitChange({ blocks: updatedBlocks });
+    
     setDirtyBlockIds(prev => {
         const newDirty = new Set(prev);
         successfullySavedIds.forEach(id => newDirty.delete(id));
         return newDirty;
     });
-    setSaveStatus('saved');
-    }, [directoryHandle, dirtyBlockIds, liveBlocks, commitChange, analysisResult.firstLabels, addToast]);
+    
+    setSaveStatus(allSavesSuccessful ? 'saved' : 'error');
+  }, [directoryHandle, projectRootPath, dirtyBlockIds, liveBlocks, commitChange, analysisResult.firstLabels, addToast]);
 
   const handleGlobalSave = useCallback(() => {
-    // Step 1: Trigger active editor to commit its content to the main state.
-    // This will move its ID from dirtyEditors to dirtyBlockIds.
-    handleSaveActiveEditor();
-    
-    // Step 2: Schedule the disk-saving part of the operation for the next
-    // event loop tick. This allows React to process and apply the state
-    // updates from Step 1 before we proceed.
-    if (directoryHandle) {
-        setTimeout(() => setSaveRequestCounter(c => c + 1), 0);
-    }
-  }, [handleSaveActiveEditor, directoryHandle]);
+    const dirtyEditorChanges = new Map<string, string>();
+    dirtyEditors.forEach(blockId => {
+        const editor = editorInstances.current.get(blockId);
+        if (editor) {
+            dirtyEditorChanges.set(blockId, editor.getValue());
+        }
+    });
 
-  // This effect orchestrates saving to disk. It's triggered after a delay
-  // by handleGlobalSave, ensuring that any state updates from committing the
-  // active editor have been processed before handleSaveToDisk is called.
+    if (dirtyEditorChanges.size === 0 && dirtyBlockIds.size === 0) return;
+
+    const newBlocks = produce(liveBlocks, draft => {
+        dirtyEditorChanges.forEach((content, blockId) => {
+            const blockIndex = draft.findIndex(b => b.id === blockId);
+            if (blockIndex !== -1 && draft[blockIndex].content !== content) {
+                draft[blockIndex].content = content;
+            }
+        });
+    });
+
+    const allDirtyIdsInState = new Set([...dirtyBlockIds, ...dirtyEditorChanges.keys()]);
+
+    commitChange({ blocks: newBlocks }, Array.from(allDirtyIdsInState));
+    setDirtyEditors(new Set());
+    
+    if (directoryHandle || projectRootPath) {
+        setSaveRequestCounter(c => c + 1);
+    }
+  }, [dirtyEditors, liveBlocks, dirtyBlockIds, commitChange, directoryHandle, projectRootPath]);
+
   useEffect(() => {
     if (saveRequestCounter > 0) {
         handleSaveToDisk();
     }
   }, [saveRequestCounter, handleSaveToDisk]);
+
+  const handleSaveActiveTabFile = useCallback(() => {
+    if (activeTab?.type !== 'editor' || !activeTab.blockId || (!directoryHandle && !projectRootPath)) return;
+    
+    postSaveCallback.current = (savedBlockId: string) => {
+        handleSaveToDisk([savedBlockId]);
+    };
+
+    handleSaveActiveEditor();
+  }, [activeTab, directoryHandle, projectRootPath, handleSaveActiveEditor, handleSaveToDisk]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1187,7 +1329,7 @@ const App: React.FC = () => {
 
       if (isCtrlOrCmd && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        handleGlobalSave();
+        handleSaveActiveTabFile();
       } else {
         const activeEl = document.activeElement;
         if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.getAttribute('role') === 'textbox')) {
@@ -1243,7 +1385,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedBlockIds, selectedGroupIds, requestDelete, handleOpenEditorTab, addBlock, liveBlocks, liveGroups, commitChange, undo, redo, handleGlobalSave]);
+  }, [selectedBlockIds, selectedGroupIds, requestDelete, handleOpenEditorTab, addBlock, liveBlocks, liveGroups, commitChange, undo, redo, handleSaveActiveTabFile]);
 
   const handleSettingsChange = (key: string, value: any) => {
     if (key === 'theme') {
@@ -1464,7 +1606,7 @@ const App: React.FC = () => {
 
   const requestOpenFolder = () => {
     // Check for unsaved changes in file-system mode, or any blocks in browser-only mode.
-    const hasUnsavedWork = (directoryHandle && dirtyBlockIds.size > 0) || (!directoryHandle && liveBlocks.length > 0);
+    const hasUnsavedWork = ((directoryHandle || projectRootPath) && dirtyBlockIds.size > 0) || (!directoryHandle && !projectRootPath && liveBlocks.length > 0);
 
     if (hasUnsavedWork) {
         setOpenFolderConfirmVisible(true);
@@ -1541,58 +1683,15 @@ const App: React.FC = () => {
 
   const handleOpenFolder = async () => {
     setLoadingState({ visible: true, progress: 0, message: 'Opening project folder...' });
-    try {
-        const rootHandle = await pickDirectory();
-        if (!rootHandle) {
-            return;
-        }
-        setDirectoryHandle(rootHandle);
-
-        setLoadingState(s => ({ ...s, progress: 10, message: 'Building file tree...' }));
-        const tree = await buildTreeFromHandle(rootHandle);
-        setFileTree(tree);
-        
-        setLoadingState(s => ({ ...s, progress: 25, message: 'Loading project assets...' }));
-        const projectImagesMap = await loadProjectImages(rootHandle);
-        setProjectImages(projectImagesMap);
-        if (projectImagesMap.size > 0) setImagesLastScanned(Date.now());
-        const projectAudiosMap = await loadProjectAudios(rootHandle);
-        setProjectAudios(projectAudiosMap);
-        if (projectAudiosMap.size > 0) setAudiosLastScanned(Date.now());
-
-        const projectSettings = await loadIdeSettings(rootHandle);
-        setImageMetadata(projectSettings.imageMetadata || new Map());
-        setAudioMetadata(projectSettings.audioMetadata || new Map());
-
-        setLoadingState(s => ({ ...s, progress: 50, message: 'Reading script files...' }));
-        const newBlocks: Block[] = [];
-        const findRpyFilesRecursively = async (dirHandle: FileSystemDirectoryHandle, currentPath: string) => {
-            for await (const entry of dirHandle.values()) {
-                const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
-                if (entry.kind === 'file' && entry.name.endsWith('.rpy')) {
-                    const fileHandle = entry as FileSystemFileHandle;
-                    const file = await fileHandle.getFile();
-                    const content = await file.text();
-                    newBlocks.push({
-                        id: uuidv4(), content, position: { x: 0, y: 0 }, width: 300, height: 200, filePath: newPath, fileHandle,
-                    });
-                } else if (entry.kind === 'directory') {
-                    if (entry.name.toLowerCase() !== 'images' && entry.name.toLowerCase() !== 'audio') {
-                        await findRpyFilesRecursively(entry as FileSystemDirectoryHandle, newPath);
-                    }
-                }
-            }
-        };
-        await findRpyFilesRecursively(rootHandle, '');
-
-        // Reconcile saved tabs with blocks that were actually loaded
+    
+    // This inner function processes loaded data, shared by both Electron and Web paths.
+    const processProjectData = (newBlocks: Block[], projectSettings: Partial<IdeSettings>) => {
         const filePathToBlockMap = new Map<string, Block>();
         newBlocks.forEach(b => {
             if (b.filePath) filePathToBlockMap.set(b.filePath, b);
         });
 
         const validTabs: EditorTab[] = [];
-        // FIX: Explicitly type loadedTabs to ensure correct type inference for oldActiveTab.
         const loadedTabs: EditorTab[] = projectSettings.openTabs && Array.isArray(projectSettings.openTabs) && projectSettings.openTabs.length > 0
             ? projectSettings.openTabs
             : [{ id: 'canvas', type: 'canvas' }];
@@ -1602,11 +1701,9 @@ const App: React.FC = () => {
             if (tab.type === 'editor' && tab.filePath) {
                 const correspondingBlock = filePathToBlockMap.get(tab.filePath);
                 if (correspondingBlock) {
-                    // This tab is valid; update its blockId to the new one generated on load.
                     validTabs.push({ ...tab, id: correspondingBlock.id, blockId: correspondingBlock.id });
                 }
             } else if (tab.type !== 'editor') {
-                // Keep non-editor tabs like 'canvas', 'image', 'audio', etc.
                 validTabs.push(tab);
             }
         });
@@ -1615,11 +1712,9 @@ const App: React.FC = () => {
             validTabs.unshift({ id: 'canvas', type: 'canvas' });
         }
 
-        // Determine the new active tab
         let finalActiveTabId = 'canvas';
         const oldActiveTab = loadedTabs.find(t => t.id === loadedActiveTabId);
         if (oldActiveTab) {
-            // Find the new version of the previously active tab
             const newVersionOfActiveTab = validTabs.find(t => (t.filePath && t.filePath === oldActiveTab.filePath && t.type === oldActiveTab.type) || t.id === oldActiveTab.id);
             if (newVersionOfActiveTab) {
                 finalActiveTabId = newVersionOfActiveTab.id;
@@ -1641,14 +1736,143 @@ const App: React.FC = () => {
         setSelectedGroupIds([]);
         setDirtyBlockIds(new Set());
         setIsWelcomeScreenVisible(false);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') console.log('User cancelled directory picker.');
-      else {
-        console.error("Error opening directory:", err);
-        addToast(`Error opening directory: ${(err as Error).message}`, 'error');
-      }
-    } finally {
-        setLoadingState({ visible: false, progress: 0, message: '' });
+    };
+
+    if (isElectron) {
+        try {
+            const rootPath = await window.electronAPI!.openDirectory();
+            if (!rootPath) {
+                setLoadingState({ visible: false, progress: 0, message: '' });
+                return;
+            }
+            setProjectRootPath(rootPath);
+            setDirectoryHandle(null);
+
+            setLoadingState(s => ({ ...s, progress: 10, message: 'Reading project files...' }));
+            const projectData = await window.electronAPI!.loadProject(rootPath);
+            setFileTree(projectData.tree);
+
+            const projectImagesMap = new Map<string, ProjectImage>();
+            projectData.images.forEach(img => {
+                const isProjectImage = img.path.startsWith('game/images/');
+                projectImagesMap.set(img.path, {
+                    filePath: img.path, fileName: img.path.split('/').pop() || '', dataUrl: img.dataUrl,
+                    fileHandle: null, isInProject: isProjectImage, projectFilePath: isProjectImage ? img.path : undefined,
+                    lastModified: img.lastModified
+                });
+            });
+            setProjectImages(projectImagesMap);
+            if (projectImagesMap.size > 0) setImagesLastScanned(Date.now());
+
+            const projectAudiosMap = new Map<string, RenpyAudio>();
+            projectData.audios.forEach(aud => {
+                const isProjectAudio = aud.path.startsWith('game/audio/');
+                 projectAudiosMap.set(aud.path, {
+                    filePath: aud.path, fileName: aud.path.split('/').pop() || '', dataUrl: aud.dataUrl,
+                    fileHandle: null, isInProject: isProjectAudio, projectFilePath: isProjectAudio ? aud.path : undefined,
+                    lastModified: aud.lastModified
+                });
+            });
+            setProjectAudios(projectAudiosMap);
+            if (projectAudiosMap.size > 0) setAudiosLastScanned(Date.now());
+
+            const projectSettings = projectData.settings || {};
+            // Apply settings
+            if (projectSettings.theme) setTheme(projectSettings.theme);
+            if (projectSettings.apiKey) setApiKey(projectSettings.apiKey);
+            if (typeof projectSettings.enableAiFeatures === 'boolean') setEnableAiFeatures(projectSettings.enableAiFeatures);
+            if (projectSettings.selectedModel) setSelectedModel(projectSettings.selectedModel);
+            if (typeof projectSettings.isLeftSidebarOpen === 'boolean') setIsLeftSidebarOpen(projectSettings.isLeftSidebarOpen);
+            if (typeof projectSettings.leftSidebarWidth === 'number') setLeftSidebarWidth(projectSettings.leftSidebarWidth);
+            if (typeof projectSettings.isRightSidebarOpen === 'boolean') setIsRightSidebarOpen(projectSettings.isRightSidebarOpen);
+            if (typeof projectSettings.rightSidebarWidth === 'number') setRightSidebarWidth(projectSettings.rightSidebarWidth);
+
+            const imageMetadataMap = new Map<string, ImageMetadata>();
+            if (projectSettings.imageMetadata) {
+                for (const [filePath, meta] of Object.entries(projectSettings.imageMetadata)) {
+                    imageMetadataMap.set(filePath, meta as ImageMetadata);
+                }
+            }
+            setImageMetadata(imageMetadataMap);
+
+            const audioMetadataMap = new Map<string, AudioMetadata>();
+            if (projectSettings.audioMetadata) {
+                for (const [filePath, meta] of Object.entries(projectSettings.audioMetadata)) {
+                    audioMetadataMap.set(filePath, meta as AudioMetadata);
+                }
+            }
+            setAudioMetadata(audioMetadataMap);
+
+            setLoadingState(s => ({ ...s, progress: 50, message: 'Processing script files...' }));
+            const newBlocks: Block[] = projectData.files.map(file => ({
+                id: uuidv4(), content: file.content, position: { x: 0, y: 0 },
+                width: 300, height: 200, filePath: file.path, fileHandle: null,
+            }));
+            
+            processProjectData(newBlocks, projectSettings);
+        } catch (err) {
+            console.error("Error opening directory in Electron:", err);
+            addToast(`Error opening directory: ${(err as Error).message}`, 'error');
+        } finally {
+            setLoadingState({ visible: false, progress: 0, message: '' });
+        }
+    } else { // Browser Path
+        try {
+            const rootHandle = await pickDirectory();
+            if (!rootHandle) {
+                setLoadingState({ visible: false, progress: 0, message: '' });
+                return;
+            }
+            setDirectoryHandle(rootHandle);
+            setProjectRootPath(null);
+
+            setLoadingState(s => ({ ...s, progress: 10, message: 'Building file tree...' }));
+            const tree = await buildTreeFromHandle(rootHandle);
+            setFileTree(tree);
+            
+            setLoadingState(s => ({ ...s, progress: 25, message: 'Loading project assets...' }));
+            const projectImagesMap = await loadProjectImages(rootHandle);
+            setProjectImages(projectImagesMap);
+            if (projectImagesMap.size > 0) setImagesLastScanned(Date.now());
+            const projectAudiosMap = await loadProjectAudios(rootHandle);
+            setProjectAudios(projectAudiosMap);
+            if (projectAudiosMap.size > 0) setAudiosLastScanned(Date.now());
+
+            const projectSettings = await loadIdeSettings(rootHandle);
+            setImageMetadata(projectSettings.imageMetadata || new Map());
+            setAudioMetadata(projectSettings.audioMetadata || new Map());
+
+            setLoadingState(s => ({ ...s, progress: 50, message: 'Reading script files...' }));
+            const newBlocks: Block[] = [];
+            const findRpyFilesRecursively = async (dirHandle: FileSystemDirectoryHandle, currentPath: string) => {
+                for await (const entry of dirHandle.values()) {
+                    const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+                    if (entry.kind === 'file' && entry.name.endsWith('.rpy')) {
+                        const fileHandle = entry as FileSystemFileHandle;
+                        const file = await fileHandle.getFile();
+                        const content = await file.text();
+                        newBlocks.push({
+                            id: uuidv4(), content, position: { x: 0, y: 0 }, width: 300, height: 200, filePath: newPath, fileHandle,
+                        });
+                    } else if (entry.kind === 'directory') {
+                        if (entry.name.toLowerCase() !== 'images' && entry.name.toLowerCase() !== 'audio') {
+                            await findRpyFilesRecursively(entry as FileSystemDirectoryHandle, newPath);
+                        }
+                    }
+                }
+            };
+            await findRpyFilesRecursively(rootHandle, '');
+
+            processProjectData(newBlocks, projectSettings);
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'AbortError') console.log('User cancelled directory picker.');
+          else {
+            console.error("Error opening directory:", err);
+            addToast(`Error opening directory: ${(err as Error).message}`, 'error');
+          }
+        } finally {
+            setLoadingState({ visible: false, progress: 0, message: '' });
+        }
     }
   };
   
@@ -1742,6 +1966,7 @@ const App: React.FC = () => {
       setFileTree(tree);
 
       setDirectoryHandle(null);
+      setProjectRootPath(null);
       setDirtyBlockIds(new Set());
       setProjectImages(newImages);
       if (newImages.size > 0) setImagesLastScanned(Date.now());
@@ -1786,10 +2011,7 @@ const App: React.FC = () => {
   }, []);
 
   const onInteractionEnd = useCallback(() => {
-    // Read the latest live state from the ref
     const { blocks: currentLiveBlocks, groups: currentLiveGroups } = liveStateRef.current;
-
-    // Use the historyState from the hook's closure, which is the last committed state.
     const hasChanges =
       historyState.blocks.length !== currentLiveBlocks.length ||
       historyState.groups.length !== currentLiveGroups.length ||
@@ -1817,7 +2039,6 @@ const App: React.FC = () => {
     if (hasChanges) {
       setHistory({ blocks: currentLiveBlocks, groups: currentLiveGroups });
 
-      // Determine dirty blocks only from position changes, as other changes (resize) are already marked dirty
       const draggedBlockIds = currentLiveBlocks
         .filter(b => {
           const originalBlock = historyState.blocks.find(hb => hb.id === b.id);
@@ -1898,76 +2119,54 @@ const App: React.FC = () => {
     const oldSubfolder = oldMetadata?.projectSubfolder?.trim() || '';
     const newSubfolder = newMetadata.projectSubfolder?.trim() || '';
 
-    // If no directory handle, or image not in project, or no change in subfolder, just update metadata state
-    if (!directoryHandle || !imageToMove || !imageToMove.isInProject || oldSubfolder === newSubfolder) {
-        setImageMetadata(prev => {
-            const newMap = new Map(prev);
-            newMap.set(projectFilePath, newMetadata);
-            return newMap;
-        });
+    if (!(projectRootPath || directoryHandle) || !imageToMove || !imageToMove.isInProject || oldSubfolder === newSubfolder) {
+        setImageMetadata(prev => new Map(prev).set(projectFilePath, newMetadata));
         return;
     }
 
-    // --- File move logic ---
     try {
         const oldPath = imageToMove.projectFilePath!;
         const fileName = imageToMove.fileName;
-        
         const newPath = `game/images${newSubfolder ? `/${newSubfolder}` : ''}/${fileName}`.replace(/\/+/g, '/').replace(/^\//, '');
 
         if (oldPath === newPath) {
-             setImageMetadata(prev => {
-                const newMap = new Map(prev);
-                newMap.set(projectFilePath, newMetadata);
-                return newMap;
-            });
-            return;
+             setImageMetadata(prev => new Map(prev).set(projectFilePath, newMetadata));
+             return;
         }
 
-        if (!imageToMove.fileHandle) {
-            console.error("Cannot move image without a file handle.", imageToMove);
-            addToast("Cannot move image: file handle is missing.", 'error');
-            return;
-        }
-        const fileContent = await imageToMove.fileHandle.getFile();
+        if (isElectron && projectRootPath) {
+            const oldFullPath = `${projectRootPath}/${oldPath}`;
+            const newFullPath = `${projectRootPath}/${newPath}`;
+            const result = await window.electronAPI!.moveFile(oldFullPath, newFullPath);
+            if (!result.success) throw new Error(result.error);
+        } else if (directoryHandle) {
+            if (!imageToMove.fileHandle) throw new Error("Cannot move image without a file handle.");
+            const fileContent = await imageToMove.fileHandle.getFile();
 
-        let targetDir = await directoryHandle.getDirectoryHandle('game', { create: true });
-        targetDir = await targetDir.getDirectoryHandle('images', { create: true });
-        
-        if (newSubfolder) {
-            const subfolderParts = newSubfolder.split('/');
-            for (const part of subfolderParts) {
-                if (part) targetDir = await targetDir.getDirectoryHandle(part, { create: true });
+            let targetDir = await directoryHandle.getDirectoryHandle('game/images', { create: true });
+            if (newSubfolder) {
+                for (const part of newSubfolder.split('/')) {
+                    if (part) targetDir = await targetDir.getDirectoryHandle(part, { create: true });
+                }
             }
+
+            const newFileHandle = await targetDir.getFileHandle(fileName, { create: true });
+            const writable = await newFileHandle.createWritable();
+            await writable.write(fileContent);
+            await writable.close();
+
+            let oldDirParent = directoryHandle;
+            const oldDirParts = oldPath.split('/').slice(0, -1);
+            for (const part of oldDirParts) { oldDirParent = await oldDirParent.getDirectoryHandle(part); }
+            await oldDirParent.removeEntry(fileName);
+            
+            imageToMove.fileHandle = newFileHandle; // Update handle for browser mode
         }
 
-        const newFileHandle = await targetDir.getFileHandle(fileName, { create: true });
-        const writable = await newFileHandle.createWritable();
-        await writable.write(fileContent);
-        await writable.close();
-
-        let oldDirParent = directoryHandle;
-        const oldDirParts = oldPath.split('/').slice(0, -1);
-        for (const part of oldDirParts) {
-            oldDirParent = await oldDirParent.getDirectoryHandle(part);
-        }
-        await oldDirParent.removeEntry(fileName);
-
-        const newProjectImages: Map<string, ProjectImage> = new Map(projectImages);
+        const newProjectImages = new Map(projectImages);
         newProjectImages.delete(oldPath);
-        const updatedImage: ProjectImage = {
-            ...imageToMove,
-            filePath: newPath,
-            projectFilePath: newPath,
-            fileHandle: newFileHandle,
-        };
+        const updatedImage: ProjectImage = { ...imageToMove, filePath: newPath, projectFilePath: newPath };
         newProjectImages.set(newPath, updatedImage);
-
-        const sourceImage = Array.from(newProjectImages.values()).find(img => img.projectFilePath === oldPath && img.filePath !== oldPath);
-        if (sourceImage) {
-            const updatedSourceImage: ProjectImage = { ...sourceImage, projectFilePath: newPath };
-            newProjectImages.set(sourceImage.filePath, updatedSourceImage);
-        }
         setProjectImages(newProjectImages);
 
         const newMetadataMap = new Map(imageMetadata);
@@ -1981,18 +2180,13 @@ const App: React.FC = () => {
             return addNodeToFileTree(treeAfterRemoval!, newPath);
         });
 
-        setOpenTabs(tabs => tabs.map(tab => {
-            if (tab.id === 'image_editor' && tab.filePath === oldPath) {
-                return { ...tab, filePath: newPath };
-            }
-            return tab;
-        }));
+        setOpenTabs(tabs => tabs.map(tab => (tab.id === 'image_editor' && tab.filePath === oldPath) ? { ...tab, filePath: newPath } : tab));
         
     } catch (err) {
         console.error("Failed to move image file:", err);
         addToast(`Could not move the image file. Error: ${(err as Error).message}`, 'error');
     }
-  }, [directoryHandle, projectImages, imageMetadata, fileTree, activeTabId, addToast]);
+  }, [isElectron, projectRootPath, directoryHandle, projectImages, imageMetadata, fileTree, addToast]);
   
   const handleAddImageScanDirectory = useCallback(async () => {
       const dirHandle = await pickDirectory();
@@ -2128,7 +2322,7 @@ const App: React.FC = () => {
       const oldSubfolder = oldMetadata?.projectSubfolder?.trim() || '';
       const newSubfolder = newMetadata.projectSubfolder?.trim() || '';
   
-      if (!directoryHandle || !audioToMove || !audioToMove.isInProject || oldSubfolder === newSubfolder) {
+      if (!(projectRootPath || directoryHandle) || !audioToMove || !audioToMove.isInProject || oldSubfolder === newSubfolder) {
           setAudioMetadata(prev => new Map(prev).set(projectFilePath, newMetadata));
           return;
       }
@@ -2142,29 +2336,42 @@ const App: React.FC = () => {
               return;
           }
   
-          if (!audioToMove.fileHandle) { throw new Error("File handle missing."); }
-          const fileContent = await audioToMove.fileHandle.getFile();
-  
-          let targetDir = await directoryHandle.getDirectoryHandle('game/audio', { create: true });
-          if (newSubfolder) {
-              for (const part of newSubfolder.split('/')) {
-                  if (part) targetDir = await targetDir.getDirectoryHandle(part, { create: true });
+          if (isElectron && projectRootPath) {
+              const oldFullPath = `${projectRootPath}/${oldPath}`;
+              const newFullPath = `${projectRootPath}/${newPath}`;
+              const result = await window.electronAPI!.moveFile(oldFullPath, newFullPath);
+              if (!result.success) throw new Error(result.error);
+          } else if (directoryHandle) {
+              if (!audioToMove.fileHandle) { throw new Error("File handle missing."); }
+              const fileContent = await audioToMove.fileHandle.getFile();
+      
+              let targetDir = await directoryHandle.getDirectoryHandle('game/audio', { create: true });
+              if (newSubfolder) {
+                  for (const part of newSubfolder.split('/')) {
+                      if (part) targetDir = await targetDir.getDirectoryHandle(part, { create: true });
+                  }
               }
+      
+              const newFileHandle = await targetDir.getFileHandle(fileName, { create: true });
+              const writable = await newFileHandle.createWritable();
+              await writable.write(fileContent);
+              await writable.close();
+      
+              let oldDirParent = directoryHandle;
+              for (const part of oldPath.split('/').slice(0, -1)) { oldDirParent = await oldDirParent.getDirectoryHandle(part); }
+              await oldDirParent.removeEntry(fileName);
+              audioToMove.fileHandle = newFileHandle;
           }
-  
-          const newFileHandle = await targetDir.getFileHandle(fileName, { create: true });
-          const writable = await newFileHandle.createWritable();
-          await writable.write(fileContent);
-          await writable.close();
-  
-          let oldDirParent = directoryHandle;
-          for (const part of oldPath.split('/').slice(0, -1)) { oldDirParent = await oldDirParent.getDirectoryHandle(part); }
-          await oldDirParent.removeEntry(fileName);
-  
+
           const newProjectAudios = new Map(projectAudios);
           newProjectAudios.delete(oldPath);
-          const dataUrl = await fileToDataUrl(fileContent);
-          newProjectAudios.set(newPath, { ...audioToMove, filePath: newPath, projectFilePath: newPath, fileHandle: newFileHandle, dataUrl, lastModified: fileContent.lastModified });
+          const updatedAudio = { ...audioToMove, filePath: newPath, projectFilePath: newPath };
+          if (!isElectron && updatedAudio.fileHandle) {
+              const file = await updatedAudio.fileHandle.getFile();
+              updatedAudio.dataUrl = await fileToDataUrl(file);
+              updatedAudio.lastModified = file.lastModified;
+          }
+          newProjectAudios.set(newPath, updatedAudio);
   
           setProjectAudios(newProjectAudios);
           const newMetadataMap = new Map(audioMetadata);
@@ -2183,7 +2390,7 @@ const App: React.FC = () => {
           console.error("Failed to move audio file:", err);
           addToast(`Could not move the audio file. Error: ${(err as Error).message}`, 'error');
       }
-  }, [directoryHandle, projectAudios, audioMetadata, fileTree, addToast]);
+  }, [isElectron, projectRootPath, directoryHandle, projectAudios, audioMetadata, fileTree, addToast]);
   
   const handleAddAudioScanDirectory = useCallback(async () => {
       const dirHandle = await pickDirectory();
@@ -2288,6 +2495,7 @@ const App: React.FC = () => {
       {loadingState.visible && <LoadingOverlay progress={loadingState.progress} message={loadingState.message} />}
       <Toolbar
         directoryHandle={directoryHandle}
+        projectRootPath={projectRootPath}
         dirtyBlockIds={dirtyBlockIds}
         dirtyEditors={dirtyEditors}
         saveStatus={saveStatus}
@@ -2411,7 +2619,6 @@ const App: React.FC = () => {
                                     onSwitchFocusBlock={handleOpenEditorTab}
                                     onSave={handleSaveBlockContent}
                                     onDirtyChange={handleEditorDirtyChange}
-                                    saveTrigger={saveTrigger}
                                     editorTheme={editorThemeForMonaco}
                                     initialScrollRequest={tab.scrollRequest}
                                     apiKey={apiKey}
@@ -2419,6 +2626,8 @@ const App: React.FC = () => {
                                     availableModels={availableModels}
                                     selectedModel={selectedModel}
                                     addToast={addToast}
+                                    onEditorMount={handleEditorMount}
+                                    onEditorUnmount={handleEditorUnmount}
                                 />
                             ) : null;
                         })()}
@@ -2497,7 +2706,7 @@ const App: React.FC = () => {
             audiosLastScanned={audiosLastScanned}
             isRefreshingAudios={isRefreshingAudios}
             onRefreshAudios={handleRefreshAudios}
-            isFileSystemApiSupported={!!directoryHandle}
+            isFileSystemApiSupported={!!directoryHandle || !!projectRootPath}
             onHoverHighlightStart={handleHoverHighlightStart}
             onHoverHighlightEnd={handleHoverHighlightEnd}
           />}
@@ -2511,6 +2720,7 @@ const App: React.FC = () => {
             commitChange({ blocks: [], groups: [] });
             setFileTree(null);
             setDirectoryHandle(null);
+            setProjectRootPath(null);
             setIsClearConfirmVisible(false);
           }}
           onClose={() => setIsClearConfirmVisible(false)}

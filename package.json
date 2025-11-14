@@ -1,12 +1,14 @@
 {
-  "name": "renpy-visual-novel-accelerator",
-  "private": true,
-  "version": "0.0.0",
+  "name": "vangard-renpy-renide",
+  "version": "0.1.0",
   "type": "module",
+  "main": "electron.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "build": "vite build",
+    "preview": "vite preview",
+    "electron:start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder"
   },
   "dependencies": {
     "@google/genai": "^0.12.0",
@@ -20,7 +22,34 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.2.1",
+    "electron": "^29.1.5",
+    "electron-builder": "^24.13.3",
     "typescript": "^5.2.2",
     "vite": "^5.2.0"
+  },
+  "build": {
+    "appId": "com.vangard.renpy.renide",
+    "productName": "Vangard Ren'Py Ren'IDE",
+    "files": [
+      "dist/**/*",
+      "electron.js",
+      "preload.js",
+      "vangard-renide-512x512.png"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "vangard-renide-512x512.png"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "vangard-renide-512x512.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "vangard-renide-512x512.png"
+    }
   }
 }
