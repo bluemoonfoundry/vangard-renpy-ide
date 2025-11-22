@@ -1,7 +1,3 @@
-
-
-
-
 export interface Position {
   x: number;
   y: number;
@@ -250,8 +246,24 @@ export interface IdeSettings {
   openTabs: EditorTab[];
   activeTabId: string;
   apiKey?: string;
-  enableAiFeatures?: boolean;
-  selectedModel?: string;
+  enableAiFeatures: boolean;
+  selectedModel: string;
 }
 
 export type ClipboardState = { type: 'copy' | 'cut'; paths: Set<string> } | null;
+
+declare global {
+  interface Window {
+      electronAPI?: {
+          openDirectory: () => Promise<string | null>;
+          createProject?: () => Promise<string | null>;
+          loadProject: (path: string) => Promise<any>;
+          writeFile: (path: string, content: string, encoding?: string) => Promise<{ success: boolean; error?: string }>;
+          removeEntry?: (path: string) => Promise<{ success: boolean; error?: string }>;
+          moveFile?: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
+          path?: {
+              join: (...paths: string[]) => string;
+          }
+      }
+  }
+}

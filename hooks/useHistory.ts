@@ -44,7 +44,9 @@ export const useHistory = <T>(initialState: T) => {
     });
   }, [canRedo, history]);
 
-  const setState = useCallback((newState: T) => {
+  const setState = useCallback((action: T | ((prev: T) => T)) => {
+    const newState = action instanceof Function ? action(history.present) : action;
+
     if (JSON.stringify(newState) === JSON.stringify(history.present)) {
       return; // Do nothing if state is unchanged
     }

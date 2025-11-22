@@ -101,6 +101,17 @@ function createWindow() {
     {
         label: 'File',
         submenu: [
+            { 
+                label: 'New Project...',
+                accelerator: 'CmdOrCtrl+N',
+                click: () => mainWindow.webContents.send('menu-command', { command: 'new-project' })
+            },
+            { 
+                label: 'Open Project...',
+                accelerator: 'CmdOrCtrl+O',
+                click: () => mainWindow.webContents.send('menu-command', { command: 'open-project' })
+            },
+            { type: 'separator' },
             process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' }
         ]
     },
@@ -168,14 +179,35 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('dialog:createProject', async () => {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+        title: 'Create New Ren\'Py Project',
+        buttonLabel: 'Create Project',
+        defaultPath: path.join(app.getPath('documents'), 'NewRenPyProject')
+    });
+    if (canceled || !filePath) {
+        return null;
+    }
+    try {
+        await fs.mkdir(path.join(filePath, 'game', 'images'), { recursive: true });
+        await fs.mkdir(path.join(filePath, 'game', 'audio'), { recursive: true });
+        return filePath;
+    } catch (error) {
+        console.error('Failed to create project directory:', error);
+        dialog.showErrorBox('Project Creation Failed', `Could not create project directory: ${error.message}`);
+        return null;
+    }
+  });
+
   ipcMain.handle('project:load', async (event, rootPath) => {
     return await readProjectFiles(rootPath);
   });
 
-  ipcMain.handle('fs:writeFile', async (event, filePath, content) => {
+  // FIX: Accept an optional encoding parameter to handle binary files (like images) correctly.
+  ipcMain.handle('fs:writeFile', async (event, filePath, content, encoding) => {
     try {
       await fs.mkdir(path.dirname(filePath), { recursive: true });
-      await fs.writeFile(filePath, content);
+      await fs.writeFile(filePath, content, encoding);
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };

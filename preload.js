@@ -1,9 +1,12 @@
+
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
+  createProject: () => ipcRenderer.invoke('dialog:createProject'),
   loadProject: (rootPath) => ipcRenderer.invoke('project:load', rootPath),
-  writeFile: (filePath, content) => ipcRenderer.invoke('fs:writeFile', filePath, content),
+  // FIX: Pass the encoding parameter to the main process for correct file writing.
+  writeFile: (filePath, content, encoding) => ipcRenderer.invoke('fs:writeFile', filePath, content, encoding),
   removeEntry: (entryPath) => ipcRenderer.invoke('fs:removeEntry', entryPath),
   moveFile: (oldPath, newPath) => ipcRenderer.invoke('fs:moveFile', oldPath, newPath),
   onMenuCommand: (callback) => {
