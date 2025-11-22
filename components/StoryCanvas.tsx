@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect, forwardRef } from 'react';
 import CodeBlock from './CodeBlock';
 import GroupContainer from './GroupContainer';
 import type { Block, Position, RenpyAnalysisResult, LabelLocation, BlockGroup, Link } from '../types';
@@ -25,35 +25,40 @@ interface StoryCanvasProps {
   setCanvasFilters: React.Dispatch<React.SetStateAction<{ story: boolean; screens: boolean; config: boolean }>>;
   centerOnBlockRequest: { blockId: string, key: number } | null;
   hoverHighlightIds: Set<string> | null;
+  transform: { x: number, y: number, scale: number };
+  onTransformChange: React.Dispatch<React.SetStateAction<{ x: number, y: number, scale: number }>>;
 }
 
 const getBlockById = (blocks: Block[], id: string) => blocks.find(b => b.id === id);
 const getGroupById = (groups: BlockGroup[], id: string) => groups.find(g => g.id === id);
 
-const getAttachmentPoint = (block: Block, side: 'left' | 'right' | 'top' | 'bottom'): Position => {
+const getAttachmentPoint = (position: Position, width: number, height: number, side: 'left' | 'right' | 'top' | 'bottom'): Position => {
     switch(side) {
-        case 'left': return { x: block.position.x, y: block.position.y + block.height / 2 };
-        case 'right': return { x: block.position.x + block.width, y: block.position.y + block.height / 2 };
-        case 'top': return { x: block.position.x + block.width / 2, y: block.position.y };
-        case 'bottom': return { x: block.position.x + block.width / 2, y: block.position.y + block.height };
+        case 'left': return { x: position.x, y: position.y + height / 2 };
+        case 'right': return { x: position.x + width, y: position.y + height / 2 };
+        case 'top': return { x: position.x + width / 2, y: position.y };
+        case 'bottom': return { x: position.x + width / 2, y: position.y + height };
     }
 }
 
-const getOptimalPath = (sourceBlock: Block, targetBlock: Block): [Position, Position] => {
+const getOptimalPath = (
+    sourcePos: Position, sourceW: number, sourceH: number, 
+    targetPos: Position, targetW: number, targetH: number
+): string => {
     const sourcePoints = {
-        right: getAttachmentPoint(sourceBlock, 'right'),
-        left: getAttachmentPoint(sourceBlock, 'left'),
-        bottom: getAttachmentPoint(sourceBlock, 'bottom'),
-        top: getAttachmentPoint(sourceBlock, 'top'),
+        right: getAttachmentPoint(sourcePos, sourceW, sourceH, 'right'),
+        left: getAttachmentPoint(sourcePos, sourceW, sourceH, 'left'),
+        bottom: getAttachmentPoint(sourcePos, sourceW, sourceH, 'bottom'),
+        top: getAttachmentPoint(sourcePos, sourceW, sourceH, 'top'),
     };
     const targetPoints = {
-        left: getAttachmentPoint(targetBlock, 'left'),
-        right: getAttachmentPoint(targetBlock, 'right'),
-        top: getAttachmentPoint(targetBlock, 'top'),
-        bottom: getAttachmentPoint(targetBlock, 'bottom'),
+        left: getAttachmentPoint(targetPos, targetW, targetH, 'left'),
+        right: getAttachmentPoint(targetPos, targetW, targetH, 'right'),
+        top: getAttachmentPoint(targetPos, targetW, targetH, 'top'),
+        bottom: getAttachmentPoint(targetPos, targetW, targetH, 'bottom'),
     };
 
-    let bestPath: [Position, Position] = [sourcePoints.right, targetPoints.left];
+    let bestPoints = [sourcePoints.right, targetPoints.left];
     let minDistance = Infinity;
 
     for (const sKey of Object.keys(sourcePoints) as Array<keyof typeof sourcePoints>) {
@@ -61,35 +66,34 @@ const getOptimalPath = (sourceBlock: Block, targetBlock: Block): [Position, Posi
             const dist = Math.hypot(sourcePoints[sKey].x - targetPoints[tKey].x, sourcePoints[sKey].y - targetPoints[tKey].y);
             if (dist < minDistance) {
                 minDistance = dist;
-                bestPath = [sourcePoints[sKey], targetPoints[tKey]];
+                bestPoints = [sourcePoints[sKey], targetPoints[tKey]];
             }
         }
     }
-    return bestPath;
+    
+    const [p1, p2] = bestPoints;
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const controlX = p1.x + dx / 2 + (dy / 5);
+    const controlY = p1.y + dy / 2 - (dx / 5);
+
+    return `M${p1.x},${p1.y} Q${controlX},${controlY} ${p2.x},${p2.y}`;
 };
 
-const Arrow: React.FC<{ 
-  link: Link;
-  sourcePos: Position; 
-  targetPos: Position;
+const Arrow = forwardRef<SVGGElement, { 
+  pathData: string;
   isDimmed: boolean;
   onHighlight: (startNodeId: string) => void;
-}> = ({ link, sourcePos, targetPos, isDimmed, onHighlight }) => {
-    const dx = targetPos.x - sourcePos.x;
-    const dy = targetPos.y - sourcePos.y;
-    
-    const controlX = sourcePos.x + dx / 2 + (dy / 5);
-    const controlY = sourcePos.y + dy / 2 - (dx / 5);
-
-    const pathData = `M${sourcePos.x},${sourcePos.y} Q${controlX},${controlY} ${targetPos.x},${targetPos.y}`;
-    
+  targetId: string;
+}>(({ pathData, isDimmed, onHighlight, targetId }, ref) => {
     const handlePointerDown = (e: React.PointerEvent) => {
-        e.stopPropagation(); // Prevent canvas from handling this to start a rubber band
-        onHighlight(link.targetId);
+        e.stopPropagation();
+        onHighlight(targetId);
     };
 
     return (
         <g 
+          ref={ref}
           className={`arrow-interaction-group transition-opacity duration-300 ${isDimmed ? 'opacity-20' : 'opacity-100'} pointer-events-auto`}
           onPointerDown={handlePointerDown}
         >
@@ -110,7 +114,7 @@ const Arrow: React.FC<{
           />
         </g>
     );
-};
+});
 
 interface Rect { x: number; y: number; width: number; height: number; }
 
@@ -133,19 +137,45 @@ type InteractionState =
   | { type: 'idle' }
   | { type: 'panning'; }
   | { type: 'rubber-band'; start: Position; }
-  | { type: 'dragging-blocks'; dragStartPositions: Map<string, Position>; }
-  | { type: 'dragging-groups'; groupDragStartPositions: Map<string, Position>; blockDragStartPositions: Map<string, Position>; }
+  | { 
+      type: 'dragging-blocks'; 
+      dragInitialPositions: Map<string, Position>; // id -> original x,y
+      draggedLinks: Array<{ 
+          key: string; 
+          sourceId: string; 
+          targetId: string; 
+          sourceDim: { w: number, h: number }; 
+          targetDim: { w: number, h: number };
+      }>;
+    }
+  | { 
+      type: 'dragging-groups'; 
+      dragInitialPositions: Map<string, Position>; // includes both groups and blocks
+      draggedLinks: Array<{ 
+          key: string; 
+          sourceId: string; 
+          targetId: string; 
+          sourceDim: { w: number, h: number }; 
+          targetDim: { w: number, h: number };
+      }>;
+    }
   | { type: 'resizing-block'; block: Block; }
   | { type: 'resizing-group'; group: BlockGroup; };
 
-const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResult, updateBlock, updateGroup, updateBlockPositions, updateGroupPositions, onInteractionEnd, deleteBlock, onOpenEditor, selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, findUsagesHighlightIds, clearFindUsages, dirtyBlockIds, canvasFilters, setCanvasFilters, centerOnBlockRequest, hoverHighlightIds }) => {
-  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResult, updateBlock, updateGroup, updateBlockPositions, updateGroupPositions, onInteractionEnd, deleteBlock, onOpenEditor, selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, findUsagesHighlightIds, clearFindUsages, dirtyBlockIds, canvasFilters, setCanvasFilters, centerOnBlockRequest, hoverHighlightIds, transform, onTransformChange }) => {
   const [rubberBandRect, setRubberBandRect] = useState<Rect | null>(null);
+  
+  // Refs for Imperative DOM updates
+  const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const groupRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const arrowRefs = useRef<Map<string, SVGGElement>>(new Map());
+
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
   const [highlightedPath, setHighlightedPath] = useState<Set<string> | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const interactionState = useRef<InteractionState>({ type: 'idle' });
   const pointerStartPos = useRef<Position>({ x: 0, y: 0 });
+  const rafRef = useRef<number>();
   const [flashingBlockId, setFlashingBlockId] = useState<string | null>(null);
   const lastHandledRequestKey = useRef<number | null>(null);
 
@@ -165,7 +195,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
         const newX = (canvasRect.width / 2) - (targetX * transform.scale);
         const newY = (canvasRect.height / 2) - (targetY * transform.scale);
         
-        setTransform(t => ({ ...t, x: newX, y: newY }));
+        onTransformChange(t => ({ ...t, x: newX, y: newY }));
 
         setFlashingBlockId(blockId);
         const timer = setTimeout(() => setFlashingBlockId(null), 1500);
@@ -174,7 +204,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
 
         return () => clearTimeout(timer);
     }
-  }, [centerOnBlockRequest, blocks, transform.scale]);
+  }, [centerOnBlockRequest, blocks, transform.scale, onTransformChange]);
 
   const adjacencyMap = useMemo(() => {
     const adj = new Map<string, string[]>();
@@ -194,7 +224,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
 
     while (queue.length > 0) {
       const u = queue.shift()!;
-      path.add(u); // Add the source of the path as well
+      path.add(u);
       const neighbors = adjacencyMap.get(u) || [];
       for (const v of neighbors) {
         if (!visited.has(v)) {
@@ -204,7 +234,6 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
       }
     }
 
-    // Trace back to find all sources of the start node for a complete path view
     let hasChanged = true;
     while(hasChanged) {
         hasChanged = false;
@@ -253,13 +282,33 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
             interactionState.current = { type: 'resizing-block', block };
         } else if (targetEl.closest('.drag-handle') && !targetEl.closest('button, input')) {
             const currentSelection = selectedBlockIds.includes(blockId) ? selectedBlockIds : [blockId];
-            const dragStartPositions = new Map<string, Position>();
+            
+            const dragInitialPositions = new Map<string, Position>();
+            const movingBlockIds = new Set<string>();
+
             blocks.forEach(b => {
                 if (currentSelection.includes(b.id)) {
-                    dragStartPositions.set(b.id, b.position);
+                    dragInitialPositions.set(b.id, { ...b.position });
+                    movingBlockIds.add(b.id);
                 }
             });
-            interactionState.current = { type: 'dragging-blocks', dragStartPositions };
+
+            // Pre-calculate affected links to optimize drag loop
+            const draggedLinks = analysisResult.links.filter(link => 
+                movingBlockIds.has(link.sourceId) || movingBlockIds.has(link.targetId)
+            ).map(link => {
+                const s = getBlockById(blocks, link.sourceId);
+                const t = getBlockById(blocks, link.targetId);
+                return {
+                    key: `${link.sourceId}-${link.targetId}`,
+                    sourceId: link.sourceId,
+                    targetId: link.targetId,
+                    sourceDim: s ? { w: s.width, h: s.height } : { w: 0, h: 0 },
+                    targetDim: t ? { w: t.width, h: t.height } : { w: 0, h: 0 }
+                };
+            });
+
+            interactionState.current = { type: 'dragging-blocks', dragInitialPositions, draggedLinks };
             setIsDraggingSelection(true);
         }
 
@@ -274,25 +323,41 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
             interactionState.current = { type: 'resizing-group', group };
         } else if (targetEl.closest('.drag-handle')) {
             const currentSelection = selectedGroupIds.includes(groupId) ? selectedGroupIds : [groupId];
-            const groupDragStartPositions = new Map<string, Position>();
-            const blockDragStartPositions = new Map<string, Position>();
-            const blockIdsToMove = new Set<string>();
+            const dragInitialPositions = new Map<string, Position>();
+            const movingIds = new Set<string>();
 
             currentSelection.forEach(id => {
               const g = getGroupById(groups, id);
               if (g) {
-                groupDragStartPositions.set(id, g.position);
-                g.blockIds.forEach(bId => blockIdsToMove.add(bId));
+                dragInitialPositions.set(id, { ...g.position });
+                g.blockIds.forEach(bId => {
+                    const b = getBlockById(blocks, bId);
+                    if(b) {
+                        dragInitialPositions.set(bId, { ...b.position });
+                        movingIds.add(bId);
+                    }
+                });
               }
             });
             
-            blocks.forEach(b => {
-              if (blockIdsToMove.has(b.id)) {
-                blockDragStartPositions.set(b.id, b.position);
-              }
+            // Also check for any independently selected blocks that might be dragged together (if UI allowed mix selection)
+            // but for now simple logic:
+            
+            const draggedLinks = analysisResult.links.filter(link => 
+                movingIds.has(link.sourceId) || movingIds.has(link.targetId)
+            ).map(link => {
+                const s = getBlockById(blocks, link.sourceId);
+                const t = getBlockById(blocks, link.targetId);
+                return {
+                    key: `${link.sourceId}-${link.targetId}`,
+                    sourceId: link.sourceId,
+                    targetId: link.targetId,
+                    sourceDim: s ? { w: s.width, h: s.height } : { w: 0, h: 0 },
+                    targetDim: t ? { w: t.width, h: t.height } : { w: 0, h: 0 }
+                };
             });
 
-            interactionState.current = { type: 'dragging-groups', groupDragStartPositions, blockDragStartPositions };
+            interactionState.current = { type: 'dragging-groups', dragInitialPositions, draggedLinks };
             setIsDraggingSelection(true);
         }
 
@@ -316,57 +381,90 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
         const dx = currentPos.x - pointerStartPos.current.x;
         const dy = currentPos.y - pointerStartPos.current.y;
 
-        switch(interactionState.current.type) {
-            case 'dragging-blocks': {
-                const updates = Array.from(interactionState.current.dragStartPositions.entries()).map(([id, startPos]) => ({
-                    id,
-                    position: { x: startPos.x + dx, y: startPos.y + dy }
-                }));
-                updateBlockPositions(updates);
-                break;
-            }
-            case 'dragging-groups': {
-              const { groupDragStartPositions, blockDragStartPositions } = interactionState.current;
-              const groupUpdates = Array.from(groupDragStartPositions.entries()).map(([id, startPos]) => ({
-                id, position: { x: startPos.x + dx, y: startPos.y + dy }
-              }));
-              const blockUpdates = Array.from(blockDragStartPositions.entries()).map(([id, startPos]) => ({
-                id, position: { x: startPos.x + dx, y: startPos.y + dy }
-              }));
-              updateGroupPositions(groupUpdates);
-              updateBlockPositions(blockUpdates);
-              break;
-            }
-            case 'resizing-block': {
-                const { block } = interactionState.current;
+        // Use requestAnimationFrame to throttle visual updates
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        
+        rafRef.current = requestAnimationFrame(() => {
+            const state = interactionState.current;
+            
+            if (state.type === 'dragging-blocks' || state.type === 'dragging-groups') {
+                const currentPositions = new Map<string, Position>();
+
+                // 1. Move Nodes (Blocks & Groups)
+                state.dragInitialPositions.forEach((startPos, id) => {
+                    const newX = startPos.x + dx;
+                    const newY = startPos.y + dy;
+                    currentPositions.set(id, { x: newX, y: newY });
+
+                    // Update Block DOM
+                    const blockEl = blockRefs.current.get(id);
+                    if (blockEl) {
+                        blockEl.style.left = `${newX}px`;
+                        blockEl.style.top = `${newY}px`;
+                    }
+                    
+                    // Update Group DOM
+                    const groupEl = groupRefs.current.get(id);
+                    if (groupEl) {
+                        groupEl.style.left = `${newX}px`;
+                        groupEl.style.top = `${newY}px`;
+                    }
+                });
+
+                // 2. Update Links Imperatively
+                state.draggedLinks.forEach(link => {
+                    const gEl = arrowRefs.current.get(link.key);
+                    if (gEl) {
+                        // Get current position or fallback to static position
+                        let sPos = currentPositions.get(link.sourceId);
+                        if (!sPos) {
+                            const b = getBlockById(blocks, link.sourceId);
+                            if(b) sPos = b.position;
+                        }
+
+                        let tPos = currentPositions.get(link.targetId);
+                        if (!tPos) {
+                            const b = getBlockById(blocks, link.targetId);
+                            if(b) tPos = b.position;
+                        }
+
+                        if (sPos && tPos) {
+                            const newPath = getOptimalPath(
+                                sPos, link.sourceDim.w, link.sourceDim.h,
+                                tPos, link.targetDim.w, link.targetDim.h
+                            );
+                            const paths = gEl.querySelectorAll('path');
+                            if (paths.length >= 2) {
+                                paths[0].setAttribute('d', newPath); // Hit Area
+                                paths[1].setAttribute('d', newPath); // Visible Line
+                            }
+                        }
+                    }
+                });
+
+            } else if (state.type === 'resizing-block') {
+                const { block } = state;
                 updateBlock(block.id, {
                     width: Math.max(block.width + dx * transform.scale, 250),
                     height: Math.max(block.height + dy * transform.scale, 150),
                 });
-                break;
-            }
-             case 'resizing-group': {
-              const { group } = interactionState.current;
-              updateGroup(group.id, {
-                width: Math.max(group.width + dx * transform.scale, 250),
-                height: Math.max(group.height + dy * transform.scale, 150),
-              });
-              break;
-            }
-            case 'panning': {
-                setTransform(t => ({...t, x: t.x + moveEvent.movementX, y: t.y + moveEvent.movementY }));
-                break;
-            }
-            case 'rubber-band': {
-                const start = interactionState.current.start;
+            } else if (state.type === 'resizing-group') {
+                const { group } = state;
+                updateGroup(group.id, {
+                    width: Math.max(group.width + dx * transform.scale, 250),
+                    height: Math.max(group.height + dy * transform.scale, 150),
+                });
+            } else if (state.type === 'panning') {
+                onTransformChange(t => ({...t, x: t.x + moveEvent.movementX, y: t.y + moveEvent.movementY }));
+            } else if (state.type === 'rubber-band') {
+                const start = state.start;
                 const x = Math.min(start.x, currentPos.x);
                 const y = Math.min(start.y, currentPos.y);
                 const width = Math.abs(start.x - currentPos.x);
                 const height = Math.abs(start.y - currentPos.y);
                 setRubberBandRect({ x, y, width, height });
-                break;
             }
-        }
+        });
     };
     
     const handlePointerUp = (upEvent: PointerEvent) => {
@@ -392,7 +490,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
                     b.position.x + b.width > finalRect.x &&
                     b.position.y < finalRect.y + finalRect.height &&
                     b.position.y + b.height > finalRect.y
-                ).map(b => b.id);
+                 ).map(b => b.id);
                 
                 const selectedGroupsInRect = groups.filter(g => 
                     g.position.x < finalRect.x + finalRect.width &&
@@ -416,6 +514,24 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
             }
         }
         
+        // Commit changes to React State
+        if ((state.type === 'dragging-blocks' || state.type === 'dragging-groups') && distance > 0) {
+            const blockUpdates: { id: string, position: Position }[] = [];
+            const groupUpdates: { id: string, position: Position }[] = [];
+
+            state.dragInitialPositions.forEach((startPos, id) => {
+                const newPos = { x: startPos.x + dx, y: startPos.y + dy };
+                if (getGroupById(groups, id)) {
+                    groupUpdates.push({ id, position: newPos });
+                } else {
+                    blockUpdates.push({ id, position: newPos });
+                }
+            });
+
+            if (blockUpdates.length > 0) updateBlockPositions(blockUpdates);
+            if (groupUpdates.length > 0) updateGroupPositions(groupUpdates);
+        }
+        
         const wasInteractiveMove = state.type === 'dragging-blocks' || 
                                  state.type === 'dragging-groups' || 
                                  state.type === 'resizing-block' || 
@@ -431,6 +547,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
         if (canvasRef.current) canvasEl.releasePointerCapture(e.pointerId);
         window.removeEventListener('pointermove', handlePointerMove);
         window.removeEventListener('pointerup', handlePointerUp);
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
 
     window.addEventListener('pointermove', handlePointerMove);
@@ -442,7 +559,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
     e.preventDefault();
     const rect = canvasRef.current.getBoundingClientRect();
     const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    setTransform(t => {
+    onTransformChange(t => {
       const zoom = 1 - e.deltaY * 0.002;
       const newScale = Math.max(0.2, Math.min(3, t.scale * zoom));
       const worldX = (pointer.x - t.x) / t.scale;
@@ -562,9 +679,28 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
               const sourceBlock = getBlockById(blocks, link.sourceId);
               const targetBlock = getBlockById(blocks, link.targetId);
               if (!sourceBlock || !targetBlock) return null;
-              const [sourcePos, targetPos] = getOptimalPath(sourceBlock, targetBlock);
+              
+              const pathData = getOptimalPath(
+                  sourceBlock.position, sourceBlock.width, sourceBlock.height,
+                  targetBlock.position, targetBlock.width, targetBlock.height
+              );
+              
               const isDimmed = highlightedPath !== null && (!highlightedPath.has(link.sourceId) || !highlightedPath.has(link.targetId));
-              return <Arrow key={`${link.sourceId}-${link.targetId}-${index}`} link={link} sourcePos={sourcePos} targetPos={targetPos} isDimmed={isDimmed} onHighlight={handleHighlightPath} />;
+              const linkKey = `${link.sourceId}-${link.targetId}`;
+
+              return (
+                <Arrow 
+                    key={linkKey} 
+                    ref={(el) => {
+                        if (el) arrowRefs.current.set(linkKey, el);
+                        else arrowRefs.current.delete(linkKey);
+                    }}
+                    pathData={pathData} 
+                    isDimmed={isDimmed} 
+                    onHighlight={handleHighlightPath}
+                    targetId={link.targetId}
+                />
+              );
             })}
           </g>
         </svg>
@@ -576,6 +712,10 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
           return (
             <GroupContainer
               key={group.id}
+              ref={(el) => {
+                  if (el) groupRefs.current.set(group.id, el);
+                  else groupRefs.current.delete(group.id);
+              }}
               group={group}
               updateGroup={updateGroup}
               isSelected={selectedGroupIds.includes(group.id)}
@@ -595,6 +735,10 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
           return (
             <CodeBlock
               key={block.id}
+              ref={(el) => {
+                  if (el) blockRefs.current.set(block.id, el);
+                  else blockRefs.current.delete(block.id);
+              }}
               block={block}
               analysisResult={analysisResult}
               updateBlock={updateBlock}

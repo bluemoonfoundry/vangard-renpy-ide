@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, forwardRef } from 'react';
 import type { Block, RenpyAnalysisResult, LabelLocation } from '../types';
 
 interface CodeBlockProps {
@@ -28,7 +28,7 @@ const JumpIcon: React.FC = () => <div title="Contains Jumps/Calls"><svg xmlns="h
 const PythonIcon: React.FC = () => <div title="Contains Python code"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6.28 5.22a.75.75 0 010 1.06L3.56 9l2.72 2.72a.75.75 0 01-1.06 1.06L1.47 9.53a.75.75 0 010-1.06l3.75-3.75a.75.75 0 011.06 0zm7.44 0a.75.75 0 011.06 0l3.75 3.75a.75.75 0 010 1.06L14.78 14l-2.72-2.72a.75.75 0 011.06-1.06L16.44 9l-2.72-2.72a.75.75 0 010-1.06z" clipRule="evenodd" /></svg></div>;
 
 
-const CodeBlock: React.FC<CodeBlockProps> = React.memo(({ 
+const CodeBlock = forwardRef<HTMLDivElement, CodeBlockProps>(({ 
   block, 
   analysisResult, 
   updateBlock, 
@@ -46,7 +46,7 @@ const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
   isScreenBlock,
   isConfigBlock,
   isFlashing,
-}) => {
+}, ref) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -140,14 +140,17 @@ const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
 
   return (
     <div
+      ref={ref}
       data-block-id={block.id}
-      className={`code-block-wrapper absolute bg-white dark:bg-gray-800 rounded-lg shadow-2xl border-2 ${borderClass} ${shadowClass} flex flex-col transition-all duration-200 ${isDimmed ? 'opacity-30' : ''} ${isFlashing ? 'flash-block' : isHoverHighlighted ? 'pulse-block heatmap-highlight' : ''}`}
+      className={`code-block-wrapper absolute bg-white dark:bg-gray-800 rounded-lg shadow-2xl border-2 ${borderClass} ${shadowClass} flex flex-col transition-colors duration-200 ${isDimmed ? 'opacity-30' : ''} ${isFlashing ? 'flash-block' : isHoverHighlighted ? 'pulse-block heatmap-highlight' : ''}`}
       style={{
         left: block.position.x,
         top: block.position.y,
         width: block.width,
         height: block.height,
         zIndex: isSelected ? 10 : 5,
+        // Remove transition on left/top during drag to prevent fighting with JS updates
+        transitionProperty: isDragging ? 'none' : 'box-shadow, border-color, opacity, transform',
       }}
       onDoubleClick={() => onOpenEditor(block.id)}
     >
@@ -223,4 +226,5 @@ const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
   );
 });
 
-export default CodeBlock;
+// Use React.memo for performance optimization of non-drag re-renders
+export default React.memo(CodeBlock);

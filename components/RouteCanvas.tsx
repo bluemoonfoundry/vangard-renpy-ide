@@ -1,5 +1,3 @@
-
-
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import LabelBlock from './LabelBlock';
 import ViewRoutesPanel from './ViewRoutesPanel';
@@ -11,6 +9,8 @@ interface RouteCanvasProps {
   identifiedRoutes: IdentifiedRoute[];
   updateLabelNodePositions: (updates: { id: string, position: Position }[]) => void;
   onOpenEditor: (blockId: string, line: number) => void;
+  transform: { x: number, y: number, scale: number };
+  onTransformChange: React.Dispatch<React.SetStateAction<{ x: number, y: number, scale: number }>>;
 }
 
 interface Rect { x: number; y: number; width: number; height: number; }
@@ -103,8 +103,7 @@ type InteractionState =
   | { type: 'rubber-band'; start: Position; }
   | { type: 'dragging-nodes'; dragStartPositions: Map<string, Position>; };
 
-const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, identifiedRoutes, updateLabelNodePositions, onOpenEditor }) => {
-  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, identifiedRoutes, updateLabelNodePositions, onOpenEditor, transform, onTransformChange }) => {
   const [rubberBandRect, setRubberBandRect] = useState<Rect | null>(null);
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
@@ -206,7 +205,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
                 break;
             }
             case 'panning': {
-                setTransform(t => ({...t, x: t.x + moveEvent.movementX, y: t.y + moveEvent.movementY }));
+                onTransformChange(t => ({...t, x: t.x + moveEvent.movementX, y: t.y + moveEvent.movementY }));
                 break;
             }
             case 'rubber-band': {
@@ -273,7 +272,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
     e.preventDefault();
     const rect = canvasRef.current.getBoundingClientRect();
     const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    setTransform(t => {
+    onTransformChange(t => {
       const zoom = 1 - e.deltaY * 0.002;
       const newScale = Math.max(0.2, Math.min(3, t.scale * zoom));
       const worldX = (pointer.x - t.x) / t.scale;

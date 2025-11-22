@@ -12,12 +12,15 @@ import ConfirmModal from './components/ConfirmModal';
 import Toast from './components/Toast';
 import LoadingOverlay from './components/LoadingOverlay';
 import WelcomeScreen from './components/WelcomeScreen';
+import ImageEditorView from './components/ImageEditorView';
+import AudioEditorView from './components/AudioEditorView';
+import CharacterEditorView from './components/CharacterEditorView';
 import { useRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import type { 
   Block, BlockGroup, Link, Position, FileSystemTreeNode, EditorTab, 
   ToastMessage, IdeSettings, Theme, ProjectImage, RenpyAudio, 
-  ClipboardState, ImageMetadata, AudioMetadata 
+  ClipboardState, ImageMetadata, AudioMetadata, LabelNode, Character
 } from './types';
 
 // --- Utility: ArrayBuffer to Base64 (Browser Compatible) ---
@@ -31,45 +34,57 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
   return window.btoa(binary);
 };
 
-// --- Layout Algorithm ---
-const tidyUpLayout = (blocksToLayout: Block[], links: Link[]): Block[] => {
-    if (!blocksToLayout || blocksToLayout.length === 0) return [];
+// --- Generic Layout Algorithm ---
+interface LayoutNode {
+    id: string;
+    width: number;
+    height: number;
+    position: Position;
+}
+
+interface LayoutEdge {
+    sourceId: string;
+    targetId: string;
+}
+
+const computeAutoLayout = <T extends LayoutNode>(nodes: T[], edges: LayoutEdge[]): T[] => {
+    if (!nodes || nodes.length === 0) return [];
 
     const PADDING_X = 100;
-    const PADDING_Y = 50;
+    const PADDING_Y = 80;
     const COMPONENT_SPACING = 200;
     const DEFAULT_WIDTH = 300;
     const DEFAULT_HEIGHT = 150;
 
-    // 1. Sanitize blocks to ensure they have valid dimensions.
-    const sanitizedBlocks = blocksToLayout.map(b => ({
-      ...b,
-      width: (typeof b.width === 'number' && b.width > 50) ? b.width : DEFAULT_WIDTH,
-      height: (typeof b.height === 'number' && b.height > 50) ? b.height : DEFAULT_HEIGHT,
+    // 1. Sanitize inputs
+    const sanitizedNodes = nodes.map(n => ({
+        ...n,
+        width: (n.width && n.width > 50) ? n.width : DEFAULT_WIDTH,
+        height: (n.height && n.height > 50) ? n.height : DEFAULT_HEIGHT,
     }));
     
-    const blockMap = new Map(sanitizedBlocks.map(b => [b.id, b]));
-    const allBlockIds = new Set(sanitizedBlocks.map(b => b.id));
+    const nodeMap = new Map(sanitizedNodes.map(n => [n.id, n]));
+    const allNodeIds = new Set(sanitizedNodes.map(n => n.id));
 
-    // 2. Find Connected Components (Undirected) to group blocks
+    // 2. Identify Connected Components
     const undirectedAdj = new Map<string, string[]>();
-    allBlockIds.forEach(id => undirectedAdj.set(id, []));
+    allNodeIds.forEach(id => undirectedAdj.set(id, []));
     
-    links.forEach(link => {
-        if (allBlockIds.has(link.sourceId) && allBlockIds.has(link.targetId)) {
-            undirectedAdj.get(link.sourceId)?.push(link.targetId);
-            undirectedAdj.get(link.targetId)?.push(link.sourceId);
+    edges.forEach(edge => {
+        if (allNodeIds.has(edge.sourceId) && allNodeIds.has(edge.targetId)) {
+            undirectedAdj.get(edge.sourceId)?.push(edge.targetId);
+            undirectedAdj.get(edge.targetId)?.push(edge.sourceId);
         }
     });
 
     const components: string[][] = [];
     const visited = new Set<string>();
 
-    for (const blockId of allBlockIds) {
-        if (!visited.has(blockId)) {
+    for (const nodeId of allNodeIds) {
+        if (!visited.has(nodeId)) {
             const component: string[] = [];
-            const queue = [blockId];
-            visited.add(blockId);
+            const queue = [nodeId];
+            visited.add(nodeId);
             while (queue.length > 0) {
                 const u = queue.shift()!;
                 component.push(u);
@@ -84,19 +99,19 @@ const tidyUpLayout = (blocksToLayout: Block[], links: Link[]): Block[] => {
         }
     }
 
-    // Sort components by size (keeps larger structures first)
+    // Sort components by size (largest first)
     components.sort((a, b) => b.length - a.length);
 
     // 3. Layout each component
     const finalPositions = new Map<string, Position>();
     let currentOffsetX = 50;
 
-    // Build directed adjacency for topological sort within components
+    // Directed adjacency for layering
     const adj = new Map<string, string[]>();
-    allBlockIds.forEach(id => adj.set(id, []));
-    links.forEach(link => {
-        if (allBlockIds.has(link.sourceId) && allBlockIds.has(link.targetId)) {
-            adj.get(link.sourceId)?.push(link.targetId);
+    allNodeIds.forEach(id => adj.set(id, []));
+    edges.forEach(edge => {
+        if (allNodeIds.has(edge.sourceId) && allNodeIds.has(edge.targetId)) {
+            adj.get(edge.sourceId)?.push(edge.targetId);
         }
     });
 
@@ -105,7 +120,6 @@ const tidyUpLayout = (blocksToLayout: Block[], links: Link[]): Block[] => {
         const compInDegree = new Map<string, number>();
         componentIds.forEach(id => compInDegree.set(id, 0));
 
-        // Calculate in-degree restricted to this component
         componentIds.forEach(u => {
             adj.get(u)?.forEach(v => {
                 if (compNodes.has(v)) {
@@ -117,9 +131,8 @@ const tidyUpLayout = (blocksToLayout: Block[], links: Link[]): Block[] => {
         const queue: string[] = [];
         compInDegree.forEach((d, id) => { if (d === 0) queue.push(id); });
         
-        // Cycle handling / Disconnected single nodes in component
+        // Cycle breaking
         if (queue.length === 0 && componentIds.length > 0) {
-            // Pick the node with the lowest in-degree (approximate root of cycle)
             let minDegree = Infinity;
             let candidate = componentIds[0];
             compInDegree.forEach((d, id) => {
@@ -134,14 +147,11 @@ const tidyUpLayout = (blocksToLayout: Block[], links: Link[]): Block[] => {
         const layers: string[][] = [];
         const visitedInLayering = new Set<string>();
         let iterationCount = 0;
-        const MAX_ITERATIONS = componentIds.length * 2 + 100; // Safety break
+        const MAX_ITERATIONS = componentIds.length * 2 + 100; 
 
         while(queue.length > 0) {
             iterationCount++;
-            if (iterationCount > MAX_ITERATIONS) {
-                console.warn("Layout algorithm hit max iterations, breaking loop.");
-                break;
-            }
+            if (iterationCount > MAX_ITERATIONS) break;
 
             const layerSize = queue.length;
             const layer: string[] = [];
@@ -154,16 +164,10 @@ const tidyUpLayout = (blocksToLayout: Block[], links: Link[]): Block[] => {
 
                 adj.get(u)?.forEach(v => {
                     if (compNodes.has(v)) {
-                        // Decrement in-degree
                         const currentDeg = compInDegree.get(v) || 0;
                         compInDegree.set(v, currentDeg - 1);
-                        
-                        // If ready (degree <= 0) AND not already visited/processed this pass
                         if ((compInDegree.get(v) || 0) <= 0 && !visitedInLayering.has(v)) {
-                            // Check if already in queue to avoid duplicates
-                            if (!queue.includes(v)) {
-                                queue.push(v);
-                            }
+                            if (!queue.includes(v)) queue.push(v);
                         }
                     }
                 });
@@ -171,7 +175,6 @@ const tidyUpLayout = (blocksToLayout: Block[], links: Link[]): Block[] => {
             if (layer.length > 0) layers.push(layer);
         }
 
-        // Catch any remaining nodes (unreachable or complex cycles not cleared)
         const remaining = componentIds.filter(id => !visitedInLayering.has(id));
         if (remaining.length > 0) layers.push(remaining);
 
@@ -181,58 +184,60 @@ const tidyUpLayout = (blocksToLayout: Block[], links: Link[]): Block[] => {
             let maxW = 0;
             let totalH = 0;
             layer.forEach(id => {
-                const b = blockMap.get(id);
-                if (b) {
-                    maxW = Math.max(maxW, b.width);
-                    totalH += b.height;
+                const n = nodeMap.get(id);
+                if (n) {
+                    maxW = Math.max(maxW, n.width);
+                    totalH += n.height;
                 }
             });
             totalH += (layer.length - 1) * PADDING_Y;
 
             let currentY = -totalH / 2;
             layer.forEach(id => {
-                const b = blockMap.get(id);
-                if (b) {
-                    const x = layerX + (maxW - b.width) / 2;
+                const n = nodeMap.get(id);
+                if (n) {
+                    const x = layerX + (maxW - n.width) / 2;
                     finalPositions.set(id, {
                         x: currentOffsetX + x,
-                        y: currentY 
+                        y: currentY + 100 // Offset to avoid top edge
                     });
-                    currentY += b.height + PADDING_Y;
+                    currentY += n.height + PADDING_Y;
                 }
             });
 
             layerX += maxW + PADDING_X;
         });
 
-        // Increment global offset for next component
-        // Ensure we step forward by at least a minimum amount
         const componentWidth = Math.max(layerX - PADDING_X, DEFAULT_WIDTH); 
         currentOffsetX += componentWidth + COMPONENT_SPACING;
     });
 
-    // Normalize Y coordinates so the whole graph starts somewhat near top-left
+    // Normalize Y
     let minY = Infinity;
     finalPositions.forEach(p => { if (p.y < minY) minY = p.y; });
     
     if (minY !== Infinity) {
-        const targetY = 50;
+        const targetY = 100;
         const shift = targetY - minY;
         finalPositions.forEach(p => { p.y += shift; });
     } else {
-        // Fallback if somehow positions weren't set properly
-         blocksToLayout.forEach(b => {
-             if (!finalPositions.has(b.id)) {
-                 finalPositions.set(b.id, { x: 50, y: 50 });
+         // Fallback for completely disconnected single nodes if algorithm somehow failed
+         let x = 50;
+         let y = 100;
+         nodes.forEach(n => {
+             if (!finalPositions.has(n.id)) {
+                 finalPositions.set(n.id, { x, y });
+                 x += n.width + 50;
              }
          });
     }
 
-    return blocksToLayout.map(b => {
-        const pos = finalPositions.get(b.id);
-        return pos ? { ...b, position: pos } : b;
+    return nodes.map(n => {
+        const pos = finalPositions.get(n.id);
+        return pos ? { ...n, position: pos } : n;
     });
 };
+
 
 // --- Main App Component ---
 
@@ -262,7 +267,8 @@ const App: React.FC = () => {
   const [isRefreshingAudios, setIsRefreshingAudios] = useState(false);
 
   // --- State: UI & Editor ---
-  const [openTabs, setOpenTabs] = useImmer<EditorTab[]>([{ id: 'canvas', type: 'canvas' }]);
+  // Using standard useState for openTabs to avoid Immer proxy issues with simple array management
+  const [openTabs, setOpenTabs] = useState<EditorTab[]>([{ id: 'canvas', type: 'canvas' }]);
   const [activeTabId, setActiveTabId] = useState<string>('canvas');
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
@@ -278,6 +284,10 @@ const App: React.FC = () => {
   const [loadingMessage, setLoadingMessage] = useState('');
   const [loadingProgress, setLoadingProgress] = useState(0);
   
+  // --- State: View Transforms ---
+  const [storyCanvasTransform, setStoryCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [routeCanvasTransform, setRouteCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
+
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [ideSettings, setIdeSettings] = useState<IdeSettings>({
     theme: 'system',
@@ -423,17 +433,17 @@ const App: React.FC = () => {
     });
     
     setBlocks(prev => prev.filter(b => b.id !== id));
-    setOpenTabs(draft => draft.filter(t => t.blockId !== id));
+    setOpenTabs(prev => prev.filter(t => t.blockId !== id));
     if (activeTabId === id) setActiveTabId('canvas');
     
     // Note: We don't delete the file from disk automatically here, just from the canvas.
-  }, [setBlocks, setGroups, setOpenTabs, activeTabId]);
+  }, [setBlocks, setGroups, activeTabId]);
 
   // --- Layout ---
   const handleTidyUp = useCallback(() => {
     try {
         const links = analysisResult.links;
-        const newLayout = tidyUpLayout(blocks, links);
+        const newLayout = computeAutoLayout(blocks, links);
         setBlocks(newLayout);
         addToast('Layout organized', 'success');
     } catch (e) {
@@ -452,7 +462,7 @@ const App: React.FC = () => {
             return prev;
         });
         setActiveTabId(id);
-  }, [setOpenTabs]);
+  }, []);
 
   // --- File System Integration ---
   
@@ -496,19 +506,34 @@ const App: React.FC = () => {
           }
 
           setProjectRootPath(projectData.rootPath);
-          setBlocks(tidyUpLayout(loadedBlocks, [])); // Initial layout
+          // Use computeAutoLayout for initial layout
+          setBlocks(computeAutoLayout(loadedBlocks, [])); 
           setFileSystemTree(projectData.tree);
           
           // Load Assets
           const imgMap = new Map<string, ProjectImage>();
           projectData.images.forEach((img: any) => {
-              imgMap.set(img.path, { ...img, fileName: img.path.split('/').pop(), isInProject: true, fileHandle: null });
+              // Fix: Map 'path' from Electron to 'filePath' expected by ProjectImage
+              imgMap.set(img.path, { 
+                  ...img, 
+                  filePath: img.path,
+                  fileName: img.path.split('/').pop(), 
+                  isInProject: true, 
+                  fileHandle: null 
+              });
           });
           setImages(imgMap);
 
           const audioMap = new Map<string, RenpyAudio>();
           projectData.audios.forEach((aud: any) => {
-              audioMap.set(aud.path, { ...aud, fileName: aud.path.split('/').pop(), isInProject: true, fileHandle: null });
+              // Fix: Map 'path' from Electron to 'filePath' expected by RenpyAudio
+              audioMap.set(aud.path, { 
+                  ...aud, 
+                  filePath: aud.path,
+                  fileName: aud.path.split('/').pop(), 
+                  isInProject: true, 
+                  fileHandle: null 
+              });
           });
           setAudios(audioMap);
 
@@ -528,7 +553,7 @@ const App: React.FC = () => {
       } finally {
           setIsLoading(false);
       }
-  }, [setBlocks, setImages, setAudios, setIdeSettings, setOpenTabs, addToast, setFileSystemTree]);
+  }, [setBlocks, setImages, setAudios, setIdeSettings, addToast, setFileSystemTree]);
 
   const handleOpenProjectFolder = useCallback(async () => {
     try {
@@ -583,7 +608,6 @@ const App: React.FC = () => {
             for (const blockId of dirtyBlockIds) {
                 const block = blocks.find(b => b.id === blockId);
                 if (block && block.filePath) {
-                    const fullPath = `${projectRootPath}/${block.filePath}`;
                     const absPath = window.electronAPI.path ? window.electronAPI.path.join(projectRootPath, block.filePath) : `${projectRootPath}/${block.filePath}`;
                     
                     const res = await window.electronAPI.writeFile(absPath, block.content);
@@ -657,13 +681,14 @@ const App: React.FC = () => {
         }]);
     } else if (line) {
         // Update scroll request for existing tab
-        setOpenTabs(draft => {
-            const tab = draft.find(t => t.id === blockId);
-            if (tab) tab.scrollRequest = { line, key: Date.now() };
-        });
+        setOpenTabs(prev => prev.map(tab => 
+            tab.id === blockId 
+                ? { ...tab, scrollRequest: { line, key: Date.now() } }
+                : tab
+        ));
     }
     setActiveTabId(blockId);
-  }, [blocks, openTabs, setOpenTabs]);
+  }, [blocks, openTabs]);
 
   const handleCloseTab = useCallback((tabId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -671,7 +696,7 @@ const App: React.FC = () => {
     if (activeTabId === tabId) {
         setActiveTabId('canvas');
     }
-  }, [activeTabId, setOpenTabs]);
+  }, [activeTabId]);
 
   const handleSwitchTab = (tabId: string) => setActiveTabId(tabId);
 
@@ -701,6 +726,29 @@ const App: React.FC = () => {
       addToast(`Found usages in ${ids.size} blocks`, 'info');
   };
 
+  // --- Character Editor ---
+  const handleOpenCharacterEditor = useCallback((tag: string) => {
+      const tabId = `char-${tag}`;
+      setOpenTabs(prev => {
+          if (!prev.find(t => t.id === tabId)) {
+              return [...prev, { id: tabId, type: 'character', characterTag: tag }];
+          }
+          return prev;
+      });
+      setActiveTabId(tabId);
+  }, []);
+
+  const handleUpdateCharacter = (char: Character, oldTag?: string) => {
+      // To update a character, we need to update the block that defines it.
+      // This is complex because we need to parse/regenerate the define statement.
+      // For this demo, we'll just show a success toast but note that full
+      // source-code regeneration for characters is a larger task usually involving AST manipulation.
+      
+      // However, we can try a simple Find & Replace for the definition line if we have `definedInBlockId`.
+      addToast(`Saved character ${char.name} (Simulated)`, 'success');
+      // In a real implementation, we'd update the block content here.
+  };
+
   // --- Search & Highlights ---
   const clearHighlights = () => {
       setFindUsagesHighlightIds(null);
@@ -709,20 +757,27 @@ const App: React.FC = () => {
 
   // --- Route Canvas Support ---
   const [routeCanvasData, setRouteCanvasData] = useState<{
-      labelNodes: any[], routeLinks: any[], identifiedRoutes: any[]
+      labelNodes: LabelNode[], routeLinks: any[], identifiedRoutes: any[]
   }>({ labelNodes: [], routeLinks: [], identifiedRoutes: [] });
 
   const handleAnalyzeRoutes = useCallback(() => {
       const { labelNodes, routeLinks, identifiedRoutes } = performRouteAnalysis(blocks, analysisResult.labels, analysisResult.jumps);
-      setRouteCanvasData({ labelNodes, routeLinks, identifiedRoutes });
+      
+      // Fix: Apply automatic layout to the generated route nodes before displaying
+      const layoutedNodes = computeAutoLayout(labelNodes, routeLinks);
+
+      setRouteCanvasData({ labelNodes: layoutedNodes, routeLinks, identifiedRoutes });
       
       // Open Route Canvas Tab
       const tabId = 'route-canvas';
-      if (!openTabs.some(t => t.id === tabId)) {
-          setOpenTabs(prev => [...prev, { id: tabId, type: 'route-canvas' }]);
-      }
+      setOpenTabs(prev => {
+          if (!prev.some(t => t.id === tabId)) {
+              return [...prev, { id: tabId, type: 'route-canvas' }];
+          }
+          return prev;
+      });
       setActiveTabId(tabId);
-  }, [blocks, analysisResult, openTabs, setOpenTabs]);
+  }, [blocks, analysisResult]);
 
   // --- Asset Management (Basic Implementation) ---
   const handleCopyImagesToProject = async (sourcePaths: string[]) => {
@@ -782,6 +837,7 @@ const App: React.FC = () => {
 
   // --- Render Helpers ---
   const activeBlock = useMemo(() => blocks.find(b => b.id === activeTabId), [blocks, activeTabId]);
+  const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId), [openTabs, activeTabId]);
 
   return (
     <div className="flex flex-col h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
@@ -855,9 +911,17 @@ const App: React.FC = () => {
             <div className="flex items-center bg-gray-200 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700 overflow-x-auto">
                 {openTabs.map(tab => {
                     const block = blocks.find(b => b.id === tab.blockId);
-                    const title = tab.type === 'canvas' ? 'Story Canvas' : 
-                                  tab.type === 'route-canvas' ? 'Route Canvas' : 
-                                  block ? (block.title || block.filePath || 'Untitled') : 'Unknown';
+                    let title = 'Unknown';
+                    if (tab.type === 'canvas') title = 'Story Canvas';
+                    else if (tab.type === 'route-canvas') title = 'Route Canvas';
+                    else if (tab.type === 'editor' && block) title = block.title || block.filePath || 'Untitled';
+                    else if (tab.type === 'image' && tab.filePath) title = tab.filePath.split(/[/\\]/).pop() || 'Image';
+                    else if (tab.type === 'audio' && tab.filePath) title = tab.filePath.split(/[/\\]/).pop() || 'Audio';
+                    else if (tab.type === 'character' && tab.characterTag) {
+                        const char = analysisResult.characters.get(tab.characterTag);
+                        title = char ? `Char: ${char.name}` : (tab.characterTag === 'new_character' ? 'New Character' : 'Unknown Character');
+                    }
+
                     const isActive = activeTabId === tab.id;
                     return (
                         <div 
@@ -904,6 +968,8 @@ const App: React.FC = () => {
                         setCanvasFilters={setCanvasFilters}
                         centerOnBlockRequest={centerOnBlockRequest}
                         hoverHighlightIds={hoverHighlightIds}
+                        transform={storyCanvasTransform}
+                        onTransformChange={setStoryCanvasTransform}
                     />
                 )}
                 
@@ -925,15 +991,17 @@ const App: React.FC = () => {
                              });
                         }}
                         onOpenEditor={handleOpenEditor}
+                        transform={routeCanvasTransform}
+                        onTransformChange={setRouteCanvasTransform}
                     />
                 )}
 
-                {activeBlock && openTabs.find(t => t.id === activeTabId)?.type === 'editor' && (
+                {activeBlock && activeTab?.type === 'editor' && (
                     <EditorView 
                         block={activeBlock}
                         blocks={blocks}
                         analysisResult={analysisResult}
-                        initialScrollRequest={openTabs.find(t => t.id === activeTabId)?.scrollRequest}
+                        initialScrollRequest={activeTab.scrollRequest}
                         onSwitchFocusBlock={(blockId, line) => {
                             handleOpenEditor(blockId, line);
                         }}
@@ -952,6 +1020,48 @@ const App: React.FC = () => {
                         onEditorUnmount={(id) => editorInstances.current.delete(id)}
                     />
                 )}
+
+                {activeTab?.type === 'image' && activeTab.filePath && (
+                    <ImageEditorView 
+                        // Safe lookup or fallback to prevent crash, though content might be empty if lookup fails
+                        image={images.get(activeTab.filePath) || { filePath: activeTab.filePath, fileName: 'Unknown', isInProject: false, fileHandle: null, dataUrl: '' }}
+                        metadata={imageMetadata.get(activeTab.filePath) || (images.get(activeTab.filePath)?.projectFilePath ? imageMetadata.get(images.get(activeTab.filePath)!.projectFilePath!) : undefined)}
+                        onUpdateMetadata={(path, meta) => {
+                             setImageMetadata(draft => { draft.set(path, meta); });
+                             addToast('Image metadata saved', 'success');
+                        }}
+                        onCopyToProject={(src, meta) => {
+                            handleCopyImagesToProject([src]);
+                            const fileName = src.split(/[/\\]/).pop() || '';
+                            const projectPath = `game/images/${fileName}`;
+                            setImageMetadata(draft => { draft.set(projectPath, meta); });
+                        }}
+                    />
+                )}
+
+                {activeTab?.type === 'audio' && activeTab.filePath && (
+                    <AudioEditorView 
+                        audio={audios.get(activeTab.filePath) || { filePath: activeTab.filePath, fileName: 'Unknown', dataUrl: '', fileHandle: null, isInProject: false }}
+                        metadata={audioMetadata.get(activeTab.filePath) || (audios.get(activeTab.filePath)?.projectFilePath ? audioMetadata.get(audios.get(activeTab.filePath)!.projectFilePath!) : undefined)}
+                        onUpdateMetadata={(path, meta) => {
+                             setAudioMetadata(draft => { draft.set(path, meta); });
+                             addToast('Audio metadata saved', 'success');
+                        }}
+                        onCopyToProject={(src, meta) => {
+                             addToast('Copy not implemented fully', 'warning');
+                        }}
+                    />
+                )}
+
+                {activeTab?.type === 'character' && activeTab.characterTag && (
+                    <CharacterEditorView 
+                        character={analysisResult.characters.get(activeTab.characterTag)}
+                        onSave={handleUpdateCharacter}
+                        existingTags={Array.from(analysisResult.characters.keys())}
+                        projectImages={Array.from(images.values())}
+                        imageMetadata={imageMetadata}
+                    />
+                )}
             </div>
         </div>
 
@@ -960,7 +1070,7 @@ const App: React.FC = () => {
              <div className="w-80 flex-shrink-0 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col overflow-hidden transition-all duration-300">
                 <StoryElementsPanel 
                     analysisResult={analysisResult}
-                    onOpenCharacterEditor={(tag) => {/* ... */}}
+                    onOpenCharacterEditor={handleOpenCharacterEditor}
                     onFindCharacterUsages={(tag) => handleFindUsages(tag, 'character')}
                     onAddVariable={() => {}}
                     onFindVariableUsages={(name) => handleFindUsages(name, 'variable')}
@@ -974,11 +1084,13 @@ const App: React.FC = () => {
                     onCopyImagesToProject={handleCopyImagesToProject}
                     onUpdateImageMetadata={() => {}}
                     onOpenImageEditor={(path) => {
-                        // Open image tab
                         const tabId = `img-${path}`;
-                        if(!openTabs.find(t => t.id === tabId)) {
-                             setOpenTabs(p => [...p, { id: tabId, type: 'image', filePath: path }]);
-                        }
+                        setOpenTabs(prev => {
+                            if(!prev.find(t => t.id === tabId)) {
+                                return [...prev, { id: tabId, type: 'image', filePath: path }];
+                            }
+                            return prev;
+                        });
                         setActiveTabId(tabId);
                     }}
                     imagesLastScanned={imagesLastScanned}
@@ -992,7 +1104,16 @@ const App: React.FC = () => {
                     onRemoveAudioScanDirectory={() => {}}
                     onCopyAudiosToProject={() => {}}
                     onUpdateAudioMetadata={() => {}}
-                    onOpenAudioEditor={() => {}}
+                    onOpenAudioEditor={(path) => {
+                        const tabId = `aud-${path}`;
+                        setOpenTabs(prev => {
+                            if(!prev.find(t => t.id === tabId)) {
+                                return [...prev, { id: tabId, type: 'audio', filePath: path }];
+                            }
+                            return prev;
+                        });
+                        setActiveTabId(tabId);
+                    }}
                     audiosLastScanned={audiosLastScanned}
                     isRefreshingAudios={isRefreshingAudios}
                     onRefreshAudios={() => {}}
