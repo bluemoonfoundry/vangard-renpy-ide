@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import type { Block, RenpyAnalysisResult } from '../types';
@@ -7,7 +8,6 @@ interface GenerateContentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onInsertContent: (content: string) => void;
-  apiKey?: string;
   currentBlockId: string;
   blocks: Block[];
   analysisResult: RenpyAnalysisResult;
@@ -20,7 +20,6 @@ const GenerateContentModal: React.FC<GenerateContentModalProps> = ({
   isOpen, 
   onClose, 
   onInsertContent, 
-  apiKey,
   currentBlockId,
   blocks,
   analysisResult,
@@ -44,8 +43,9 @@ const GenerateContentModal: React.FC<GenerateContentModalProps> = ({
     setResponse('');
 
     try {
+      const apiKey = process.env.API_KEY;
       if (!apiKey) {
-        throw new Error("Gemini API key is not configured. Please set it in the Settings panel.");
+        throw new Error("Gemini API key is not configured. Please set the API_KEY environment variable.");
       }
 
       let finalPrompt = '';
@@ -111,7 +111,6 @@ const GenerateContentModal: React.FC<GenerateContentModalProps> = ({
         contents: finalPrompt,
       });
 
-      // Clean up response to remove potential markdown code blocks
       let resultText = genResponse.text.trim();
       if (resultText.startsWith('```renpy')) {
         resultText = resultText.substring(7);
@@ -129,7 +128,7 @@ const GenerateContentModal: React.FC<GenerateContentModalProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [prompt, isLoading, apiKey, includeContext, renpyOnly, getCurrentContext, analysisResult, blocks, currentBlockId, model]);
+  }, [prompt, isLoading, includeContext, renpyOnly, getCurrentContext, analysisResult, blocks, currentBlockId, model]);
 
   const handleCopyAndInsert = () => {
     onInsertContent(response);
@@ -137,7 +136,6 @@ const GenerateContentModal: React.FC<GenerateContentModalProps> = ({
   };
 
   const handleClose = () => {
-    // Reset state on close
     setPrompt('');
     setResponse('');
     setError(null);
@@ -272,4 +270,3 @@ const GenerateContentModal: React.FC<GenerateContentModalProps> = ({
 };
 
 export default GenerateContentModal;
-    

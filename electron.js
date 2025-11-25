@@ -1,5 +1,6 @@
 
 
+
 import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -15,12 +16,10 @@ async function loadWindowState() {
     try {
         const data = await fs.readFile(windowStatePath, 'utf-8');
         const state = JSON.parse(data);
-        // Basic validation to ensure we have a usable state
         if (typeof state.width === 'number' && typeof state.height === 'number') {
             return state;
         }
     } catch (error) {
-        // File doesn't exist or is invalid, which is expected on first launch.
         console.log('No saved window state found, using defaults.');
     }
     return null;
@@ -30,13 +29,35 @@ function saveWindowState(window) {
     if (!window) return;
     try {
         const bounds = window.getBounds();
-        // Use fire-and-forget for writeFile as the app might be closing.
         fs.writeFile(windowStatePath, JSON.stringify(bounds));
     } catch (error) {
         console.error('Failed to save window state:', error);
     }
 }
-// --- End Window State Management ---
+
+// --- App Settings Management ---
+const appSettingsPath = path.join(app.getPath('userData'), 'app-settings.json');
+
+async function loadAppSettings() {
+    try {
+        const data = await fs.readFile(appSettingsPath, 'utf-8');
+        return JSON.parse(data);
+    } catch (error) {
+        console.log('No saved app settings found, using defaults.');
+        return null;
+    }
+}
+
+async function saveAppSettings(settings) {
+    try {
+        await fs.writeFile(appSettingsPath, JSON.stringify(settings, null, 2));
+        return { success: true };
+    } catch (error) {
+        console.error('Failed to save app settings:', error);
+        return { success: false, error: error.message };
+    }
+}
+
 
 async function readProjectFiles(rootPath) {
     const results = {
@@ -77,7 +98,6 @@ async function readProjectFiles(rootPath) {
             }
             children.push(childNode);
         }
-        // Sort children
         children.sort((a, b) => {
             if (a.children && !b.children) return -1;
             if (!a.children && b.children) return 1;
@@ -92,19 +112,17 @@ async function readProjectFiles(rootPath) {
         const settingsContent = await fs.readFile(path.join(rootPath, 'game', 'project.ide.json'), 'utf-8');
         results.settings = JSON.parse(settingsContent);
     } catch (e) {
-        // No settings file found, which is fine.
         results.settings = {};
     }
 
     return results;
 }
 
-let forceQuit = false; // Flag to bypass the custom close handling
+let forceQuit = false;
 
 async function createWindow() {
   const savedState = await loadWindowState();
 
-  // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: savedState?.width || 1280,
     height: savedState?.height || 800,
@@ -119,14 +137,11 @@ async function createWindow() {
   });
 
   mainWindow.on('close', (e) => {
-    // If we've already decided to quit, don't prevent it.
     if (forceQuit) {
       saveWindowState(mainWindow);
       return;
     }
-    // Prevent the window from closing immediately.
     e.preventDefault();
-    // Ask the renderer process if there are unsaved changes.
     mainWindow.webContents.send('check-unsaved-changes-before-exit');
   });
 
@@ -208,7 +223,6 @@ async function createWindow() {
   const menu = Menu.buildFromTemplate(menuTemplate);
   Menu.setApplicationMenu(menu);
 
-  // Load the index.html from the Vite build output directory.
   mainWindow.loadFile(path.join(__dirname, 'dist/index.html'));
 }
 
@@ -303,10 +317,8 @@ app.whenReady().then(() => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (window) {
         if (hasUnsavedChanges) {
-            // Tell the renderer to show its custom modal.
             window.webContents.send('show-exit-modal');
         } else {
-            // No unsaved changes, so we can quit immediately.
             forceQuit = true;
             app.quit();
         }
@@ -316,6 +328,13 @@ app.whenReady().then(() => {
   ipcMain.on('force-quit', () => {
     forceQuit = true;
     app.quit();
+  });
+
+  ipcMain.handle('app:get-settings', async () => {
+    return await loadAppSettings();
+  });
+  ipcMain.handle('app:save-settings', async (event, settings) => {
+      return await saveAppSettings(settings);
   });
 
   createWindow();

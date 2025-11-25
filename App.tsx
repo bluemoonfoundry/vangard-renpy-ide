@@ -1,5 +1,4 @@
 
-
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -24,7 +23,8 @@ import { useHistory } from './hooks/useHistory';
 import type { 
   Block, BlockGroup, Link, Position, FileSystemTreeNode, EditorTab, 
   ToastMessage, IdeSettings, Theme, ProjectImage, RenpyAudio, 
-  ClipboardState, ImageMetadata, AudioMetadata, LabelNode, Character
+  ClipboardState, ImageMetadata, AudioMetadata, LabelNode, Character,
+  AppSettings, ProjectSettings, StickyNote
 } from './types';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
@@ -263,6 +263,7 @@ const App: React.FC = () => {
   // --- State: Blocks & Groups (Undo/Redo) ---
   const { state: blocks, setState: setBlocks, undo, redo, canUndo, canRedo } = useHistory<Block[]>([]);
   const [groups, setGroups] = useImmer<BlockGroup[]>([]);
+  const [stickyNotes, setStickyNotes] = useImmer<StickyNote[]>([]);
   
   // --- State: File System & Environment ---
   const [projectRootPath, setProjectRootPath] = useState<string | null>(null);
@@ -288,13 +289,12 @@ const App: React.FC = () => {
   // --- State: UI & Editor ---
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([{ id: 'canvas', type: 'canvas' }]);
   const [activeTabId, setActiveTabId] = useState<string>('canvas');
-  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
-  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   
   const [dirtyBlockIds, setDirtyBlockIds] = useState<Set<string>>(new Set());
   const [dirtyEditors, setDirtyEditors] = useState<Set<string>>(new Set()); // Blocks modified in editor but not synced to block state yet
+  const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false); // Track project setting changes like sticky notes
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saved');
   
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -311,17 +311,19 @@ const App: React.FC = () => {
   const [storyCanvasTransform, setStoryCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [routeCanvasTransform, setRouteCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
 
+  // --- State: Application and Project Settings ---
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
-  const [ideSettings, setIdeSettings] = useState<IdeSettings>({
+  const [appSettingsLoaded, setAppSettingsLoaded] = useState(false);
+  const [appSettings, updateAppSettings] = useImmer<AppSettings>({
     theme: 'system',
     isLeftSidebarOpen: true,
     leftSidebarWidth: 250,
     isRightSidebarOpen: true,
     rightSidebarWidth: 300,
-    openTabs: [],
-    activeTabId: 'canvas',
+  });
+  const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes'>>({
     enableAiFeatures: false,
-    selectedModel: 'gemini-1.5-flash',
+    selectedModel: 'gemini-2.5-flash',
   });
 
   // --- State: Clipboard & Search ---
@@ -329,7 +331,7 @@ const App: React.FC = () => {
   const [findUsagesHighlightIds, setFindUsagesHighlightIds] = useState<Set<string> | null>(null);
   const [centerOnBlockRequest, setCenterOnBlockRequest] = useState<{ blockId: string, key: number } | null>(null);
   const [flashBlockRequest, setFlashBlockRequest] = useState<{ blockId: string, key: number } | null>(null);
-  const [canvasFilters, setCanvasFilters] = useState({ story: true, screens: true, config: false });
+  const [canvasFilters, setCanvasFilters] = useState({ story: true, screens: true, config: false, notes: true });
   const [hoverHighlightIds, setHoverHighlightIds] = useState<Set<string> | null>(null);
 
   // --- Analysis ---
@@ -339,26 +341,48 @@ const App: React.FC = () => {
   const editorInstances = useRef<Map<string, monaco.editor.IStandaloneCodeEditor>>(new Map());
   const initialLayoutNeeded = useRef(false);
 
-  // --- Initial Load & Theme ---
+  // --- Initial Load of App Settings & Theme Management ---
   useEffect(() => {
-    const savedSettings = localStorage.getItem('renpy-ide-settings');
-    if (savedSettings) {
-      try {
-        const parsed = JSON.parse(savedSettings);
-        setIdeSettings(prev => ({ ...prev, ...parsed }));
-        setIsLeftSidebarOpen(parsed.isLeftSidebarOpen ?? true);
-        setIsRightSidebarOpen(parsed.isRightSidebarOpen ?? true);
-      } catch (e) { console.error("Failed to load settings", e); }
+    // Load app-level settings from Electron main process or fallback to localStorage
+    if (window.electronAPI?.getAppSettings) {
+      window.electronAPI.getAppSettings().then(savedSettings => {
+        if (savedSettings) {
+          updateAppSettings(draft => { Object.assign(draft, savedSettings) });
+        }
+      }).finally(() => {
+        setAppSettingsLoaded(true);
+      });
+    } else { // Browser fallback
+      const savedSettings = localStorage.getItem('renpy-ide-app-settings');
+      if (savedSettings) {
+        try {
+          const parsed = JSON.parse(savedSettings);
+          updateAppSettings(draft => { Object.assign(draft, parsed) });
+        } catch (e) { console.error("Failed to load app settings from localStorage", e); }
+      }
+      setAppSettingsLoaded(true);
     }
-  }, []);
+  }, [updateAppSettings]);
 
   useEffect(() => {
-    localStorage.setItem('renpy-ide-settings', JSON.stringify({
-      ...ideSettings,
-      isLeftSidebarOpen,
-      isRightSidebarOpen
-    }));
+    // Prevent saving the initial default state before settings have been loaded
+    if (!appSettingsLoaded) {
+      return;
+    }
+
+    // Save app settings whenever they change
+    if (window.electronAPI?.saveAppSettings) {
+      window.electronAPI.saveAppSettings(appSettings)
+        .then(result => {
+            if (!result || !result.success) {
+                console.error('Failed to save app settings:', result?.error);
+            }
+        });
+    } else { // Browser fallback
+      localStorage.setItem('renpy-ide-app-settings', JSON.stringify(appSettings));
+    }
     
+    // Apply theme based on settings
     const root = window.document.documentElement;
     const applyTheme = (theme: Theme) => {
       root.classList.remove('dark', 'theme-solarized-light', 'theme-solarized-dark', 'theme-colorful', 'theme-colorful-light');
@@ -367,16 +391,16 @@ const App: React.FC = () => {
       if (theme === 'solarized-dark') root.classList.add('dark', 'theme-solarized-dark');
       if (theme === 'colorful') root.classList.add('dark', 'theme-colorful');
       if (theme === 'colorful-light') root.classList.add('theme-colorful-light');
-      // system & light: no special class (defaults)
     };
 
-    if (ideSettings.theme === 'system') {
+    if (appSettings.theme === 'system') {
       const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       applyTheme(systemTheme);
     } else {
-      applyTheme(ideSettings.theme);
+      applyTheme(appSettings.theme);
     }
-  }, [ideSettings, isLeftSidebarOpen, isRightSidebarOpen]);
+  }, [appSettings, appSettingsLoaded]);
+
 
   // --- Toast Helper ---
   const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
@@ -429,10 +453,8 @@ const App: React.FC = () => {
     const blockWidth = 320;
     const blockHeight = 200;
 
-    // Calculate the visual center of the available workspace
-    // Adjust for sidebars if they are open
-    const leftOffset = isLeftSidebarOpen ? 256 : 0; // w-64
-    const rightOffset = isRightSidebarOpen ? 320 : 0; // w-80
+    const leftOffset = appSettings.isLeftSidebarOpen ? appSettings.leftSidebarWidth : 0;
+    const rightOffset = appSettings.isRightSidebarOpen ? appSettings.rightSidebarWidth : 0;
     const topOffset = 64; // h-16 (header)
 
     const visibleWidth = window.innerWidth - leftOffset - rightOffset;
@@ -441,11 +463,9 @@ const App: React.FC = () => {
     const screenCenterX = leftOffset + (visibleWidth / 2);
     const screenCenterY = topOffset + (visibleHeight / 2);
 
-    // Convert screen coordinates to world coordinates
     const worldCenterX = (screenCenterX - storyCanvasTransform.x) / storyCanvasTransform.scale;
     const worldCenterY = (screenCenterY - storyCanvasTransform.y) / storyCanvasTransform.scale;
 
-    // Center the block itself on that point
     const position = {
         x: worldCenterX - (blockWidth / 2),
         y: worldCenterY - (blockHeight / 2)
@@ -464,11 +484,9 @@ const App: React.FC = () => {
     setBlocks(prev => [...prev, newBlock]);
     setDirtyBlockIds(prev => new Set(prev).add(id));
     
-    // Automatically select the new block and trigger a flash
     setSelectedBlockIds([id]);
     setFlashBlockRequest({ blockId: id, key: Date.now() });
 
-    // Update tree if possible (mock for browser, explicit for fs)
     if (fileSystemTree && filePath) {
         setFileSystemTree(prev => {
             if (!prev) return null;
@@ -476,7 +494,7 @@ const App: React.FC = () => {
         });
     }
     return id;
-  }, [setBlocks, fileSystemTree, storyCanvasTransform, isLeftSidebarOpen, isRightSidebarOpen]);
+  }, [setBlocks, fileSystemTree, storyCanvasTransform, appSettings]);
 
   const handleCreateBlockConfirm = async (name: string, type: BlockType, folderPath: string) => {
     let content = '';
@@ -497,8 +515,6 @@ const App: React.FC = () => {
 
     if (window.electronAPI && projectRootPath) {
         try {
-            // Use the folderPath provided by the modal logic (based on selection)
-            // Ensure folderPath doesn't have trailing slash for path.join
             const cleanFolderPath = folderPath.endsWith('/') ? folderPath.slice(0, -1) : folderPath;
             const relativePath = cleanFolderPath ? `${cleanFolderPath}/${fileName}` : fileName;
             const fullPath = await window.electronAPI.path.join(projectRootPath!, cleanFolderPath, fileName);
@@ -507,29 +523,83 @@ const App: React.FC = () => {
             if (res.success) {
                 const id = addBlock(relativePath, content);
                 addToast(`Created ${fileName} in ${cleanFolderPath || 'root'}`, 'success');
-                // Refresh tree
                 const projData = await window.electronAPI.loadProject(projectRootPath);
                 setFileSystemTree(projData.tree);
             } else {
-                throw new Error(res.error);
+                throw new Error(res.error || 'Unknown error occurred during file creation');
             }
-        } catch (e: any) {
+        } catch (e) {
             console.error(e);
-            addToast(`Failed to create file: ${e?.message || String(e)}`, 'error');
+            // FIX: Properly handle the unknown error type from the catch block to avoid passing it directly to a string.
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            addToast(`Failed to create file: ${errorMessage}`, 'error');
         }
     } else {
-        // Browser mode
         addBlock(fileName, content);
         addToast(`Created block ${fileName}`, 'success');
     }
   };
 
+  // --- Sticky Note Management ---
+  const addStickyNote = useCallback(() => {
+      const id = `note-${Date.now()}`;
+      const width = 200;
+      const height = 200;
+
+      const leftOffset = appSettings.isLeftSidebarOpen ? appSettings.leftSidebarWidth : 0;
+      const rightOffset = appSettings.isRightSidebarOpen ? appSettings.rightSidebarWidth : 0;
+      const topOffset = 64; 
+
+      const visibleWidth = window.innerWidth - leftOffset - rightOffset;
+      const visibleHeight = window.innerHeight - topOffset;
+
+      const screenCenterX = leftOffset + (visibleWidth / 2);
+      const screenCenterY = topOffset + (visibleHeight / 2);
+
+      const worldCenterX = (screenCenterX - storyCanvasTransform.x) / storyCanvasTransform.scale;
+      const worldCenterY = (screenCenterY - storyCanvasTransform.y) / storyCanvasTransform.scale;
+
+      const position = {
+          x: worldCenterX - (width / 2),
+          y: worldCenterY - (height / 2)
+      };
+
+      const newNote: StickyNote = {
+          id,
+          content: '',
+          position,
+          width,
+          height,
+          color: 'yellow'
+      };
+
+      setStickyNotes(draft => {
+          draft.push(newNote);
+      });
+      setHasUnsavedSettings(true);
+  }, [appSettings, storyCanvasTransform, setStickyNotes]);
+
+  const updateStickyNote = useCallback((id: string, data: Partial<StickyNote>) => {
+      setStickyNotes(draft => {
+          const idx = draft.findIndex(n => n.id === id);
+          if (idx !== -1) Object.assign(draft[idx], data);
+      });
+      setHasUnsavedSettings(true);
+  }, [setStickyNotes]);
+
+  const deleteStickyNote = useCallback((id: string) => {
+      setStickyNotes(draft => {
+          const idx = draft.findIndex(n => n.id === id);
+          if (idx !== -1) draft.splice(idx, 1);
+      });
+      setHasUnsavedSettings(true);
+  }, [setStickyNotes]);
+
+
   const getSelectedFolderForNewBlock = useCallback(() => {
     if (explorerSelectedPaths.size === 1) {
         const selectedPath = Array.from(explorerSelectedPaths)[0];
         if (!fileSystemTree) return 'game/';
-
-        // Helper to find node
         const findNode = (node: FileSystemTreeNode, targetPath: string): FileSystemTreeNode | null => {
             if (node.path === targetPath) return node;
             if (node.children) {
@@ -540,26 +610,21 @@ const App: React.FC = () => {
             }
             return null;
         };
-
         const node = findNode(fileSystemTree, selectedPath);
         if (node) {
             if (node.children) {
-                // It is a directory
                 return node.path ? (node.path.endsWith('/') ? node.path : node.path + '/') : ''; 
             } else {
-                // It is a file, return parent directory
                 const parts = node.path.split('/');
-                parts.pop(); // Remove filename
+                parts.pop();
                 return parts.length > 0 ? parts.join('/') + '/' : '';
             }
         }
     }
-    // Fallback if multiple selected or none or not found
     return 'game/';
   }, [explorerSelectedPaths, fileSystemTree]);
 
   const deleteBlock = useCallback((id: string) => {
-    // Remove from groups
     setGroups(draft => {
         draft.forEach(g => {
             g.blockIds = g.blockIds.filter(bid => bid !== id);
@@ -569,8 +634,6 @@ const App: React.FC = () => {
     setBlocks(prev => prev.filter(b => b.id !== id));
     setOpenTabs(prev => prev.filter(t => t.blockId !== id));
     if (activeTabId === id) setActiveTabId('canvas');
-    
-    // Note: We don't delete the file from disk automatically here, just from the canvas.
   }, [setBlocks, setGroups, activeTabId]);
 
   // --- Layout ---
@@ -590,14 +653,9 @@ const App: React.FC = () => {
     }
   }, [blocks, analysisResult, setBlocks, addToast]);
 
-  // Effect to run initial tidy-up after project load
   useEffect(() => {
-    // Only run if the flag is set, and we have blocks and analysis is likely complete
     if (initialLayoutNeeded.current && blocks.length > 0 && analysisResult) {
-        initialLayoutNeeded.current = false; // Reset the flag immediately to prevent re-runs
-        
-        // A small timeout can ensure the analysis has completed after the blocks were set
-        // and avoid a flicker if the layout is too fast.
+        initialLayoutNeeded.current = false; 
         setTimeout(() => handleTidyUp(false), 100);
     }
   }, [blocks, analysisResult, handleTidyUp]);
@@ -616,26 +674,23 @@ const App: React.FC = () => {
 
   // --- File System Integration ---
   
-  // Shared project loader
   const loadProject = useCallback(async (path: string) => {
       setIsLoading(true);
       setLoadingMessage('Reading project files...');
       try {
           const projectData = await window.electronAPI!.loadProject(path);
           
-          // Convert files to blocks
           let loadedBlocks: Block[] = projectData.files.map((f: any, index: number) => ({
               id: `block-${index}-${Date.now()}`,
               content: f.content,
               filePath: f.path,
-              position: { x: (index % 5) * 350, y: Math.floor(index / 5) * 250 }, // Simple grid init
+              position: { x: (index % 5) * 350, y: Math.floor(index / 5) * 250 },
               width: 320,
               height: 200,
               title: f.path.split('/').pop()
           }));
 
           if (loadedBlocks.length === 0) {
-             // Create default block for empty project
              const defaultBlock = {
                  id: `block-${Date.now()}`,
                  content: `label start:\n    "Welcome to your new project!"\n    return\n`,
@@ -644,11 +699,9 @@ const App: React.FC = () => {
                  width: 320, height: 200, title: 'script.rpy'
              };
              loadedBlocks.push(defaultBlock);
-             // Try to write it to disk immediately if possible
              if (window.electronAPI?.writeFile) {
                  const scriptPath = await window.electronAPI.path.join(projectData.rootPath, 'script.rpy');
                  await window.electronAPI.writeFile(scriptPath, defaultBlock.content);
-                 // Also update tree to reflect this new file
                  if (projectData.tree) {
                      projectData.tree.children = [...(projectData.tree.children || []), { name: 'script.rpy', path: 'script.rpy' }];
                  }
@@ -656,16 +709,12 @@ const App: React.FC = () => {
           }
 
           setProjectRootPath(projectData.rootPath);
-          // Set blocks with their initial grid layout, which will then trigger
-          // a full tidy-up via an effect once analysis is complete.
           setBlocks(loadedBlocks);
           initialLayoutNeeded.current = true;
           setFileSystemTree(projectData.tree);
           
-          // Load Assets
           const imgMap = new Map<string, ProjectImage>();
           projectData.images.forEach((img: any) => {
-              // Fix: Map 'path' from Electron to 'filePath' expected by ProjectImage
               imgMap.set(img.path, { 
                   ...img, 
                   filePath: img.path,
@@ -678,7 +727,6 @@ const App: React.FC = () => {
 
           const audioMap = new Map<string, RenpyAudio>();
           projectData.audios.forEach((aud: any) => {
-              // Fix: Map 'path' from Electron to 'filePath' expected by RenpyAudio
               audioMap.set(aud.path, { 
                   ...aud, 
                   filePath: aud.path,
@@ -689,14 +737,27 @@ const App: React.FC = () => {
           });
           setAudios(audioMap);
 
-          // Load Settings
-           if (projectData.settings) {
-              // Merge project settings (like API key) if present
-              setIdeSettings(prev => ({ ...prev, ...projectData.settings }));
+          // Load Project Settings
+          if (projectData.settings) {
+            updateProjectSettings(draft => {
+              draft.enableAiFeatures = projectData.settings.enableAiFeatures ?? false;
+              draft.selectedModel = projectData.settings.selectedModel ?? 'gemini-2.5-flash';
+            });
+            setOpenTabs(projectData.settings.openTabs ?? [{ id: 'canvas', type: 'canvas' }]);
+            setActiveTabId(projectData.settings.activeTabId ?? 'canvas');
+            setStickyNotes(projectData.settings.stickyNotes || []);
+          } else {
+            // Reset to defaults for a new/unconfigured project
+            updateProjectSettings(draft => {
+              draft.enableAiFeatures = false;
+              draft.selectedModel = 'gemini-2.5-flash';
+            });
+            setOpenTabs([{ id: 'canvas', type: 'canvas' }]);
+            setActiveTabId('canvas');
+            setStickyNotes([]);
           }
-
-          setOpenTabs([{ id: 'canvas', type: 'canvas' }]);
-          setActiveTabId('canvas');
+          
+          setHasUnsavedSettings(false);
           setShowWelcome(false);
           addToast('Project loaded successfully', 'success');
       } catch (err) {
@@ -705,7 +766,7 @@ const App: React.FC = () => {
       } finally {
           setIsLoading(false);
       }
-  }, [setBlocks, setImages, setAudios, setIdeSettings, addToast, setFileSystemTree]);
+  }, [setBlocks, setImages, setAudios, updateProjectSettings, addToast, setFileSystemTree, setStickyNotes]);
 
   const handleOpenProjectFolder = useCallback(async () => {
     try {
@@ -715,7 +776,6 @@ const App: React.FC = () => {
                 await loadProject(path);
             }
         } else {
-            // Web File System Access API (Not implemented fully for this demo, falling back to mock)
             alert("To use local file system features, please run this app in Electron or use a compatible browser with FS Access API support (Chrome/Edge). For now, you are in Browser Mode.");
         }
     } catch (err) {
@@ -744,7 +804,6 @@ const App: React.FC = () => {
     const editor = editorInstances.current.get(blockId);
     let contentToSave: string | undefined;
 
-    // 1. Get latest content from editor if open, otherwise from state
     if (editor) {
         contentToSave = editor.getValue();
         updateBlock(blockId, { content: contentToSave });
@@ -755,7 +814,6 @@ const App: React.FC = () => {
 
     if (contentToSave === undefined) return;
 
-    // 2. Write to disk
     if (window.electronAPI && projectRootPath) {
         const block = blocks.find(b => b.id === blockId);
         if (block && block.filePath) {
@@ -769,7 +827,6 @@ const App: React.FC = () => {
         }
     }
 
-    // 3. Clear dirty state for this block
     setDirtyBlockIds(prev => {
         const next = new Set(prev);
         next.delete(blockId);
@@ -786,9 +843,7 @@ const App: React.FC = () => {
   const handleSaveAll = useCallback(async () => {
     setSaveStatus('saving');
     try {
-        // 1. Capture all content from open editors first to ensure we have latest changes
         let currentBlocks = [...blocks];
-        
         const editorUpdates = new Map<string, string>();
 
         for (const blockId of dirtyEditors) {
@@ -817,6 +872,7 @@ const App: React.FC = () => {
         if (!projectRootPath && !directoryHandle) {
              setDirtyBlockIds(new Set());
              setDirtyEditors(new Set());
+             setHasUnsavedSettings(false);
              setSaveStatus('saved');
              addToast('Changes saved to memory', 'success');
              setTimeout(() => setSaveStatus('saved'), 2000);
@@ -829,21 +885,23 @@ const App: React.FC = () => {
                 if (block && block.filePath) {
                     const absPath = await window.electronAPI.path.join(projectRootPath!, block.filePath);
                     const res = await window.electronAPI.writeFile(absPath, block.content);
-                    if (!res.success) throw new Error(res.error);
+                    if (!res.success) throw new Error(res.error || 'Unknown error saving file');
                 }
             }
             
+             const settingsToSave: ProjectSettings = {
+                ...projectSettings,
+                openTabs,
+                activeTabId,
+                stickyNotes,
+             };
              const settingsPath = await window.electronAPI.path.join(projectRootPath!, 'game/project.ide.json');
-             await window.electronAPI.writeFile(settingsPath, JSON.stringify({
-                 apiKey: ideSettings.apiKey,
-                 theme: ideSettings.theme,
-                 enableAiFeatures: ideSettings.enableAiFeatures,
-                 selectedModel: ideSettings.selectedModel
-             }, null, 2));
+             await window.electronAPI.writeFile(settingsPath, JSON.stringify(settingsToSave, null, 2));
         } 
 
         setDirtyBlockIds(new Set());
         setDirtyEditors(new Set());
+        setHasUnsavedSettings(false);
         setSaveStatus('saved');
         addToast('All changes saved', 'success');
         setTimeout(() => setSaveStatus('saved'), 2000);
@@ -852,11 +910,10 @@ const App: React.FC = () => {
         setSaveStatus('error');
         addToast('Failed to save changes', 'error');
     }
-  }, [blocks, dirtyEditors, dirtyBlockIds, projectRootPath, directoryHandle, ideSettings, addToast, setBlocks]);
+  }, [blocks, dirtyEditors, dirtyBlockIds, projectRootPath, directoryHandle, projectSettings, openTabs, activeTabId, stickyNotes, addToast, setBlocks]);
   
-  // --- Unsaved Changes Modal Handling for New Project ---
   const handleNewProjectRequest = useCallback(() => {
-    const hasUnsaved = dirtyBlockIds.size > 0 || dirtyEditors.size > 0;
+    const hasUnsaved = dirtyBlockIds.size > 0 || dirtyEditors.size > 0 || hasUnsavedSettings;
     
     if (hasUnsaved) {
       setUnsavedChangesModalInfo({
@@ -880,7 +937,7 @@ const App: React.FC = () => {
     } else {
       handleCreateProject();
     }
-  }, [dirtyBlockIds, dirtyEditors, handleCreateProject, handleSaveAll]);
+  }, [dirtyBlockIds, dirtyEditors, hasUnsavedSettings, handleCreateProject, handleSaveAll]);
   
   // --- Tab Management ---
   const handleOpenEditor = useCallback((blockId: string, line?: number) => {
@@ -896,7 +953,6 @@ const App: React.FC = () => {
             }]);
         }
     } else if (line) {
-        // Update scroll request for existing tab
         setOpenTabs(prev => prev.map(tab => 
             tab.id === blockId 
                 ? { ...tab, scrollRequest: { line, key: Date.now() } }
@@ -929,7 +985,6 @@ const App: React.FC = () => {
     } else if (imageExtensions.some(ext => lowerFilePath.endsWith(ext))) {
       handleOpenImageEditorTab(filePath);
     }
-    // Future: Add audio file handling here
   }, [blocks, handleOpenEditor, handleOpenImageEditorTab]);
 
   const handleCloseTab = useCallback((tabId: string, e?: React.MouseEvent) => {
@@ -1022,13 +1077,9 @@ const App: React.FC = () => {
   }, []);
 
   const handleFindUsages = (id: string, type: 'character' | 'variable') => {
-      // Simple finding based on analysis result
       const ids = new Set<string>();
       if (type === 'character') {
-          // We don't have a direct map of char -> block[] in analysis result exposed simply yet, 
-          // but we have dialogueLines.
-          const lines = analysisResult.dialogueLines; // Map<blockId, line[]>
-          // This is blockId -> lines. We need to search.
+          const lines = analysisResult.dialogueLines;
           lines.forEach((dialogues, blockId) => {
               if (dialogues.some(d => d.tag === id)) ids.add(blockId);
           });
@@ -1055,14 +1106,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleUpdateCharacter = (char: Character, oldTag?: string) => {
-      // To update a character, we need to update the block that defines it.
-      // This is complex because we need to parse/regenerate the define statement.
-      // For this demo, we'll just show a success toast but note that full
-      // source-code regeneration for characters is a larger task usually involving AST manipulation.
-      
-      // However, we can try a simple Find & Replace for the definition line if we have `definedInBlockId`.
       addToast(`Saved character ${char.name} (Simulated)`, 'success');
-      // In a real implementation, we'd update the block content here.
   };
 
   // --- Search & Highlights ---
@@ -1078,13 +1122,9 @@ const App: React.FC = () => {
 
   const handleAnalyzeRoutes = useCallback(() => {
       const { labelNodes, routeLinks, identifiedRoutes } = performRouteAnalysis(blocks, analysisResult.labels, analysisResult.jumps);
-      
-      // Fix: Apply automatic layout to the generated route nodes before displaying
       const layoutedNodes = computeAutoLayout(labelNodes, routeLinks);
-
       setRouteCanvasData({ labelNodes: layoutedNodes, routeLinks, identifiedRoutes });
       
-      // Open Route Canvas Tab
       const tabId = 'route-canvas';
       setOpenTabs(prev => {
           if (!prev.some(t => t.id === tabId)) {
@@ -1108,14 +1148,12 @@ const App: React.FC = () => {
               
               const img = (Array.from(images.values()) as ProjectImage[]).find(i => i.filePath === src);
               if (img && img.dataUrl) {
-                 // remove data:image/png;base64, prefix
                  const base64Data = img.dataUrl.split(',')[1];
                  await window.electronAPI.writeFile(destPath, base64Data, 'base64');
                  
                  setImages(draft => {
                      const existing = draft.get(src);
                      if (existing) existing.isInProject = true;
-                     // Add new entry for the project file
                      const relativePath = `game/images/${fileName}`;
                      draft.set(relativePath, { ...existing!, filePath: relativePath, isInProject: true, projectFilePath: relativePath });
                  });
@@ -1146,7 +1184,6 @@ const App: React.FC = () => {
                     addBlock(newPath, content);
                 }
             }
-            // Reload project to get updated tree. A bit heavy but robust.
             await loadProject(projectRootPath);
             addToast(`${type === 'file' ? 'File' : 'Folder'} created: ${name}`, 'success');
         } catch(e) {
@@ -1188,7 +1225,7 @@ const App: React.FC = () => {
 
         try {
             await window.electronAPI.moveFile(fullOldPath, fullNewPath);
-            await loadProject(projectRootPath); // Reload
+            await loadProject(projectRootPath);
             addToast(`Renamed to ${newName}`, 'success');
         } catch (e) {
             addToast('Rename failed', 'error');
@@ -1261,7 +1298,6 @@ const App: React.FC = () => {
   // --- Menu Command Listener ---
   useEffect(() => {
       if (window.electronAPI?.onMenuCommand) {
-          // FIX: Removed explicit `any` type. TypeScript will now correctly infer the type of `data` from the updated `onMenuCommand` definition in `types.ts`.
           const removeListener = window.electronAPI.onMenuCommand((data) => {
               switch (data.command) {
                   case 'new-project':
@@ -1285,7 +1321,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (window.electronAPI) {
       const removeCheckListener = window.electronAPI.onCheckUnsavedChangesBeforeExit(() => {
-        const hasUnsaved = dirtyBlockIds.size > 0 || dirtyEditors.size > 0;
+        const hasUnsaved = dirtyBlockIds.size > 0 || dirtyEditors.size > 0 || hasUnsavedSettings;
         window.electronAPI!.replyUnsavedChangesBeforeExit(hasUnsaved);
       });
 
@@ -1313,9 +1349,8 @@ const App: React.FC = () => {
         removeShowModalListener();
       };
     }
-  }, [dirtyBlockIds, dirtyEditors, handleSaveAll]);
+  }, [dirtyBlockIds, dirtyEditors, hasUnsavedSettings, handleSaveAll]);
 
-  // Use useCallback to stabilize callbacks passed to EditorView to avoid re-mounting
   const handleEditorMount = useCallback((id: string, editor: monaco.editor.IStandaloneCodeEditor) => {
       editorInstances.current.set(id, editor);
   }, []);
@@ -1327,6 +1362,25 @@ const App: React.FC = () => {
   // --- Render Helpers ---
   const activeBlock = useMemo(() => blocks.find(b => b.id === activeTabId), [blocks, activeTabId]);
   const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId), [openTabs, activeTabId]);
+
+  const settingsForModal: IdeSettings = useMemo(() => ({
+      ...appSettings,
+      ...projectSettings,
+  }), [appSettings, projectSettings]);
+
+  const handleSettingsChange = useCallback((key: keyof IdeSettings, value: any) => {
+      updateAppSettings(draft => {
+          if (key in draft) {
+            (draft as any)[key] = value;
+          }
+      });
+      updateProjectSettings(draft => {
+          if (key in draft) {
+            (draft as any)[key] = value;
+          }
+      });
+  }, [updateAppSettings, updateProjectSettings]);
+
 
   return (
     <div className="fixed inset-0 flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
@@ -1355,18 +1409,18 @@ const App: React.FC = () => {
             requestOpenFolder={handleOpenProjectFolder}
             handleSave={handleSaveAll}
             onOpenSettings={() => setSettingsModalOpen(true)}
-            isLeftSidebarOpen={isLeftSidebarOpen}
-            setIsLeftSidebarOpen={setIsLeftSidebarOpen}
-            isRightSidebarOpen={isRightSidebarOpen}
-            setIsRightSidebarOpen={setIsRightSidebarOpen}
+            isLeftSidebarOpen={appSettings.isLeftSidebarOpen}
+            setIsLeftSidebarOpen={(open) => updateAppSettings(draft => { draft.isLeftSidebarOpen = open; })}
+            isRightSidebarOpen={appSettings.isRightSidebarOpen}
+            setIsRightSidebarOpen={(open) => updateAppSettings(draft => { draft.isRightSidebarOpen = open; })}
             onOpenStaticTab={handleOpenStaticTab}
+            onAddStickyNote={addStickyNote}
         />
       </div>
       
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar: File Explorer */}
-        {isLeftSidebarOpen && (
-            <div className="w-64 flex-none border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden min-h-0">
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {appSettings.isLeftSidebarOpen && (
+            <div className="w-64 flex-none border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden h-full">
                 <FileExplorerPanel 
                     tree={fileSystemTree}
                     onFileOpen={handlePathDoubleClick}
@@ -1390,9 +1444,7 @@ const App: React.FC = () => {
             </div>
         )}
 
-        {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-100 dark:bg-gray-900 relative">
-            {/* Tab Bar */}
             <div className="flex-none flex flex-wrap items-center bg-gray-200 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700">
                 {openTabs.map(tab => {
                     const block = blocks.find(b => b.id === tab.blockId);
@@ -1407,7 +1459,6 @@ const App: React.FC = () => {
                         title = char ? `Char: ${char.name}` : (tab.characterTag === 'new_character' ? 'New Character' : 'Unknown Character');
                     }
                     
-                    // Determine dirty state
                     const isDirty = (tab.blockId && (dirtyBlockIds.has(tab.blockId) || dirtyEditors.has(tab.blockId))) || false;
 
                     const isActive = activeTabId === tab.id;
@@ -1435,17 +1486,19 @@ const App: React.FC = () => {
                 })}
             </div>
 
-            {/* Tab Content */}
             <div className="flex-1 relative overflow-hidden">
                 {activeTabId === 'canvas' && (
                     <StoryCanvas 
                         blocks={blocks}
                         groups={groups}
+                        stickyNotes={stickyNotes}
                         analysisResult={analysisResult}
                         updateBlock={updateBlock}
                         updateGroup={updateGroup}
                         updateBlockPositions={updateBlockPositions}
                         updateGroupPositions={updateGroupPositions}
+                        updateStickyNote={updateStickyNote}
+                        deleteStickyNote={deleteStickyNote}
                         onInteractionEnd={() => {}}
                         deleteBlock={deleteBlock}
                         onOpenEditor={handleOpenEditor}
@@ -1502,11 +1555,10 @@ const App: React.FC = () => {
                             if (isDirty) setDirtyEditors(prev => new Set(prev).add(id));
                             else setDirtyEditors(prev => { const s = new Set(prev); s.delete(id); return s; });
                         }}
-                        editorTheme={ideSettings.theme.includes('dark') || ideSettings.theme === 'colorful' ? 'dark' : 'light'}
-                        apiKey={ideSettings.apiKey}
-                        enableAiFeatures={ideSettings.enableAiFeatures}
-                        availableModels={['gemini-1.5-flash', 'gemini-1.5-pro']}
-                        selectedModel={ideSettings.selectedModel}
+                        editorTheme={appSettings.theme.includes('dark') || appSettings.theme === 'colorful' ? 'dark' : 'light'}
+                        enableAiFeatures={projectSettings.enableAiFeatures}
+                        availableModels={['gemini-2.5-flash', 'gemini-3-pro-preview']}
+                        selectedModel={projectSettings.selectedModel}
                         addToast={addToast}
                         onEditorMount={handleEditorMount}
                         onEditorUnmount={handleEditorUnmount}
@@ -1556,9 +1608,8 @@ const App: React.FC = () => {
             </div>
         </div>
 
-        {/* Right Sidebar: Story Elements */}
-        {isRightSidebarOpen && (
-             <div className="w-80 flex-none border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col overflow-hidden min-h-0">
+        {appSettings.isRightSidebarOpen && (
+             <div className="w-80 flex-none border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col overflow-hidden h-full">
                 <StoryElementsPanel 
                     analysisResult={analysisResult}
                     onOpenCharacterEditor={handleOpenCharacterEditor}
@@ -1601,8 +1652,6 @@ const App: React.FC = () => {
                     onRefreshAudios={() => {}}
                     isFileSystemApiSupported={!!window.electronAPI}
                     onHoverHighlightStart={(id) => {
-                        // Find blocks containing this
-                        // Simplified: Just highlight blocks that define it for now
                         const defBlock = analysisResult.variables.get(id)?.definedInBlockId;
                         if(defBlock) setHoverHighlightIds(new Set([defBlock]));
                     }}
@@ -1612,14 +1661,13 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Modals & Overlays */}
       {settingsModalOpen && (
         <SettingsModal 
             isOpen={settingsModalOpen}
             onClose={() => setSettingsModalOpen(false)}
-            settings={ideSettings}
-            onSettingsChange={(k, v) => setIdeSettings(p => ({ ...p, [k]: v }))}
-            availableModels={['gemini-1.5-flash', 'gemini-1.5-pro']}
+            settings={settingsForModal}
+            onSettingsChange={handleSettingsChange}
+            availableModels={['gemini-2.5-flash', 'gemini-3-pro-preview']}
         />
       )}
       
@@ -1678,7 +1726,6 @@ const App: React.FC = () => {
 
       {isLoading && <LoadingOverlay progress={loadingProgress} message={loadingMessage} />}
 
-      {/* Toasts */}
       <div className="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none">
         {toasts.map(t => (
              <div key={t.id} className="pointer-events-auto">

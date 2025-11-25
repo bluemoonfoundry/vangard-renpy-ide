@@ -1,18 +1,11 @@
 import React from 'react';
-import type { Theme } from '../types';
-
-interface Settings {
-  theme: Theme;
-  apiKey?: string;
-  enableAiFeatures: boolean;
-  selectedModel: string;
-}
+import type { Theme, IdeSettings } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  settings: Settings;
-  onSettingsChange: (key: keyof Settings, value: string | boolean) => void;
+  settings: IdeSettings;
+  onSettingsChange: (key: keyof IdeSettings, value: string | boolean) => void;
   availableModels: string[];
 }
 
@@ -79,19 +72,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                 {settings.enableAiFeatures && (
                     <div className="space-y-4 pl-8">
                         <div>
-                            <label htmlFor="api-key-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Gemini API Key
-                            </label>
-                            <input
-                                id="api-key-input"
-                                type="password"
-                                value={settings.apiKey || ''}
-                                onChange={(e) => onSettingsChange('apiKey', e.target.value)}
-                                placeholder="Enter your API key"
-                                className="w-full mt-1 p-2 rounded bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500"
-                            />
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                                Your API key is stored locally in your browser or in `project.ide.json` and is never sent to any other servers.
+                                The Gemini API key should be configured via the `API_KEY` environment variable.
                             </p>
                         </div>
                         <div>
@@ -113,7 +95,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                 )}
             </div>
              <p className="text-xs text-gray-500 dark:text-gray-400 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    Settings are saved automatically between sessions.
+                    Application settings (like theme) are saved globally. Project settings (like AI model) are saved in `project.ide.json`.
                 </p>
         </main>
         <footer className="bg-gray-50 dark:bg-gray-700 p-4 rounded-b-lg flex justify-end items-center space-x-4">

@@ -1,16 +1,21 @@
+
 import React, { useState, useRef, useCallback, useMemo, useEffect, forwardRef } from 'react';
 import CodeBlock from './CodeBlock';
 import GroupContainer from './GroupContainer';
-import type { Block, Position, RenpyAnalysisResult, LabelLocation, BlockGroup, Link } from '../types';
+import StickyNote from './StickyNote';
+import type { Block, Position, RenpyAnalysisResult, LabelLocation, BlockGroup, Link, StickyNote as StickyNoteType } from '../types';
 
 interface StoryCanvasProps {
   blocks: Block[];
   groups: BlockGroup[];
+  stickyNotes: StickyNoteType[];
   analysisResult: RenpyAnalysisResult;
   updateBlock: (id: string, newBlockData: Partial<Block>) => void;
   updateGroup: (id: string, newGroupData: Partial<BlockGroup>) => void;
   updateBlockPositions: (updates: { id: string, position: Position }[]) => void;
   updateGroupPositions: (updates: { id: string, position: Position }[]) => void;
+  updateStickyNote: (id: string, data: Partial<StickyNoteType>) => void;
+  deleteStickyNote: (id: string) => void;
   onInteractionEnd: () => void;
   deleteBlock: (id: string) => void;
   onOpenEditor: (id: string, line?: number) => void;
@@ -21,8 +26,8 @@ interface StoryCanvasProps {
   findUsagesHighlightIds: Set<string> | null;
   clearFindUsages: () => void;
   dirtyBlockIds: Set<string>;
-  canvasFilters: { story: boolean; screens: boolean; config: boolean };
-  setCanvasFilters: React.Dispatch<React.SetStateAction<{ story: boolean; screens: boolean; config: boolean }>>;
+  canvasFilters: { story: boolean; screens: boolean; config: boolean; notes: boolean };
+  setCanvasFilters: React.Dispatch<React.SetStateAction<{ story: boolean; screens: boolean; config: boolean; notes: boolean }>>;
   centerOnBlockRequest: { blockId: string, key: number } | null;
   flashBlockRequest: { blockId: string, key: number } | null;
   hoverHighlightIds: Set<string> | null;
@@ -32,6 +37,7 @@ interface StoryCanvasProps {
 
 const getBlockById = (blocks: Block[], id: string) => blocks.find(b => b.id === id);
 const getGroupById = (groups: BlockGroup[], id: string) => groups.find(g => g.id === id);
+const getStickyNoteById = (notes: StickyNoteType[], id: string) => notes.find(n => n.id === id);
 
 const getAttachmentPoint = (position: Position, width: number, height: number, side: 'left' | 'right' | 'top' | 'bottom'): Position => {
     switch(side) {
@@ -160,15 +166,27 @@ type InteractionState =
           targetDim: { w: number, h: number };
       }>;
     }
+  | { type: 'dragging-notes'; dragInitialPositions: Map<string, Position>; }
   | { type: 'resizing-block'; block: Block; }
-  | { type: 'resizing-group'; group: BlockGroup; };
+  | { type: 'resizing-group'; group: BlockGroup; }
+  | { type: 'resizing-note'; note: StickyNoteType; };
 
-const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResult, updateBlock, updateGroup, updateBlockPositions, updateGroupPositions, onInteractionEnd, deleteBlock, onOpenEditor, selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, findUsagesHighlightIds, clearFindUsages, dirtyBlockIds, canvasFilters, setCanvasFilters, centerOnBlockRequest, flashBlockRequest, hoverHighlightIds, transform, onTransformChange }) => {
+const StoryCanvas: React.FC<StoryCanvasProps> = ({ 
+    blocks, groups, stickyNotes, analysisResult, 
+    updateBlock, updateGroup, updateBlockPositions, updateGroupPositions, updateStickyNote, deleteStickyNote,
+    onInteractionEnd, deleteBlock, onOpenEditor, 
+    selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, 
+    findUsagesHighlightIds, clearFindUsages, dirtyBlockIds, 
+    canvasFilters, setCanvasFilters, centerOnBlockRequest, flashBlockRequest, hoverHighlightIds, 
+    transform, onTransformChange 
+}) => {
   const [rubberBandRect, setRubberBandRect] = useState<Rect | null>(null);
+  const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   
   // Refs for Imperative DOM updates
   const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const groupRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const noteRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const arrowRefs = useRef<Map<string, SVGGElement>>(new Map());
 
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
@@ -285,14 +303,51 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
     
     const blockWrapper = targetEl.closest('.code-block-wrapper');
     const groupWrapper = targetEl.closest('.group-container-wrapper');
+    const noteWrapper = targetEl.closest('.sticky-note-wrapper');
+
     const blockId = blockWrapper?.getAttribute('data-block-id');
     const groupId = groupWrapper?.getAttribute('data-group-id');
+    const noteId = noteWrapper?.getAttribute('data-note-id');
+
     const block = blockId ? getBlockById(blocks, blockId) : null;
     const group = groupId ? getGroupById(groups, groupId) : null;
+    const note = noteId ? getStickyNoteById(stickyNotes, noteId) : null;
     
     const canvasEl = e.currentTarget;
 
-    if (block && blockId) {
+    if (note && noteId) {
+        if (targetEl.closest('.resize-handle')) {
+            interactionState.current = { type: 'resizing-note', note };
+        } else if (targetEl.closest('.drag-handle') || targetEl.closest('.sticky-note-wrapper')) {
+             // Allow dragging from anywhere on the note if not resizing, 
+             // but text selection inside textarea is handled by browser default usually. 
+             // However, we added a drag-handle to the header. Let's restrict dragging to the header for consistency
+             // OR allow dragging the whole note if not interacting with text.
+             // For now, let's rely on the header .drag-handle for movement to avoid fighting text selection.
+             if (targetEl.closest('.drag-handle')) {
+                const currentSelection = selectedNoteIds.includes(noteId) ? selectedNoteIds : [noteId];
+                const dragInitialPositions = new Map<string, Position>();
+                
+                stickyNotes.forEach(n => {
+                    if (currentSelection.includes(n.id)) {
+                        dragInitialPositions.set(n.id, { ...n.position });
+                    }
+                });
+                interactionState.current = { type: 'dragging-notes', dragInitialPositions };
+                setIsDraggingSelection(true);
+             }
+        }
+
+        if (!targetEl.closest('button')) { // Don't select if clicking delete/color buttons
+             if (e.shiftKey) {
+                setSelectedNoteIds(prev => prev.includes(noteId) ? prev.filter(id => id !== noteId) : [...prev, noteId]);
+            } else if (!selectedNoteIds.includes(noteId)) {
+                setSelectedNoteIds([noteId]);
+                setSelectedBlockIds([]);
+                setSelectedGroupIds([]);
+            }
+        }
+    } else if (block && blockId) {
         if (targetEl.closest('.resize-handle')) {
             interactionState.current = { type: 'resizing-block', block };
         } else if (targetEl.closest('.drag-handle') && !targetEl.closest('button, input')) {
@@ -332,6 +387,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
         } else if (!selectedBlockIds.includes(blockId)) {
             setSelectedBlockIds([blockId]);
             setSelectedGroupIds([]);
+            setSelectedNoteIds([]);
         }
     } else if (group && groupId) {
         if (targetEl.closest('.resize-handle')) {
@@ -354,9 +410,6 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
                 });
               }
             });
-            
-            // Also check for any independently selected blocks that might be dragged together (if UI allowed mix selection)
-            // but for now simple logic:
             
             const draggedLinks = analysisResult.links.filter(link => 
                 movingIds.has(link.sourceId) || movingIds.has(link.targetId)
@@ -381,6 +434,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
         } else if (!selectedGroupIds.includes(groupId)) {
             setSelectedGroupIds([groupId]);
             setSelectedBlockIds([]);
+            setSelectedNoteIds([]);
         }
     } else {
         if (e.shiftKey) {
@@ -396,7 +450,6 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
         const dx = currentPos.x - pointerStartPos.current.x;
         const dy = currentPos.y - pointerStartPos.current.y;
 
-        // Use requestAnimationFrame to throttle visual updates
         if (rafRef.current) cancelAnimationFrame(rafRef.current);
         
         rafRef.current = requestAnimationFrame(() => {
@@ -405,20 +458,16 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
             if (state.type === 'dragging-blocks' || state.type === 'dragging-groups') {
                 const currentPositions = new Map<string, Position>();
 
-                // 1. Move Nodes (Blocks & Groups)
                 state.dragInitialPositions.forEach((startPos, id) => {
                     const newX = startPos.x + dx;
                     const newY = startPos.y + dy;
                     currentPositions.set(id, { x: newX, y: newY });
 
-                    // Update Block DOM
                     const blockEl = blockRefs.current.get(id);
                     if (blockEl) {
                         blockEl.style.left = `${newX}px`;
                         blockEl.style.top = `${newY}px`;
                     }
-                    
-                    // Update Group DOM
                     const groupEl = groupRefs.current.get(id);
                     if (groupEl) {
                         groupEl.style.left = `${newX}px`;
@@ -426,11 +475,9 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
                     }
                 });
 
-                // 2. Update Links Imperatively
                 state.draggedLinks.forEach(link => {
                     const gEl = arrowRefs.current.get(link.key);
                     if (gEl) {
-                        // Get current position or fallback to static position
                         let sPos = currentPositions.get(link.sourceId);
                         if (!sPos) {
                             const b = getBlockById(blocks, link.sourceId);
@@ -450,13 +497,23 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
                             );
                             const paths = gEl.querySelectorAll('path');
                             if (paths.length >= 2) {
-                                paths[0].setAttribute('d', newPath); // Hit Area
-                                paths[1].setAttribute('d', newPath); // Visible Line
+                                paths[0].setAttribute('d', newPath);
+                                paths[1].setAttribute('d', newPath);
                             }
                         }
                     }
                 });
 
+            } else if (state.type === 'dragging-notes') {
+                state.dragInitialPositions.forEach((startPos, id) => {
+                    const newX = startPos.x + dx;
+                    const newY = startPos.y + dy;
+                    const noteEl = noteRefs.current.get(id);
+                    if (noteEl) {
+                        noteEl.style.left = `${newX}px`;
+                        noteEl.style.top = `${newY}px`;
+                    }
+                });
             } else if (state.type === 'resizing-block') {
                 const { block } = state;
                 updateBlock(block.id, {
@@ -468,6 +525,12 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
                 updateGroup(group.id, {
                     width: Math.max(group.width + dx * transform.scale, 250),
                     height: Math.max(group.height + dy * transform.scale, 150),
+                });
+            } else if (state.type === 'resizing-note') {
+                const { note } = state;
+                updateStickyNote(note.id, {
+                    width: Math.max(note.width + dx * transform.scale, 150),
+                    height: Math.max(note.height + dy * transform.scale, 150),
                 });
             } else if (state.type === 'panning') {
                 onTransformChange(t => ({...t, x: t.x + moveEvent.movementX, y: t.y + moveEvent.movementY }));
@@ -514,46 +577,64 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
                     g.position.y + g.height > finalRect.y
                 ).map(g => g.id);
 
+                const selectedNotesInRect = stickyNotes.filter(n => 
+                    n.position.x < finalRect.x + finalRect.width &&
+                    n.position.x + n.width > finalRect.x &&
+                    n.position.y < finalRect.y + finalRect.height &&
+                    n.position.y + n.height > finalRect.y
+                ).map(n => n.id);
+
                 if (upEvent.shiftKey) {
                     setSelectedBlockIds(prev => [...new Set([...prev, ...selectedInRect])]);
                     setSelectedGroupIds(prev => [...new Set([...prev, ...selectedGroupsInRect])]);
+                    setSelectedNoteIds(prev => [...new Set([...prev, ...selectedNotesInRect])]);
                 } else {
                     setSelectedBlockIds(selectedInRect);
                     setSelectedGroupIds(selectedGroupsInRect);
+                    setSelectedNoteIds(selectedNotesInRect);
                 }
             } else { // It was a click, not a drag.
                 setSelectedBlockIds([]);
                 setSelectedGroupIds([]);
+                setSelectedNoteIds([]);
                 if (highlightedPath) setHighlightedPath(null);
                 if (findUsagesHighlightIds) clearFindUsages();
             }
         }
         
         // Commit changes to React State
-        if ((state.type === 'dragging-blocks' || state.type === 'dragging-groups') && distance > 0) {
+        if ((state.type === 'dragging-blocks' || state.type === 'dragging-groups' || state.type === 'dragging-notes') && distance > 0) {
             const blockUpdates: { id: string, position: Position }[] = [];
             const groupUpdates: { id: string, position: Position }[] = [];
+            
+            if (state.type === 'dragging-notes') {
+                state.dragInitialPositions.forEach((startPos, id) => {
+                    const newPos = { x: startPos.x + dx, y: startPos.y + dy };
+                    updateStickyNote(id, { position: newPos });
+                });
+            } else {
+                state.dragInitialPositions.forEach((startPos, id) => {
+                    const newPos = { x: startPos.x + dx, y: startPos.y + dy };
+                    if (getGroupById(groups, id)) {
+                        groupUpdates.push({ id, position: newPos });
+                    } else {
+                        blockUpdates.push({ id, position: newPos });
+                    }
+                });
 
-            state.dragInitialPositions.forEach((startPos, id) => {
-                const newPos = { x: startPos.x + dx, y: startPos.y + dy };
-                if (getGroupById(groups, id)) {
-                    groupUpdates.push({ id, position: newPos });
-                } else {
-                    blockUpdates.push({ id, position: newPos });
-                }
-            });
-
-            if (blockUpdates.length > 0) updateBlockPositions(blockUpdates);
-            if (groupUpdates.length > 0) updateGroupPositions(groupUpdates);
+                if (blockUpdates.length > 0) updateBlockPositions(blockUpdates);
+                if (groupUpdates.length > 0) updateGroupPositions(groupUpdates);
+            }
         }
         
         const wasInteractiveMove = state.type === 'dragging-blocks' || 
                                  state.type === 'dragging-groups' || 
+                                 state.type === 'dragging-notes' ||
                                  state.type === 'resizing-block' || 
-                                 state.type === 'resizing-group';
+                                 state.type === 'resizing-group' ||
+                                 state.type === 'resizing-note';
         
         setIsDraggingSelection(false);
-        // FIX: Call onInteractionEnd when a drag/resize action finishes to properly manage history state.
         if (wasInteractiveMove) onInteractionEnd();
         interactionState.current = { type: 'idle' };
         setRubberBandRect(null);
@@ -654,6 +735,10 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
              <label className="flex items-center space-x-2 cursor-pointer text-sm">
                 <input type="checkbox" checked={canvasFilters.config} onChange={e => setCanvasFilters(f => ({ ...f, config: e.target.checked }))} className="h-4 w-4 rounded focus:ring-red-500" style={{ accentColor: 'rgb(239 68 68)' }} />
                 <span>Config Blocks</span>
+            </label>
+            <label className="flex items-center space-x-2 cursor-pointer text-sm">
+                <input type="checkbox" checked={canvasFilters.notes} onChange={e => setCanvasFilters(f => ({ ...f, notes: e.target.checked }))} className="h-4 w-4 rounded focus:ring-yellow-500" style={{ accentColor: 'rgb(234 179 8)' }} />
+                <span>Notes</span>
             </label>
         </div>
 
@@ -772,6 +857,21 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
             />
           );
         })}
+
+        {canvasFilters.notes && stickyNotes.map((note) => (
+            <StickyNote
+                key={note.id}
+                ref={(el) => {
+                    if(el) noteRefs.current.set(note.id, el);
+                    else noteRefs.current.delete(note.id);
+                }}
+                note={note}
+                updateNote={updateStickyNote}
+                deleteNote={deleteStickyNote}
+                isSelected={selectedNoteIds.includes(note.id)}
+                isDragging={isDraggingSelection && selectedNoteIds.includes(note.id)}
+            />
+        ))}
       </div>
     </div>
   );

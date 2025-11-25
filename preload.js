@@ -1,4 +1,5 @@
 
+
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -35,6 +36,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   forceQuit: () => {
     ipcRenderer.send('force-quit');
   },
+  // --- App Settings ---
+  getAppSettings: () => ipcRenderer.invoke('app:get-settings'),
+  saveAppSettings: (settings) => ipcRenderer.invoke('app:save-settings', settings),
   path: {
     join: (...args) => ipcRenderer.invoke('path:join', ...args),
   }

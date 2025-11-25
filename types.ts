@@ -1,5 +1,7 @@
 
 
+
+
 export interface Position {
   x: number;
   y: number;
@@ -23,6 +25,17 @@ export interface BlockGroup {
   width: number;
   height: number;
   blockIds: string[];
+}
+
+export type NoteColor = 'yellow' | 'blue' | 'green' | 'pink' | 'purple' | 'red';
+
+export interface StickyNote {
+  id: string;
+  content: string;
+  position: Position;
+  width: number;
+  height: number;
+  color: NoteColor;
 }
 
 export interface Character {
@@ -239,18 +252,25 @@ export interface ToastMessage {
 
 export type Theme = 'system' | 'light' | 'dark' | 'solarized-light' | 'solarized-dark' | 'colorful' | 'colorful-light';
 
-export interface IdeSettings {
+export interface AppSettings {
   theme: Theme;
   isLeftSidebarOpen: boolean;
   leftSidebarWidth: number;
   isRightSidebarOpen: boolean;
   rightSidebarWidth: number;
-  openTabs: EditorTab[];
-  activeTabId: string;
-  apiKey?: string;
+}
+
+export interface ProjectSettings {
   enableAiFeatures: boolean;
   selectedModel: string;
+  openTabs: EditorTab[];
+  activeTabId: string;
+  stickyNotes?: StickyNote[];
 }
+
+// This type is a mix for components that need both, like SettingsModal
+export interface IdeSettings extends AppSettings, Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes'> {}
+
 
 export type ClipboardState = { type: 'copy' | 'cut'; paths: Set<string> } | null;
 
@@ -265,12 +285,13 @@ declare global {
           removeEntry: (path: string) => Promise<{ success: boolean; error?: string }>;
           moveFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
           copyEntry: (sourcePath: string, destPath: string) => Promise<{ success: boolean; error?: string }>;
-          // FIX: Correct the type definition for `onMenuCommand`. The callback should return `void`, not another function. This aligns with standard event listener patterns and other similar functions in this interface.
           onMenuCommand: (callback: (data: { command: string, type?: 'canvas' | 'route-canvas' }) => void) => () => void;
           onCheckUnsavedChangesBeforeExit: (callback: () => void) => () => void;
           replyUnsavedChangesBeforeExit: (hasUnsaved: boolean) => void;
           onShowExitModal: (callback: () => void) => () => void;
           forceQuit: () => void;
+          getAppSettings: () => Promise<Partial<AppSettings> | null>;
+          saveAppSettings: (settings: AppSettings) => Promise<{ success: boolean; error?: string }>;
           path: {
               join: (...paths: string[]) => Promise<string>;
           }

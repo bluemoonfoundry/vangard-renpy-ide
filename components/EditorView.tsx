@@ -1,5 +1,6 @@
 
 
+
 import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type { Block, RenpyAnalysisResult, ToastMessage } from '../types';
@@ -16,7 +17,6 @@ interface EditorViewProps {
   onTriggerSave?: (blockId: string) => void;
   onDirtyChange: (blockId: string, isDirty: boolean) => void;
   editorTheme: 'light' | 'dark';
-  apiKey?: string;
   enableAiFeatures: boolean;
   availableModels: string[];
   selectedModel: string;
@@ -36,7 +36,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     onTriggerSave,
     onDirtyChange,
     editorTheme,
-    apiKey,
     enableAiFeatures,
     availableModels,
     selectedModel,
@@ -63,9 +62,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   }, [onDirtyChange, onTriggerSave, onSave, block]);
 
   useEffect(() => {
-    // When the component unmounts (tab switch/close), sync content to parent block state
-    // and clear the editor dirty flag. This effectively persists the changes to the 'file'
-    // but not yet to disk, maintaining a dirty state at the block level.
     return () => {
         if (editorRef.current) {
              try {
@@ -74,7 +70,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                     onSaveRef.current(blockRef.current.id, currentContent);
                 }
              } catch (e) {
-                 // Editor might be disposed already
              }
         }
         onDirtyChangeRef.current(blockRef.current.id, false);
@@ -83,19 +78,15 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   }, [onEditorUnmount]);
   
   useEffect(() => {
-    // This effect handles scrolling the editor to a specific line when requested.
-    // It runs whenever a new `initialScrollRequest` is passed in.
     if (editorRef.current && initialScrollRequest) {
         const editor = editorRef.current;
         setTimeout(() => {
             editor.revealLineInCenter(initialScrollRequest.line, monaco.editor.ScrollType.Smooth);
             editor.setPosition({ lineNumber: initialScrollRequest.line, column: 1 });
-        }, 100); // A small delay ensures the editor is fully ready.
+        }, 100); 
     }
   }, [initialScrollRequest]);
 
-  // This effect synchronizes the `enableAiFeatures` prop with the Monaco editor's context key.
-  // This ensures the context menu item is correctly shown or hidden when the setting changes.
   useEffect(() => {
     if (aiFeaturesEnabledContextKey.current) {
       aiFeaturesEnabledContextKey.current.set(enableAiFeatures);
@@ -115,7 +106,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   };
 
   const handleEditorWillMount: BeforeMount = (monaco) => {
-    // This setup only needs to run once per application load.
     if (!monaco.languages.getLanguages().some(({ id }) => id === 'renpy')) {
       monaco.languages.register({ id: 'renpy' });
       monaco.languages.setMonarchTokensProvider('renpy', {
@@ -138,12 +128,11 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       const trimmedLine = line.trim();
       
       if (trimmedLine === '' || trimmedLine.startsWith('#')) {
-        return; // Skip empty and comment lines, but don't reset indent expectation
+        return; 
       }
 
       const currentIndent = line.length - line.trimStart().length;
 
-      // 1. Check for expected indentation
       if (expectIndentedBlock) {
         if (currentIndent <= previousIndent) {
           markers.push({
@@ -158,7 +147,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         expectIndentedBlock = false;
       }
       
-      // 2. Check indentation consistency (must be multiple of 4)
       if (currentIndent % 4 !== 0) {
         markers.push({
           startLineNumber: lineNumber,
@@ -170,7 +158,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         });
       }
 
-      // 3. Check for missing colons on block statements
       const colonKeywords = ['label', 'if', 'elif', 'menu', 'python', 'while', 'for', 'else'];
       const firstWord = trimmedLine.split(/[\s:]/)[0];
       if (colonKeywords.includes(firstWord) && !trimmedLine.endsWith(':')) {
@@ -190,7 +177,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       }
     });
 
-    // 4. Check for invalid jumps using existing analysis
     const invalidJumpsForBlock = analysisResult.invalidJumps[block.id] || [];
     const allJumpsInBlock = analysisResult.jumps[block.id] || [];
 
@@ -216,27 +202,21 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     onEditorMount(block.id, editor);
     editor.focus();
 
-    // Create the context key and store it in the ref so we can update it later.
     aiFeaturesEnabledContextKey.current = editor.createContextKey('aiFeaturesEnabled', enableAiFeatures);
 
-    // Listen for content changes to update dirty state
     editor.onDidChangeModelContent(() => {
         const currentContent = editor.getValue();
         const savedContent = blockRef.current.content;
-        // We use a simple equality check. If the editor content differs from the 
-        // last saved content (blockRef.current.content), it is dirty.
         const isDirty = currentContent !== savedContent;
         onDirtyChangeRef.current(blockRef.current.id, isDirty);
     });
 
-    // Add Ctrl+S / Cmd+S binding
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
         if (onTriggerSaveRef.current) {
             onTriggerSaveRef.current(blockRef.current.id);
         }
     });
 
-    // Add the "Generate AI Content" action to the context menu
     editor.addAction({
       id: 'generate-ai-content',
       label: 'Generate AI Content...',
@@ -251,13 +231,11 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       },
     });
 
-    // Add validation
     const disposable = editor.onDidChangeModelContent(() => {
       const markers = performValidation(editor.getValue(), monaco);
       monaco.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
     });
     
-    // Initial validation
     const markers = performValidation(editor.getValue(), monaco);
     monaco.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
   };
@@ -301,7 +279,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         isOpen={isGenerateModalOpen}
         onClose={() => setIsGenerateModalOpen(false)}
         onInsertContent={handleInsertContent}
-        apiKey={apiKey}
         currentBlockId={block.id}
         blocks={blocks}
         analysisResult={analysisResult}
