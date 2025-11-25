@@ -1,3 +1,5 @@
+
+
 import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type { Block, RenpyAnalysisResult, ToastMessage } from '../types';
@@ -11,6 +13,7 @@ interface EditorViewProps {
   initialScrollRequest?: { line: number; key: number };
   onSwitchFocusBlock: (blockId: string, line: number) => void;
   onSave: (blockId: string, newContent: string) => void;
+  onTriggerSave?: (blockId: string) => void;
   onDirtyChange: (blockId: string, isDirty: boolean) => void;
   editorTheme: 'light' | 'dark';
   apiKey?: string;
@@ -30,6 +33,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     initialScrollRequest,
     onSwitchFocusBlock,
     onSave, 
+    onTriggerSave,
     onDirtyChange,
     editorTheme,
     apiKey,
@@ -44,18 +48,39 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const monacoRef = useRef<typeof monaco | null>(null);
   const aiFeaturesEnabledContextKey = useRef<monaco.editor.IContextKey<boolean> | null>(null);
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
-  const propsRef = useRef(props);
+  
+  // Refs to keep track of latest props for closures
+  const onDirtyChangeRef = useRef(onDirtyChange);
+  const onTriggerSaveRef = useRef(onTriggerSave);
+  const onSaveRef = useRef(onSave);
+  const blockRef = useRef(block);
+  
   useEffect(() => {
-    propsRef.current = props;
-  }, [props]);
+    onDirtyChangeRef.current = onDirtyChange;
+    onTriggerSaveRef.current = onTriggerSave;
+    onSaveRef.current = onSave;
+    blockRef.current = block;
+  }, [onDirtyChange, onTriggerSave, onSave, block]);
 
   useEffect(() => {
-    // When the component unmounts, ensure dirty state is cleared and editor instance is unregistered
+    // When the component unmounts (tab switch/close), sync content to parent block state
+    // and clear the editor dirty flag. This effectively persists the changes to the 'file'
+    // but not yet to disk, maintaining a dirty state at the block level.
     return () => {
-        onDirtyChange(block.id, false);
-        onEditorUnmount(block.id);
+        if (editorRef.current) {
+             try {
+                const currentContent = editorRef.current.getValue();
+                if (currentContent !== blockRef.current.content) {
+                    onSaveRef.current(blockRef.current.id, currentContent);
+                }
+             } catch (e) {
+                 // Editor might be disposed already
+             }
+        }
+        onDirtyChangeRef.current(blockRef.current.id, false);
+        onEditorUnmount(blockRef.current.id);
     };
-  }, [block.id, onDirtyChange, onEditorUnmount]);
+  }, [onEditorUnmount]);
   
   useEffect(() => {
     // This effect handles scrolling the editor to a specific line when requested.
@@ -194,6 +219,23 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     // Create the context key and store it in the ref so we can update it later.
     aiFeaturesEnabledContextKey.current = editor.createContextKey('aiFeaturesEnabled', enableAiFeatures);
 
+    // Listen for content changes to update dirty state
+    editor.onDidChangeModelContent(() => {
+        const currentContent = editor.getValue();
+        const savedContent = blockRef.current.content;
+        // We use a simple equality check. If the editor content differs from the 
+        // last saved content (blockRef.current.content), it is dirty.
+        const isDirty = currentContent !== savedContent;
+        onDirtyChangeRef.current(blockRef.current.id, isDirty);
+    });
+
+    // Add Ctrl+S / Cmd+S binding
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+        if (onTriggerSaveRef.current) {
+            onTriggerSaveRef.current(blockRef.current.id);
+        }
+    });
+
     // Add the "Generate AI Content" action to the context menu
     editor.addAction({
       id: 'generate-ai-content',
@@ -205,136 +247,68 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       contextMenuGroupId: '1_modification',
       contextMenuOrder: 1.5,
       run: () => {
-        // Use the ref to get the latest props, avoiding the stale closure.
-        const { enableAiFeatures: currentEnableAi, apiKey: currentApiKey, addToast: currentAddToast } = propsRef.current;
-        
-        if (!currentEnableAi) {
-          return;
-        }
-        if (currentApiKey) {
-          setIsGenerateModalOpen(true);
-        } else {
-          currentAddToast('Please enter your Gemini API key in Settings to use AI features.', 'warning');
-        }
+        setIsGenerateModalOpen(true);
       },
     });
 
-    const validateCode = () => {
-        if (!monacoRef.current || !editorRef.current) return;
-        const code = editorRef.current.getValue();
-        const model = editorRef.current.getModel();
-        if (model) {
-            const markers = performValidation(code, monacoRef.current);
-            monacoRef.current.editor.setModelMarkers(model, 'renpy-validator', markers);
-        }
-    };
+    // Add validation
+    const disposable = editor.onDidChangeModelContent(() => {
+      const markers = performValidation(editor.getValue(), monaco);
+      monaco.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
+    });
     
-    // Initial validation and hyperlink setup
-    validateCode();
+    // Initial validation
+    const markers = performValidation(editor.getValue(), monaco);
+    monaco.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
+  };
 
-    const { jumps, labels } = analysisResult;
-    const blockJumps = jumps[block.id] || [];
-    const newDecorations: monaco.editor.IModelDeltaDecoration[] = blockJumps.map(jump => {
-      const targetExists = !!labels[jump.target];
-      let inlineClassName = 'renpy-jump-link';
-      
-      if (!targetExists) {
-        if (jump.isDynamic) {
-          inlineClassName = 'renpy-jump-dynamic';
-        } else {
-          inlineClassName = 'renpy-jump-invalid';
-        }
+  const getCurrentContext = () => {
+      if (!editorRef.current) return '';
+      const model = editorRef.current.getModel();
+      const position = editorRef.current.getPosition();
+      if (model && position) {
+          return model.getValueInRange({
+              startLineNumber: 1,
+              startColumn: 1,
+              endLineNumber: position.lineNumber,
+              endColumn: position.column
+          });
       }
-
-      return {
-        range: new monaco.Range(jump.line, jump.columnStart, jump.line, jump.columnEnd),
-        options: {
-          inlineClassName: inlineClassName,
-        }
-      };
-    });
-    editor.deltaDecorations([], newDecorations);
-
-    // Set up click listener for valid jumps
-    editor.onMouseDown((e) => {
-        const target = e.target;
-        if (target.type !== monaco.editor.MouseTargetType.CONTENT_TEXT || !target.position) return;
-        
-        const classList = target.element?.classList;
-        const isJumpLink = classList?.contains('renpy-jump-link') || 
-                           classList?.contains('renpy-jump-dynamic') || 
-                           classList?.contains('renpy-jump-invalid');
-        if (!isJumpLink) return;
-
-        const clickedJump = blockJumps.find(j => 
-            j.line === target.position!.lineNumber &&
-            j.columnStart <= target.position!.column &&
-            j.columnEnd >= target.position!.column
-        );
-        
-        if (!clickedJump) return;
-        
-        const targetLabelLocation = labels[clickedJump.target];
-        if (!targetLabelLocation) return;
-        
-        if (targetLabelLocation.blockId === block.id) {
-            editor.revealLineInCenter(targetLabelLocation.line, monaco.editor.ScrollType.Smooth);
-            editor.setPosition({ lineNumber: targetLabelLocation.line, column: 1 });
-        } else {
-            onSwitchFocusBlock(targetLabelLocation.blockId, targetLabelLocation.line);
-        }
-    });
-    
-    // Track dirty state and re-validate on content change
-    editor.onDidChangeModelContent(() => {
-        const currentValue = editor.getValue();
-        onDirtyChange(block.id, currentValue !== block.content);
-        validateCode();
-    });
+      return '';
   };
 
   return (
-    <div className="w-full h-full p-1 bg-white dark:bg-gray-800 relative">
-        <Editor
-            key={block.id}
-            height="100%"
-            language="renpy"
-            theme={editorTheme === 'dark' ? 'renpy-dark' : 'renpy-light'}
-            defaultValue={block.content}
-            beforeMount={handleEditorWillMount}
-            onMount={handleEditorDidMount}
-            options={{
-                minimap: { enabled: true },
-                lineNumbers: 'on',
-                wordWrap: 'on',
-                automaticLayout: true,
-                fontSize: 16,
-                padding: { top: 10 },
-            }}
-        />
-        {isGenerateModalOpen && (
-            <GenerateContentModal
-                isOpen={isGenerateModalOpen}
-                onClose={() => setIsGenerateModalOpen(false)}
-                onInsertContent={handleInsertContent}
-                apiKey={apiKey}
-                currentBlockId={block.id}
-                blocks={blocks}
-                analysisResult={analysisResult}
-                getCurrentContext={() => {
-                    if (!editorRef.current) return '';
-                    const editor = editorRef.current;
-                    const position = editor.getPosition();
-                    if (!position) return '';
-                    const model = editor.getModel();
-                    if (!model) return '';
-                    // Get content up to the beginning of the current line
-                    return model.getValueInRange(new monaco.Range(1, 1, position.lineNumber, 1));
-                }}
-                availableModels={availableModels}
-                selectedModel={selectedModel}
-            />
-        )}
+    <div className="h-full flex flex-col overflow-hidden">
+      <Editor
+        height="100%"
+        defaultLanguage="renpy"
+        path={block.filePath || block.id}
+        defaultValue={block.content}
+        theme={editorTheme === 'dark' ? 'renpy-dark' : 'renpy-light'}
+        onMount={handleEditorDidMount}
+        beforeMount={handleEditorWillMount}
+        options={{
+          minimap: { enabled: true },
+          fontSize: 14,
+          wordWrap: 'on',
+          scrollBeyondLastLine: false,
+          automaticLayout: true,
+          tabSize: 4,
+          insertSpaces: true,
+        }}
+      />
+      <GenerateContentModal
+        isOpen={isGenerateModalOpen}
+        onClose={() => setIsGenerateModalOpen(false)}
+        onInsertContent={handleInsertContent}
+        apiKey={apiKey}
+        currentBlockId={block.id}
+        blocks={blocks}
+        analysisResult={analysisResult}
+        getCurrentContext={getCurrentContext}
+        availableModels={availableModels}
+        selectedModel={selectedModel}
+      />
     </div>
   );
 };

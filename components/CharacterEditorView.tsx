@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Character, ProjectImage, ImageMetadata } from '../types';
 
@@ -105,14 +102,14 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
     );
     
   return (
-    <div className="w-full h-full flex flex-col bg-gray-100 dark:bg-gray-900">
-      <header className="flex-shrink-0 h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-6">
+    <div className="w-full h-full flex flex-col bg-gray-100 dark:bg-gray-900 overflow-hidden">
+      <header className="flex-none h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-6">
           <h2 className="text-xl font-bold">{isNew ? 'New Character' : `Editing: ${character.name}`}</h2>
           <button onClick={handleSave} className="px-6 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-colors">
               Save Changes
           </button>
       </header>
-      <main className="flex-grow p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+      <main className="flex-grow p-6 overflow-y-auto overscroll-contain grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
         {/* Left Column */}
         <div className="space-y-4">
             <h3 className="text-lg font-semibold border-b pb-2 border-gray-300 dark:border-gray-700">Primary Attributes</h3>

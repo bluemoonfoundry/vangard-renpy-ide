@@ -1,3 +1,4 @@
+
 import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -203,11 +204,19 @@ app.whenReady().then(() => {
     return await readProjectFiles(rootPath);
   });
 
-  // FIX: Accept an optional encoding parameter to handle binary files (like images) correctly.
   ipcMain.handle('fs:writeFile', async (event, filePath, content, encoding) => {
     try {
       await fs.mkdir(path.dirname(filePath), { recursive: true });
       await fs.writeFile(filePath, content, encoding);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('fs:createDirectory', async (event, dirPath) => {
+    try {
+      await fs.mkdir(dirPath, { recursive: true });
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
@@ -231,6 +240,20 @@ app.whenReady().then(() => {
     } catch (error) {
       return { success: false, error: error.message };
     }
+  });
+
+  ipcMain.handle('fs:copyEntry', async (event, sourcePath, destPath) => {
+    try {
+      // fs.cp is recursive by default for directories
+      await fs.cp(sourcePath, destPath, { recursive: true });
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+  
+  ipcMain.handle('path:join', (event, ...args) => {
+    return path.join(...args);
   });
 
 

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import type { Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, RenpyScreen, RenpyAnalysisResult } from '../types';
 import VariableManager from './VariableManager';
@@ -54,16 +55,18 @@ const TabButton: React.FC<{
   count?: number;
   isActive: boolean;
   onClick: () => void;
-}> = ({ label, count, isActive, onClick }) => (
+  className?: string;
+}> = ({ label, count, isActive, onClick, className = '' }) => (
   <button
     onClick={onClick}
-    className={`flex-1 text-center py-2 px-1 text-sm font-semibold border-b-2 transition-colors duration-200 ${
+    className={`flex-none py-2 px-2 text-sm font-semibold border-b-2 transition-colors duration-200 flex items-center justify-center ${
       isActive
-        ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-        : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100'
-    }`}
+        ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-gray-800'
+        : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
+    } ${className}`}
   >
-    {label} {typeof count !== 'undefined' && `(${count})`}
+    <span>{label}</span>
+    {typeof count !== 'undefined' && <span className="ml-1.5 text-xs opacity-70">({count})</span>}
   </button>
 );
 
@@ -83,21 +86,21 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     const characterList = Array.from(characters.values()).sort((a: Character, b: Character) => a.name.localeCompare(b.name));
 
     return (
-        <div className="h-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex flex-col">
-            <header className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="h-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex flex-col min-h-0">
+            <header className="flex-none p-4 border-b border-gray-200 dark:border-gray-700">
                 <h2 className="text-xl font-bold">Story Elements</h2>
             </header>
-            <nav className="flex-shrink-0 flex border-b border-gray-200 dark:border-gray-700">
-                <TabButton label="Characters" count={characterList.length} isActive={activeTab === 'characters'} onClick={() => setActiveTab('characters')} />
-                <TabButton label="Variables" count={analysisResult.variables.size} isActive={activeTab === 'variables'} onClick={() => setActiveTab('variables')} />
-                <TabButton label="Images" count={projectImages.size} isActive={activeTab === 'images'} onClick={() => setActiveTab('images')} />
-                <TabButton label="Audio" count={projectAudios.size} isActive={activeTab === 'audio'} onClick={() => setActiveTab('audio')} />
-                <TabButton label="Screens" count={analysisResult.screens.size} isActive={activeTab === 'screens'} onClick={() => setActiveTab('screens')} />
-                <TabButton label="Snippets" isActive={activeTab === 'snippets'} onClick={() => setActiveTab('snippets')} />
+            <nav className="flex-none flex flex-wrap border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
+                <TabButton className="flex-grow" label="Characters" count={characterList.length} isActive={activeTab === 'characters'} onClick={() => setActiveTab('characters')} />
+                <TabButton className="flex-grow" label="Variables" count={analysisResult.variables.size} isActive={activeTab === 'variables'} onClick={() => setActiveTab('variables')} />
+                <TabButton className="flex-grow" label="Images" count={projectImages.size} isActive={activeTab === 'images'} onClick={() => setActiveTab('images')} />
+                <TabButton className="flex-grow" label="Audio" count={projectAudios.size} isActive={activeTab === 'audio'} onClick={() => setActiveTab('audio')} />
+                <TabButton className="flex-grow" label="Screens" count={analysisResult.screens.size} isActive={activeTab === 'screens'} onClick={() => setActiveTab('screens')} />
+                <TabButton className="flex-grow" label="Snippets" isActive={activeTab === 'snippets'} onClick={() => setActiveTab('snippets')} />
             </nav>
-            <main className="flex-grow p-4 overflow-y-auto">
+            <main className="flex-grow flex flex-col min-h-0 overflow-hidden relative">
                 {activeTab === 'characters' && (
-                    <div className="space-y-3">
+                    <div className="flex-grow overflow-y-auto p-4 overscroll-contain space-y-3">
                         <div className="flex justify-between items-center">
                             <h3 className="font-semibold">Characters ({characterList.length})</h3>
                             <button onClick={() => onOpenCharacterEditor('new_character')} className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold">+ Add</button>
@@ -133,13 +136,15 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                     </div>
                 )}
                 {activeTab === 'variables' && (
-                    <VariableManager
-                        analysisResult={analysisResult}
-                        onAddVariable={onAddVariable}
-                        onFindUsages={onFindVariableUsages}
-                        onHoverHighlightStart={onHoverHighlightStart}
-                        onHoverHighlightEnd={onHoverHighlightEnd}
-                    />
+                    <div className="flex-grow overflow-y-auto p-4 overscroll-contain">
+                        <VariableManager
+                            analysisResult={analysisResult}
+                            onAddVariable={onAddVariable}
+                            onFindUsages={onFindVariableUsages}
+                            onHoverHighlightStart={onHoverHighlightStart}
+                            onHoverHighlightEnd={onHoverHighlightEnd}
+                        />
+                    </div>
                 )}
                 {activeTab === 'images' && (
                     <ImageManager
@@ -172,14 +177,18 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                     />
                 )}
                 {activeTab === 'screens' && (
-                    <ScreenManager
-                        screens={analysisResult.screens}
-                        onAddScreen={onAddScreen}
-                        onFindDefinition={onFindScreenDefinition}
-                    />
+                    <div className="flex-grow overflow-y-auto p-4 overscroll-contain">
+                        <ScreenManager
+                            screens={analysisResult.screens}
+                            onAddScreen={onAddScreen}
+                            onFindDefinition={onFindScreenDefinition}
+                        />
+                    </div>
                 )}
                 {activeTab === 'snippets' && (
-                    <SnippetManager />
+                    <div className="flex-grow overflow-y-auto p-4 overscroll-contain">
+                        <SnippetManager />
+                    </div>
                 )}
             </main>
         </div>

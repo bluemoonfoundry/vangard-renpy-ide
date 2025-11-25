@@ -5,10 +5,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
   createProject: () => ipcRenderer.invoke('dialog:createProject'),
   loadProject: (rootPath) => ipcRenderer.invoke('project:load', rootPath),
-  // FIX: Pass the encoding parameter to the main process for correct file writing.
   writeFile: (filePath, content, encoding) => ipcRenderer.invoke('fs:writeFile', filePath, content, encoding),
+  createDirectory: (dirPath) => ipcRenderer.invoke('fs:createDirectory', dirPath),
   removeEntry: (entryPath) => ipcRenderer.invoke('fs:removeEntry', entryPath),
   moveFile: (oldPath, newPath) => ipcRenderer.invoke('fs:moveFile', oldPath, newPath),
+  copyEntry: (sourcePath, destPath) => ipcRenderer.invoke('fs:copyEntry', sourcePath, destPath),
   onMenuCommand: (callback) => {
     const subscription = (_event, ...args) => callback(...args);
     ipcRenderer.on('menu-command', subscription);
@@ -17,4 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('menu-command', subscription);
     };
   },
+  path: {
+    join: (...args) => ipcRenderer.invoke('path:join', ...args),
+  }
 });

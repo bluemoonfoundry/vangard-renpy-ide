@@ -1,6 +1,7 @@
+
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useImmer } from 'use-immer';
-import JSZip from 'jszip';
 import Toolbar from './components/Toolbar';
 import StoryCanvas from './components/StoryCanvas';
 import FileExplorerPanel from './components/FileExplorerPanel';
@@ -9,6 +10,7 @@ import StoryElementsPanel from './components/StoryElementsPanel';
 import RouteCanvas from './components/RouteCanvas';
 import SettingsModal from './components/SettingsModal';
 import ConfirmModal from './components/ConfirmModal';
+import CreateBlockModal, { BlockType } from './components/CreateBlockModal';
 import Toast from './components/Toast';
 import LoadingOverlay from './components/LoadingOverlay';
 import WelcomeScreen from './components/WelcomeScreen';
@@ -22,6 +24,7 @@ import type {
   ToastMessage, IdeSettings, Theme, ProjectImage, RenpyAudio, 
   ClipboardState, ImageMetadata, AudioMetadata, LabelNode, Character
 } from './types';
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
 // --- Utility: ArrayBuffer to Base64 (Browser Compatible) ---
 const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
@@ -258,6 +261,10 @@ const App: React.FC = () => {
   const [imageMetadata, setImageMetadata] = useImmer<Map<string, ImageMetadata>>(new Map());
   const [audioMetadata, setAudioMetadata] = useImmer<Map<string, AudioMetadata>>(new Map());
   
+  // --- State: File Explorer Selection ---
+  const [explorerSelectedPaths, setExplorerSelectedPaths] = useState<Set<string>>(new Set());
+  const [explorerLastClickedPath, setExplorerLastClickedPath] = useState<string | null>(null);
+
   // --- State: Scanning ---
   const [imageScanDirectories, setImageScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
   const [audioScanDirectories, setAudioScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
@@ -267,7 +274,6 @@ const App: React.FC = () => {
   const [isRefreshingAudios, setIsRefreshingAudios] = useState(false);
 
   // --- State: UI & Editor ---
-  // Using standard useState for openTabs to avoid Immer proxy issues with simple array management
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([{ id: 'canvas', type: 'canvas' }]);
   const [activeTabId, setActiveTabId] = useState<string>('canvas');
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
@@ -283,6 +289,10 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [loadingProgress, setLoadingProgress] = useState(0);
+  
+  const [deleteConfirmInfo, setDeleteConfirmInfo] = useState<{ paths: string[]; onConfirm: () => void; } | null>(null);
+  const [createBlockModalOpen, setCreateBlockModalOpen] = useState(false);
+  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
   
   // --- State: View Transforms ---
   const [storyCanvasTransform, setStoryCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
@@ -305,15 +315,15 @@ const App: React.FC = () => {
   const [clipboard, setClipboard] = useState<ClipboardState>(null);
   const [findUsagesHighlightIds, setFindUsagesHighlightIds] = useState<Set<string> | null>(null);
   const [centerOnBlockRequest, setCenterOnBlockRequest] = useState<{ blockId: string, key: number } | null>(null);
+  const [flashBlockRequest, setFlashBlockRequest] = useState<{ blockId: string, key: number } | null>(null);
   const [canvasFilters, setCanvasFilters] = useState({ story: true, screens: true, config: false });
   const [hoverHighlightIds, setHoverHighlightIds] = useState<Set<string> | null>(null);
-  const [isClearConfirmVisible, setIsClearConfirmVisible] = useState(false);
 
   // --- Analysis ---
   const analysisResult = useRenpyAnalysis(blocks, 0); // 0 is a trigger for force re-analysis if needed
   
   // --- Refs ---
-  const editorInstances = useRef<Map<string, any>>(new Map());
+  const editorInstances = useRef<Map<string, monaco.editor.IStandaloneCodeEditor>>(new Map());
 
   // --- Initial Load & Theme ---
   useEffect(() => {
@@ -400,29 +410,139 @@ const App: React.FC = () => {
   }, [setGroups]);
 
 
-  const addBlock = useCallback(() => {
+  const addBlock = useCallback((filePath: string, content: string) => {
     const id = `block-${Date.now()}`;
+    const blockWidth = 320;
+    const blockHeight = 200;
+
+    // Calculate the visual center of the available workspace
+    // Adjust for sidebars if they are open
+    const leftOffset = isLeftSidebarOpen ? 256 : 0; // w-64
+    const rightOffset = isRightSidebarOpen ? 320 : 0; // w-80
+    const topOffset = 64; // h-16 (header)
+
+    const visibleWidth = window.innerWidth - leftOffset - rightOffset;
+    const visibleHeight = window.innerHeight - topOffset;
+
+    const screenCenterX = leftOffset + (visibleWidth / 2);
+    const screenCenterY = topOffset + (visibleHeight / 2);
+
+    // Convert screen coordinates to world coordinates
+    const worldCenterX = (screenCenterX - storyCanvasTransform.x) / storyCanvasTransform.scale;
+    const worldCenterY = (screenCenterY - storyCanvasTransform.y) / storyCanvasTransform.scale;
+
+    // Center the block itself on that point
+    const position = {
+        x: worldCenterX - (blockWidth / 2),
+        y: worldCenterY - (blockHeight / 2)
+    };
+
     const newBlock: Block = {
       id,
-      content: `label new_label_${Math.floor(Math.random() * 1000)}:\n    "Write your dialogue here."\n    return\n`,
-      position: { x: 100 + Math.random() * 50, y: 100 + Math.random() * 50 },
-      width: 320,
-      height: 200,
-      title: 'New Block',
-      filePath: `new_file_${Math.floor(Math.random() * 1000)}.rpy`
+      content,
+      position,
+      width: blockWidth,
+      height: blockHeight,
+      title: filePath.split('/').pop(),
+      filePath
     };
+    
     setBlocks(prev => [...prev, newBlock]);
     setDirtyBlockIds(prev => new Set(prev).add(id));
     
+    // Automatically select the new block and trigger a flash
+    setSelectedBlockIds([id]);
+    setFlashBlockRequest({ blockId: id, key: Date.now() });
+
     // Update tree if possible (mock for browser, explicit for fs)
-    if (fileSystemTree) {
+    if (fileSystemTree && filePath) {
         setFileSystemTree(prev => {
             if (!prev) return null;
-            const newNode: FileSystemTreeNode = { name: newBlock.filePath!, path: newBlock.filePath! };
-            return { ...prev, children: [...(prev.children || []), newNode] };
+            return prev;
         });
     }
-  }, [setBlocks, fileSystemTree]);
+    return id;
+  }, [setBlocks, fileSystemTree, storyCanvasTransform, isLeftSidebarOpen, isRightSidebarOpen]);
+
+  const handleCreateBlockConfirm = async (name: string, type: BlockType, folderPath: string) => {
+    let content = '';
+    const safeName = name.replace(/\.rpy$/, '');
+    const fileName = `${safeName}.rpy`;
+    
+    switch (type) {
+        case 'story':
+            content = `label ${safeName}:\n    "Start writing your story here..."\n    return\n`;
+            break;
+        case 'screen':
+            content = `screen ${safeName}():\n    zorder 100\n    frame:\n        align (0.5, 0.5)\n        text "New Screen"\n`;
+            break;
+        case 'config':
+            content = `# Configuration for ${safeName}\ndefine ${safeName}_enabled = True\n`;
+            break;
+    }
+
+    if (window.electronAPI && projectRootPath) {
+        try {
+            // Use the folderPath provided by the modal logic (based on selection)
+            // Ensure folderPath doesn't have trailing slash for path.join
+            const cleanFolderPath = folderPath.endsWith('/') ? folderPath.slice(0, -1) : folderPath;
+            const relativePath = cleanFolderPath ? `${cleanFolderPath}/${fileName}` : fileName;
+            const fullPath = await window.electronAPI.path.join(projectRootPath!, cleanFolderPath, fileName);
+            
+            const res = await window.electronAPI.writeFile(fullPath, content);
+            if (res.success) {
+                const id = addBlock(relativePath, content);
+                addToast(`Created ${fileName} in ${cleanFolderPath || 'root'}`, 'success');
+                // Refresh tree
+                const projData = await window.electronAPI.loadProject(projectRootPath);
+                setFileSystemTree(projData.tree);
+            } else {
+                throw new Error(res.error);
+            }
+        } catch (e: any) {
+            console.error(e);
+            addToast(`Failed to create file: ${e?.message || String(e)}`, 'error');
+        }
+    } else {
+        // Browser mode
+        addBlock(fileName, content);
+        addToast(`Created block ${fileName}`, 'success');
+    }
+  };
+
+  const getSelectedFolderForNewBlock = useCallback(() => {
+    if (explorerSelectedPaths.size === 1) {
+        const selectedPath = Array.from(explorerSelectedPaths)[0];
+        if (!fileSystemTree) return 'game/';
+
+        // Helper to find node
+        const findNode = (node: FileSystemTreeNode, targetPath: string): FileSystemTreeNode | null => {
+            if (node.path === targetPath) return node;
+            if (node.children) {
+                for (const child of node.children) {
+                    const found = findNode(child, targetPath);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+
+        const node = findNode(fileSystemTree, selectedPath);
+        if (node) {
+            if (node.children) {
+                // It is a directory
+                return node.path ? (node.path.endsWith('/') ? node.path : node.path + '/') : ''; 
+            } else {
+                // It is a file, return parent directory
+                const parts = node.path.split('/');
+                parts.pop(); // Remove filename
+                return parts.length > 0 ? parts.join('/') + '/' : '';
+            }
+        }
+    }
+    // Fallback if multiple selected or none or not found
+    return 'game/';
+  }, [explorerSelectedPaths, fileSystemTree]);
 
   const deleteBlock = useCallback((id: string) => {
     // Remove from groups
@@ -496,7 +616,7 @@ const App: React.FC = () => {
              loadedBlocks.push(defaultBlock);
              // Try to write it to disk immediately if possible
              if (window.electronAPI?.writeFile) {
-                 const scriptPath = window.electronAPI.path ? window.electronAPI.path.join(projectData.rootPath, 'script.rpy') : `${projectData.rootPath}/script.rpy`;
+                 const scriptPath = await window.electronAPI.path.join(projectData.rootPath, 'script.rpy');
                  await window.electronAPI.writeFile(scriptPath, defaultBlock.content);
                  // Also update tree to reflect this new file
                  if (projectData.tree) {
@@ -588,35 +708,118 @@ const App: React.FC = () => {
       }
   }, [loadProject, addToast]);
 
-  const handleContinueInBrowser = () => {
-      setShowWelcome(false);
-      setBlocks([]);
-      setFileSystemTree({ name: 'Browser Project', path: '', children: [] });
-      // Reset other states
-      setProjectRootPath(null);
-      setImages(new Map());
-      setAudios(new Map());
-      addToast('Started in Browser Mode', 'info');
-  };
+  // --- Unsaved Changes Modal Handling for New Project ---
+  const handleNewProjectRequest = useCallback(() => {
+    // Check if there are unsaved changes
+    const hasUnsaved = dirtyBlockIds.size > 0 || dirtyEditors.size > 0;
+    
+    if (hasUnsaved) {
+      setShowUnsavedChangesModal(true);
+    } else {
+      handleCreateProject();
+    }
+  }, [dirtyBlockIds, dirtyEditors, handleCreateProject]);
+
+  const handleSaveBlock = useCallback(async (blockId: string) => {
+    const editor = editorInstances.current.get(blockId);
+    let contentToSave: string | undefined;
+
+    // 1. Get latest content from editor if open, otherwise from state
+    if (editor) {
+        contentToSave = editor.getValue();
+        updateBlock(blockId, { content: contentToSave });
+    } else {
+        const block = blocks.find(b => b.id === blockId);
+        contentToSave = block?.content;
+    }
+
+    if (contentToSave === undefined) return;
+
+    // 2. Write to disk
+    if (window.electronAPI && projectRootPath) {
+        const block = blocks.find(b => b.id === blockId);
+        if (block && block.filePath) {
+             const absPath = await window.electronAPI.path.join(projectRootPath, block.filePath);
+             const res = await window.electronAPI.writeFile(absPath, contentToSave);
+             if (res.success) {
+                 addToast(`Saved ${block.title || 'file'}`, 'success');
+             } else {
+                 addToast(`Failed to save: ${res.error}`, 'error');
+             }
+        }
+    }
+
+    // 3. Clear dirty state for this block
+    setDirtyBlockIds(prev => {
+        const next = new Set(prev);
+        next.delete(blockId);
+        return next;
+    });
+    setDirtyEditors(prev => {
+        const next = new Set(prev);
+        next.delete(blockId);
+        return next;
+    });
+
+  }, [blocks, projectRootPath, updateBlock, addToast]);
 
   const handleSaveAll = async () => {
-    if (!projectRootPath && !directoryHandle) return; // Browser mode usually requires download
     setSaveStatus('saving');
     try {
+        // 1. Capture all content from open editors first to ensure we have latest changes
+        let currentBlocks = [...blocks];
+        
+        // Iterate over dirtyEditors to get latest content
+        // We use a Map to track updates to perform a single state update
+        const editorUpdates = new Map<string, string>();
+
+        for (const blockId of dirtyEditors) {
+             const editor = editorInstances.current.get(blockId);
+             if (editor) {
+                 const content = editor.getValue();
+                 editorUpdates.set(blockId, content);
+                 const idx = currentBlocks.findIndex(b => b.id === blockId);
+                 if (idx !== -1) {
+                     currentBlocks[idx] = { ...currentBlocks[idx], content };
+                 }
+             }
+        }
+
+        if (editorUpdates.size > 0) {
+            setBlocks(prev => prev.map(b => {
+                if(editorUpdates.has(b.id)) {
+                    return { ...b, content: editorUpdates.get(b.id)! };
+                }
+                return b;
+            }));
+        }
+
+        // Combine both sets of dirty IDs
+        const blocksToSave = new Set([...dirtyBlockIds, ...dirtyEditors]);
+
+        // Browser mode: just commit to memory and clear dirty flags
+        if (!projectRootPath && !directoryHandle) {
+             setDirtyBlockIds(new Set());
+             setDirtyEditors(new Set());
+             setSaveStatus('saved');
+             addToast('Changes saved to memory', 'success');
+             setTimeout(() => setSaveStatus('saved'), 2000);
+             return;
+        }
+
         if (window.electronAPI) {
             // Save all dirty blocks
-            for (const blockId of dirtyBlockIds) {
-                const block = blocks.find(b => b.id === blockId);
+            for (const blockId of blocksToSave) {
+                const block = currentBlocks.find(b => b.id === blockId);
                 if (block && block.filePath) {
-                    const absPath = window.electronAPI.path ? window.electronAPI.path.join(projectRootPath, block.filePath) : `${projectRootPath}/${block.filePath}`;
-                    
+                    const absPath = await window.electronAPI.path.join(projectRootPath!, block.filePath);
                     const res = await window.electronAPI.writeFile(absPath, block.content);
                     if (!res.success) throw new Error(res.error);
                 }
             }
             
             // Save project settings
-             const settingsPath = `${projectRootPath}/game/project.ide.json`;
+             const settingsPath = await window.electronAPI.path.join(projectRootPath!, 'game/project.ide.json');
              await window.electronAPI.writeFile(settingsPath, JSON.stringify({
                  apiKey: ideSettings.apiKey,
                  theme: ideSettings.theme,
@@ -628,6 +831,7 @@ const App: React.FC = () => {
         // Web FS API implementation would go here
 
         setDirtyBlockIds(new Set());
+        setDirtyEditors(new Set());
         setSaveStatus('saved');
         addToast('All changes saved', 'success');
         setTimeout(() => setSaveStatus('saved'), 2000);
@@ -638,47 +842,19 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDownloadZip = async () => {
-      setIsLoading(true);
-      setLoadingMessage('Compressing files...');
-      try {
-        const zip = new JSZip();
-        const gameFolder = zip.folder("game");
-        
-        blocks.forEach(block => {
-            const fileName = block.filePath || `${block.id}.rpy`;
-            gameFolder?.file(fileName, block.content);
-        });
-        
-        // Add images/audio if we have dataUrls
-        // Note: Data URLs might be large.
-        
-        const content = await zip.generateAsync({ type: "blob" });
-        const url = URL.createObjectURL(content);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = "renpy-project.zip";
-        a.click();
-        URL.revokeObjectURL(url);
-        addToast('Project downloaded', 'success');
-      } catch (e) {
-          addToast('Failed to generate zip', 'error');
-      } finally {
-          setIsLoading(false);
-      }
-  };
-
   // --- Tab Management ---
   const handleOpenEditor = useCallback((blockId: string, line?: number) => {
     const existing = openTabs.find(t => t.id === blockId);
     if (!existing) {
         const block = blocks.find(b => b.id === blockId);
-        setOpenTabs(prev => [...prev, { 
-            id: blockId, 
-            type: 'editor', 
-            blockId, 
-            scrollRequest: line ? { line, key: Date.now() } : undefined 
-        }]);
+        if (block) {
+            setOpenTabs(prev => [...prev, { 
+                id: blockId, 
+                type: 'editor', 
+                blockId, 
+                scrollRequest: line ? { line, key: Date.now() } : undefined 
+            }]);
+        }
     } else if (line) {
         // Update scroll request for existing tab
         setOpenTabs(prev => prev.map(tab => 
@@ -787,7 +963,8 @@ const App: React.FC = () => {
       try {
           for (const src of sourcePaths) {
               const fileName = src.split(/[/\\]/).pop();
-              const destPath = `${projectRootPath}/game/images/${fileName}`;
+              if (!fileName) continue;
+              const destPath = await window.electronAPI.path.join(projectRootPath, 'game', 'images', fileName);
               
               const img = (Array.from(images.values()) as ProjectImage[]).find(i => i.filePath === src);
               if (img && img.dataUrl) {
@@ -812,6 +989,134 @@ const App: React.FC = () => {
           setIsLoading(false);
       }
   };
+  
+    // --- File System Operations ---
+    const handleCreateNode = useCallback(async (parentPath: string, name: string, type: 'file' | 'folder') => {
+        if (!projectRootPath || !window.electronAPI?.path) return;
+        const newPath = await window.electronAPI.path.join(parentPath, name);
+        const fullPath = await window.electronAPI.path.join(projectRootPath, newPath);
+        
+        try {
+            if (type === 'folder') {
+                await window.electronAPI.createDirectory(fullPath);
+            } else {
+                const content = name.endsWith('.rpy') ? `# New file: ${name}\n\nlabel ${name.replace('.rpy', '')}_start:\n    return\n` : '';
+                await window.electronAPI.writeFile(fullPath, content);
+                if (name.endsWith('.rpy')) {
+                    addBlock(newPath, content);
+                }
+            }
+            // Reload project to get updated tree. A bit heavy but robust.
+            await loadProject(projectRootPath);
+            addToast(`${type === 'file' ? 'File' : 'Folder'} created: ${name}`, 'success');
+        } catch(e) {
+            addToast(`Failed to create ${type}`, 'error');
+            console.error(e);
+        }
+    }, [projectRootPath, addToast, addBlock, loadProject]);
+
+    const handleDeleteNode = useCallback((paths: string[]) => {
+        if (!projectRootPath || !window.electronAPI?.removeEntry) return;
+
+        setDeleteConfirmInfo({
+            paths,
+            onConfirm: async () => {
+                try {
+                    for (const path of paths) {
+                        const fullPath = await window.electronAPI!.path.join(projectRootPath, path);
+                        const res = await window.electronAPI!.removeEntry!(fullPath);
+                        if (!res.success) throw new Error(res.error);
+                    }
+                    await loadProject(projectRootPath); // Reload to reflect changes
+                    addToast(`${paths.length} item(s) deleted`, 'success');
+                } catch(e) {
+                    addToast(`Failed to delete items`, 'error');
+                }
+                setDeleteConfirmInfo(null);
+            }
+        });
+    }, [projectRootPath, loadProject, addToast]);
+
+    const handleRenameNode = useCallback(async (oldPath: string, newName: string) => {
+        if (!projectRootPath || !window.electronAPI?.moveFile) return;
+        const oldName = oldPath.split('/').pop();
+        if(newName === oldName) return;
+
+        const newPath = oldPath.substring(0, oldPath.lastIndexOf('/') + 1) + newName;
+        const fullOldPath = await window.electronAPI.path.join(projectRootPath, oldPath);
+        const fullNewPath = await window.electronAPI.path.join(projectRootPath, newPath);
+
+        try {
+            await window.electronAPI.moveFile(fullOldPath, fullNewPath);
+            await loadProject(projectRootPath); // Reload
+            addToast(`Renamed to ${newName}`, 'success');
+        } catch (e) {
+            addToast('Rename failed', 'error');
+        }
+    }, [projectRootPath, loadProject, addToast]);
+
+    const handleMoveNode = useCallback(async (sourcePaths: string[], targetFolderPath: string) => {
+        if (!projectRootPath || !window.electronAPI?.moveFile) return;
+        try {
+            for(const sourcePath of sourcePaths) {
+                const sourceName = sourcePath.split('/').pop();
+                if(!sourceName) continue;
+                
+                const newPath = await window.electronAPI.path.join(targetFolderPath, sourceName);
+                if(newPath === sourcePath) continue;
+
+                const fullOldPath = await window.electronAPI.path.join(projectRootPath, sourcePath);
+                const fullNewPath = await window.electronAPI.path.join(projectRootPath, newPath);
+                await window.electronAPI.moveFile(fullOldPath, fullNewPath);
+            }
+            await loadProject(projectRootPath);
+            addToast(`${sourcePaths.length} item(s) moved`, 'success');
+        } catch (e) {
+            addToast('Move failed', 'error');
+        }
+    }, [projectRootPath, loadProject, addToast]);
+
+    const handleCut = useCallback((paths: string[]) => {
+        setClipboard({ type: 'cut', paths: new Set(paths) });
+        addToast(`${paths.length} item(s) cut to clipboard`, 'info');
+    }, []);
+
+    const handleCopy = useCallback((paths: string[]) => {
+        setClipboard({ type: 'copy', paths: new Set(paths) });
+        addToast(`${paths.length} item(s) copied to clipboard`, 'info');
+    }, []);
+
+    const handlePaste = useCallback(async (targetFolderPath: string) => {
+        if (!clipboard || !projectRootPath || !window.electronAPI) return;
+        
+        try {
+            for(const sourcePath of clipboard.paths) {
+                const sourceName = sourcePath.split('/').pop();
+                if(!sourceName) continue;
+                
+                const destPath = await window.electronAPI.path.join(targetFolderPath, sourceName);
+                const fullSourcePath = await window.electronAPI.path.join(projectRootPath, sourcePath);
+                const fullDestPath = await window.electronAPI.path.join(projectRootPath, destPath);
+
+                if (clipboard.type === 'copy') {
+                    await window.electronAPI.copyEntry!(fullSourcePath, fullDestPath);
+                } else { // cut
+                    await window.electronAPI.moveFile!(fullSourcePath, fullDestPath);
+                }
+            }
+
+            if(clipboard.type === 'cut') {
+                setClipboard(null);
+            }
+            
+            await loadProject(projectRootPath);
+            addToast('Paste successful', 'success');
+
+        } catch (e) {
+             addToast('Paste failed', 'error');
+        }
+    }, [clipboard, projectRootPath, loadProject, addToast]);
+
 
   // --- Menu Command Listener ---
   useEffect(() => {
@@ -835,80 +1140,88 @@ const App: React.FC = () => {
       }
   }, [handleCreateProject, handleOpenProjectFolder, handleOpenStaticTab]);
 
+  // Use useCallback to stabilize callbacks passed to EditorView to avoid re-mounting
+  const handleEditorMount = useCallback((id: string, editor: monaco.editor.IStandaloneCodeEditor) => {
+      editorInstances.current.set(id, editor);
+  }, []);
+
+  const handleEditorUnmount = useCallback((id: string) => {
+      editorInstances.current.delete(id);
+  }, []);
+
   // --- Render Helpers ---
   const activeBlock = useMemo(() => blocks.find(b => b.id === activeTabId), [blocks, activeTabId]);
   const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId), [openTabs, activeTabId]);
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
+    <div className="fixed inset-0 flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
       {showWelcome && (
         <WelcomeScreen 
             onOpenProject={handleOpenProjectFolder}
             onCreateProject={handleCreateProject}
-            onContinueInBrowser={handleContinueInBrowser}
             isElectron={!!window.electronAPI}
         />
       )}
-      <Toolbar 
-        directoryHandle={directoryHandle}
-        projectRootPath={projectRootPath}
-        dirtyBlockIds={dirtyBlockIds}
-        dirtyEditors={dirtyEditors}
-        saveStatus={saveStatus}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        undo={undo}
-        redo={redo}
-        addBlock={addBlock}
-        handleTidyUp={handleTidyUp}
-        onAnalyzeRoutes={handleAnalyzeRoutes}
-        requestOpenFolder={handleOpenProjectFolder}
-        handleSave={handleSaveAll}
-        handleDownloadFiles={handleDownloadZip}
-        onUploadClick={() => {/* Upload Zip Impl */}}
-        setIsClearConfirmVisible={setIsClearConfirmVisible}
-        onOpenSettings={() => setSettingsModalOpen(true)}
-        isLeftSidebarOpen={isLeftSidebarOpen}
-        setIsLeftSidebarOpen={setIsLeftSidebarOpen}
-        isRightSidebarOpen={isRightSidebarOpen}
-        setIsRightSidebarOpen={setIsRightSidebarOpen}
-        onOpenStaticTab={handleOpenStaticTab}
-      />
+      <div className="flex-none z-40">
+        <Toolbar 
+            directoryHandle={directoryHandle}
+            projectRootPath={projectRootPath}
+            dirtyBlockIds={dirtyBlockIds}
+            dirtyEditors={dirtyEditors}
+            saveStatus={saveStatus}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            undo={undo}
+            redo={redo}
+            addBlock={() => setCreateBlockModalOpen(true)}
+            handleTidyUp={handleTidyUp}
+            onAnalyzeRoutes={handleAnalyzeRoutes}
+            onRequestNewProject={handleNewProjectRequest}
+            requestOpenFolder={handleOpenProjectFolder}
+            handleSave={handleSaveAll}
+            onOpenSettings={() => setSettingsModalOpen(true)}
+            isLeftSidebarOpen={isLeftSidebarOpen}
+            setIsLeftSidebarOpen={setIsLeftSidebarOpen}
+            isRightSidebarOpen={isRightSidebarOpen}
+            setIsRightSidebarOpen={setIsRightSidebarOpen}
+            onOpenStaticTab={handleOpenStaticTab}
+        />
+      </div>
       
-      <div className="flex-grow flex overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar: File Explorer */}
         {isLeftSidebarOpen && (
-            <div className="w-64 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300">
+            <div className="w-64 flex-none border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden min-h-0">
                 <FileExplorerPanel 
                     tree={fileSystemTree}
-                    onFileOpen={(path) => {
-                        // Find block with this path or create/open
-                        const block = blocks.find(b => b.filePath === path);
-                        if (block) handleOpenEditor(block.id);
+                    onFileOpen={(filePath) => {
+                      const block = blocks.find(b => b.filePath === filePath);
+                      if (block) handleOpenEditor(block.id);
                     }}
-                    onCreateNode={(parent, name, type) => {
-                        // Update logic would go here
-                        addToast(`${type} created: ${name}`, 'success');
-                    }}
-                    onRenameNode={() => {}}
-                    onDeleteNode={() => {}}
-                    onMoveNode={() => {}}
+                    onCreateNode={handleCreateNode}
+                    onRenameNode={handleRenameNode}
+                    onDeleteNode={handleDeleteNode}
+                    onMoveNode={handleMoveNode}
                     clipboard={clipboard}
-                    onCut={() => {}}
-                    onCopy={() => {}}
-                    onPaste={() => {}}
-                    onCenterOnBlock={(path) => {
-                         const block = blocks.find(b => b.filePath === path);
+                    onCut={handleCut}
+                    onCopy={handleCopy}
+                    onPaste={handlePaste}
+                    onCenterOnBlock={(filePath) => {
+                         const block = blocks.find(b => b.filePath === filePath);
                          if (block) handleCenterOnBlock(block.id);
                     }}
+                    selectedPaths={explorerSelectedPaths}
+                    setSelectedPaths={setExplorerSelectedPaths}
+                    lastClickedPath={explorerLastClickedPath}
+                    setLastClickedPath={setExplorerLastClickedPath}
                 />
             </div>
         )}
 
         {/* Main Content Area */}
-        <div className="flex-grow flex flex-col min-w-0 bg-gray-100 dark:bg-gray-900 relative">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-100 dark:bg-gray-900 relative">
             {/* Tab Bar */}
-            <div className="flex items-center bg-gray-200 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700 overflow-x-auto">
+            <div className="flex-none flex flex-wrap items-center bg-gray-200 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700">
                 {openTabs.map(tab => {
                     const block = blocks.find(b => b.id === tab.blockId);
                     let title = 'Unknown';
@@ -921,15 +1234,21 @@ const App: React.FC = () => {
                         const char = analysisResult.characters.get(tab.characterTag);
                         title = char ? `Char: ${char.name}` : (tab.characterTag === 'new_character' ? 'New Character' : 'Unknown Character');
                     }
+                    
+                    // Determine dirty state
+                    const isDirty = (tab.blockId && (dirtyBlockIds.has(tab.blockId) || dirtyEditors.has(tab.blockId))) || false;
 
                     const isActive = activeTabId === tab.id;
                     return (
                         <div 
                             key={tab.id}
                             onClick={() => handleSwitchTab(tab.id)}
-                            className={`group flex items-center px-4 py-2 text-sm cursor-pointer border-r border-gray-300 dark:border-gray-700 min-w-[120px] max-w-[200px] ${isActive ? 'bg-white dark:bg-gray-900 font-medium text-indigo-600 dark:text-indigo-400 border-t-2 border-t-indigo-500' : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}`}
+                            className={`group flex items-center px-4 py-2 text-sm cursor-pointer border-r border-gray-300 dark:border-gray-700 min-w-[120px] max-w-[200px] flex-shrink-0 ${isActive ? 'bg-white dark:bg-gray-900 font-medium text-indigo-600 dark:text-indigo-400 border-t-2 border-t-indigo-500' : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}`}
                         >
-                            <span className="truncate flex-grow">{title}</span>
+                            <span className="truncate flex-grow flex items-center">
+                                {title}
+                                {isDirty && <span className="text-indigo-500 ml-1.5">•</span>}
+                            </span>
                             {tab.id !== 'canvas' && (
                                 <button 
                                     onClick={(e) => handleCloseTab(tab.id, e)}
@@ -944,7 +1263,7 @@ const App: React.FC = () => {
             </div>
 
             {/* Tab Content */}
-            <div className="flex-grow relative overflow-hidden">
+            <div className="flex-1 relative overflow-hidden">
                 {activeTabId === 'canvas' && (
                     <StoryCanvas 
                         blocks={blocks}
@@ -967,6 +1286,7 @@ const App: React.FC = () => {
                         canvasFilters={canvasFilters}
                         setCanvasFilters={setCanvasFilters}
                         centerOnBlockRequest={centerOnBlockRequest}
+                        flashBlockRequest={flashBlockRequest}
                         hoverHighlightIds={hoverHighlightIds}
                         transform={storyCanvasTransform}
                         onTransformChange={setStoryCanvasTransform}
@@ -979,9 +1299,6 @@ const App: React.FC = () => {
                         routeLinks={routeCanvasData.routeLinks}
                         identifiedRoutes={routeCanvasData.identifiedRoutes}
                         updateLabelNodePositions={(updates) => {
-                            // Update internal state of route canvas nodes if needed, 
-                            // or just let them be transient. 
-                            // For now, we can update the state passed to it.
                              setRouteCanvasData(prev => {
                                  const nextNodes = prev.labelNodes.map(n => {
                                      const up = updates.find(u => u.id === n.id);
@@ -998,6 +1315,7 @@ const App: React.FC = () => {
 
                 {activeBlock && activeTab?.type === 'editor' && (
                     <EditorView 
+                        key={activeBlock.id}
                         block={activeBlock}
                         blocks={blocks}
                         analysisResult={analysisResult}
@@ -1006,6 +1324,7 @@ const App: React.FC = () => {
                             handleOpenEditor(blockId, line);
                         }}
                         onSave={(id, content) => updateBlock(id, { content })}
+                        onTriggerSave={handleSaveBlock}
                         onDirtyChange={(id, isDirty) => {
                             if (isDirty) setDirtyEditors(prev => new Set(prev).add(id));
                             else setDirtyEditors(prev => { const s = new Set(prev); s.delete(id); return s; });
@@ -1016,14 +1335,13 @@ const App: React.FC = () => {
                         availableModels={['gemini-1.5-flash', 'gemini-1.5-pro']}
                         selectedModel={ideSettings.selectedModel}
                         addToast={addToast}
-                        onEditorMount={(id, editor) => editorInstances.current.set(id, editor)}
-                        onEditorUnmount={(id) => editorInstances.current.delete(id)}
+                        onEditorMount={handleEditorMount}
+                        onEditorUnmount={handleEditorUnmount}
                     />
                 )}
 
                 {activeTab?.type === 'image' && activeTab.filePath && (
                     <ImageEditorView 
-                        // Safe lookup or fallback to prevent crash, though content might be empty if lookup fails
                         image={images.get(activeTab.filePath) || { filePath: activeTab.filePath, fileName: 'Unknown', isInProject: false, fileHandle: null, dataUrl: '' }}
                         metadata={imageMetadata.get(activeTab.filePath) || (images.get(activeTab.filePath)?.projectFilePath ? imageMetadata.get(images.get(activeTab.filePath)!.projectFilePath!) : undefined)}
                         onUpdateMetadata={(path, meta) => {
@@ -1067,7 +1385,7 @@ const App: React.FC = () => {
 
         {/* Right Sidebar: Story Elements */}
         {isRightSidebarOpen && (
-             <div className="w-80 flex-shrink-0 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col overflow-hidden transition-all duration-300">
+             <div className="w-80 flex-none border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col overflow-hidden min-h-0">
                 <StoryElementsPanel 
                     analysisResult={analysisResult}
                     onOpenCharacterEditor={handleOpenCharacterEditor}
@@ -1141,20 +1459,64 @@ const App: React.FC = () => {
         />
       )}
       
-      {isClearConfirmVisible && (
+      {createBlockModalOpen && (
+          <CreateBlockModal 
+            isOpen={createBlockModalOpen}
+            onClose={() => setCreateBlockModalOpen(false)}
+            onConfirm={(name, type) => handleCreateBlockConfirm(name, type, getSelectedFolderForNewBlock())}
+            defaultPath={getSelectedFolderForNewBlock()}
+          />
+      )}
+
+      {deleteConfirmInfo && (
         <ConfirmModal 
-            title="Clear Canvas"
-            onConfirm={() => {
-                setBlocks([]);
-                setGroups([]);
-                setOpenTabs([{ id: 'canvas', type: 'canvas' }]);
-                setActiveTabId('canvas');
-                setIsClearConfirmVisible(false);
-            }}
-            onClose={() => setIsClearConfirmVisible(false)}
+            title={`Delete ${deleteConfirmInfo.paths.length} item(s)?`}
+            onConfirm={deleteConfirmInfo.onConfirm}
+            onClose={() => setDeleteConfirmInfo(null)}
         >
-            Are you sure you want to clear the entire project? This action cannot be undone if you haven't saved.
+            Are you sure you want to permanently delete these items? This action cannot be undone.
+            <ul className="text-xs list-disc list-inside mt-2 max-h-24 overflow-y-auto bg-gray-100 dark:bg-gray-700 p-2 rounded">
+                {deleteConfirmInfo.paths.map(p => <li key={p} className="truncate">{p.split('/').pop()}</li>)}
+            </ul>
         </ConfirmModal>
+      )}
+      
+      {showUnsavedChangesModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md m-4 flex flex-col p-6">
+            <h2 className="text-xl font-bold mb-4 dark:text-white">Unsaved Changes</h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              You have unsaved changes in your current project. Do you want to save them before creating a new project?
+            </p>
+            <div className="flex justify-end space-x-3">
+               <button
+                onClick={() => setShowUnsavedChangesModal(false)}
+                className="px-4 py-2 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowUnsavedChangesModal(false);
+                  handleCreateProject();
+                }}
+                className="px-4 py-2 rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 font-medium"
+              >
+                Don't Save
+              </button>
+              <button
+                onClick={async () => {
+                  await handleSaveAll();
+                  setShowUnsavedChangesModal(false);
+                  handleCreateProject();
+                }}
+                className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+              >
+                Save & Continue
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {isLoading && <LoadingOverlay progress={loadingProgress} message={loadingMessage} />}

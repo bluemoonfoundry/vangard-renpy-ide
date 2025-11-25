@@ -120,8 +120,8 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
   };
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 space-y-4">
+    <div className="h-full flex flex-col p-4">
+      <div className="flex-none space-y-4 mb-4">
         <div className="flex justify-between items-center">
             <span className="text-xs text-gray-500 dark:text-gray-400">
                 {lastScanned ? `Last scanned: ${new Date(lastScanned).toLocaleTimeString()}` : 'Not scanned.'}
@@ -189,7 +189,7 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
           </button>
         </div>
       </div>
-      <div className="flex-grow overflow-y-auto -mr-4 pr-4 pt-4">
+      <div className="flex-grow overflow-y-auto -mr-4 pr-4 overscroll-contain">
         <div className="space-y-2">
           {filteredAudios.map(audio => (
             <AudioItem

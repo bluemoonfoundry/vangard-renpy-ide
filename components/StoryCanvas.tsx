@@ -24,6 +24,7 @@ interface StoryCanvasProps {
   canvasFilters: { story: boolean; screens: boolean; config: boolean };
   setCanvasFilters: React.Dispatch<React.SetStateAction<{ story: boolean; screens: boolean; config: boolean }>>;
   centerOnBlockRequest: { blockId: string, key: number } | null;
+  flashBlockRequest: { blockId: string, key: number } | null;
   hoverHighlightIds: Set<string> | null;
   transform: { x: number, y: number, scale: number };
   onTransformChange: React.Dispatch<React.SetStateAction<{ x: number, y: number, scale: number }>>;
@@ -162,7 +163,7 @@ type InteractionState =
   | { type: 'resizing-block'; block: Block; }
   | { type: 'resizing-group'; group: BlockGroup; };
 
-const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResult, updateBlock, updateGroup, updateBlockPositions, updateGroupPositions, onInteractionEnd, deleteBlock, onOpenEditor, selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, findUsagesHighlightIds, clearFindUsages, dirtyBlockIds, canvasFilters, setCanvasFilters, centerOnBlockRequest, hoverHighlightIds, transform, onTransformChange }) => {
+const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResult, updateBlock, updateGroup, updateBlockPositions, updateGroupPositions, onInteractionEnd, deleteBlock, onOpenEditor, selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, findUsagesHighlightIds, clearFindUsages, dirtyBlockIds, canvasFilters, setCanvasFilters, centerOnBlockRequest, flashBlockRequest, hoverHighlightIds, transform, onTransformChange }) => {
   const [rubberBandRect, setRubberBandRect] = useState<Rect | null>(null);
   
   // Refs for Imperative DOM updates
@@ -175,9 +176,11 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
   const canvasRef = useRef<HTMLDivElement>(null);
   const interactionState = useRef<InteractionState>({ type: 'idle' });
   const pointerStartPos = useRef<Position>({ x: 0, y: 0 });
-  const rafRef = useRef<number>();
+  // FIX: useRef<number>() requires an initial value. Initialize with null.
+  const rafRef = useRef<number | null>(null);
   const [flashingBlockId, setFlashingBlockId] = useState<string | null>(null);
   const lastHandledRequestKey = useRef<number | null>(null);
+  const lastHandledFlashKey = useRef<number | null>(null);
 
   useEffect(() => {
     if (!centerOnBlockRequest || !canvasRef.current) return;
@@ -205,6 +208,18 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
         return () => clearTimeout(timer);
     }
   }, [centerOnBlockRequest, blocks, transform.scale, onTransformChange]);
+
+  // Effect to handle flash requests without camera movement
+  useEffect(() => {
+    if (!flashBlockRequest) return;
+    if (flashBlockRequest.key === lastHandledFlashKey.current) return;
+
+    setFlashingBlockId(flashBlockRequest.blockId);
+    const timer = setTimeout(() => setFlashingBlockId(null), 1500);
+    lastHandledFlashKey.current = flashBlockRequest.key;
+
+    return () => clearTimeout(timer);
+  }, [flashBlockRequest]);
 
   const adjacencyMap = useMemo(() => {
     const adj = new Map<string, string[]>();
@@ -537,11 +552,9 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({ blocks, groups, analysisResul
                                  state.type === 'resizing-block' || 
                                  state.type === 'resizing-group';
         
-        if (wasInteractiveMove && distance > 2) {
-            onInteractionEnd();
-        }
-
         setIsDraggingSelection(false);
+        // FIX: Call onInteractionEnd when a drag/resize action finishes to properly manage history state.
+        if (wasInteractiveMove) onInteractionEnd();
         interactionState.current = { type: 'idle' };
         setRubberBandRect(null);
         if (canvasRef.current) canvasEl.releasePointerCapture(e.pointerId);

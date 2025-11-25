@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:debug": "vite build --mode development",
     "preview": "vite preview",
     "electron:start": "npm run build && electron .",
     "dist": "npm run build && electron-builder"
@@ -24,8 +25,11 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.19",
     "electron": "^39.2.3",
     "electron-builder": "^24.13.3",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.3",
     "typescript": "^5.2.2",
     "vite": "^7.2.4"
   },

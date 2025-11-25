@@ -4,14 +4,12 @@ import logo from '../vangard-renide-512x512.png';
 interface WelcomeScreenProps {
   onOpenProject: () => void;
   onCreateProject: () => void;
-  onContinueInBrowser: () => void;
   isElectron: boolean;
 }
 
 const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ 
   onOpenProject, 
   onCreateProject, 
-  onContinueInBrowser,
   isElectron 
 }) => {
   return (
@@ -36,7 +34,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
             </div>
             
             <div className="space-y-4">
-                {isElectron && (
+                {isElectron ? (
                     <>
                         <button 
                             onClick={onCreateProject}
@@ -64,19 +62,11 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
                             </div>
                         </button>
                     </>
+                ) : (
+                    <div className="p-4 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg text-yellow-800 dark:text-yellow-200 text-sm">
+                        This application is designed to run in Electron. Please launch the Electron app to create or open projects.
+                    </div>
                 )}
-
-                <div className="relative py-2">
-                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-300 dark:border-gray-700"></div></div>
-                    <div className="relative flex justify-center"><span className="px-4 bg-gray-50 dark:bg-gray-900 text-sm text-gray-500 dark:text-gray-500">or</span></div>
-                </div>
-
-                <button 
-                    onClick={onContinueInBrowser}
-                    className="w-full py-3 px-4 rounded-lg border border-transparent hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 font-medium transition-colors text-center"
-                >
-                    Continue in Browser Mode (Prototyping)
-                </button>
             </div>
         </div>
       </div>

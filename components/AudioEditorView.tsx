@@ -41,14 +41,14 @@ const AudioEditorView: React.FC<AudioEditorViewProps> = ({ audio, metadata, onUp
   const renpyTag = `play audio "game/audio/${subfolder ? `${subfolder}/` : ''}${audio.fileName}"`;
 
   return (
-    <div className="w-full h-full flex flex-col bg-gray-100 dark:bg-gray-900">
+    <div className="w-full h-full flex flex-col bg-gray-100 dark:bg-gray-900 overflow-hidden">
       <div className="flex-grow p-4 flex flex-col items-center justify-center">
           <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">{audio.fileName}</h2>
           <audio controls src={audio.dataUrl} className="w-full max-w-lg">
             Your browser does not support the audio element.
           </audio>
       </div>
-      <aside className="w-full h-80 flex-shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 flex flex-row space-x-8 overflow-y-auto">
+      <aside className="w-full h-80 flex-shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 flex flex-row space-x-8 overflow-y-auto overscroll-contain">
         <div className="flex-1 space-y-4 max-w-md">
             <h3 className="text-lg font-bold border-b pb-2 border-gray-200 dark:border-gray-700">File Info</h3>
             <div className="space-y-2 text-sm">

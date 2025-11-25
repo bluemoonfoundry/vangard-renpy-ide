@@ -1,3 +1,5 @@
+
+
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import type { Theme } from '../types';
 import logo from '../vangard-renide-512x512.png';
@@ -17,11 +19,9 @@ interface ToolbarProps {
   addBlock: () => void;
   handleTidyUp: () => void;
   onAnalyzeRoutes: () => void;
+  onRequestNewProject: () => void;
   requestOpenFolder: () => void;
   handleSave: () => void;
-  handleDownloadFiles: () => void;
-  onUploadClick: () => void;
-  setIsClearConfirmVisible: (visible: boolean) => void;
   onOpenSettings: () => void;
   isLeftSidebarOpen: boolean;
   setIsLeftSidebarOpen: (open: boolean) => void;
@@ -59,11 +59,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
   addBlock,
   handleTidyUp,
   onAnalyzeRoutes,
+  onRequestNewProject,
   requestOpenFolder,
   handleSave,
-  handleDownloadFiles,
-  onUploadClick,
-  setIsClearConfirmVisible,
   onOpenSettings,
   isLeftSidebarOpen,
   setIsLeftSidebarOpen,
@@ -136,17 +134,21 @@ const Toolbar: React.FC<ToolbarProps> = ({
       </div>
 
       <div className="flex items-center space-x-2">
+        <ToolbarButton onClick={onRequestNewProject} title="Create New Project">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8z" clipRule="evenodd" /></svg>
+            <span>New Project</span>
+        </ToolbarButton>
+
          <ToolbarButton onClick={requestOpenFolder} title="Open Project Folder">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
+            <span>Open Project</span>
         </ToolbarButton>
        
         <ToolbarButton
             onClick={handleSave}
-            disabled={(!directoryHandle && !projectRootPath) || totalUnsavedCount === 0}
+            disabled={totalUnsavedCount === 0}
             title={
-                (!directoryHandle && !projectRootPath)
-                ? 'Open a project folder to enable saving to files'
-                : totalUnsavedCount === 0
+                totalUnsavedCount === 0
                 ? 'No changes to save'
                 : `Save All (${totalUnsavedCount} unsaved)`
             }
@@ -159,15 +161,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
         <SaveStatusIndicator />
 
-        <ToolbarButton onClick={handleDownloadFiles} title="Download Project as .zip">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-        </ToolbarButton>
-        <ToolbarButton onClick={onUploadClick} title="Upload a .zip project">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M4 16h12v2H4v-2zm4-12v8H4l6-6 6 6h-4V4H8z"/></svg>
-        </ToolbarButton>
-        <ToolbarButton onClick={() => setIsClearConfirmVisible(true)} title="Clear entire canvas">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
-        </ToolbarButton>
         <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
         <ToolbarButton onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)} title="Toggle Left Sidebar">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm4 2a1 1 0 011-1h6a1 1 0 110 2H8a1 1 0 01-1-1z" clipRule="evenodd" /></svg>

@@ -1,3 +1,4 @@
+
 export interface Position {
   x: number;
   y: number;
@@ -259,10 +260,13 @@ declare global {
           createProject?: () => Promise<string | null>;
           loadProject: (path: string) => Promise<any>;
           writeFile: (path: string, content: string, encoding?: string) => Promise<{ success: boolean; error?: string }>;
-          removeEntry?: (path: string) => Promise<{ success: boolean; error?: string }>;
-          moveFile?: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
-          path?: {
-              join: (...paths: string[]) => string;
+          createDirectory: (path: string) => Promise<{ success: boolean; error?: string }>;
+          removeEntry: (path: string) => Promise<{ success: boolean; error?: string }>;
+          moveFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
+          copyEntry: (sourcePath: string, destPath: string) => Promise<{ success: boolean; error?: string }>;
+          onMenuCommand: (callback: (data: { command: string, type?: 'canvas' | 'route-canvas' }) => void) => () => void;
+          path: {
+              join: (...paths: string[]) => Promise<string>;
           }
       }
   }

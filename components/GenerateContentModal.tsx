@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import type { Block, RenpyAnalysisResult } from '../types';
@@ -85,7 +86,7 @@ const GenerateContentModal: React.FC<GenerateContentModalProps> = ({
               });
           }
           
-          const blockMap = new Map(blocks.map(b => [b.id, b]));
+          const blockMap = new Map<string, Block>(blocks.map(b => [b.id, b]));
           const ancestorContent = Array.from(ancestors)
               .map(id => {
                   const block = blockMap.get(id);
@@ -271,3 +272,4 @@ const GenerateContentModal: React.FC<GenerateContentModalProps> = ({
 };
 
 export default GenerateContentModal;
+    
