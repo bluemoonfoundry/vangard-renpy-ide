@@ -18,6 +18,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('menu-command', subscription);
     };
   },
+  // --- Exit confirmation flow ---
+  onCheckUnsavedChangesBeforeExit: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('check-unsaved-changes-before-exit', subscription);
+    return () => ipcRenderer.removeListener('check-unsaved-changes-before-exit', subscription);
+  },
+  replyUnsavedChangesBeforeExit: (hasUnsaved) => {
+    ipcRenderer.send('reply-unsaved-changes-before-exit', hasUnsaved);
+  },
+  onShowExitModal: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('show-exit-modal', subscription);
+    return () => ipcRenderer.removeListener('show-exit-modal', subscription);
+  },
+  forceQuit: () => {
+    ipcRenderer.send('force-quit');
+  },
   path: {
     join: (...args) => ipcRenderer.invoke('path:join', ...args),
   }

@@ -1,4 +1,5 @@
 
+
 export interface Position {
   x: number;
   y: number;
@@ -264,7 +265,12 @@ declare global {
           removeEntry: (path: string) => Promise<{ success: boolean; error?: string }>;
           moveFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
           copyEntry: (sourcePath: string, destPath: string) => Promise<{ success: boolean; error?: string }>;
+          // FIX: Correct the type definition for `onMenuCommand`. The callback should return `void`, not another function. This aligns with standard event listener patterns and other similar functions in this interface.
           onMenuCommand: (callback: (data: { command: string, type?: 'canvas' | 'route-canvas' }) => void) => () => void;
+          onCheckUnsavedChangesBeforeExit: (callback: () => void) => () => void;
+          replyUnsavedChangesBeforeExit: (hasUnsaved: boolean) => void;
+          onShowExitModal: (callback: () => void) => () => void;
+          forceQuit: () => void;
           path: {
               join: (...paths: string[]) => Promise<string>;
           }

@@ -38,7 +38,6 @@ function saveWindowState(window) {
 }
 // --- End Window State Management ---
 
-
 async function readProjectFiles(rootPath) {
     const results = {
         rootPath,
@@ -100,6 +99,7 @@ async function readProjectFiles(rootPath) {
     return results;
 }
 
+let forceQuit = false; // Flag to bypass the custom close handling
 
 async function createWindow() {
   const savedState = await loadWindowState();
@@ -112,17 +112,22 @@ async function createWindow() {
     y: savedState?.y,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      // Security best practices are enabled by default in recent Electron versions:
       nodeIntegration: false,
       contextIsolation: true,
     },
-    // The icon path should point to the icon file at the root of the app package.
     icon: path.join(__dirname, 'vangard-renide-512x512.png')
   });
 
-  // Save the window state when the window is closed.
-  mainWindow.on('close', () => {
-    saveWindowState(mainWindow);
+  mainWindow.on('close', (e) => {
+    // If we've already decided to quit, don't prevent it.
+    if (forceQuit) {
+      saveWindowState(mainWindow);
+      return;
+    }
+    // Prevent the window from closing immediately.
+    e.preventDefault();
+    // Ask the renderer process if there are unsaved changes.
+    mainWindow.webContents.send('check-unsaved-changes-before-exit');
   });
 
   const menuTemplate = [
@@ -207,8 +212,6 @@ async function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'dist/index.html'));
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
 app.whenReady().then(() => {
   ipcMain.handle('dialog:openDirectory', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
@@ -285,7 +288,6 @@ app.whenReady().then(() => {
 
   ipcMain.handle('fs:copyEntry', async (event, sourcePath, destPath) => {
     try {
-      // fs.cp is recursive by default for directories
       await fs.cp(sourcePath, destPath, { recursive: true });
       return { success: true };
     } catch (error) {
@@ -296,22 +298,35 @@ app.whenReady().then(() => {
   ipcMain.handle('path:join', (event, ...args) => {
     return path.join(...args);
   });
+  
+  ipcMain.on('reply-unsaved-changes-before-exit', (event, hasUnsavedChanges) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (window) {
+        if (hasUnsavedChanges) {
+            // Tell the renderer to show its custom modal.
+            window.webContents.send('show-exit-modal');
+        } else {
+            // No unsaved changes, so we can quit immediately.
+            forceQuit = true;
+            app.quit();
+        }
+    }
+  });
 
+  ipcMain.on('force-quit', () => {
+    forceQuit = true;
+    app.quit();
+  });
 
   createWindow();
 
   app.on('activate', () => {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
   });
 });
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();

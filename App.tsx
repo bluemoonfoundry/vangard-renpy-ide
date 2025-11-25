@@ -1,7 +1,5 @@
 
 
-
-
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -248,6 +246,16 @@ const computeAutoLayout = <T extends LayoutNode>(nodes: T[], edges: LayoutEdge[]
 
 // --- Main App Component ---
 
+interface UnsavedChangesModalInfo {
+    title: string;
+    message: string;
+    confirmText: string;
+    dontSaveText: string;
+    onConfirm: () => Promise<void> | void;
+    onDontSave: () => void;
+    onCancel: () => void;
+}
+
 const App: React.FC = () => {
   // --- State: Welcome Screen ---
   const [showWelcome, setShowWelcome] = useState(true);
@@ -296,7 +304,7 @@ const App: React.FC = () => {
   
   const [deleteConfirmInfo, setDeleteConfirmInfo] = useState<{ paths: string[]; onConfirm: () => void; } | null>(null);
   const [createBlockModalOpen, setCreateBlockModalOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState<{ action: () => void; message: string; title: string; } | null>(null);
+  const [unsavedChangesModalInfo, setUnsavedChangesModalInfo] = useState<UnsavedChangesModalInfo | null>(null);
   const [contextMenuInfo, setContextMenuInfo] = useState<{ x: number; y: number; tabId: string } | null>(null);
   
   // --- State: View Transforms ---
@@ -732,21 +740,6 @@ const App: React.FC = () => {
       }
   }, [loadProject, addToast]);
 
-  // --- Unsaved Changes Modal Handling for New Project ---
-  const handleNewProjectRequest = useCallback(() => {
-    const hasUnsaved = dirtyBlockIds.size > 0 || dirtyEditors.size > 0;
-    
-    if (hasUnsaved) {
-      setPendingAction({
-        action: handleCreateProject,
-        title: 'Unsaved Changes',
-        message: 'You have unsaved changes in your current project. Do you want to save them before creating a new project?'
-      });
-    } else {
-      handleCreateProject();
-    }
-  }, [dirtyBlockIds, dirtyEditors, handleCreateProject]);
-
   const handleSaveBlock = useCallback(async (blockId: string) => {
     const editor = editorInstances.current.get(blockId);
     let contentToSave: string | undefined;
@@ -790,14 +783,12 @@ const App: React.FC = () => {
 
   }, [blocks, projectRootPath, updateBlock, addToast]);
 
-  const handleSaveAll = async () => {
+  const handleSaveAll = useCallback(async () => {
     setSaveStatus('saving');
     try {
         // 1. Capture all content from open editors first to ensure we have latest changes
         let currentBlocks = [...blocks];
         
-        // Iterate over dirtyEditors to get latest content
-        // We use a Map to track updates to perform a single state update
         const editorUpdates = new Map<string, string>();
 
         for (const blockId of dirtyEditors) {
@@ -821,10 +812,8 @@ const App: React.FC = () => {
             }));
         }
 
-        // Combine both sets of dirty IDs
         const blocksToSave = new Set([...dirtyBlockIds, ...dirtyEditors]);
 
-        // Browser mode: just commit to memory and clear dirty flags
         if (!projectRootPath && !directoryHandle) {
              setDirtyBlockIds(new Set());
              setDirtyEditors(new Set());
@@ -835,7 +824,6 @@ const App: React.FC = () => {
         }
 
         if (window.electronAPI) {
-            // Save all dirty blocks
             for (const blockId of blocksToSave) {
                 const block = currentBlocks.find(b => b.id === blockId);
                 if (block && block.filePath) {
@@ -845,7 +833,6 @@ const App: React.FC = () => {
                 }
             }
             
-            // Save project settings
              const settingsPath = await window.electronAPI.path.join(projectRootPath!, 'game/project.ide.json');
              await window.electronAPI.writeFile(settingsPath, JSON.stringify({
                  apiKey: ideSettings.apiKey,
@@ -853,9 +840,7 @@ const App: React.FC = () => {
                  enableAiFeatures: ideSettings.enableAiFeatures,
                  selectedModel: ideSettings.selectedModel
              }, null, 2));
-
         } 
-        // Web FS API implementation would go here
 
         setDirtyBlockIds(new Set());
         setDirtyEditors(new Set());
@@ -867,8 +852,36 @@ const App: React.FC = () => {
         setSaveStatus('error');
         addToast('Failed to save changes', 'error');
     }
-  };
-
+  }, [blocks, dirtyEditors, dirtyBlockIds, projectRootPath, directoryHandle, ideSettings, addToast, setBlocks]);
+  
+  // --- Unsaved Changes Modal Handling for New Project ---
+  const handleNewProjectRequest = useCallback(() => {
+    const hasUnsaved = dirtyBlockIds.size > 0 || dirtyEditors.size > 0;
+    
+    if (hasUnsaved) {
+      setUnsavedChangesModalInfo({
+        title: 'Unsaved Changes',
+        message: 'You have unsaved changes. Do you want to save them before creating a new project?',
+        confirmText: 'Save & Create',
+        dontSaveText: "Don't Save & Create",
+        onConfirm: async () => {
+          await handleSaveAll();
+          handleCreateProject();
+          setUnsavedChangesModalInfo(null);
+        },
+        onDontSave: () => {
+          handleCreateProject();
+          setUnsavedChangesModalInfo(null);
+        },
+        onCancel: () => {
+          setUnsavedChangesModalInfo(null);
+        }
+      });
+    } else {
+      handleCreateProject();
+    }
+  }, [dirtyBlockIds, dirtyEditors, handleCreateProject, handleSaveAll]);
+  
   // --- Tab Management ---
   const handleOpenEditor = useCallback((blockId: string, line?: number) => {
     const existing = openTabs.find(t => t.id === blockId);
@@ -919,8 +932,8 @@ const App: React.FC = () => {
     // Future: Add audio file handling here
   }, [blocks, handleOpenEditor, handleOpenImageEditorTab]);
 
-  const handleCloseTab = useCallback((tabId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCloseTab = useCallback((tabId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setOpenTabs(prev => prev.filter(t => t.id !== tabId));
     if (activeTabId === tabId) {
         setActiveTabId('canvas');
@@ -945,15 +958,28 @@ const App: React.FC = () => {
     };
 
     if (hasUnsaved) {
-        setPendingAction({
-            action: closeAction,
+        setUnsavedChangesModalInfo({
             title: 'Close Other Tabs',
-            message: 'You have unsaved changes. Do you want to save them before closing other tabs?'
+            message: 'You have unsaved changes. Do you want to save them before closing other tabs?',
+            confirmText: 'Save & Close',
+            dontSaveText: "Don't Save & Close",
+            onConfirm: async () => {
+                await handleSaveAll();
+                closeAction();
+                setUnsavedChangesModalInfo(null);
+            },
+            onDontSave: () => {
+                closeAction();
+                setUnsavedChangesModalInfo(null);
+            },
+            onCancel: () => {
+                setUnsavedChangesModalInfo(null);
+            }
         });
     } else {
         closeAction();
     }
-  }, [openTabs, activeTabId, dirtyBlockIds, dirtyEditors]);
+  }, [openTabs, activeTabId, dirtyBlockIds, dirtyEditors, handleSaveAll]);
 
   const handleCloseAllRequest = useCallback(() => {
     const tabsToClose = openTabs.filter(t => t.id !== 'canvas');
@@ -965,15 +991,28 @@ const App: React.FC = () => {
     };
 
     if (hasUnsaved) {
-        setPendingAction({
-            action: closeAction,
+        setUnsavedChangesModalInfo({
             title: 'Close All Tabs',
-            message: 'You have unsaved changes. Do you want to save them before closing all tabs?'
+            message: 'You have unsaved changes. Do you want to save them before closing all tabs?',
+            confirmText: 'Save & Close',
+            dontSaveText: "Don't Save & Close",
+            onConfirm: async () => {
+                await handleSaveAll();
+                closeAction();
+                setUnsavedChangesModalInfo(null);
+            },
+            onDontSave: () => {
+                closeAction();
+                setUnsavedChangesModalInfo(null);
+            },
+            onCancel: () => {
+                setUnsavedChangesModalInfo(null);
+            }
         });
     } else {
         closeAction();
     }
-  }, [openTabs, dirtyBlockIds, dirtyEditors]);
+  }, [openTabs, dirtyBlockIds, dirtyEditors, handleSaveAll]);
 
   const handleSwitchTab = (tabId: string) => setActiveTabId(tabId);
 
@@ -1222,10 +1261,11 @@ const App: React.FC = () => {
   // --- Menu Command Listener ---
   useEffect(() => {
       if (window.electronAPI?.onMenuCommand) {
-          const removeListener = window.electronAPI.onMenuCommand((data: any) => {
+          // FIX: Removed explicit `any` type. TypeScript will now correctly infer the type of `data` from the updated `onMenuCommand` definition in `types.ts`.
+          const removeListener = window.electronAPI.onMenuCommand((data) => {
               switch (data.command) {
                   case 'new-project':
-                      handleCreateProject();
+                      handleNewProjectRequest();
                       break;
                   case 'open-project':
                       handleOpenProjectFolder();
@@ -1239,7 +1279,41 @@ const App: React.FC = () => {
           });
           return () => removeListener();
       }
-  }, [handleCreateProject, handleOpenProjectFolder, handleOpenStaticTab]);
+  }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenStaticTab]);
+  
+  // --- Exit Confirmation Handling ---
+  useEffect(() => {
+    if (window.electronAPI) {
+      const removeCheckListener = window.electronAPI.onCheckUnsavedChangesBeforeExit(() => {
+        const hasUnsaved = dirtyBlockIds.size > 0 || dirtyEditors.size > 0;
+        window.electronAPI!.replyUnsavedChangesBeforeExit(hasUnsaved);
+      });
+
+      const removeShowModalListener = window.electronAPI.onShowExitModal(() => {
+        setUnsavedChangesModalInfo({
+          title: 'Quit Application',
+          message: 'You have unsaved changes. Do you want to save them before quitting?',
+          confirmText: 'Save & Quit',
+          dontSaveText: "Don't Save & Quit",
+          onConfirm: async () => {
+            await handleSaveAll();
+            window.electronAPI!.forceQuit();
+          },
+          onDontSave: () => {
+            window.electronAPI!.forceQuit();
+          },
+          onCancel: () => {
+            setUnsavedChangesModalInfo(null);
+          },
+        });
+      });
+
+      return () => {
+        removeCheckListener();
+        removeShowModalListener();
+      };
+    }
+  }, [dirtyBlockIds, dirtyEditors, handleSaveAll]);
 
   // Use useCallback to stabilize callbacks passed to EditorView to avoid re-mounting
   const handleEditorMount = useCallback((id: string, editor: monaco.editor.IStandaloneCodeEditor) => {
@@ -1259,7 +1333,7 @@ const App: React.FC = () => {
       {showWelcome && (
         <WelcomeScreen 
             onOpenProject={handleOpenProjectFolder}
-            onCreateProject={handleCreateProject}
+            onCreateProject={handleNewProjectRequest}
             isElectron={!!window.electronAPI}
         />
       )}
@@ -1571,38 +1645,31 @@ const App: React.FC = () => {
         </ConfirmModal>
       )}
       
-      {pendingAction && (
+      {unsavedChangesModalInfo && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md m-4 flex flex-col p-6">
-            <h2 className="text-xl font-bold mb-4 dark:text-white">{pendingAction.title}</h2>
+            <h2 className="text-xl font-bold mb-4 dark:text-white">{unsavedChangesModalInfo.title}</h2>
             <p className="text-gray-600 dark:text-gray-300 mb-6">
-              {pendingAction.message}
+              {unsavedChangesModalInfo.message}
             </p>
             <div className="flex justify-end space-x-3">
                <button
-                onClick={() => setPendingAction(null)}
+                onClick={unsavedChangesModalInfo.onCancel}
                 className="px-4 py-2 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium"
               >
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  if (pendingAction.action) pendingAction.action();
-                  setPendingAction(null);
-                }}
+                onClick={unsavedChangesModalInfo.onDontSave}
                 className="px-4 py-2 rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 font-medium"
               >
-                Don't Save
+                {unsavedChangesModalInfo.dontSaveText}
               </button>
               <button
-                onClick={async () => {
-                  await handleSaveAll();
-                  if (pendingAction.action) pendingAction.action();
-                  setPendingAction(null);
-                }}
+                onClick={unsavedChangesModalInfo.onConfirm}
                 className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
               >
-                Save & Continue
+                {unsavedChangesModalInfo.confirmText}
               </button>
             </div>
           </div>
@@ -1626,7 +1693,7 @@ const App: React.FC = () => {
             y={contextMenuInfo.y}
             tabId={contextMenuInfo.tabId}
             onClose={() => setContextMenuInfo(null)}
-            onCloseTab={(tabId) => handleCloseTab(tabId, { stopPropagation: () => {} } as React.MouseEvent)}
+            onCloseTab={(tabId) => handleCloseTab(tabId)}
             onCloseOthers={handleCloseOthersRequest}
             onCloseAll={handleCloseAllRequest}
         />,
