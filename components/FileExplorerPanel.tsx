@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import type { FileSystemTreeNode } from '../types';
@@ -58,12 +59,14 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   selectedPaths, setSelectedPaths, lastClickedPath, setLastClickedPath, flatVisibleNodes 
 }) => {
   const isDirectory = !!node.children;
-  const isExpanded = expandedPaths.has(node.path);
   const isRpyFile = node.name.endsWith('.rpy');
   const [isRenaming, setIsRenaming] = useState(false);
   const [inputValue, setInputValue] = useState(node.name);
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+
+  // FIX: Define isExpanded based on whether the node's path is in the expandedPaths set.
+  const isExpanded = expandedPaths.has(node.path);
 
   const isSelected = selectedPaths.has(node.path);
 
@@ -84,7 +87,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   }, [isRenaming]);
 
   const handleDoubleClick = () => {
-    if (!isDirectory && isRpyFile) {
+    if (!isDirectory) {
       onFileOpen(node.path);
     }
   };

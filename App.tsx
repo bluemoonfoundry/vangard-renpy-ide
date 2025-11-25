@@ -1,6 +1,9 @@
 
 
+
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
 import Toolbar from './components/Toolbar';
 import StoryCanvas from './components/StoryCanvas';
@@ -17,6 +20,7 @@ import WelcomeScreen from './components/WelcomeScreen';
 import ImageEditorView from './components/ImageEditorView';
 import AudioEditorView from './components/AudioEditorView';
 import CharacterEditorView from './components/CharacterEditorView';
+import TabContextMenu from './components/TabContextMenu';
 import { useRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import type { 
@@ -292,7 +296,8 @@ const App: React.FC = () => {
   
   const [deleteConfirmInfo, setDeleteConfirmInfo] = useState<{ paths: string[]; onConfirm: () => void; } | null>(null);
   const [createBlockModalOpen, setCreateBlockModalOpen] = useState(false);
-  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ action: () => void; message: string; title: string; } | null>(null);
+  const [contextMenuInfo, setContextMenuInfo] = useState<{ x: number; y: number; tabId: string } | null>(null);
   
   // --- State: View Transforms ---
   const [storyCanvasTransform, setStoryCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
@@ -324,6 +329,7 @@ const App: React.FC = () => {
   
   // --- Refs ---
   const editorInstances = useRef<Map<string, monaco.editor.IStandaloneCodeEditor>>(new Map());
+  const initialLayoutNeeded = useRef(false);
 
   // --- Initial Load & Theme ---
   useEffect(() => {
@@ -560,17 +566,33 @@ const App: React.FC = () => {
   }, [setBlocks, setGroups, activeTabId]);
 
   // --- Layout ---
-  const handleTidyUp = useCallback(() => {
+  const handleTidyUp = useCallback((showToast = true) => {
     try {
         const links = analysisResult.links;
         const newLayout = computeAutoLayout(blocks, links);
         setBlocks(newLayout);
-        addToast('Layout organized', 'success');
+        if (showToast) {
+            addToast('Layout organized', 'success');
+        }
     } catch (e) {
         console.error("Failed to tidy up layout:", e);
-        addToast('Failed to organize layout', 'error');
+        if (showToast) {
+            addToast('Failed to organize layout', 'error');
+        }
     }
   }, [blocks, analysisResult, setBlocks, addToast]);
+
+  // Effect to run initial tidy-up after project load
+  useEffect(() => {
+    // Only run if the flag is set, and we have blocks and analysis is likely complete
+    if (initialLayoutNeeded.current && blocks.length > 0 && analysisResult) {
+        initialLayoutNeeded.current = false; // Reset the flag immediately to prevent re-runs
+        
+        // A small timeout can ensure the analysis has completed after the blocks were set
+        // and avoid a flicker if the layout is too fast.
+        setTimeout(() => handleTidyUp(false), 100);
+    }
+  }, [blocks, analysisResult, handleTidyUp]);
 
   // --- Tab Management Helpers ---
   const handleOpenStaticTab = useCallback((type: 'canvas' | 'route-canvas') => {
@@ -626,8 +648,10 @@ const App: React.FC = () => {
           }
 
           setProjectRootPath(projectData.rootPath);
-          // Use computeAutoLayout for initial layout
-          setBlocks(computeAutoLayout(loadedBlocks, [])); 
+          // Set blocks with their initial grid layout, which will then trigger
+          // a full tidy-up via an effect once analysis is complete.
+          setBlocks(loadedBlocks);
+          initialLayoutNeeded.current = true;
           setFileSystemTree(projectData.tree);
           
           // Load Assets
@@ -710,11 +734,14 @@ const App: React.FC = () => {
 
   // --- Unsaved Changes Modal Handling for New Project ---
   const handleNewProjectRequest = useCallback(() => {
-    // Check if there are unsaved changes
     const hasUnsaved = dirtyBlockIds.size > 0 || dirtyEditors.size > 0;
     
     if (hasUnsaved) {
-      setShowUnsavedChangesModal(true);
+      setPendingAction({
+        action: handleCreateProject,
+        title: 'Unsaved Changes',
+        message: 'You have unsaved changes in your current project. Do you want to save them before creating a new project?'
+      });
     } else {
       handleCreateProject();
     }
@@ -866,6 +893,32 @@ const App: React.FC = () => {
     setActiveTabId(blockId);
   }, [blocks, openTabs]);
 
+  const handleOpenImageEditorTab = useCallback((filePath: string) => {
+    const tabId = `img-${filePath}`;
+    setOpenTabs(prev => {
+      if (!prev.find(t => t.id === tabId)) {
+        return [...prev, { id: tabId, type: 'image', filePath: filePath }];
+      }
+      return prev;
+    });
+    setActiveTabId(tabId);
+  }, []);
+
+  const handlePathDoubleClick = useCallback((filePath: string) => {
+    const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
+    const lowerFilePath = filePath.toLowerCase();
+
+    if (lowerFilePath.endsWith('.rpy')) {
+      const block = blocks.find(b => b.filePath === filePath);
+      if (block) {
+        handleOpenEditor(block.id);
+      }
+    } else if (imageExtensions.some(ext => lowerFilePath.endsWith(ext))) {
+      handleOpenImageEditorTab(filePath);
+    }
+    // Future: Add audio file handling here
+  }, [blocks, handleOpenEditor, handleOpenImageEditorTab]);
+
   const handleCloseTab = useCallback((tabId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setOpenTabs(prev => prev.filter(t => t.id !== tabId));
@@ -873,6 +926,54 @@ const App: React.FC = () => {
         setActiveTabId('canvas');
     }
   }, [activeTabId]);
+
+  const handleTabContextMenu = useCallback((e: React.MouseEvent, tabId: string) => {
+      e.preventDefault();
+      setContextMenuInfo({ x: e.clientX, y: e.clientY, tabId });
+  }, []);
+
+  const handleCloseOthersRequest = useCallback((tabId: string) => {
+    const tabsToClose = openTabs.filter(t => t.id !== tabId && t.id !== 'canvas');
+    const hasUnsaved = tabsToClose.some(t => t.blockId && (dirtyBlockIds.has(t.blockId) || dirtyEditors.has(t.blockId)));
+    
+    const closeAction = () => {
+        const keptTabs = openTabs.filter(t => t.id === tabId || t.id === 'canvas');
+        setOpenTabs(keptTabs);
+        if (!keptTabs.some(t => t.id === activeTabId)) {
+            setActiveTabId(tabId);
+        }
+    };
+
+    if (hasUnsaved) {
+        setPendingAction({
+            action: closeAction,
+            title: 'Close Other Tabs',
+            message: 'You have unsaved changes. Do you want to save them before closing other tabs?'
+        });
+    } else {
+        closeAction();
+    }
+  }, [openTabs, activeTabId, dirtyBlockIds, dirtyEditors]);
+
+  const handleCloseAllRequest = useCallback(() => {
+    const tabsToClose = openTabs.filter(t => t.id !== 'canvas');
+    const hasUnsaved = tabsToClose.some(t => t.blockId && (dirtyBlockIds.has(t.blockId) || dirtyEditors.has(t.blockId)));
+
+    const closeAction = () => {
+        setOpenTabs([{ id: 'canvas', type: 'canvas' }]);
+        setActiveTabId('canvas');
+    };
+
+    if (hasUnsaved) {
+        setPendingAction({
+            action: closeAction,
+            title: 'Close All Tabs',
+            message: 'You have unsaved changes. Do you want to save them before closing all tabs?'
+        });
+    } else {
+        closeAction();
+    }
+  }, [openTabs, dirtyBlockIds, dirtyEditors]);
 
   const handleSwitchTab = (tabId: string) => setActiveTabId(tabId);
 
@@ -1194,10 +1295,7 @@ const App: React.FC = () => {
             <div className="w-64 flex-none border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden min-h-0">
                 <FileExplorerPanel 
                     tree={fileSystemTree}
-                    onFileOpen={(filePath) => {
-                      const block = blocks.find(b => b.filePath === filePath);
-                      if (block) handleOpenEditor(block.id);
-                    }}
+                    onFileOpen={handlePathDoubleClick}
                     onCreateNode={handleCreateNode}
                     onRenameNode={handleRenameNode}
                     onDeleteNode={handleDeleteNode}
@@ -1243,6 +1341,7 @@ const App: React.FC = () => {
                         <div 
                             key={tab.id}
                             onClick={() => handleSwitchTab(tab.id)}
+                            onContextMenu={(e) => handleTabContextMenu(e, tab.id)}
                             className={`group flex items-center px-4 py-2 text-sm cursor-pointer border-r border-gray-300 dark:border-gray-700 min-w-[120px] max-w-[200px] flex-shrink-0 ${isActive ? 'bg-white dark:bg-gray-900 font-medium text-indigo-600 dark:text-indigo-400 border-t-2 border-t-indigo-500' : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}`}
                         >
                             <span className="truncate flex-grow flex items-center">
@@ -1401,16 +1500,7 @@ const App: React.FC = () => {
                     onRemoveImageScanDirectory={() => {}}
                     onCopyImagesToProject={handleCopyImagesToProject}
                     onUpdateImageMetadata={() => {}}
-                    onOpenImageEditor={(path) => {
-                        const tabId = `img-${path}`;
-                        setOpenTabs(prev => {
-                            if(!prev.find(t => t.id === tabId)) {
-                                return [...prev, { id: tabId, type: 'image', filePath: path }];
-                            }
-                            return prev;
-                        });
-                        setActiveTabId(tabId);
-                    }}
+                    onOpenImageEditor={handleOpenImageEditorTab}
                     imagesLastScanned={imagesLastScanned}
                     isRefreshingImages={isRefreshingImages}
                     onRefreshImages={() => {}}
@@ -1481,24 +1571,24 @@ const App: React.FC = () => {
         </ConfirmModal>
       )}
       
-      {showUnsavedChangesModal && (
+      {pendingAction && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md m-4 flex flex-col p-6">
-            <h2 className="text-xl font-bold mb-4 dark:text-white">Unsaved Changes</h2>
+            <h2 className="text-xl font-bold mb-4 dark:text-white">{pendingAction.title}</h2>
             <p className="text-gray-600 dark:text-gray-300 mb-6">
-              You have unsaved changes in your current project. Do you want to save them before creating a new project?
+              {pendingAction.message}
             </p>
             <div className="flex justify-end space-x-3">
                <button
-                onClick={() => setShowUnsavedChangesModal(false)}
+                onClick={() => setPendingAction(null)}
                 className="px-4 py-2 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium"
               >
                 Cancel
               </button>
               <button
                 onClick={() => {
-                  setShowUnsavedChangesModal(false);
-                  handleCreateProject();
+                  if (pendingAction.action) pendingAction.action();
+                  setPendingAction(null);
                 }}
                 className="px-4 py-2 rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 font-medium"
               >
@@ -1507,8 +1597,8 @@ const App: React.FC = () => {
               <button
                 onClick={async () => {
                   await handleSaveAll();
-                  setShowUnsavedChangesModal(false);
-                  handleCreateProject();
+                  if (pendingAction.action) pendingAction.action();
+                  setPendingAction(null);
                 }}
                 className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
               >
@@ -1529,6 +1619,19 @@ const App: React.FC = () => {
              </div>
         ))}
       </div>
+
+      {contextMenuInfo && createPortal(
+        <TabContextMenu
+            x={contextMenuInfo.x}
+            y={contextMenuInfo.y}
+            tabId={contextMenuInfo.tabId}
+            onClose={() => setContextMenuInfo(null)}
+            onCloseTab={(tabId) => handleCloseTab(tabId, { stopPropagation: () => {} } as React.MouseEvent)}
+            onCloseOthers={handleCloseOthersRequest}
+            onCloseAll={handleCloseAllRequest}
+        />,
+        document.body
+      )}
     </div>
   );
 };

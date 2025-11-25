@@ -1,4 +1,5 @@
 
+
 import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -6,6 +7,37 @@ import fs from 'fs/promises';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// --- Window State Management ---
+const windowStatePath = path.join(app.getPath('userData'), 'window-state.json');
+
+async function loadWindowState() {
+    try {
+        const data = await fs.readFile(windowStatePath, 'utf-8');
+        const state = JSON.parse(data);
+        // Basic validation to ensure we have a usable state
+        if (typeof state.width === 'number' && typeof state.height === 'number') {
+            return state;
+        }
+    } catch (error) {
+        // File doesn't exist or is invalid, which is expected on first launch.
+        console.log('No saved window state found, using defaults.');
+    }
+    return null;
+}
+
+function saveWindowState(window) {
+    if (!window) return;
+    try {
+        const bounds = window.getBounds();
+        // Use fire-and-forget for writeFile as the app might be closing.
+        fs.writeFile(windowStatePath, JSON.stringify(bounds));
+    } catch (error) {
+        console.error('Failed to save window state:', error);
+    }
+}
+// --- End Window State Management ---
+
 
 async function readProjectFiles(rootPath) {
     const results = {
@@ -69,11 +101,15 @@ async function readProjectFiles(rootPath) {
 }
 
 
-function createWindow() {
+async function createWindow() {
+  const savedState = await loadWindowState();
+
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: savedState?.width || 1280,
+    height: savedState?.height || 800,
+    x: savedState?.x,
+    y: savedState?.y,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       // Security best practices are enabled by default in recent Electron versions:
@@ -82,6 +118,11 @@ function createWindow() {
     },
     // The icon path should point to the icon file at the root of the app package.
     icon: path.join(__dirname, 'vangard-renide-512x512.png')
+  });
+
+  // Save the window state when the window is closed.
+  mainWindow.on('close', () => {
+    saveWindowState(mainWindow);
   });
 
   const menuTemplate = [
