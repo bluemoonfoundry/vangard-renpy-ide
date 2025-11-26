@@ -1,7 +1,5 @@
 
 
-
-
 export interface Position {
   x: number;
   y: number;
@@ -102,7 +100,6 @@ export interface ProjectImage {
   filePath: string; // A unique path for the image, e.g., "ScannedDir/subdir/img.png" or "game/images/img.png"
   fileName: string;
   dataUrl?: string; // Made optional for lazy loading
-  // FIX: Allow fileHandle to be null for images loaded from zip files.
   fileHandle: FileSystemFileHandle | null;
   isInProject: boolean; // True if it's inside game/images
   projectFilePath?: string; // The path within the project if copied, e.g., "game/images/img.png"
@@ -258,6 +255,7 @@ export interface AppSettings {
   leftSidebarWidth: number;
   isRightSidebarOpen: boolean;
   rightSidebarWidth: number;
+  renpyPath: string;
 }
 
 export interface ProjectSettings {
@@ -273,6 +271,18 @@ export interface IdeSettings extends AppSettings, Omit<ProjectSettings, 'openTab
 
 
 export type ClipboardState = { type: 'copy' | 'cut'; paths: Set<string> } | null;
+
+export interface SearchMatch {
+  lineNumber: number;
+  lineContent: string;
+  startColumn: number;
+  endColumn: number;
+}
+
+export interface SearchResult {
+  filePath: string;
+  matches: SearchMatch[];
+}
 
 declare global {
   interface Window {
@@ -292,9 +302,24 @@ declare global {
           forceQuit: () => void;
           getAppSettings: () => Promise<Partial<AppSettings> | null>;
           saveAppSettings: (settings: AppSettings) => Promise<{ success: boolean; error?: string }>;
+          selectRenpy: () => Promise<string | null>;
+          runGame: (renpyPath: string, projectPath: string) => void;
+          stopGame: () => void;
+          onGameStarted: (callback: () => void) => () => void;
+          onGameStopped: (callback: () => void) => () => void;
+          onGameError: (callback: (error: string) => void) => () => void;
+          onSaveIdeStateBeforeQuit: (callback: () => void) => () => void;
+          ideStateSavedForQuit: () => void;
           path: {
               join: (...paths: string[]) => Promise<string>;
-          }
+          };
+          searchInProject: (options: { 
+              projectPath: string; 
+              query: string; 
+              isCaseSensitive?: boolean; 
+              isWholeWord?: boolean; 
+              isRegex?: boolean; 
+          }) => Promise<SearchResult[]>;
       }
   }
 }

@@ -1,8 +1,5 @@
 
 
-
-
-
 import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -238,6 +235,58 @@ async function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'dist/index.html'));
 }
 
+async function searchInDirectory(directory, query, options) {
+    const results = [];
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+
+    for (const entry of entries) {
+        const fullPath = path.join(directory, entry.name);
+        const relativePath = path.relative(options.projectPath, fullPath).replace(/\\/g, '/');
+        
+        if (entry.isDirectory()) {
+            if (entry.name === '.git' || entry.name === 'node_modules') continue;
+            results.push(...await searchInDirectory(fullPath, query, options));
+        } else if (entry.isFile() && entry.name.endsWith('.rpy')) {
+            const content = await fs.readFile(fullPath, 'utf-8');
+            const lines = content.split('\n');
+            const matches = [];
+            
+            let flags = 'g';
+            if (!options.isCaseSensitive) flags += 'i';
+            
+            let searchPattern = options.isRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            if (options.isWholeWord) {
+                searchPattern = `\\b${searchPattern}\\b`;
+            }
+
+            try {
+              const regex = new RegExp(searchPattern, flags);
+
+              for (let i = 0; i < lines.length; i++) {
+                  const line = lines[i];
+                  let match;
+                  while ((match = regex.exec(line)) !== null) {
+                      matches.push({
+                          lineNumber: i + 1,
+                          lineContent: line,
+                          startColumn: match.index + 1,
+                          endColumn: match.index + match[0].length + 1,
+                      });
+                  }
+              }
+            } catch (e) {
+              // Invalid regex, just return no matches for this file
+              console.error(`Invalid regex for file ${relativePath}:`, e.message);
+            }
+
+            if (matches.length > 0) {
+                results.push({ filePath: relativePath, matches });
+            }
+        }
+    }
+    return results;
+}
+
 app.whenReady().then(() => {
   ipcMain.handle('dialog:openDirectory', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
@@ -346,10 +395,14 @@ app.whenReady().then(() => {
         if (hasUnsavedChanges) {
             window.webContents.send('show-exit-modal');
         } else {
-            forceQuit = true;
-            app.quit();
+            window.webContents.send('save-ide-state-before-quit');
         }
     }
+  });
+
+  ipcMain.on('ide-state-saved-for-quit', () => {
+    forceQuit = true;
+    app.quit();
   });
 
   ipcMain.on('force-quit', () => {
@@ -398,6 +451,17 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('app:save-settings', async (event, settings) => {
       return await saveAppSettings(settings);
+  });
+
+  ipcMain.handle('project:search', async (event, { projectPath, query, ...options }) => {
+    if (!query) return [];
+    try {
+        const results = await searchInDirectory(projectPath, query, { projectPath, ...options });
+        return results;
+    } catch (error) {
+        console.error('Search failed:', error);
+        return [];
+    }
   });
 
   createWindow();

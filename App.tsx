@@ -1,12 +1,12 @@
 
 
-
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
 import Toolbar from './components/Toolbar';
 import StoryCanvas from './components/StoryCanvas';
 import FileExplorerPanel from './components/FileExplorerPanel';
+import SearchPanel from './components/SearchPanel';
 import EditorView from './components/EditorView';
 import StoryElementsPanel from './components/StoryElementsPanel';
 import RouteCanvas from './components/RouteCanvas';
@@ -21,13 +21,14 @@ import ImageEditorView from './components/ImageEditorView';
 import AudioEditorView from './components/AudioEditorView';
 import CharacterEditorView from './components/CharacterEditorView';
 import TabContextMenu from './components/TabContextMenu';
-import { useRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
+import Sash from './components/Sash';
+import { useRenpyAnalysis, performRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import type { 
   Block, BlockGroup, Link, Position, FileSystemTreeNode, EditorTab, 
   ToastMessage, IdeSettings, Theme, ProjectImage, RenpyAudio, 
   ClipboardState, ImageMetadata, AudioMetadata, LabelNode, Character,
-  AppSettings, ProjectSettings, StickyNote
+  AppSettings, ProjectSettings, StickyNote, SearchResult
 } from './types';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
@@ -334,13 +335,26 @@ const App: React.FC = () => {
     selectedModel: 'gemini-2.5-flash',
   });
 
-  // --- State: Clipboard & Search ---
+  // --- State: Clipboard & Highlights ---
   const [clipboard, setClipboard] = useState<ClipboardState>(null);
   const [findUsagesHighlightIds, setFindUsagesHighlightIds] = useState<Set<string> | null>(null);
   const [centerOnBlockRequest, setCenterOnBlockRequest] = useState<{ blockId: string, key: number } | null>(null);
   const [flashBlockRequest, setFlashBlockRequest] = useState<{ blockId: string, key: number } | null>(null);
   const [canvasFilters, setCanvasFilters] = useState({ story: true, screens: true, config: false, notes: true });
   const [hoverHighlightIds, setHoverHighlightIds] = useState<Set<string> | null>(null);
+
+  // --- State: Search ---
+  const [activeLeftPanel, setActiveLeftPanel] = useState<'explorer' | 'search'>('explorer');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [replaceQuery, setReplaceQuery] = useState('');
+  const [searchOptions, setSearchOptions] = useImmer({
+    isCaseSensitive: false,
+    isWholeWord: false,
+    isRegex: false,
+  });
+  const [searchResults, setSearchResults] = useImmer<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [replaceAllConfirmInfo, setReplaceAllConfirmInfo] = useState<{ onConfirm: () => void; totalMatches: number; totalFiles: number; } | null>(null);
 
   // --- Analysis ---
   const analysisResult = useRenpyAnalysis(blocks, 0); // 0 is a trigger for force re-analysis if needed
@@ -373,12 +387,8 @@ const App: React.FC = () => {
   }, [updateAppSettings]);
 
   useEffect(() => {
-    // Prevent saving the initial default state before settings have been loaded
-    if (!appSettingsLoaded) {
-      return;
-    }
+    if (!appSettingsLoaded) return;
 
-    // Save app settings whenever they change
     if (window.electronAPI?.saveAppSettings) {
       window.electronAPI.saveAppSettings(appSettings)
         .then(result => {
@@ -386,11 +396,10 @@ const App: React.FC = () => {
                 console.error('Failed to save app settings:', result?.error);
             }
         });
-    } else { // Browser fallback
+    } else {
       localStorage.setItem('renpy-ide-app-settings', JSON.stringify(appSettings));
     }
     
-    // Apply theme based on settings
     const root = window.document.documentElement;
     const applyTheme = (theme: Theme) => {
       root.classList.remove('dark', 'theme-solarized-light', 'theme-solarized-dark', 'theme-colorful', 'theme-colorful-light');
@@ -538,13 +547,7 @@ const App: React.FC = () => {
             }
         } catch (e) {
             console.error(e);
-            // FIX: The 'e' object in a catch block is of type 'unknown'. We must safely extract a message from it before passing it to functions expecting a string.
-            let errorMessage: string;
-            if (e instanceof Error) {
-              errorMessage = e.message;
-            } else {
-              errorMessage = String(e);
-            }
+            const errorMessage = e instanceof Error ? e.message : String(e);
             addToast(`Failed to create file: ${errorMessage}`, 'error');
         }
     } else {
@@ -693,7 +696,7 @@ const App: React.FC = () => {
       try {
           const projectData = await window.electronAPI!.loadProject(path);
           
-          let loadedBlocks: Block[] = projectData.files.map((f: any, index: number) => ({
+          const loadedBlocks: Block[] = projectData.files.map((f: any, index: number) => ({
               id: `block-${index}-${Date.now()}`,
               content: f.content,
               filePath: f.path,
@@ -702,6 +705,7 @@ const App: React.FC = () => {
               height: 200,
               title: f.path.split('/').pop()
           }));
+          const blockFilePathMap = new Map(loadedBlocks.map(b => [b.filePath, b]));
 
           if (loadedBlocks.length === 0) {
              const defaultBlock = {
@@ -750,24 +754,55 @@ const App: React.FC = () => {
           });
           setAudios(audioMap);
 
-          // Load Project Settings
           if (projectData.settings) {
-            updateProjectSettings(draft => {
-              draft.enableAiFeatures = projectData.settings.enableAiFeatures ?? false;
-              draft.selectedModel = projectData.settings.selectedModel ?? 'gemini-2.5-flash';
-            });
-            setOpenTabs(projectData.settings.openTabs ?? [{ id: 'canvas', type: 'canvas' }]);
-            setActiveTabId(projectData.settings.activeTabId ?? 'canvas');
-            setStickyNotes(projectData.settings.stickyNotes || []);
+              updateProjectSettings(draft => {
+                  draft.enableAiFeatures = projectData.settings.enableAiFeatures ?? false;
+                  draft.selectedModel = projectData.settings.selectedModel ?? 'gemini-2.5-flash';
+              });
+              setStickyNotes(projectData.settings.stickyNotes || []);
+              
+              const savedTabs: EditorTab[] = projectData.settings.openTabs ?? [{ id: 'canvas', type: 'canvas' }];
+              const tempAnalysis = performRenpyAnalysis(loadedBlocks);
+
+              const validTabs = savedTabs.filter(tab => {
+                  if (tab.type === 'editor' && tab.filePath) {
+                      return blockFilePathMap.has(tab.filePath);
+                  }
+                  if (tab.type === 'image' && tab.filePath) {
+                      return imgMap.has(tab.filePath);
+                  }
+                  if (tab.type === 'audio' && tab.filePath) {
+                      return audioMap.has(tab.filePath);
+                  }
+                  if (tab.type === 'character' && tab.characterTag) {
+                      return tempAnalysis.characters.has(tab.characterTag);
+                  }
+                  return tab.type === 'canvas' || tab.type === 'route-canvas';
+              });
+
+              const rehydratedTabs = validTabs.map(tab => {
+                  if (tab.type === 'editor' && tab.filePath) {
+                      const matchingBlock = blockFilePathMap.get(tab.filePath);
+                      if (matchingBlock) {
+                          return { ...tab, id: matchingBlock.id, blockId: matchingBlock.id };
+                      }
+                  }
+                  return tab;
+              });
+
+              setOpenTabs(rehydratedTabs);
+              
+              const activeTabIsValid = rehydratedTabs.some(t => t.id === projectData.settings.activeTabId);
+              setActiveTabId(activeTabIsValid ? projectData.settings.activeTabId : 'canvas');
+              
           } else {
-            // Reset to defaults for a new/unconfigured project
-            updateProjectSettings(draft => {
-              draft.enableAiFeatures = false;
-              draft.selectedModel = 'gemini-2.5-flash';
-            });
-            setOpenTabs([{ id: 'canvas', type: 'canvas' }]);
-            setActiveTabId('canvas');
-            setStickyNotes([]);
+              updateProjectSettings(draft => {
+                  draft.enableAiFeatures = false;
+                  draft.selectedModel = 'gemini-2.5-flash';
+              });
+              setOpenTabs([{ id: 'canvas', type: 'canvas' }]);
+              setActiveTabId('canvas');
+              setStickyNotes([]);
           }
           
           setHasUnsavedSettings(false);
@@ -780,6 +815,7 @@ const App: React.FC = () => {
           setIsLoading(false);
       }
   }, [setBlocks, setImages, setAudios, updateProjectSettings, addToast, setFileSystemTree, setStickyNotes]);
+
 
   const handleOpenProjectFolder = useCallback(async () => {
     try {
@@ -852,6 +888,25 @@ const App: React.FC = () => {
     });
 
   }, [blocks, projectRootPath, updateBlock, addToast]);
+  
+  const handleSaveProjectSettings = useCallback(async () => {
+    if (!projectRootPath || !window.electronAPI) return;
+    try {
+      const settingsToSave: ProjectSettings = {
+        ...(projectSettings as ProjectSettings),
+        openTabs,
+        activeTabId,
+        stickyNotes: Array.from(stickyNotes),
+      };
+      const settingsPath = await window.electronAPI.path.join(projectRootPath, 'game/project.ide.json');
+      await window.electronAPI.writeFile(settingsPath, JSON.stringify(settingsToSave, null, 2));
+      setHasUnsavedSettings(false);
+    } catch (e) {
+      console.error("Failed to save IDE settings:", e);
+      addToast('Failed to save workspace settings', 'error');
+    }
+  }, [projectRootPath, projectSettings, openTabs, activeTabId, stickyNotes, addToast]);
+
 
   const handleSaveAll = useCallback(async () => {
     setSaveStatus('saving');
@@ -901,20 +956,11 @@ const App: React.FC = () => {
                     if (!res.success) throw new Error(res.error || 'Unknown error saving file');
                 }
             }
-            
-             const settingsToSave: ProjectSettings = {
-                ...projectSettings,
-                openTabs,
-                activeTabId,
-                stickyNotes,
-             };
-             const settingsPath = await window.electronAPI.path.join(projectRootPath!, 'game/project.ide.json');
-             await window.electronAPI.writeFile(settingsPath, JSON.stringify(settingsToSave, null, 2));
+            await handleSaveProjectSettings();
         } 
 
         setDirtyBlockIds(new Set());
         setDirtyEditors(new Set());
-        setHasUnsavedSettings(false);
         setSaveStatus('saved');
         addToast('All changes saved', 'success');
         setTimeout(() => setSaveStatus('saved'), 2000);
@@ -923,7 +969,7 @@ const App: React.FC = () => {
         setSaveStatus('error');
         addToast('Failed to save changes', 'error');
     }
-  }, [blocks, dirtyEditors, dirtyBlockIds, projectRootPath, directoryHandle, projectSettings, openTabs, activeTabId, stickyNotes, addToast, setBlocks]);
+  }, [blocks, dirtyEditors, dirtyBlockIds, projectRootPath, directoryHandle, addToast, setBlocks, handleSaveProjectSettings]);
   
   const handleNewProjectRequest = useCallback(() => {
     const hasUnsaved = dirtyBlockIds.size > 0 || dirtyEditors.size > 0 || hasUnsavedSettings;
@@ -954,17 +1000,18 @@ const App: React.FC = () => {
   
   // --- Tab Management ---
   const handleOpenEditor = useCallback((blockId: string, line?: number) => {
+    const block = blocks.find(b => b.id === blockId);
+    if (!block) return;
+
     const existing = openTabs.find(t => t.id === blockId);
     if (!existing) {
-        const block = blocks.find(b => b.id === blockId);
-        if (block) {
-            setOpenTabs(prev => [...prev, { 
-                id: blockId, 
-                type: 'editor', 
-                blockId, 
-                scrollRequest: line ? { line, key: Date.now() } : undefined 
-            }]);
-        }
+        setOpenTabs(prev => [...prev, { 
+            id: blockId, 
+            type: 'editor', 
+            blockId,
+            filePath: block.filePath,
+            scrollRequest: line ? { line, key: Date.now() } : undefined 
+        }]);
     } else if (line) {
         setOpenTabs(prev => prev.map(tab => 
             tab.id === blockId 
@@ -1122,7 +1169,99 @@ const App: React.FC = () => {
       addToast(`Saved character ${char.name} (Simulated)`, 'success');
   };
 
-  // --- Search & Highlights ---
+  // --- Search ---
+  const handleToggleSearch = () => {
+    setActiveLeftPanel('search');
+    if (!appSettings.isLeftSidebarOpen) {
+      updateAppSettings(draft => { draft.isLeftSidebarOpen = true; });
+    }
+  };
+
+  const handleSearch = useCallback(async () => {
+    if (!projectRootPath || !searchQuery.trim() || !window.electronAPI) return;
+    setIsSearching(true);
+    setSearchResults([]);
+    try {
+      const results = await window.electronAPI.searchInProject({
+        projectPath: projectRootPath,
+        query: searchQuery,
+        ...searchOptions,
+      });
+      setSearchResults(results);
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      addToast(`Search failed: ${errorMessage}`, 'error');
+    } finally {
+      setIsSearching(false);
+    }
+  }, [projectRootPath, searchQuery, searchOptions, setSearchResults, addToast]);
+
+  const handleSearchResultClick = useCallback((filePath: string, lineNumber: number) => {
+    const block = blocks.find(b => b.filePath === filePath);
+    if (block) {
+      handleOpenEditor(block.id, lineNumber);
+    }
+  }, [blocks, handleOpenEditor]);
+
+  const handleReplaceAll = useCallback(() => {
+    const totalMatches = searchResults.reduce((sum, file) => sum + file.matches.length, 0);
+    if (totalMatches === 0) return;
+
+    setReplaceAllConfirmInfo({
+      totalMatches,
+      totalFiles: searchResults.length,
+      onConfirm: () => {
+        try {
+          let flags = 'g';
+          if (!searchOptions.isCaseSensitive) flags += 'i';
+
+          let searchPattern = searchOptions.isRegex ? searchQuery : searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          if (searchOptions.isWholeWord) {
+            searchPattern = `\\b${searchPattern}\\b`;
+          }
+          const regex = new RegExp(searchPattern, flags);
+          
+          const updatedBlockIds = new Set<string>();
+
+          const newBlocks = blocks.map(block => {
+            const fileResult = searchResults.find(r => r.filePath === block.filePath);
+            if (fileResult) {
+              const newContent = block.content.replace(regex, replaceQuery);
+              if (newContent !== block.content) {
+                updatedBlockIds.add(block.id);
+                
+                const editorInstance = editorInstances.current.get(block.id);
+                if (editorInstance && editorInstance.getValue() !== newContent) {
+                  editorInstance.setValue(newContent);
+                }
+                return { ...block, content: newContent };
+              }
+            }
+            return block;
+          });
+          
+          setBlocks(newBlocks);
+          setDirtyBlockIds(prev => new Set([...prev, ...updatedBlockIds]));
+
+          addToast(`Replaced ${totalMatches} occurrences across ${updatedBlockIds.size} files.`, 'success');
+
+          // Clear search state
+          setSearchQuery('');
+          setReplaceQuery('');
+          setSearchResults([]);
+
+        } catch (e) {
+          const errorMessage = e instanceof Error ? e.message : String(e);
+          addToast(`Replace failed: ${errorMessage}`, 'error');
+        } finally {
+          setReplaceAllConfirmInfo(null);
+        }
+      }
+    });
+  }, [searchResults, searchQuery, replaceQuery, searchOptions, blocks, addToast, setBlocks, setDirtyBlockIds, setSearchQuery, setReplaceQuery, setSearchResults]);
+
+
+  // --- Highlights ---
   const clearHighlights = () => {
       setFindUsagesHighlightIds(null);
       setHoverHighlightIds(null);
@@ -1217,7 +1356,7 @@ const App: React.FC = () => {
                         const res = await window.electronAPI!.removeEntry!(fullPath);
                         if (!res.success) throw new Error(res.error);
                     }
-                    await loadProject(projectRootPath); // Reload to reflect changes
+                    await loadProject(projectRootPath);
                     addToast(`${paths.length} item(s) deleted`, 'success');
                 } catch(e) {
                     addToast(`Failed to delete items`, 'error');
@@ -1290,7 +1429,7 @@ const App: React.FC = () => {
 
                 if (clipboard.type === 'copy') {
                     await window.electronAPI.copyEntry!(fullSourcePath, fullDestPath);
-                } else { // cut
+                } else {
                     await window.electronAPI.moveFile!(fullSourcePath, fullDestPath);
                 }
             }
@@ -1333,6 +1472,10 @@ const App: React.FC = () => {
             if (e.key === 'F5') {
                 e.preventDefault();
                 handleRunGame();
+            }
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+                e.preventDefault();
+                handleToggleSearch();
             }
         };
         window.addEventListener('keydown', handleKeyDown);
@@ -1407,13 +1550,21 @@ const App: React.FC = () => {
           },
         });
       });
+      
+      const removeSaveStateListener = window.electronAPI.onSaveIdeStateBeforeQuit(async () => {
+        if (projectRootPath) {
+          await handleSaveProjectSettings();
+        }
+        window.electronAPI!.ideStateSavedForQuit();
+      });
 
       return () => {
         removeCheckListener();
         removeShowModalListener();
+        removeSaveStateListener();
       };
     }
-  }, [dirtyBlockIds, dirtyEditors, hasUnsavedSettings, handleSaveAll]);
+  }, [dirtyBlockIds, dirtyEditors, hasUnsavedSettings, handleSaveAll, handleSaveProjectSettings, projectRootPath]);
 
   const handleEditorMount = useCallback((id: string, editor: monaco.editor.IStandaloneCodeEditor) => {
       editorInstances.current.set(id, editor);
@@ -1422,6 +1573,22 @@ const App: React.FC = () => {
   const handleEditorUnmount = useCallback((id: string) => {
       editorInstances.current.delete(id);
   }, []);
+
+  // --- Sash/Resizing Handlers ---
+  const handleLeftSashDrag = useCallback((delta: number) => {
+    updateAppSettings(draft => {
+        const newWidth = draft.leftSidebarWidth + delta;
+        draft.leftSidebarWidth = Math.max(200, Math.min(newWidth, 600));
+    });
+  }, [updateAppSettings]);
+
+  const handleRightSashDrag = useCallback((delta: number) => {
+    updateAppSettings(draft => {
+        const newWidth = draft.rightSidebarWidth - delta;
+        draft.rightSidebarWidth = Math.max(240, Math.min(newWidth, 600));
+    });
+  }, [updateAppSettings]);
+
 
   // --- Render Helpers ---
   const activeBlock = useMemo(() => blocks.find(b => b.id === activeTabId), [blocks, activeTabId]);
@@ -1482,33 +1649,78 @@ const App: React.FC = () => {
             isGameRunning={isGameRunning}
             onRunGame={handleRunGame}
             onStopGame={handleStopGame}
+            onToggleSearch={handleToggleSearch}
         />
       </div>
       
       <div className="flex-1 flex overflow-hidden min-h-0">
         {appSettings.isLeftSidebarOpen && (
-            <div className="w-64 flex-none border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden h-full">
-                <FileExplorerPanel 
-                    tree={fileSystemTree}
-                    onFileOpen={handlePathDoubleClick}
-                    onCreateNode={handleCreateNode}
-                    onRenameNode={handleRenameNode}
-                    onDeleteNode={handleDeleteNode}
-                    onMoveNode={handleMoveNode}
-                    clipboard={clipboard}
-                    onCut={handleCut}
-                    onCopy={handleCopy}
-                    onPaste={handlePaste}
-                    onCenterOnBlock={(filePath) => {
-                         const block = blocks.find(b => b.filePath === filePath);
-                         if (block) handleCenterOnBlock(block.id);
-                    }}
-                    selectedPaths={explorerSelectedPaths}
-                    setSelectedPaths={setExplorerSelectedPaths}
-                    lastClickedPath={explorerLastClickedPath}
-                    setLastClickedPath={setExplorerLastClickedPath}
-                />
-            </div>
+            <>
+                <div 
+                    className="flex-none border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden h-full"
+                    style={{ width: appSettings.leftSidebarWidth }}
+                >
+                    <div className="flex-none flex border-b border-gray-200 dark:border-gray-700">
+                        <button
+                        onClick={() => setActiveLeftPanel('explorer')}
+                        className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors ${activeLeftPanel === 'explorer' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400' : 'bg-gray-100 dark:bg-gray-900 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        >
+                        Explorer
+                        </button>
+                        <button
+                        onClick={() => setActiveLeftPanel('search')}
+                        className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors ${activeLeftPanel === 'search' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400' : 'bg-gray-100 dark:bg-gray-900 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        >
+                        Search
+                        </button>
+                    </div>
+                    
+                    <div className="flex-1 min-h-0 relative">
+                        <div className={`w-full h-full absolute top-0 left-0 transition-opacity ${activeLeftPanel === 'explorer' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
+                        {activeLeftPanel === 'explorer' && (
+                            <FileExplorerPanel 
+                                tree={fileSystemTree}
+                                onFileOpen={handlePathDoubleClick}
+                                onCreateNode={handleCreateNode}
+                                onRenameNode={handleRenameNode}
+                                onDeleteNode={handleDeleteNode}
+                                onMoveNode={handleMoveNode}
+                                clipboard={clipboard}
+                                onCut={handleCut}
+                                onCopy={handleCopy}
+                                onPaste={handlePaste}
+                                onCenterOnBlock={(filePath) => {
+                                    const block = blocks.find(b => b.filePath === filePath);
+                                    if (block) handleCenterOnBlock(block.id);
+                                }}
+                                selectedPaths={explorerSelectedPaths}
+                                setSelectedPaths={setExplorerSelectedPaths}
+                                lastClickedPath={explorerLastClickedPath}
+                                setLastClickedPath={setExplorerLastClickedPath}
+                            />
+                        )}
+                        </div>
+                        <div className={`w-full h-full absolute top-0 left-0 transition-opacity ${activeLeftPanel === 'search' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
+                        {activeLeftPanel === 'search' && (
+                            <SearchPanel
+                            query={searchQuery}
+                            setQuery={setSearchQuery}
+                            replace={replaceQuery}
+                            setReplace={setReplaceQuery}
+                            options={searchOptions}
+                            setOptions={setSearchOptions}
+                            results={searchResults}
+                            onSearch={handleSearch}
+                            onReplaceAll={handleReplaceAll}
+                            onResultClick={handleSearchResultClick}
+                            isSearching={isSearching}
+                            />
+                        )}
+                        </div>
+                    </div>
+                </div>
+                <Sash onDrag={handleLeftSashDrag} />
+            </>
         )}
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-100 dark:bg-gray-900 relative">
@@ -1676,55 +1888,61 @@ const App: React.FC = () => {
         </div>
 
         {appSettings.isRightSidebarOpen && (
-             <div className="w-80 flex-none border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col overflow-hidden h-full">
-                <StoryElementsPanel 
-                    analysisResult={analysisResult}
-                    onOpenCharacterEditor={handleOpenCharacterEditor}
-                    onFindCharacterUsages={(tag) => handleFindUsages(tag, 'character')}
-                    onAddVariable={() => {}}
-                    onFindVariableUsages={(name) => handleFindUsages(name, 'variable')}
-                    onAddScreen={() => {}}
-                    onFindScreenDefinition={() => {}}
-                    projectImages={images}
-                    imageMetadata={imageMetadata}
-                    imageScanDirectories={imageScanDirectories}
-                    onAddImageScanDirectory={() => {}}
-                    onRemoveImageScanDirectory={() => {}}
-                    onCopyImagesToProject={handleCopyImagesToProject}
-                    onUpdateImageMetadata={() => {}}
-                    onOpenImageEditor={handleOpenImageEditorTab}
-                    imagesLastScanned={imagesLastScanned}
-                    isRefreshingImages={isRefreshingImages}
-                    onRefreshImages={() => {}}
-                    
-                    projectAudios={audios}
-                    audioMetadata={audioMetadata}
-                    audioScanDirectories={audioScanDirectories}
-                    onAddAudioScanDirectory={() => {}}
-                    onRemoveAudioScanDirectory={() => {}}
-                    onCopyAudiosToProject={() => {}}
-                    onUpdateAudioMetadata={() => {}}
-                    onOpenAudioEditor={(path) => {
-                        const tabId = `aud-${path}`;
-                        setOpenTabs(prev => {
-                            if(!prev.find(t => t.id === tabId)) {
-                                return [...prev, { id: tabId, type: 'audio', filePath: path }];
-                            }
-                            return prev;
-                        });
-                        setActiveTabId(tabId);
-                    }}
-                    audiosLastScanned={audiosLastScanned}
-                    isRefreshingAudios={isRefreshingAudios}
-                    onRefreshAudios={() => {}}
-                    isFileSystemApiSupported={!!window.electronAPI}
-                    onHoverHighlightStart={(id) => {
-                        const defBlock = analysisResult.variables.get(id)?.definedInBlockId;
-                        if(defBlock) setHoverHighlightIds(new Set([defBlock]));
-                    }}
-                    onHoverHighlightEnd={() => setHoverHighlightIds(null)}
-                />
-            </div>
+            <>
+                <Sash onDrag={handleRightSashDrag} />
+                <div 
+                    className="flex-none border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col overflow-hidden h-full"
+                    style={{ width: appSettings.rightSidebarWidth }}
+                >
+                    <StoryElementsPanel 
+                        analysisResult={analysisResult}
+                        onOpenCharacterEditor={handleOpenCharacterEditor}
+                        onFindCharacterUsages={(tag) => handleFindUsages(tag, 'character')}
+                        onAddVariable={() => {}}
+                        onFindVariableUsages={(name) => handleFindUsages(name, 'variable')}
+                        onAddScreen={() => {}}
+                        onFindScreenDefinition={() => {}}
+                        projectImages={images}
+                        imageMetadata={imageMetadata}
+                        imageScanDirectories={imageScanDirectories}
+                        onAddImageScanDirectory={() => {}}
+                        onRemoveImageScanDirectory={() => {}}
+                        onCopyImagesToProject={handleCopyImagesToProject}
+                        onUpdateImageMetadata={() => {}}
+                        onOpenImageEditor={handleOpenImageEditorTab}
+                        imagesLastScanned={imagesLastScanned}
+                        isRefreshingImages={isRefreshingImages}
+                        onRefreshImages={() => {}}
+                        
+                        projectAudios={audios}
+                        audioMetadata={audioMetadata}
+                        audioScanDirectories={audioScanDirectories}
+                        onAddAudioScanDirectory={() => {}}
+                        onRemoveAudioScanDirectory={() => {}}
+                        onCopyAudiosToProject={() => {}}
+                        onUpdateAudioMetadata={() => {}}
+                        onOpenAudioEditor={(path) => {
+                            const tabId = `aud-${path}`;
+                            setOpenTabs(prev => {
+                                if(!prev.find(t => t.id === tabId)) {
+                                    return [...prev, { id: tabId, type: 'audio', filePath: path }];
+                                }
+                                return prev;
+                            });
+                            setActiveTabId(tabId);
+                        }}
+                        audiosLastScanned={audiosLastScanned}
+                        isRefreshingAudios={isRefreshingAudios}
+                        onRefreshAudios={() => {}}
+                        isFileSystemApiSupported={!!window.electronAPI}
+                        onHoverHighlightStart={(id) => {
+                            const defBlock = analysisResult.variables.get(id)?.definedInBlockId;
+                            if(defBlock) setHoverHighlightIds(new Set([defBlock]));
+                        }}
+                        onHoverHighlightEnd={() => setHoverHighlightIds(null)}
+                    />
+                </div>
+            </>
         )}
       </div>
 
@@ -1745,7 +1963,6 @@ const App: React.FC = () => {
           onSave={(path) => {
             updateAppSettings(draft => { draft.renpyPath = path; });
             setShowConfigureRenpyModal(false);
-            // Re-trigger run game after saving
             if (projectRootPath) {
                 setTimeout(() => {
                     if (window.electronAPI) {
@@ -1778,6 +1995,21 @@ const App: React.FC = () => {
             <ul className="text-xs list-disc list-inside mt-2 max-h-24 overflow-y-auto bg-gray-100 dark:bg-gray-700 p-2 rounded">
                 {deleteConfirmInfo.paths.map(p => <li key={p} className="truncate">{p.split('/').pop()}</li>)}
             </ul>
+        </ConfirmModal>
+      )}
+
+      {replaceAllConfirmInfo && (
+        <ConfirmModal
+          title="Confirm Global Replace"
+          confirmText="Replace All"
+          confirmClassName="bg-indigo-600 hover:bg-indigo-700"
+          onConfirm={() => {
+            replaceAllConfirmInfo.onConfirm();
+            setReplaceAllConfirmInfo(null);
+          }}
+          onClose={() => setReplaceAllConfirmInfo(null)}
+        >
+          {`Are you sure you want to replace ${replaceAllConfirmInfo.totalMatches} occurrence(s) across ${replaceAllConfirmInfo.totalFiles} file(s)? This action will modify your open files but will NOT save them automatically.`}
         </ConfirmModal>
       )}
       

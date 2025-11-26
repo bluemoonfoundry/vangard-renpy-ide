@@ -1,8 +1,4 @@
 
-
-
-
-
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import type { Theme } from '../types';
 import logo from '../vangard-renide-512x512.png';
@@ -35,6 +31,7 @@ interface ToolbarProps {
   isGameRunning: boolean;
   onRunGame: () => void;
   onStopGame: () => void;
+  onToggleSearch: () => void;
 }
 
 const ToolbarButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { children: React.ReactNode; }> = ({ children, ...props }) => {
@@ -79,6 +76,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   isGameRunning,
   onRunGame,
   onStopGame,
+  onToggleSearch,
 }) => {
 
   const totalUnsavedCount = useMemo(() => {
@@ -182,6 +180,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
         <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
         <ToolbarButton onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)} title="Toggle Left Sidebar">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm4 2a1 1 0 011-1h6a1 1 0 110 2H8a1 1 0 01-1-1z" clipRule="evenodd" /></svg>
+        </ToolbarButton>
+        <ToolbarButton onClick={onToggleSearch} title="Search (Ctrl+Shift+F)">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" /></svg>
         </ToolbarButton>
          <ToolbarButton onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)} title="Toggle Right Sidebar">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" style={{ transform: 'scaleX(-1)' }}><path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm4 2a1 1 0 011-1h6a1 1 0 110 2H8a1 1 0 01-1-1z" clipRule="evenodd" /></svg>
