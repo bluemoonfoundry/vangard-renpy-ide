@@ -1,7 +1,9 @@
 
+
 import React, { useEffect, useRef } from 'react';
 import type { FileSystemTreeNode } from '../types';
-import type { ClipboardState } from '../App';
+// FIX: Corrected import path for ClipboardState
+import type { ClipboardState } from '../types';
 
 
 interface ContextMenuProps {

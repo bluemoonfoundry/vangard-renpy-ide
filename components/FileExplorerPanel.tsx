@@ -1,9 +1,11 @@
 
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import type { FileSystemTreeNode } from '../types';
 import FileExplorerContextMenu from './FileExplorerContextMenu';
-import type { ClipboardState } from '../App';
+// FIX: Corrected import path for ClipboardState
+import type { ClipboardState } from '../types';
 
 const FolderIcon: React.FC<{ isOpen: boolean }> = ({ isOpen }) => (
   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
@@ -57,12 +59,14 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   selectedPaths, setSelectedPaths, lastClickedPath, setLastClickedPath, flatVisibleNodes 
 }) => {
   const isDirectory = !!node.children;
-  const isExpanded = expandedPaths.has(node.path);
   const isRpyFile = node.name.endsWith('.rpy');
   const [isRenaming, setIsRenaming] = useState(false);
   const [inputValue, setInputValue] = useState(node.name);
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+
+  // FIX: Define isExpanded based on whether the node's path is in the expandedPaths set.
+  const isExpanded = expandedPaths.has(node.path);
 
   const isSelected = selectedPaths.has(node.path);
 
@@ -83,7 +87,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   }, [isRenaming]);
 
   const handleDoubleClick = () => {
-    if (!isDirectory && isRpyFile) {
+    if (!isDirectory) {
       onFileOpen(node.path);
     }
   };
@@ -302,15 +306,22 @@ interface FileExplorerPanelProps {
   onCopy: (paths: string[]) => void;
   onPaste: (targetPath: string) => void;
   onCenterOnBlock: (filePath: string) => void;
+  // Selection
+  selectedPaths: Set<string>;
+  setSelectedPaths: React.Dispatch<React.SetStateAction<Set<string>>>;
+  lastClickedPath: string | null;
+  setLastClickedPath: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
-const FileExplorerPanel: React.FC<FileExplorerPanelProps> = ({ tree, onFileOpen, onCreateNode, onRenameNode, onDeleteNode, onMoveNode, clipboard, onCut, onCopy, onPaste, onCenterOnBlock }) => {
+const FileExplorerPanel: React.FC<FileExplorerPanelProps> = ({ 
+    tree, onFileOpen, onCreateNode, onRenameNode, onDeleteNode, onMoveNode, 
+    clipboard, onCut, onCopy, onPaste, onCenterOnBlock,
+    selectedPaths, setSelectedPaths, lastClickedPath, setLastClickedPath 
+}) => {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: FileSystemTreeNode } | null>(null);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [creatingIn, setCreatingIn] = useState<{ path: string, type: 'file' | 'folder' } | null>(null);
-  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
-  const [lastClickedPath, setLastClickedPath] = useState<string | null>(null);
 
   const flatVisibleNodes = useMemo(() => {
       if (!tree) return [];
@@ -378,10 +389,10 @@ const FileExplorerPanel: React.FC<FileExplorerPanelProps> = ({ tree, onFileOpen,
 
   return (
     <aside className="w-full h-full bg-white dark:bg-gray-800 flex flex-col z-10" onClick={() => { setContextMenu(null); setSelectedPaths(new Set()); }}>
-      <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex-none p-4 border-b border-gray-200 dark:border-gray-700">
         <h2 className="text-xl font-bold">Project Explorer</h2>
       </div>
-      <div className="flex-grow p-2 overflow-y-auto" onContextMenu={(e) => {
+      <div className="flex-1 min-h-0 p-2 overflow-y-auto overscroll-contain" onContextMenu={(e) => {
             e.preventDefault();
             if(tree) handleContextMenu(e, tree);
         }}>

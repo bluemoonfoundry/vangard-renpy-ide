@@ -10,5 +10,7 @@ label scene_01_start:
     
     h "Don't worry! That's what I'm here for. Everyone finds their place here."
     h "Let's head over to the main courtyard where the booths are set up."
+
+    # Add some content
     
     jump scene_02_first_choice

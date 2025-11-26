@@ -1,10 +1,15 @@
-import React, { useMemo } from 'react';
+
+
+
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import type { Theme } from '../types';
+import logo from '../vangard-renide-512x512.png';
 
 type SaveStatus = 'saving' | 'saved' | 'error';
 
 interface ToolbarProps {
   directoryHandle: FileSystemDirectoryHandle | null;
+  projectRootPath: string | null;
   dirtyBlockIds: Set<string>;
   dirtyEditors: Set<string>;
   saveStatus: SaveStatus;
@@ -15,16 +20,16 @@ interface ToolbarProps {
   addBlock: () => void;
   handleTidyUp: () => void;
   onAnalyzeRoutes: () => void;
+  onRequestNewProject: () => void;
   requestOpenFolder: () => void;
   handleSave: () => void;
-  handleDownloadFiles: () => void;
-  onUploadClick: () => void;
-  setIsClearConfirmVisible: (visible: boolean) => void;
   onOpenSettings: () => void;
   isLeftSidebarOpen: boolean;
   setIsLeftSidebarOpen: (open: boolean) => void;
   isRightSidebarOpen: boolean;
   setIsRightSidebarOpen: (open: boolean) => void;
+  onOpenStaticTab: (type: 'canvas' | 'route-canvas') => void;
+  onAddStickyNote: () => void;
 }
 
 const ToolbarButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { children: React.ReactNode; }> = ({ children, ...props }) => {
@@ -45,6 +50,7 @@ const ToolbarButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { 
 
 const Toolbar: React.FC<ToolbarProps> = ({
   directoryHandle,
+  projectRootPath,
   dirtyBlockIds,
   dirtyEditors,
   saveStatus,
@@ -55,16 +61,16 @@ const Toolbar: React.FC<ToolbarProps> = ({
   addBlock,
   handleTidyUp,
   onAnalyzeRoutes,
+  onRequestNewProject,
   requestOpenFolder,
   handleSave,
-  handleDownloadFiles,
-  onUploadClick,
-  setIsClearConfirmVisible,
   onOpenSettings,
   isLeftSidebarOpen,
   setIsLeftSidebarOpen,
   isRightSidebarOpen,
   setIsRightSidebarOpen,
+  onOpenStaticTab,
+  onAddStickyNote,
 }) => {
 
   const totalUnsavedCount = useMemo(() => {
@@ -105,7 +111,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   return (
     <header className="flex-shrink-0 h-16 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 z-30">
       <div className="flex items-center space-x-4">
-        <h1 className="text-lg font-bold text-gray-800 dark:text-gray-200">Ren'Py Visual Novel Accelerator</h1>
+        <img src={logo} alt="Ren'Py Visual Novel Accelerator Logo" className="h-12 w-auto" />
       </div>
 
       <div className="flex items-center space-x-2">
@@ -120,6 +126,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
             <span>Add Block</span>
         </ToolbarButton>
+        <ToolbarButton onClick={onAddStickyNote} title="Add Sticky Note">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v11a3 3 0 106 0V4a2 2 0 00-2-2H4zm1 14a1 1 0 100-2 1 1 0 000 2zm5-1.757l4.9-4.9a2 2 0 000-2.828L13.485 5.1a2 2 0 00-2.828 0L10 5.757v8.486zM16 18H9.071l6-6H16a2 2 0 012 2v2a2 2 0 01-2 2z" clipRule="evenodd" /></svg>
+            <span>Add Note</span>
+        </ToolbarButton>
         <ToolbarButton onClick={handleTidyUp} title="Tidy Up Layout">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
             <span>Tidy Up</span>
@@ -131,38 +141,33 @@ const Toolbar: React.FC<ToolbarProps> = ({
       </div>
 
       <div className="flex items-center space-x-2">
+        <ToolbarButton onClick={onRequestNewProject} title="Create New Project">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8z" clipRule="evenodd" /></svg>
+            <span>New Project</span>
+        </ToolbarButton>
+
          <ToolbarButton onClick={requestOpenFolder} title="Open Project Folder">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
+            <span>Open Project</span>
         </ToolbarButton>
        
         <ToolbarButton
             onClick={handleSave}
-            disabled={!directoryHandle || totalUnsavedCount === 0}
+            disabled={totalUnsavedCount === 0}
             title={
-                !directoryHandle
-                ? 'Open a project folder to enable saving to files'
-                : totalUnsavedCount === 0
+                totalUnsavedCount === 0
                 ? 'No changes to save'
                 : `Save All (${totalUnsavedCount} unsaved)`
             }
         >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H9.5a1 1 0 0 0-1 1v4.5h2a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5-.5H7a.5.5 0 0 1-.5-.5v-2a.5.5 0 0 1 .5-.5h2V2H2z"/>
-                <path d="M4.5 12a.5.5 0 0 1-.5-.5v-2a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5h-3z"/>
+                <path d="M4.5 12a.5.5 0 0 1-.5-.5v-2a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5-.5h-3z"/>
             </svg>
         </ToolbarButton>
 
         <SaveStatusIndicator />
 
-        <ToolbarButton onClick={handleDownloadFiles} title="Download Project as .zip">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-        </ToolbarButton>
-        <ToolbarButton onClick={onUploadClick} title="Upload a .zip project">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M4 16h12v2H4v-2zm4-12v8H4l6-6 6 6h-4V4H8z"/></svg>
-        </ToolbarButton>
-        <ToolbarButton onClick={() => setIsClearConfirmVisible(true)} title="Clear entire canvas">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
-        </ToolbarButton>
         <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
         <ToolbarButton onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)} title="Toggle Left Sidebar">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm4 2a1 1 0 011-1h6a1 1 0 110 2H8a1 1 0 01-1-1z" clipRule="evenodd" /></svg>
@@ -172,7 +177,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
         </ToolbarButton>
         <ToolbarButton onClick={onOpenSettings} title="Open Settings">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.532 1.532 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.532 1.532 0 01-.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+              <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.532 1.532 0 012.287-.947c1.372.836 2.942-.734-2.106-2.106a1.532 1.532 0 01-.947-2.287c1.561-.379-1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
             </svg>
         </ToolbarButton>
       </div>

@@ -5,236 +5,28 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ren'Py Visual Novel Story Editor</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-      }
-    </script>
-    <style>
-      .renpy-jump-link {
-        color: #4f46e5; /* indigo-600 */
-        text-decoration: underline;
-        cursor: pointer;
-      }
-      .dark .renpy-jump-link {
-        color: #818cf8; /* indigo-400 */
-      }
-      .renpy-jump-link:hover {
-        color: #312e81; /* indigo-900 */
-      }
-      .dark .renpy-jump-link:hover {
-        color: #c7d2fe; /* indigo-200 */
-      }
-      .renpy-jump-invalid {
-        color: #ef4444; /* red-500 */
-        text-decoration: underline;
-        text-decoration-style: wavy;
-        cursor: not-allowed;
-      }
-      .dark .renpy-jump-invalid {
-        color: #f87171; /* red-400 */
-      }
-      .renpy-jump-dynamic {
-        color: #22c55e; /* green-500 */
-        text-decoration: underline;
-        text-decoration-style: dotted;
-        cursor: help;
-      }
-      .dark .renpy-jump-dynamic {
-        color: #4ade80; /* green-400 */
-      }
-      @keyframes flash-animation {
-        0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); }
-        70% { box-shadow: 0 0 0 10px rgba(79, 70, 229, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
-      }
-      .flash-block {
-        animation: flash-animation 1.5s ease-out;
-      }
-      @keyframes pulse-animation {
-        0% { box-shadow: 0 0 0 0px var(--accent-border-hover-pulse); }
-        70% { box-shadow: 0 0 0 15px transparent; }
-        100% { box-shadow: 0 0 0 0px transparent; }
-      }
-      .pulse-block {
-        animation: pulse-animation 1.3s infinite;
-      }
-      html .heatmap-highlight {
-        background-color: rgba(251, 191, 36, 0.2);
-      }
-      html.dark .heatmap-highlight {
-        background-color: rgba(251, 191, 36, 0.25);
-      }
-    </style>
-    <style>
-      /* --- Base Theme Colors (CSS Variables) --- */
-      :root {
-        --bg-primary: #f3f4f6; /* gray-100 */
-        --bg-secondary: #ffffff; /* white */
-        --bg-tertiary: #e5e7eb; /* gray-200 */
-        --bg-tertiary-hover: #d1d5db; /* gray-300 */
-        --bg-header: #f9fafb; /* gray-50 */
-        --text-primary: #111827; /* gray-900 */
-        --text-secondary: #4b5563; /* gray-600 */
-        --border-primary: #e5e7eb; /* gray-200 */
-        --accent-primary: #4f46e5; /* indigo-600 */
-        --accent-primary-hover: #4338ca; /* indigo-700 */
-        --accent-text: #6366f1; /* indigo-500 */
-        --accent-border: #6366f1; /* indigo-500 */
-        --text-on-accent: #ffffff;
-        --accent-border-hover-pulse: rgba(56, 189, 248, 0.6); /* sky-400 */
-      }
-      .dark {
-        --bg-primary: #111827; /* gray-900 */
-        --bg-secondary: #1f2937; /* gray-800 */
-        --bg-tertiary: #374151; /* gray-700 */
-        --bg-tertiary-hover: #4b5563; /* gray-600 */
-        --bg-header: #111827; /* gray-900 */
-        --text-primary: #f9fafb; /* gray-50 */
-        --text-secondary: #9ca3af; /* gray-400 */
-        --border-primary: #374151; /* gray-700 */
-        --accent-primary: #6366f1; /* indigo-500 */
-        --accent-primary-hover: #4f46e5; /* indigo-600 */
-        --accent-text: #818cf8; /* indigo-400 */
-        --accent-border: #818cf8; /* indigo-400 */
-        --text-on-accent: #ffffff;
-        --accent-border-hover-pulse: rgba(14, 165, 233, 0.6); /* sky-500 */
-      }
-
-      /* Solarized Light: A warm, low-contrast theme */
-      .theme-solarized-light {
-        --bg-primary: #fdf6e3;      /* base3 */
-        --bg-secondary: #eee8d5;    /* base2 */
-        --bg-tertiary: #d8d2c7;
-        --bg-tertiary-hover: #c9c2b8;
-        --bg-header: #fdf6e3;
-        --text-primary: #586e75;    /* base01 */
-        --text-secondary: #839496;  /* base0 */
-        --border-primary: #93a1a1;  /* base01 */
-        --accent-primary: #268bd2;  /* blue */
-        --accent-primary-hover: #1e6a9e;
-        --accent-text: #cb4b16;     /* orange */
-        --accent-border: #268bd2;
-        --text-on-accent: #fdf6e3;
-      }
-
-      /* Solarized Dark: A cool, low-contrast theme */
-      .dark.theme-solarized-dark {
-        --bg-primary: #002b36;      /* base03 */
-        --bg-secondary: #073642;    /* base02 */
-        --bg-tertiary: #586e75;      /* base01 */
-        --bg-tertiary-hover: #657b83;/* base00 */
-        --bg-header: #002b36;
-        --text-primary: #eee8d5;    /* base2 */
-        --text-secondary: #93a1a1;  /* base1 */
-        --border-primary: #586e75;
-        --accent-primary: #2aa198;  /* cyan */
-        --accent-primary-hover: #217a75;
-        --accent-text: #b58900;     /* yellow */
-        --accent-border: #2aa198;
-        --text-on-accent: #002b36;
-      }
-
-      /* Colorful (Dark): A vibrant, high-contrast synthwave theme */
-      .dark.theme-colorful {
-        --bg-primary: #191825;
-        --bg-secondary: #242234;
-        --bg-tertiary: #302e42;
-        --bg-tertiary-hover: #413f57;
-        --bg-header: #191825;
-        --text-primary: #E0D2FF;
-        --text-secondary: #a7a6b1;
-        --border-primary: #302e42;
-        --accent-primary: #FFA3FD;       /* Bright Pink */
-        --accent-primary-hover: #FF77FA;
-        --accent-text: #865DFF;          /* Bright Purple */
-        --accent-border: #FFA3FD;
-        --text-on-accent: #191825;       /* Dark text on bright button */
-      }
-      
-      /* Colorful Light: A vibrant, high-contrast lavender theme */
-      .theme-colorful-light {
-        --bg-primary: #EADFFD;
-        --bg-secondary: #FFFFFF;
-        --bg-tertiary: #D6C7F7;
-        --bg-tertiary-hover: #C3ADF1;
-        --bg-header: #F5F0FF;
-        --text-primary: #3D2C5E;
-        --text-secondary: #6B5B8A;
-        --border-primary: #D6C7F7;
-        --accent-primary: #865DFF;          /* Bright Purple */
-        --accent-primary-hover: #7141F8;
-        --accent-text: #C738BD;             /* Magenta */
-        --accent-border: #865DFF;
-        --text-on-accent: #FFFFFF;
-      }
-
-      /* --- Tailwind Class Overrides --- */
-      /* These rules apply the CSS variables to existing Tailwind classes by using more specific selectors. */
-      
-      /* Backgrounds */
-      html .bg-gray-50, html.dark .dark\:bg-gray-900 { background-color: var(--bg-header); }
-      html .bg-gray-100 { background-color: var(--bg-primary); }
-      html .bg-white, html.dark .dark\:bg-gray-800 { background-color: var(--bg-secondary); }
-      html .bg-gray-200, html.dark .dark\:bg-gray-700 { background-color: var(--bg-tertiary); }
-      html .hover\:bg-gray-100:hover { background-color: var(--bg-tertiary-hover); }
-      html.dark .dark\:hover\:bg-gray-700\/50:hover { background-color: var(--bg-tertiary-hover); opacity: 0.5; }
-      html .hover\:bg-gray-300:hover, html.dark .dark\:hover\:bg-gray-600:hover { background-color: var(--bg-tertiary-hover); }
-      
-      /* Text */
-      html .text-gray-900, html.dark .dark\:text-gray-100, html.dark .dark\:text-gray-200 { color: var(--text-primary); }
-      html .text-gray-800 { color: var(--text-primary); }
-      html .text-gray-600, html.dark .dark\:text-gray-400 { color: var(--text-secondary); }
-      html .text-gray-500, html.dark .dark\:text-gray-500 { color: var(--text-secondary); }
-      
-      /* Borders */
-      html .border-gray-200, html.dark .dark\:border-gray-700 { border-color: var(--border-primary); }
-      html .border-b { border-bottom-color: var(--border-primary); }
-      html .border-t { border-top-color: var(--border-primary); }
-      html .border-l { border-left-color: var(--border-primary); }
-      html .border-r { border-right-color: var(--border-primary); }
-
-      /* Accents (Indigo) */
-      html .bg-indigo-600 { background-color: var(--accent-primary); color: var(--text-on-accent); }
-      html .hover\:bg-indigo-700:hover { background-color: var(--accent-primary-hover); }
-      html .text-indigo-600, html.dark .dark\:text-indigo-400 { color: var(--accent-text); }
-      html .border-indigo-500, html.dark .dark\:border-indigo-400 { border-color: var(--accent-border); }
-      html .ring-indigo-500, html.dark .dark\:ring-indigo-400 { --tw-ring-color: var(--accent-border); }
-
-      /* Block background highlights */
-      html .bg-indigo-100 { background-color: var(--accent-primary); opacity: 0.15; }
-      html.dark .dark\:bg-indigo-900\/50 { background-color: var(--accent-primary); opacity: 0.2; }
-      
-      /* Special case overrides for themes to adjust feel */
-      html.theme-solarized-light .bg-indigo-100 { opacity: 0.2; }
-      html.dark.theme-solarized-dark .dark\:bg-indigo-900\/50 { opacity: 0.25; }
-      html.dark.theme-colorful .dark\:bg-indigo-900\/50 { opacity: 0.2; }
-      html.theme-colorful-light .bg-indigo-100 { background-color: var(--accent-text); opacity: 0.15; }
-
-      /* Other overrides */
-      html .renpy-jump-link { color: var(--accent-primary); }
-      html #arrowhead, html.dark #arrowhead { fill: var(--accent-primary) }
-      html .bg-red-600 { color: white; }
-    </style>
+<link rel="stylesheet" href="/index.css">
 <script type="importmap">
 {
   "imports": {
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^0.12.0",
-    "@monaco-editor/react": "https://aistudiocdn.com/@monaco-editor/react@^4.7.0",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.0",
-    "immer": "https://aistudiocdn.com/immer@^10.2.0",
-    "jszip": "https://aistudiocdn.com/jszip@^3.10.1",
-    "monaco-editor/": "https://aistudiocdn.com/monaco-editor@^0.54.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "vite": "https://aistudiocdn.com/vite@^7.2.1"
+    "use-immer": "https://aistudiocdn.com/use-immer@^0.11.0",
+    "jszip": "https://aistudiocdn.com/jszip@^3.10.1",
+    "@monaco-editor/react": "https://aistudiocdn.com/@monaco-editor/react@^4.7.0",
+    "monaco-editor/": "https://aistudiocdn.com/monaco-editor@^0.55.1/",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
+    "vite": "https://aistudiocdn.com/vite@^7.2.4",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "electron": "https://aistudiocdn.com/electron@^39.2.3",
+    "path": "https://aistudiocdn.com/path@^0.12.7",
+    "url": "https://aistudiocdn.com/url@^0.11.4",
+    "fs/": "https://aistudiocdn.com/fs@^0.0.1-security/"
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
   <body>
     <div id="root"></div>

@@ -27,6 +27,17 @@ export interface BlockGroup {
   blockIds: string[];
 }
 
+export type NoteColor = 'yellow' | 'blue' | 'green' | 'pink' | 'purple' | 'red';
+
+export interface StickyNote {
+  id: string;
+  content: string;
+  position: Position;
+  width: number;
+  height: number;
+  color: NoteColor;
+}
+
 export interface Character {
   // Core attributes
   name: string;
@@ -95,6 +106,7 @@ export interface ProjectImage {
   fileHandle: FileSystemFileHandle | null;
   isInProject: boolean; // True if it's inside game/images
   projectFilePath?: string; // The path within the project if copied, e.g., "game/images/img.png"
+  lastModified?: number;
 }
 
 export interface ImageMetadata {
@@ -110,6 +122,7 @@ export interface RenpyAudio {
   fileHandle: FileSystemFileHandle | null;
   isInProject: boolean; // True if it's inside game/audio
   projectFilePath?: string; // The path within the project if copied, e.g., "game/audio/sound.ogg"
+  lastModified?: number;
 }
 
 export interface AudioMetadata {
@@ -239,15 +252,49 @@ export interface ToastMessage {
 
 export type Theme = 'system' | 'light' | 'dark' | 'solarized-light' | 'solarized-dark' | 'colorful' | 'colorful-light';
 
-export interface IdeSettings {
+export interface AppSettings {
   theme: Theme;
   isLeftSidebarOpen: boolean;
   leftSidebarWidth: number;
   isRightSidebarOpen: boolean;
   rightSidebarWidth: number;
+}
+
+export interface ProjectSettings {
+  enableAiFeatures: boolean;
+  selectedModel: string;
   openTabs: EditorTab[];
   activeTabId: string;
-  apiKey?: string;
-  enableAiFeatures?: boolean;
-  selectedModel?: string;
+  stickyNotes?: StickyNote[];
+}
+
+// This type is a mix for components that need both, like SettingsModal
+export interface IdeSettings extends AppSettings, Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes'> {}
+
+
+export type ClipboardState = { type: 'copy' | 'cut'; paths: Set<string> } | null;
+
+declare global {
+  interface Window {
+      electronAPI?: {
+          openDirectory: () => Promise<string | null>;
+          createProject?: () => Promise<string | null>;
+          loadProject: (path: string) => Promise<any>;
+          writeFile: (path: string, content: string, encoding?: string) => Promise<{ success: boolean; error?: string }>;
+          createDirectory: (path: string) => Promise<{ success: boolean; error?: string }>;
+          removeEntry: (path: string) => Promise<{ success: boolean; error?: string }>;
+          moveFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
+          copyEntry: (sourcePath: string, destPath: string) => Promise<{ success: boolean; error?: string }>;
+          onMenuCommand: (callback: (data: { command: string, type?: 'canvas' | 'route-canvas' }) => void) => () => void;
+          onCheckUnsavedChangesBeforeExit: (callback: () => void) => () => void;
+          replyUnsavedChangesBeforeExit: (hasUnsaved: boolean) => void;
+          onShowExitModal: (callback: () => void) => () => void;
+          forceQuit: () => void;
+          getAppSettings: () => Promise<Partial<AppSettings> | null>;
+          saveAppSettings: (settings: AppSettings) => Promise<{ success: boolean; error?: string }>;
+          path: {
+              join: (...paths: string[]) => Promise<string>;
+          }
+      }
+  }
 }

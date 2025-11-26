@@ -1,0 +1,45 @@
+
+
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('electronAPI', {
+  openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
+  createProject: () => ipcRenderer.invoke('dialog:createProject'),
+  loadProject: (rootPath) => ipcRenderer.invoke('project:load', rootPath),
+  writeFile: (filePath, content, encoding) => ipcRenderer.invoke('fs:writeFile', filePath, content, encoding),
+  createDirectory: (dirPath) => ipcRenderer.invoke('fs:createDirectory', dirPath),
+  removeEntry: (entryPath) => ipcRenderer.invoke('fs:removeEntry', entryPath),
+  moveFile: (oldPath, newPath) => ipcRenderer.invoke('fs:moveFile', oldPath, newPath),
+  copyEntry: (sourcePath, destPath) => ipcRenderer.invoke('fs:copyEntry', sourcePath, destPath),
+  onMenuCommand: (callback) => {
+    const subscription = (_event, ...args) => callback(...args);
+    ipcRenderer.on('menu-command', subscription);
+
+    return () => {
+      ipcRenderer.removeListener('menu-command', subscription);
+    };
+  },
+  // --- Exit confirmation flow ---
+  onCheckUnsavedChangesBeforeExit: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('check-unsaved-changes-before-exit', subscription);
+    return () => ipcRenderer.removeListener('check-unsaved-changes-before-exit', subscription);
+  },
+  replyUnsavedChangesBeforeExit: (hasUnsaved) => {
+    ipcRenderer.send('reply-unsaved-changes-before-exit', hasUnsaved);
+  },
+  onShowExitModal: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('show-exit-modal', subscription);
+    return () => ipcRenderer.removeListener('show-exit-modal', subscription);
+  },
+  forceQuit: () => {
+    ipcRenderer.send('force-quit');
+  },
+  // --- App Settings ---
+  getAppSettings: () => ipcRenderer.invoke('app:get-settings'),
+  saveAppSettings: (settings) => ipcRenderer.invoke('app:save-settings', settings),
+  path: {
+    join: (...args) => ipcRenderer.invoke('path:join', ...args),
+  }
+});

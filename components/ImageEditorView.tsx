@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import type { ProjectImage, ImageMetadata } from '../types';
 
@@ -88,17 +87,18 @@ const ImageEditorView: React.FC<ImageEditorViewProps> = ({ image, metadata, onUp
   const renpyTag = `image ${renpyName} ${tags.split(',').map(t => t.trim()).filter(Boolean).join(' ')}`.trim().replace(/\s+/g, ' ');
 
   return (
-    <div className="w-full h-full flex bg-gray-100 dark:bg-gray-900">
+    <div className="w-full h-full flex bg-gray-100 dark:bg-gray-900 overflow-hidden">
       <div className="flex-grow min-w-0 relative">
-        <div className="absolute inset-0 overflow-auto flex items-center justify-center p-4">
+        <div className="absolute inset-0 overflow-auto overscroll-contain flex items-center justify-center p-4">
           <img src={image.dataUrl} alt={image.fileName} className="max-w-full max-h-full object-contain" />
         </div>
       </div>
-      <aside className="w-80 flex-shrink-0 h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 p-4 flex flex-col space-y-4 overflow-y-auto">
+      <aside className="w-80 flex-shrink-0 h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 p-4 flex flex-col space-y-4 overflow-y-auto overscroll-contain">
         <h2 className="text-lg font-bold border-b pb-2 border-gray-200 dark:border-gray-700">Image Properties</h2>
         
         <div className="space-y-3">
             <MetadataRow label="File Path" value={image.filePath} />
+            {image.lastModified && <MetadataRow label="Last Modified" value={new Date(image.lastModified).toLocaleString()} />}
             <MetadataRow label="Dimensions" value={dimensions ? `${dimensions.w} x ${dimensions.h} px` : 'Loading...'} />
             <MetadataRow label="File Size" value={fileSize !== null ? formatBytes(fileSize) : 'Loading...'} />
             <MetadataRow label="File Type" value={mimeType || 'N/A'} />

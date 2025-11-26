@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import type { RenpyAudio, AudioMetadata } from '../types';
 import AudioContextMenu from './AudioContextMenu';
@@ -14,6 +11,9 @@ interface AudioManagerProps {
   onCopyAudiosToProject: (sourceFilePaths: string[]) => void;
   onOpenAudioEditor: (filePath: string) => void;
   isFileSystemApiSupported: boolean;
+  lastScanned: number | null;
+  isRefreshing: boolean;
+  onRefresh: () => void;
 }
 
 const AudioItem: React.FC<{
@@ -40,7 +40,7 @@ const AudioItem: React.FC<{
   );
 };
 
-const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirectories, onAddScanDirectory, onRemoveScanDirectory, onCopyAudiosToProject, onOpenAudioEditor, isFileSystemApiSupported }) => {
+const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirectories, onAddScanDirectory, onRemoveScanDirectory, onCopyAudiosToProject, onOpenAudioEditor, isFileSystemApiSupported, lastScanned, isRefreshing, onRefresh }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSource, setSelectedSource] = useState('all');
   const [selectedAudioPaths, setSelectedAudioPaths] = useState(new Set<string>());
@@ -120,30 +120,48 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
   };
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 space-y-4">
+    <div className="h-full flex flex-col p-4">
+      <div className="flex-none space-y-4 mb-4">
+        <div className="flex justify-between items-center">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+                {lastScanned ? `Last scanned: ${new Date(lastScanned).toLocaleTimeString()}` : 'Not scanned.'}
+            </span>
+            <button onClick={onRefresh} disabled={!isFileSystemApiSupported || isRefreshing} className="px-2 py-1 rounded bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1">
+                 {isRefreshing ? (
+                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                 ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 110 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.885-.666A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566z" clipRule="evenodd" /></svg>
+                 )}
+                 <span>Refresh</span>
+            </button>
+        </div>
         <div>
           <h3 className="font-semibold mb-2">Audio Sources</h3>
-          <div className="space-y-1">
-             {sources.map(source => (
-                    <div
-                        key={source}
-                        onClick={() => setSelectedSource(source)}
-                        className={`flex items-center justify-between p-2 rounded cursor-pointer text-sm ${selectedSource === source ? 'bg-indigo-100 dark:bg-indigo-900/50 font-semibold' : 'hover:bg-gray-100 dark:hover:bg-gray-700/50'}`}
+            <div className="flex items-center space-x-2">
+                <select
+                    value={selectedSource}
+                    onChange={(e) => setSelectedSource(e.target.value)}
+                    className="flex-grow p-2 rounded bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                >
+                    {sources.map(source => (
+                    <option key={source} value={source}>
+                        {source === 'Project (game/audio)' ? 'Project Audio' : source}
+                    </option>
+                    ))}
+                </select>
+                {selectedSource !== 'all' && selectedSource !== 'Project (game/audio)' && (
+                    <button
+                        onClick={() => onRemoveScanDirectory(selectedSource)}
+                        className="p-2 rounded-md hover:bg-red-200 dark:hover:bg-red-800/50 text-gray-500 dark:text-gray-400 hover:text-red-700 dark:hover:text-red-300 flex-shrink-0"
+                        title={`Remove ${selectedSource} from scan list`}
                     >
-                        <span className="truncate">{source}</span>
-                        {source !== 'all' && source !== 'Project (game/audio)' && (
-                            <button
-                                onClick={(e) => { e.stopPropagation(); onRemoveScanDirectory(source); }}
-                                className="p-1 rounded-full hover:bg-red-200 dark:hover:bg-red-800/50 text-gray-500 dark:text-gray-400 hover:text-red-700 dark:hover:text-red-300"
-                                title={`Remove ${source}`}
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-                            </button>
-                        )}
-                    </div>
-                ))}
-          </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                    </button>
+                )}
+            </div>
            <button
               onClick={onAddScanDirectory}
               disabled={!isFileSystemApiSupported}
@@ -171,7 +189,7 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
           </button>
         </div>
       </div>
-      <div className="flex-grow overflow-y-auto -mr-4 pr-4 pt-4">
+      <div className="flex-grow overflow-y-auto -mr-4 pr-4 overscroll-contain">
         <div className="space-y-2">
           {filteredAudios.map(audio => (
             <AudioItem

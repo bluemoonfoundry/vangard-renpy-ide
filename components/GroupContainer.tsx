@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, forwardRef } from 'react';
 import type { BlockGroup } from '../types';
 
 interface GroupContainerProps {
@@ -9,7 +9,7 @@ interface GroupContainerProps {
   updateGroup: (id: string, newGroupData: Partial<BlockGroup>) => void;
 }
 
-const GroupContainer: React.FC<GroupContainerProps> = React.memo(({ group, isSelected, isDragging, isDimmed, updateGroup }) => {
+const GroupContainer = forwardRef<HTMLDivElement, GroupContainerProps>(({ group, isSelected, isDragging, isDimmed, updateGroup }, ref) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -42,14 +42,16 @@ const GroupContainer: React.FC<GroupContainerProps> = React.memo(({ group, isSel
   
   return (
     <div
+      ref={ref}
       data-group-id={group.id}
-      className={`group-container-wrapper absolute bg-indigo-500/10 dark:bg-indigo-500/20 rounded-xl border-2 ${isSelected ? 'border-indigo-600 dark:border-indigo-400' : 'border-indigo-500/30 dark:border-indigo-500/40'} ${isDragging ? 'shadow-xl shadow-indigo-500/50' : ''} transition-colors transition-shadow duration-200 ${isDimmed ? 'opacity-30' : ''}`}
+      className={`group-container-wrapper absolute bg-indigo-500/10 dark:bg-indigo-500/20 rounded-xl border-2 ${isSelected ? 'border-indigo-600 dark:border-indigo-400' : 'border-indigo-500/30 dark:border-indigo-500/40'} ${isDragging ? 'shadow-xl shadow-indigo-500/50' : ''} transition-colors duration-200 ${isDimmed ? 'opacity-30' : ''}`}
       style={{
         left: group.position.x,
         top: group.position.y,
         width: group.width,
         height: group.height,
         zIndex: isSelected ? 2 : 1,
+        transitionProperty: isDragging ? 'none' : 'background-color, border-color, shadow, opacity',
       }}
     >
       <div className="drag-handle h-8 rounded-t-lg flex items-center px-4 cursor-grab">
@@ -80,4 +82,4 @@ const GroupContainer: React.FC<GroupContainerProps> = React.memo(({ group, isSel
   );
 });
 
-export default GroupContainer;
+export default React.memo(GroupContainer);
