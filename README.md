@@ -16,10 +16,11 @@ This tool is perfect for writers, designers, and programmers who want a more int
 - **Comprehensive Project Management**: A built-in file explorer allows you to create, rename, move, and delete files and folders in your project.
 - **Story Element Management**: A dedicated panel to view, create, and manage Characters, Variables, Images, Audio, and Screens.
 - **Asset Pipeline**: Scan external directories for images and audio, and easily copy them into your project.
-- **File System Integration**: Works directly with your local project folders for a seamless development experience (recommended).
+- **File System Integration**: Works directly with your local project folders for a seamless development experience.
 - **Expanded Theme Support**: Personalize your workspace with multiple themes, including Light, Dark, Solarized, and Colorful variants.
 - **UI State Persistence**: The editor remembers your theme, sidebar layout, and open tabs between sessions for a consistent workflow.
 - **Customizable Layout**: Sidebars are resizable, allowing you to tailor the interface to your needs.
+- **Ren'py Engine Integration**: Run the Ren'Py project by clicking on a Run button. Edit code and reload in Ren'Py for side-by-side development and testing. 
 
 ---
 
