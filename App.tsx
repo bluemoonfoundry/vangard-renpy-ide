@@ -21,6 +21,7 @@ import ImageEditorView from './components/ImageEditorView';
 import AudioEditorView from './components/AudioEditorView';
 import CharacterEditorView from './components/CharacterEditorView';
 import TabContextMenu from './components/TabContextMenu';
+import Sash from './components/Sash';
 import { useRenpyAnalysis, performRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import type { 
@@ -1573,6 +1574,22 @@ const App: React.FC = () => {
       editorInstances.current.delete(id);
   }, []);
 
+  // --- Sash/Resizing Handlers ---
+  const handleLeftSashDrag = useCallback((delta: number) => {
+    updateAppSettings(draft => {
+        const newWidth = draft.leftSidebarWidth + delta;
+        draft.leftSidebarWidth = Math.max(200, Math.min(newWidth, 600));
+    });
+  }, [updateAppSettings]);
+
+  const handleRightSashDrag = useCallback((delta: number) => {
+    updateAppSettings(draft => {
+        const newWidth = draft.rightSidebarWidth - delta;
+        draft.rightSidebarWidth = Math.max(240, Math.min(newWidth, 600));
+    });
+  }, [updateAppSettings]);
+
+
   // --- Render Helpers ---
   const activeBlock = useMemo(() => blocks.find(b => b.id === activeTabId), [blocks, activeTabId]);
   const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId), [openTabs, activeTabId]);
@@ -1638,66 +1655,72 @@ const App: React.FC = () => {
       
       <div className="flex-1 flex overflow-hidden min-h-0">
         {appSettings.isLeftSidebarOpen && (
-            <div className="w-64 flex-none border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden h-full">
-              <div className="flex-none flex border-b border-gray-200 dark:border-gray-700">
-                <button
-                  onClick={() => setActiveLeftPanel('explorer')}
-                  className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors ${activeLeftPanel === 'explorer' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400' : 'bg-gray-100 dark:bg-gray-900 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+            <>
+                <div 
+                    className="flex-none border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden h-full"
+                    style={{ width: appSettings.leftSidebarWidth }}
                 >
-                  Explorer
-                </button>
-                <button
-                  onClick={() => setActiveLeftPanel('search')}
-                  className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors ${activeLeftPanel === 'search' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400' : 'bg-gray-100 dark:bg-gray-900 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
-                >
-                  Search
-                </button>
-              </div>
-              
-              <div className="flex-1 min-h-0 relative">
-                <div className={`w-full h-full absolute top-0 left-0 transition-opacity ${activeLeftPanel === 'explorer' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
-                  {activeLeftPanel === 'explorer' && (
-                    <FileExplorerPanel 
-                        tree={fileSystemTree}
-                        onFileOpen={handlePathDoubleClick}
-                        onCreateNode={handleCreateNode}
-                        onRenameNode={handleRenameNode}
-                        onDeleteNode={handleDeleteNode}
-                        onMoveNode={handleMoveNode}
-                        clipboard={clipboard}
-                        onCut={handleCut}
-                        onCopy={handleCopy}
-                        onPaste={handlePaste}
-                        onCenterOnBlock={(filePath) => {
-                            const block = blocks.find(b => b.filePath === filePath);
-                            if (block) handleCenterOnBlock(block.id);
-                        }}
-                        selectedPaths={explorerSelectedPaths}
-                        setSelectedPaths={setExplorerSelectedPaths}
-                        lastClickedPath={explorerLastClickedPath}
-                        setLastClickedPath={setExplorerLastClickedPath}
-                    />
-                  )}
+                    <div className="flex-none flex border-b border-gray-200 dark:border-gray-700">
+                        <button
+                        onClick={() => setActiveLeftPanel('explorer')}
+                        className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors ${activeLeftPanel === 'explorer' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400' : 'bg-gray-100 dark:bg-gray-900 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        >
+                        Explorer
+                        </button>
+                        <button
+                        onClick={() => setActiveLeftPanel('search')}
+                        className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors ${activeLeftPanel === 'search' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400' : 'bg-gray-100 dark:bg-gray-900 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        >
+                        Search
+                        </button>
+                    </div>
+                    
+                    <div className="flex-1 min-h-0 relative">
+                        <div className={`w-full h-full absolute top-0 left-0 transition-opacity ${activeLeftPanel === 'explorer' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
+                        {activeLeftPanel === 'explorer' && (
+                            <FileExplorerPanel 
+                                tree={fileSystemTree}
+                                onFileOpen={handlePathDoubleClick}
+                                onCreateNode={handleCreateNode}
+                                onRenameNode={handleRenameNode}
+                                onDeleteNode={handleDeleteNode}
+                                onMoveNode={handleMoveNode}
+                                clipboard={clipboard}
+                                onCut={handleCut}
+                                onCopy={handleCopy}
+                                onPaste={handlePaste}
+                                onCenterOnBlock={(filePath) => {
+                                    const block = blocks.find(b => b.filePath === filePath);
+                                    if (block) handleCenterOnBlock(block.id);
+                                }}
+                                selectedPaths={explorerSelectedPaths}
+                                setSelectedPaths={setExplorerSelectedPaths}
+                                lastClickedPath={explorerLastClickedPath}
+                                setLastClickedPath={setExplorerLastClickedPath}
+                            />
+                        )}
+                        </div>
+                        <div className={`w-full h-full absolute top-0 left-0 transition-opacity ${activeLeftPanel === 'search' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
+                        {activeLeftPanel === 'search' && (
+                            <SearchPanel
+                            query={searchQuery}
+                            setQuery={setSearchQuery}
+                            replace={replaceQuery}
+                            setReplace={setReplaceQuery}
+                            options={searchOptions}
+                            setOptions={setSearchOptions}
+                            results={searchResults}
+                            onSearch={handleSearch}
+                            onReplaceAll={handleReplaceAll}
+                            onResultClick={handleSearchResultClick}
+                            isSearching={isSearching}
+                            />
+                        )}
+                        </div>
+                    </div>
                 </div>
-                <div className={`w-full h-full absolute top-0 left-0 transition-opacity ${activeLeftPanel === 'search' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
-                  {activeLeftPanel === 'search' && (
-                    <SearchPanel
-                      query={searchQuery}
-                      setQuery={setSearchQuery}
-                      replace={replaceQuery}
-                      setReplace={setReplaceQuery}
-                      options={searchOptions}
-                      setOptions={setSearchOptions}
-                      results={searchResults}
-                      onSearch={handleSearch}
-                      onReplaceAll={handleReplaceAll}
-                      onResultClick={handleSearchResultClick}
-                      isSearching={isSearching}
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
+                <Sash onDrag={handleLeftSashDrag} />
+            </>
         )}
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-100 dark:bg-gray-900 relative">
@@ -1865,55 +1888,61 @@ const App: React.FC = () => {
         </div>
 
         {appSettings.isRightSidebarOpen && (
-             <div className="w-80 flex-none border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col overflow-hidden h-full">
-                <StoryElementsPanel 
-                    analysisResult={analysisResult}
-                    onOpenCharacterEditor={handleOpenCharacterEditor}
-                    onFindCharacterUsages={(tag) => handleFindUsages(tag, 'character')}
-                    onAddVariable={() => {}}
-                    onFindVariableUsages={(name) => handleFindUsages(name, 'variable')}
-                    onAddScreen={() => {}}
-                    onFindScreenDefinition={() => {}}
-                    projectImages={images}
-                    imageMetadata={imageMetadata}
-                    imageScanDirectories={imageScanDirectories}
-                    onAddImageScanDirectory={() => {}}
-                    onRemoveImageScanDirectory={() => {}}
-                    onCopyImagesToProject={handleCopyImagesToProject}
-                    onUpdateImageMetadata={() => {}}
-                    onOpenImageEditor={handleOpenImageEditorTab}
-                    imagesLastScanned={imagesLastScanned}
-                    isRefreshingImages={isRefreshingImages}
-                    onRefreshImages={() => {}}
-                    
-                    projectAudios={audios}
-                    audioMetadata={audioMetadata}
-                    audioScanDirectories={audioScanDirectories}
-                    onAddAudioScanDirectory={() => {}}
-                    onRemoveAudioScanDirectory={() => {}}
-                    onCopyAudiosToProject={() => {}}
-                    onUpdateAudioMetadata={() => {}}
-                    onOpenAudioEditor={(path) => {
-                        const tabId = `aud-${path}`;
-                        setOpenTabs(prev => {
-                            if(!prev.find(t => t.id === tabId)) {
-                                return [...prev, { id: tabId, type: 'audio', filePath: path }];
-                            }
-                            return prev;
-                        });
-                        setActiveTabId(tabId);
-                    }}
-                    audiosLastScanned={audiosLastScanned}
-                    isRefreshingAudios={isRefreshingAudios}
-                    onRefreshAudios={() => {}}
-                    isFileSystemApiSupported={!!window.electronAPI}
-                    onHoverHighlightStart={(id) => {
-                        const defBlock = analysisResult.variables.get(id)?.definedInBlockId;
-                        if(defBlock) setHoverHighlightIds(new Set([defBlock]));
-                    }}
-                    onHoverHighlightEnd={() => setHoverHighlightIds(null)}
-                />
-            </div>
+            <>
+                <Sash onDrag={handleRightSashDrag} />
+                <div 
+                    className="flex-none border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col overflow-hidden h-full"
+                    style={{ width: appSettings.rightSidebarWidth }}
+                >
+                    <StoryElementsPanel 
+                        analysisResult={analysisResult}
+                        onOpenCharacterEditor={handleOpenCharacterEditor}
+                        onFindCharacterUsages={(tag) => handleFindUsages(tag, 'character')}
+                        onAddVariable={() => {}}
+                        onFindVariableUsages={(name) => handleFindUsages(name, 'variable')}
+                        onAddScreen={() => {}}
+                        onFindScreenDefinition={() => {}}
+                        projectImages={images}
+                        imageMetadata={imageMetadata}
+                        imageScanDirectories={imageScanDirectories}
+                        onAddImageScanDirectory={() => {}}
+                        onRemoveImageScanDirectory={() => {}}
+                        onCopyImagesToProject={handleCopyImagesToProject}
+                        onUpdateImageMetadata={() => {}}
+                        onOpenImageEditor={handleOpenImageEditorTab}
+                        imagesLastScanned={imagesLastScanned}
+                        isRefreshingImages={isRefreshingImages}
+                        onRefreshImages={() => {}}
+                        
+                        projectAudios={audios}
+                        audioMetadata={audioMetadata}
+                        audioScanDirectories={audioScanDirectories}
+                        onAddAudioScanDirectory={() => {}}
+                        onRemoveAudioScanDirectory={() => {}}
+                        onCopyAudiosToProject={() => {}}
+                        onUpdateAudioMetadata={() => {}}
+                        onOpenAudioEditor={(path) => {
+                            const tabId = `aud-${path}`;
+                            setOpenTabs(prev => {
+                                if(!prev.find(t => t.id === tabId)) {
+                                    return [...prev, { id: tabId, type: 'audio', filePath: path }];
+                                }
+                                return prev;
+                            });
+                            setActiveTabId(tabId);
+                        }}
+                        audiosLastScanned={audiosLastScanned}
+                        isRefreshingAudios={isRefreshingAudios}
+                        onRefreshAudios={() => {}}
+                        isFileSystemApiSupported={!!window.electronAPI}
+                        onHoverHighlightStart={(id) => {
+                            const defBlock = analysisResult.variables.get(id)?.definedInBlockId;
+                            if(defBlock) setHoverHighlightIds(new Set([defBlock]));
+                        }}
+                        onHoverHighlightEnd={() => setHoverHighlightIds(null)}
+                    />
+                </div>
+            </>
         )}
       </div>
 
