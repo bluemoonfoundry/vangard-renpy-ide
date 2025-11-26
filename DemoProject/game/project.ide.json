@@ -1,0 +1,16 @@
+{
+  "enableAiFeatures": false,
+  "selectedModel": "gemini-2.5-flash",
+  "openTabs": [
+    {
+      "id": "canvas",
+      "type": "canvas"
+    },
+    {
+      "id": "route-canvas",
+      "type": "route-canvas"
+    }
+  ],
+  "activeTabId": "canvas",
+  "stickyNotes": []
+}

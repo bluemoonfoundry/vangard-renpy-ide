@@ -1,5 +1,7 @@
 
 
+
+
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -35,6 +37,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   forceQuit: () => {
     ipcRenderer.send('force-quit');
+  },
+  // --- Game Execution ---
+  selectRenpy: () => ipcRenderer.invoke('dialog:selectRenpy'),
+  runGame: (renpyPath, projectPath) => ipcRenderer.send('game:run', renpyPath, projectPath),
+  stopGame: () => ipcRenderer.send('game:stop'),
+  onGameStarted: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('game-started', subscription);
+    return () => ipcRenderer.removeListener('game-started', subscription);
+  },
+  onGameStopped: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('game-stopped', subscription);
+    return () => ipcRenderer.removeListener('game-stopped', subscription);
+  },
+  onGameError: (callback) => {
+    const subscription = (_event, error) => callback(error);
+    ipcRenderer.on('game-error', subscription);
+    return () => ipcRenderer.removeListener('game-error', subscription);
   },
   // --- App Settings ---
   getAppSettings: () => ipcRenderer.invoke('app:get-settings'),
