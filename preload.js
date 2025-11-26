@@ -1,9 +1,5 @@
 
 
-
-
-
-
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -70,7 +66,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // --- App Settings ---
   getAppSettings: () => ipcRenderer.invoke('app:get-settings'),
   saveAppSettings: (settings) => ipcRenderer.invoke('app:save-settings', settings),
+  // --- Path utils ---
   path: {
     join: (...args) => ipcRenderer.invoke('path:join', ...args),
-  }
+  },
+  // --- Search ---
+  searchInProject: (options) => ipcRenderer.invoke('project:search', options),
 });
