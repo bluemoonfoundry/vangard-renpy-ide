@@ -1,6 +1,8 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import LabelBlock from './LabelBlock';
 import ViewRoutesPanel from './ViewRoutesPanel';
+import Minimap from './Minimap';
+import type { MinimapItem } from './Minimap';
 import type { LabelNode, RouteLink, Position, IdentifiedRoute } from '../types';
 
 interface RouteCanvasProps {
@@ -113,6 +115,19 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
   const interactionState = useRef<InteractionState>({ type: 'idle' });
   const pointerStartPos = useRef<Position>({ x: 0, y: 0 });
   const nodeMap = useMemo(() => new Map(labelNodes.map(n => [n.id, n])), [labelNodes]);
+  const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    const observer = new ResizeObserver(entries => {
+        if (entries[0]) {
+            const { width, height } = entries[0].contentRect;
+            setCanvasDimensions({ width, height });
+        }
+    });
+    observer.observe(canvasRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   const handleToggleRoute = (routeId: number) => {
     setCheckedRoutes(prev => {
@@ -304,6 +319,10 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
     };
   }, [labelNodes]);
 
+  const minimapItems = useMemo((): MinimapItem[] => {
+    return labelNodes.map(n => ({ ...n, type: 'label' }));
+  }, [labelNodes]);
+
   return (
     <div
       ref={canvasRef}
@@ -374,6 +393,12 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
           />
         ))}
       </div>
+      <Minimap
+        items={minimapItems}
+        transform={transform}
+        canvasDimensions={canvasDimensions}
+        onTransformChange={onTransformChange}
+      />
     </div>
   );
 };

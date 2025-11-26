@@ -3,6 +3,8 @@ import React, { useState, useRef, useCallback, useMemo, useEffect, forwardRef } 
 import CodeBlock from './CodeBlock';
 import GroupContainer from './GroupContainer';
 import StickyNote from './StickyNote';
+import Minimap from './Minimap';
+import type { MinimapItem } from './Minimap';
 import type { Block, Position, RenpyAnalysisResult, LabelLocation, BlockGroup, Link, StickyNote as StickyNoteType } from '../types';
 
 interface StoryCanvasProps {
@@ -199,6 +201,19 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
   const [flashingBlockId, setFlashingBlockId] = useState<string | null>(null);
   const lastHandledRequestKey = useRef<number | null>(null);
   const lastHandledFlashKey = useRef<number | null>(null);
+  const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    const observer = new ResizeObserver(entries => {
+        if (entries[0]) {
+            const { width, height } = entries[0].contentRect;
+            setCanvasDimensions({ width, height });
+        }
+    });
+    observer.observe(canvasRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!centerOnBlockRequest || !canvasRef.current) return;
@@ -714,6 +729,20 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
     };
   }, [visibleBlocks]);
 
+  const minimapItems = useMemo((): MinimapItem[] => {
+    const blockItems: MinimapItem[] = visibleBlocks.map(b => {
+        const isScreen = analysisResult.screenOnlyBlockIds.has(b.id);
+        const isConfig = analysisResult.configBlockIds.has(b.id);
+        let type: MinimapItem['type'] = 'block';
+        if (isScreen) type = 'screen';
+        if (isConfig) type = 'config';
+        return { ...b, type };
+    });
+    const groupItems: MinimapItem[] = groups.map(g => ({ ...g, type: 'group', width: g.width, height: g.height }));
+    const noteItems: MinimapItem[] = canvasFilters.notes ? stickyNotes.map(n => ({ ...n, type: 'note' })) : [];
+    return [...blockItems, ...groupItems, ...noteItems];
+  }, [visibleBlocks, groups, stickyNotes, canvasFilters.notes, analysisResult]);
+
   return (
     <div
       ref={canvasRef}
@@ -873,6 +902,12 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
             />
         ))}
       </div>
+      <Minimap
+        items={minimapItems}
+        transform={transform}
+        canvasDimensions={canvasDimensions}
+        onTransformChange={onTransformChange}
+      />
     </div>
   );
 };
