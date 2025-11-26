@@ -1,7 +1,7 @@
 label scene_05_meet_sakura:
     scene bg garden
     
-    mc "That was... a lot. I think I'll wander a bit."
+    mc "That was... a lot. I think I'll wander a bit. It's a little unsettling."
     "I find a quiet rooftop garden, a peaceful escape from the noise."
     
     show s at center, size_normal

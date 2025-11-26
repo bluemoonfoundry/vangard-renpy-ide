@@ -1,5 +1,6 @@
 import React from 'react';
 import logo from '../vangard-renide-512x512.png';
+import packageJson from '../package.json';
 
 interface WelcomeScreenProps {
   onOpenProject: () => void;
@@ -22,7 +23,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         <p className="text-indigo-100 text-lg text-center max-w-md leading-relaxed">
           Design, visualize, and write your visual novels with a powerful, flow-based interface.
         </p>
-        <div className="mt-12 text-indigo-300 text-sm font-mono">v0.1.0 • Local Development Build</div>
+        <div className="mt-12 text-indigo-300 text-sm font-mono">v{packageJson.version} • Local Development Build</div>
       </div>
 
       {/* Right Side - Actions */}

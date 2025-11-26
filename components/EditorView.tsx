@@ -1,6 +1,3 @@
-
-
-
 import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type { Block, RenpyAnalysisResult, ToastMessage } from '../types';
@@ -47,19 +44,25 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const monacoRef = useRef<typeof monaco | null>(null);
   const aiFeaturesEnabledContextKey = useRef<monaco.editor.IContextKey<boolean> | null>(null);
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const decorationIds = useRef<string[]>([]);
   
   // Refs to keep track of latest props for closures
   const onDirtyChangeRef = useRef(onDirtyChange);
   const onTriggerSaveRef = useRef(onTriggerSave);
   const onSaveRef = useRef(onSave);
   const blockRef = useRef(block);
+  const onSwitchFocusBlockRef = useRef(onSwitchFocusBlock);
+  const analysisResultRef = useRef(analysisResult);
   
   useEffect(() => {
     onDirtyChangeRef.current = onDirtyChange;
     onTriggerSaveRef.current = onTriggerSave;
     onSaveRef.current = onSave;
     blockRef.current = block;
-  }, [onDirtyChange, onTriggerSave, onSave, block]);
+    onSwitchFocusBlockRef.current = onSwitchFocusBlock;
+    analysisResultRef.current = analysisResult;
+  }, [onDirtyChange, onTriggerSave, onSave, block, onSwitchFocusBlock, analysisResult]);
 
   useEffect(() => {
     return () => {
@@ -201,6 +204,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     monacoRef.current = monaco;
     onEditorMount(block.id, editor);
     editor.focus();
+    setIsMounted(true);
 
     aiFeaturesEnabledContextKey.current = editor.createContextKey('aiFeaturesEnabled', enableAiFeatures);
 
@@ -215,6 +219,32 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         if (onTriggerSaveRef.current) {
             onTriggerSaveRef.current(blockRef.current.id);
         }
+    });
+
+    editor.onMouseDown((e) => {
+      if (e.target.type !== monaco.editor.MouseTargetType.CONTENT_TEXT || !e.target.position) {
+          return;
+      }
+      // Only trigger on Ctrl/Cmd click
+      if (!e.event.ctrlKey && !e.event.metaKey) {
+          return;
+      }
+  
+      const position = e.target.position;
+      const jumpsInBlock = analysisResultRef.current.jumps[blockRef.current.id] || [];
+      const clickedJump = jumpsInBlock.find(jump =>
+          jump.line === position.lineNumber &&
+          position.column >= jump.columnStart &&
+          position.column <= jump.columnEnd
+      );
+  
+      if (clickedJump) {
+          const targetLabelLocation = analysisResultRef.current.labels[clickedJump.target];
+          if (targetLabelLocation) {
+              e.event.preventDefault();
+              onSwitchFocusBlockRef.current(targetLabelLocation.blockId, targetLabelLocation.line);
+          }
+      }
     });
 
     editor.addAction({
@@ -239,6 +269,50 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     const markers = performValidation(editor.getValue(), monaco);
     monaco.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
   };
+  
+  // Effect to update decorations when analysis or theme changes
+  useEffect(() => {
+      if (!isMounted || !editorRef.current || !monacoRef.current) return;
+  
+      const editor = editorRef.current;
+      const monaco = monacoRef.current;
+  
+      const newDecorations: monaco.editor.IModelDeltaDecoration[] = [];
+      const jumpsInBlock = analysisResult.jumps[block.id] || [];
+  
+      jumpsInBlock.forEach(jump => {
+          const targetLabelLocation = analysisResult.labels[jump.target];
+          if (targetLabelLocation) {
+              newDecorations.push({
+                  range: new monaco.Range(jump.line, jump.columnStart, jump.line, jump.columnEnd),
+                  options: {
+                      inlineClassName: 'renpy-jump-link',
+                      hoverMessage: { value: `Cmd/Ctrl + click to follow link to '${jump.target}'` }
+                  }
+              });
+          }
+          else if (!jump.isDynamic) {
+               newDecorations.push({
+                  range: new monaco.Range(jump.line, jump.columnStart, jump.line, jump.columnEnd),
+                  options: {
+                      inlineClassName: 'renpy-jump-invalid',
+                      hoverMessage: { value: `Label '${jump.target}' not found.` }
+                  }
+              });
+          } else { // is dynamic
+               newDecorations.push({
+                  range: new monaco.Range(jump.line, jump.columnStart, jump.line, jump.columnEnd),
+                  options: {
+                      inlineClassName: 'renpy-jump-dynamic',
+                      hoverMessage: { value: `Dynamic jump to expression '${jump.target}'. Cannot verify.` }
+                  }
+              });
+          }
+      });
+      
+      decorationIds.current = editor.deltaDecorations(decorationIds.current, newDecorations);
+  
+  }, [analysisResult, block.id, isMounted]);
 
   const getCurrentContext = () => {
       if (!editorRef.current) return '';

@@ -4,12 +4,15 @@ label scene_01_start:
     show h at center, size_normal with dissolve
     
     h "Welcome to Aetheria Academy's annual Club Fair!"
-    h "I'm Haruka, the student council president. It's great to see new faces."
+    h "I'm Hasper, the student council president. It's great to see new faces."
     
     mc "Hi, I'm [mc_name]. I'm not sure where to even begin."
     
     h "Don't worry! That's what I'm here for. Everyone finds their place here."
     h "Let's head over to the main courtyard where the booths are set up."
+
+
+    h "The sun sets over the city."
 
     # Add some content
     
