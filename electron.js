@@ -1,13 +1,19 @@
 
 
 
+
+
 import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
+import { spawn } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// --- Game Process Management ---
+let gameProcess = null;
 
 // --- Window State Management ---
 const windowStatePath = path.join(app.getPath('userData'), 'window-state.json');
@@ -174,6 +180,12 @@ async function createWindow() {
                 click: () => mainWindow.webContents.send('menu-command', { command: 'open-project' })
             },
             { type: 'separator' },
+            {
+                label: 'Run Project',
+                accelerator: 'F5',
+                click: () => mainWindow.webContents.send('menu-command', { command: 'run-project' })
+            },
+            { type: 'separator' },
             process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' }
         ]
     },
@@ -235,6 +247,21 @@ app.whenReady().then(() => {
       return null;
     } else {
       return filePaths[0];
+    }
+  });
+
+   ipcMain.handle('dialog:selectRenpy', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+        title: 'Select Ren\'Py Executable',
+        properties: ['openFile'],
+        filters: [
+            { name: 'Ren\'Py Launcher', extensions: process.platform === 'win32' ? ['exe'] : ['sh'] },
+        ]
+    });
+    if (canceled) {
+        return null;
+    } else {
+        return filePaths[0];
     }
   });
 
@@ -330,6 +357,42 @@ app.whenReady().then(() => {
     app.quit();
   });
 
+  ipcMain.on('game:run', (event, renpyPath, projectPath) => {
+    if (gameProcess) {
+      console.log('Game is already running.');
+      return;
+    }
+
+    try {
+      gameProcess = spawn(renpyPath, [projectPath]);
+      event.sender.send('game-started');
+
+      gameProcess.on('close', (code) => {
+        console.log(`Game process exited with code ${code}`);
+        gameProcess = null;
+        event.sender.send('game-stopped');
+      });
+
+      gameProcess.on('error', (err) => {
+        console.error('Failed to start game process:', err);
+        event.sender.send('game-error', err.message);
+        gameProcess = null;
+      });
+
+    } catch (err) {
+      console.error('Spawn error:', err);
+      event.sender.send('game-error', err.message);
+      gameProcess = null;
+    }
+  });
+
+  ipcMain.on('game:stop', () => {
+    if (gameProcess) {
+      gameProcess.kill();
+      gameProcess = null;
+    }
+  });
+
   ipcMain.handle('app:get-settings', async () => {
     return await loadAppSettings();
   });
@@ -347,6 +410,9 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  if (gameProcess) {
+    gameProcess.kill();
+  }
   if (process.platform !== 'darwin') {
     app.quit();
   }

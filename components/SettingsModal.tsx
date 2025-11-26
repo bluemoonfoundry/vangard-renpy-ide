@@ -23,6 +23,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
   if (!isOpen) {
     return null;
   }
+  
+  const handleSelectRenpyPath = async () => {
+    if (window.electronAPI) {
+        const path = await window.electronAPI.selectRenpy();
+        if (path) {
+            onSettingsChange('renpyPath', path);
+        }
+    }
+  };
 
   return (
     <div
@@ -54,6 +63,33 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                     ))}
                 </select>
             </div>
+            
+            {window.electronAPI && (
+              <>
+                <div className="border-t border-gray-200 dark:border-gray-700"></div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Ren'Py Launcher Path
+                    </label>
+                    <div className="flex items-center space-x-2">
+                         <input
+                            type="text"
+                            readOnly
+                            value={settings.renpyPath || 'Not set'}
+                            className="w-full mt-1 p-2 rounded bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 font-mono text-xs"
+                        />
+                        <button 
+                            onClick={handleSelectRenpyPath}
+                            className="mt-1 px-4 py-2 rounded bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-sm font-bold"
+                        >
+                            Change...
+                        </button>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Select your `renpy.exe` or `renpy.sh` file.</p>
+                </div>
+              </>
+            )}
+
             <div className="border-t border-gray-200 dark:border-gray-700"></div>
             <div className="space-y-4">
                 <label className="flex items-center space-x-3 cursor-pointer">
@@ -95,7 +131,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                 )}
             </div>
              <p className="text-xs text-gray-500 dark:text-gray-400 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    Application settings (like theme) are saved globally. Project settings (like AI model) are saved in `project.ide.json`.
+                    Application settings (like theme and Ren'Py path) are saved globally. Project settings (like AI model) are saved in `project.ide.json`.
                 </p>
         </main>
         <footer className="bg-gray-50 dark:bg-gray-700 p-4 rounded-b-lg flex justify-end items-center space-x-4">

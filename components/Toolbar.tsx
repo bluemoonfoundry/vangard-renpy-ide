@@ -1,6 +1,8 @@
 
 
 
+
+
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import type { Theme } from '../types';
 import logo from '../vangard-renide-512x512.png';
@@ -30,6 +32,9 @@ interface ToolbarProps {
   setIsRightSidebarOpen: (open: boolean) => void;
   onOpenStaticTab: (type: 'canvas' | 'route-canvas') => void;
   onAddStickyNote: () => void;
+  isGameRunning: boolean;
+  onRunGame: () => void;
+  onStopGame: () => void;
 }
 
 const ToolbarButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { children: React.ReactNode; }> = ({ children, ...props }) => {
@@ -71,6 +76,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
   setIsRightSidebarOpen,
   onOpenStaticTab,
   onAddStickyNote,
+  isGameRunning,
+  onRunGame,
+  onStopGame,
 }) => {
 
   const totalUnsavedCount = useMemo(() => {
@@ -141,16 +149,19 @@ const Toolbar: React.FC<ToolbarProps> = ({
       </div>
 
       <div className="flex items-center space-x-2">
-        <ToolbarButton onClick={onRequestNewProject} title="Create New Project">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8z" clipRule="evenodd" /></svg>
-            <span>New Project</span>
-        </ToolbarButton>
+        {isGameRunning ? (
+            <button onClick={onStopGame} title="Stop Game" className="flex items-center justify-center rounded-md text-sm font-medium px-3 py-1.5 space-x-2 bg-red-600 hover:bg-red-700 text-white transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1zm4 0a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                <span>Stop</span>
+            </button>
+        ) : (
+            <button onClick={onRunGame} disabled={!projectRootPath} title="Run Project (F5)" className="flex items-center justify-center rounded-md text-sm font-medium px-3 py-1.5 space-x-2 bg-green-600 hover:bg-green-700 text-white disabled:bg-green-400 dark:disabled:bg-green-800 disabled:cursor-not-allowed transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
+                <span>Run</span>
+            </button>
+        )}
+        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
 
-         <ToolbarButton onClick={requestOpenFolder} title="Open Project Folder">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
-            <span>Open Project</span>
-        </ToolbarButton>
-       
         <ToolbarButton
             onClick={handleSave}
             disabled={totalUnsavedCount === 0}

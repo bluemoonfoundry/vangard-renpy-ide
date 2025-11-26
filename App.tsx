@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -11,6 +13,7 @@ import RouteCanvas from './components/RouteCanvas';
 import SettingsModal from './components/SettingsModal';
 import ConfirmModal from './components/ConfirmModal';
 import CreateBlockModal, { BlockType } from './components/CreateBlockModal';
+import ConfigureRenpyModal from './components/ConfigureRenpyModal';
 import Toast from './components/Toast';
 import LoadingOverlay from './components/LoadingOverlay';
 import WelcomeScreen from './components/WelcomeScreen';
@@ -311,6 +314,10 @@ const App: React.FC = () => {
   const [storyCanvasTransform, setStoryCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [routeCanvasTransform, setRouteCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
 
+  // --- State: Game Execution ---
+  const [isGameRunning, setIsGameRunning] = useState(false);
+  const [showConfigureRenpyModal, setShowConfigureRenpyModal] = useState(false);
+
   // --- State: Application and Project Settings ---
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [appSettingsLoaded, setAppSettingsLoaded] = useState(false);
@@ -320,6 +327,7 @@ const App: React.FC = () => {
     leftSidebarWidth: 250,
     isRightSidebarOpen: true,
     rightSidebarWidth: 300,
+    renpyPath: '',
   });
   const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes'>>({
     enableAiFeatures: false,
@@ -530,8 +538,13 @@ const App: React.FC = () => {
             }
         } catch (e) {
             console.error(e);
-            // FIX: Properly handle the unknown error type from the catch block to avoid passing it directly to a string.
-            const errorMessage = e instanceof Error ? e.message : String(e);
+            // FIX: The 'e' object in a catch block is of type 'unknown'. We must safely extract a message from it before passing it to functions expecting a string.
+            let errorMessage: string;
+            if (e instanceof Error) {
+              errorMessage = e.message;
+            } else {
+              errorMessage = String(e);
+            }
             addToast(`Failed to create file: ${errorMessage}`, 'error');
         }
     } else {
@@ -1295,6 +1308,54 @@ const App: React.FC = () => {
     }, [clipboard, projectRootPath, loadProject, addToast]);
 
 
+    // --- Game Execution ---
+    const handleRunGame = useCallback(async () => {
+        if (!window.electronAPI || !projectRootPath) return;
+
+        if (!appSettings.renpyPath) {
+            setShowConfigureRenpyModal(true);
+            return;
+        }
+
+        await handleSaveAll();
+        window.electronAPI.runGame(appSettings.renpyPath, projectRootPath);
+
+    }, [appSettings.renpyPath, projectRootPath, handleSaveAll]);
+
+    const handleStopGame = useCallback(() => {
+        if (window.electronAPI) {
+            window.electronAPI.stopGame();
+        }
+    }, []);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'F5') {
+                e.preventDefault();
+                handleRunGame();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [handleRunGame]);
+
+    useEffect(() => {
+        if (window.electronAPI) {
+            const removeStarted = window.electronAPI.onGameStarted(() => setIsGameRunning(true));
+            const removeStopped = window.electronAPI.onGameStopped(() => setIsGameRunning(false));
+            const removeError = window.electronAPI.onGameError((error) => {
+                addToast(`Failed to launch game: ${error}`, 'error');
+                setIsGameRunning(false);
+            });
+            return () => {
+                removeStarted();
+                removeStopped();
+                removeError();
+            };
+        }
+    }, [addToast]);
+    
+
   // --- Menu Command Listener ---
   useEffect(() => {
       if (window.electronAPI?.onMenuCommand) {
@@ -1306,6 +1367,9 @@ const App: React.FC = () => {
                   case 'open-project':
                       handleOpenProjectFolder();
                       break;
+                  case 'run-project':
+                      handleRunGame();
+                      break;
                   case 'open-static-tab':
                       if (data.type === 'canvas' || data.type === 'route-canvas') {
                           handleOpenStaticTab(data.type);
@@ -1315,7 +1379,7 @@ const App: React.FC = () => {
           });
           return () => removeListener();
       }
-  }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenStaticTab]);
+  }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenStaticTab, handleRunGame]);
   
   // --- Exit Confirmation Handling ---
   useEffect(() => {
@@ -1415,6 +1479,9 @@ const App: React.FC = () => {
             setIsRightSidebarOpen={(open) => updateAppSettings(draft => { draft.isRightSidebarOpen = open; })}
             onOpenStaticTab={handleOpenStaticTab}
             onAddStickyNote={addStickyNote}
+            isGameRunning={isGameRunning}
+            onRunGame={handleRunGame}
+            onStopGame={handleStopGame}
         />
       </div>
       
@@ -1671,6 +1738,27 @@ const App: React.FC = () => {
         />
       )}
       
+      {showConfigureRenpyModal && (
+        <ConfigureRenpyModal
+          isOpen={showConfigureRenpyModal}
+          onClose={() => setShowConfigureRenpyModal(false)}
+          onSave={(path) => {
+            updateAppSettings(draft => { draft.renpyPath = path; });
+            setShowConfigureRenpyModal(false);
+            // Re-trigger run game after saving
+            if (projectRootPath) {
+                setTimeout(() => {
+                    if (window.electronAPI) {
+                        handleSaveAll().then(() => {
+                            window.electronAPI.runGame(path, projectRootPath);
+                        });
+                    }
+                }, 100);
+            }
+          }}
+        />
+      )}
+
       {createBlockModalOpen && (
           <CreateBlockModal 
             isOpen={createBlockModalOpen}
