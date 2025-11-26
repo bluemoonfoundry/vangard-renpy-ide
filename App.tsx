@@ -1,5 +1,3 @@
-
-
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -22,6 +20,7 @@ import AudioEditorView from './components/AudioEditorView';
 import CharacterEditorView from './components/CharacterEditorView';
 import TabContextMenu from './components/TabContextMenu';
 import Sash from './components/Sash';
+import StatusBar from './components/StatusBar';
 import { useRenpyAnalysis, performRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import type { 
@@ -42,6 +41,24 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
   }
   return window.btoa(binary);
 };
+
+// --- Utility: Word Count ---
+const countWordsInRenpyScript = (script: string): number => {
+    if (!script) return 0;
+    // Regex to find dialogue (e.g., e "...") and narration ("...")
+    const DIALOGUE_NARRATION_REGEX = /(?:[a-zA-Z0-9_]+\s)?"((?:\\.|[^"\\])*)"/g;
+    let totalWords = 0;
+    let match;
+    while ((match = DIALOGUE_NARRATION_REGEX.exec(script)) !== null) {
+        const text = match[1];
+        if (text) {
+            const words = text.trim().split(/\s+/).filter(Boolean);
+            totalWords += words.length;
+        }
+    }
+    return totalWords;
+};
+
 
 // --- Generic Layout Algorithm ---
 interface LayoutNode {
@@ -322,6 +339,7 @@ const App: React.FC = () => {
   // --- State: Application and Project Settings ---
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [appSettingsLoaded, setAppSettingsLoaded] = useState(false);
+  const [characterProfiles, setCharacterProfiles] = useImmer<Record<string, string>>({});
   const [appSettings, updateAppSettings] = useImmer<AppSettings>({
     theme: 'system',
     isLeftSidebarOpen: true,
@@ -330,7 +348,7 @@ const App: React.FC = () => {
     rightSidebarWidth: 300,
     renpyPath: '',
   });
-  const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes'>>({
+  const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles'>>({
     enableAiFeatures: false,
     selectedModel: 'gemini-2.5-flash',
   });
@@ -760,6 +778,7 @@ const App: React.FC = () => {
                   draft.selectedModel = projectData.settings.selectedModel ?? 'gemini-2.5-flash';
               });
               setStickyNotes(projectData.settings.stickyNotes || []);
+              setCharacterProfiles(projectData.settings.characterProfiles || {});
               
               const savedTabs: EditorTab[] = projectData.settings.openTabs ?? [{ id: 'canvas', type: 'canvas' }];
               const tempAnalysis = performRenpyAnalysis(loadedBlocks);
@@ -803,6 +822,7 @@ const App: React.FC = () => {
               setOpenTabs([{ id: 'canvas', type: 'canvas' }]);
               setActiveTabId('canvas');
               setStickyNotes([]);
+              setCharacterProfiles({});
           }
           
           setHasUnsavedSettings(false);
@@ -814,7 +834,7 @@ const App: React.FC = () => {
       } finally {
           setIsLoading(false);
       }
-  }, [setBlocks, setImages, setAudios, updateProjectSettings, addToast, setFileSystemTree, setStickyNotes]);
+  }, [setBlocks, setImages, setAudios, updateProjectSettings, addToast, setFileSystemTree, setStickyNotes, setCharacterProfiles]);
 
 
   const handleOpenProjectFolder = useCallback(async () => {
@@ -893,10 +913,11 @@ const App: React.FC = () => {
     if (!projectRootPath || !window.electronAPI) return;
     try {
       const settingsToSave: ProjectSettings = {
-        ...(projectSettings as ProjectSettings),
+        ...(projectSettings as Omit<ProjectSettings, 'characterProfiles'>),
         openTabs,
         activeTabId,
         stickyNotes: Array.from(stickyNotes),
+        characterProfiles,
       };
       const settingsPath = await window.electronAPI.path.join(projectRootPath, 'game/project.ide.json');
       await window.electronAPI.writeFile(settingsPath, JSON.stringify(settingsToSave, null, 2));
@@ -905,7 +926,7 @@ const App: React.FC = () => {
       console.error("Failed to save IDE settings:", e);
       addToast('Failed to save workspace settings', 'error');
     }
-  }, [projectRootPath, projectSettings, openTabs, activeTabId, stickyNotes, addToast]);
+  }, [projectRootPath, projectSettings, openTabs, activeTabId, stickyNotes, characterProfiles, addToast]);
 
 
   const handleSaveAll = useCallback(async () => {
@@ -1153,6 +1174,18 @@ const App: React.FC = () => {
       addToast(`Found usages in ${ids.size} blocks`, 'info');
   };
 
+  const analysisResultWithProfiles = useMemo(() => {
+    if (!analysisResult) return analysisResult;
+    const newCharacters = new Map(analysisResult.characters);
+    newCharacters.forEach((char, tag) => {
+        const profile = characterProfiles[tag];
+        if (profile !== undefined) {
+            newCharacters.set(tag, { ...char, profile });
+        }
+    });
+    return { ...analysisResult, characters: newCharacters };
+  }, [analysisResult, characterProfiles]);
+
   // --- Character Editor ---
   const handleOpenCharacterEditor = useCallback((tag: string) => {
       const tabId = `char-${tag}`;
@@ -1165,9 +1198,96 @@ const App: React.FC = () => {
       setActiveTabId(tabId);
   }, []);
 
-  const handleUpdateCharacter = (char: Character, oldTag?: string) => {
-      addToast(`Saved character ${char.name} (Simulated)`, 'success');
-  };
+  const handleUpdateCharacter = useCallback(async (char: Character, oldTag?: string) => {
+    const buildCharacterString = (char: Character): string => {
+        const args: string[] = [];
+        if (char.name && char.name !== char.tag) {
+            args.push(`"${char.name}"`);
+        }
+
+        const kwargs: Record<string, string> = {};
+        if (char.color) kwargs.color = `"${char.color}"`;
+        if (char.image) kwargs.image = `"${char.image}"`;
+        if (char.who_prefix) kwargs.who_prefix = `"${char.who_prefix}"`;
+        if (char.who_suffix) kwargs.who_suffix = `"${char.who_suffix}"`;
+        if (char.what_prefix) kwargs.what_prefix = `"${char.what_prefix}"`;
+        if (char.what_suffix) kwargs.what_suffix = `"${char.what_suffix}"`;
+        if (char.what_color) kwargs.what_color = `"${char.what_color}"`;
+        if (char.slow) kwargs.slow = 'True';
+        if (char.ctc) kwargs.ctc = `"${char.ctc}"`;
+        if (char.ctc_position && char.ctc_position !== 'nestled') kwargs.ctc_position = `"${char.ctc_position}"`;
+
+        const kwargStrings = Object.entries(kwargs).map(([key, value]) => `${key}=${value}`);
+        const allArgs = [...args, ...kwargStrings].join(', ');
+
+        return `define ${char.tag} = Character(${allArgs})`;
+    };
+
+    const newCharString = buildCharacterString(char);
+
+    setCharacterProfiles(draft => {
+        if (oldTag && oldTag !== char.tag) { // Should not happen with read-only tag
+            delete draft[oldTag];
+        }
+        if (char.profile) {
+            draft[char.tag] = char.profile;
+        } else {
+            delete draft[char.tag];
+        }
+    });
+    setHasUnsavedSettings(true);
+
+    if (oldTag) { // Updating existing character
+        const originalCharDef = analysisResult.characters.get(oldTag);
+        if (!originalCharDef) {
+            addToast(`Error: Cannot find original definition for character '${oldTag}'.`, 'error');
+            return;
+        }
+
+        const blockToUpdate = blocks.find(b => b.id === originalCharDef.definedInBlockId);
+        if (!blockToUpdate) {
+            addToast(`Error: Cannot find file for character '${oldTag}'.`, 'error');
+            return;
+        }
+
+        const regex = new RegExp(`^(\\s*define\\s+${oldTag}\\s*=\\s*Character\\s*\\([\\s\\S]*?\\))`, 'm');
+        if (regex.test(blockToUpdate.content)) {
+            const newContent = blockToUpdate.content.replace(regex, newCharString);
+            updateBlock(blockToUpdate.id, { content: newContent });
+        } else {
+            addToast(`Error: Could not find the Character definition for '${oldTag}' to update.`, 'error');
+            return;
+        }
+    } else { // Creating new character
+        const charFilePath = 'game/characters.rpy';
+        const existingFileBlock = blocks.find(b => b.filePath === charFilePath);
+        
+        if (existingFileBlock) {
+            const newContent = `${existingFileBlock.content.trim()}\n\n${newCharString}\n`;
+            updateBlock(existingFileBlock.id, { content: newContent });
+        } else {
+            const newContent = `# This file stores character definitions.\n\n${newCharString}\n`;
+            if (window.electronAPI && projectRootPath) {
+                try {
+                    const fullPath = await window.electronAPI.path.join(projectRootPath, charFilePath);
+                    const res = await window.electronAPI.writeFile(fullPath, newContent);
+                    if (res.success) {
+                        addBlock(charFilePath, newContent);
+                        const projData = await window.electronAPI.loadProject(projectRootPath);
+                        setFileSystemTree(projData.tree);
+                    } else { throw new Error(res.error || 'Unknown file creation error'); }
+                } catch (e) {
+                    addToast(`Failed to create characters.rpy: ${e instanceof Error ? e.message : String(e)}`, 'error');
+                    return;
+                }
+            } else {
+                addBlock(charFilePath, newContent);
+            }
+        }
+    }
+    
+    addToast(`Character '${char.name}' saved.`, 'success');
+  }, [addToast, analysisResult.characters, blocks, projectRootPath, setCharacterProfiles, updateBlock, addBlock, setFileSystemTree]);
 
   // --- Search ---
   const handleToggleSearch = () => {
@@ -1612,6 +1732,32 @@ const App: React.FC = () => {
       });
   }, [updateAppSettings, updateProjectSettings]);
 
+  const projectWordStats = useMemo(() => {
+    if (!projectRootPath) {
+        return { totalWords: 0, currentFileWords: null, readingTime: '≈ 0 min read' };
+    }
+    const totalWords = blocks.reduce((sum, block) => sum + countWordsInRenpyScript(block.content), 0);
+    
+    const activeEditorTab = openTabs.find(t => t.id === activeTabId && t.type === 'editor');
+    const activeBlockForCount = activeEditorTab ? blocks.find(b => b.id === activeEditorTab.blockId) : null;
+    const currentFileWords = activeBlockForCount ? countWordsInRenpyScript(activeBlockForCount.content) : null;
+    
+    const readingTimeMinutes = Math.round(totalWords / 200); // 200 wpm
+    
+    let readingTime = '';
+    if (readingTimeMinutes < 1) {
+        readingTime = '< 1 min read';
+    } else if (readingTimeMinutes < 60) {
+        readingTime = `≈ ${readingTimeMinutes} min read`;
+    } else {
+        const hours = Math.floor(readingTimeMinutes / 60);
+        const minutes = readingTimeMinutes % 60;
+        readingTime = `≈ ${hours}h ${minutes}m read`;
+    }
+
+    return { totalWords, currentFileWords, readingTime };
+  }, [blocks, activeTabId, openTabs, projectRootPath]);
+
 
   return (
     <div className="fixed inset-0 flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
@@ -1734,7 +1880,7 @@ const App: React.FC = () => {
                     else if (tab.type === 'image' && tab.filePath) title = tab.filePath.split(/[/\\]/).pop() || 'Image';
                     else if (tab.type === 'audio' && tab.filePath) title = tab.filePath.split(/[/\\]/).pop() || 'Audio';
                     else if (tab.type === 'character' && tab.characterTag) {
-                        const char = analysisResult.characters.get(tab.characterTag);
+                        const char = analysisResultWithProfiles.characters.get(tab.characterTag);
                         title = char ? `Char: ${char.name}` : (tab.characterTag === 'new_character' ? 'New Character' : 'Unknown Character');
                     }
                     
@@ -1823,7 +1969,7 @@ const App: React.FC = () => {
                         key={activeBlock.id}
                         block={activeBlock}
                         blocks={blocks}
-                        analysisResult={analysisResult}
+                        analysisResult={analysisResultWithProfiles}
                         initialScrollRequest={activeTab.scrollRequest}
                         onSwitchFocusBlock={(blockId, line) => {
                             handleOpenEditor(blockId, line);
@@ -1877,9 +2023,9 @@ const App: React.FC = () => {
 
                 {activeTab?.type === 'character' && activeTab.characterTag && (
                     <CharacterEditorView 
-                        character={analysisResult.characters.get(activeTab.characterTag)}
+                        character={analysisResultWithProfiles.characters.get(activeTab.characterTag)}
                         onSave={handleUpdateCharacter}
-                        existingTags={Array.from(analysisResult.characters.keys())}
+                        existingTags={Array.from(analysisResultWithProfiles.characters.keys())}
                         projectImages={Array.from(images.values())}
                         imageMetadata={imageMetadata}
                     />
@@ -1895,7 +2041,7 @@ const App: React.FC = () => {
                     style={{ width: appSettings.rightSidebarWidth }}
                 >
                     <StoryElementsPanel 
-                        analysisResult={analysisResult}
+                        analysisResult={analysisResultWithProfiles}
                         onOpenCharacterEditor={handleOpenCharacterEditor}
                         onFindCharacterUsages={(tag) => handleFindUsages(tag, 'character')}
                         onAddVariable={() => {}}
@@ -1945,6 +2091,14 @@ const App: React.FC = () => {
             </>
         )}
       </div>
+
+      {!showWelcome && (
+        <StatusBar
+          totalWords={projectWordStats.totalWords}
+          currentFileWords={projectWordStats.currentFileWords}
+          readingTime={projectWordStats.readingTime}
+        />
+      )}
 
       {settingsModalOpen && (
         <SettingsModal 

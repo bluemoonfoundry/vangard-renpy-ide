@@ -44,6 +44,13 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
             setSlow(character.slow ?? false);
             setCtc(character.ctc || '');
             setCtcPosition(character.ctc_position || 'nestled');
+        } else {
+            // Reset for new character form
+            setTag('');
+            setName('');
+            setColor('#E57373');
+            setImage('');
+            setProfile('');
         }
     }, [character]);
     
@@ -119,7 +126,15 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
             </div>
             <div>
                 <label className="text-sm font-medium">Code Tag</label>
-                <input type="text" value={tag} onChange={e => setTag(e.target.value)} placeholder="e.g., e" className={`w-full mt-1 p-2 rounded bg-white dark:bg-gray-700 border ${tagError ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} focus:ring-indigo-500 focus:border-indigo-500`} />
+                <input
+                    type="text"
+                    value={tag}
+                    onChange={e => setTag(e.target.value)}
+                    placeholder="e.g., e"
+                    readOnly={!isNew}
+                    title={!isNew ? "Character tag cannot be changed after creation to prevent breaking references in your code." : ""}
+                    className={`w-full mt-1 p-2 rounded bg-white dark:bg-gray-700 border ${tagError ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} focus:ring-indigo-500 focus:border-indigo-500 ${!isNew ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-70' : ''}`}
+                />
                 {tagError && <p className="text-red-500 text-xs mt-1">{tagError}</p>}
             </div>
             <div className="flex items-center space-x-4">
