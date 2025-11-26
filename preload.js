@@ -2,6 +2,8 @@
 
 
 
+
+
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -34,6 +36,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const subscription = () => callback();
     ipcRenderer.on('show-exit-modal', subscription);
     return () => ipcRenderer.removeListener('show-exit-modal', subscription);
+  },
+  onSaveIdeStateBeforeQuit: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('save-ide-state-before-quit', subscription);
+    return () => ipcRenderer.removeListener('save-ide-state-before-quit', subscription);
+  },
+  ideStateSavedForQuit: () => {
+    ipcRenderer.send('ide-state-saved-for-quit');
   },
   forceQuit: () => {
     ipcRenderer.send('force-quit');

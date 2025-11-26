@@ -2,6 +2,8 @@
 
 
 
+
+
 export interface Position {
   x: number;
   y: number;
@@ -258,6 +260,7 @@ export interface AppSettings {
   leftSidebarWidth: number;
   isRightSidebarOpen: boolean;
   rightSidebarWidth: number;
+  renpyPath: string;
 }
 
 export interface ProjectSettings {
@@ -292,6 +295,14 @@ declare global {
           forceQuit: () => void;
           getAppSettings: () => Promise<Partial<AppSettings> | null>;
           saveAppSettings: (settings: AppSettings) => Promise<{ success: boolean; error?: string }>;
+          selectRenpy: () => Promise<string | null>;
+          runGame: (renpyPath: string, projectPath: string) => void;
+          stopGame: () => void;
+          onGameStarted: (callback: () => void) => () => void;
+          onGameStopped: (callback: () => void) => () => void;
+          onGameError: (callback: (error: string) => void) => () => void;
+          onSaveIdeStateBeforeQuit: (callback: () => void) => () => void;
+          ideStateSavedForQuit: () => void;
           path: {
               join: (...paths: string[]) => Promise<string>;
           }

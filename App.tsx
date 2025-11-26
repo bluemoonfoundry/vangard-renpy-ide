@@ -1,6 +1,11 @@
 
 
 
+
+
+
+
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -21,7 +26,8 @@ import ImageEditorView from './components/ImageEditorView';
 import AudioEditorView from './components/AudioEditorView';
 import CharacterEditorView from './components/CharacterEditorView';
 import TabContextMenu from './components/TabContextMenu';
-import { useRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
+// FIX: Import performRenpyAnalysis to resolve 'Cannot find name' error.
+import { useRenpyAnalysis, performRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import type { 
   Block, BlockGroup, Link, Position, FileSystemTreeNode, EditorTab, 
@@ -538,12 +544,15 @@ const App: React.FC = () => {
             }
         } catch (e) {
             console.error(e);
-            // FIX: The 'e' object in a catch block is of type 'unknown'. We must safely extract a message from it before passing it to functions expecting a string.
+            // FIX: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+            // Handle unknown error types in a more explicit, type-safe manner.
             let errorMessage: string;
             if (e instanceof Error) {
               errorMessage = e.message;
+            } else if (typeof e === 'string') {
+              errorMessage = e;
             } else {
-              errorMessage = String(e);
+              errorMessage = 'An unknown error occurred during file creation.';
             }
             addToast(`Failed to create file: ${errorMessage}`, 'error');
         }
@@ -693,7 +702,7 @@ const App: React.FC = () => {
       try {
           const projectData = await window.electronAPI!.loadProject(path);
           
-          let loadedBlocks: Block[] = projectData.files.map((f: any, index: number) => ({
+          const loadedBlocks: Block[] = projectData.files.map((f: any, index: number) => ({
               id: `block-${index}-${Date.now()}`,
               content: f.content,
               filePath: f.path,
@@ -702,6 +711,7 @@ const App: React.FC = () => {
               height: 200,
               title: f.path.split('/').pop()
           }));
+          const blockFilePathMap = new Map(loadedBlocks.map(b => [b.filePath, b]));
 
           if (loadedBlocks.length === 0) {
              const defaultBlock = {
@@ -750,24 +760,61 @@ const App: React.FC = () => {
           });
           setAudios(audioMap);
 
-          // Load Project Settings
+          // Load & Validate Project Settings and Tabs
           if (projectData.settings) {
-            updateProjectSettings(draft => {
-              draft.enableAiFeatures = projectData.settings.enableAiFeatures ?? false;
-              draft.selectedModel = projectData.settings.selectedModel ?? 'gemini-2.5-flash';
-            });
-            setOpenTabs(projectData.settings.openTabs ?? [{ id: 'canvas', type: 'canvas' }]);
-            setActiveTabId(projectData.settings.activeTabId ?? 'canvas');
-            setStickyNotes(projectData.settings.stickyNotes || []);
+              updateProjectSettings(draft => {
+                  draft.enableAiFeatures = projectData.settings.enableAiFeatures ?? false;
+                  draft.selectedModel = projectData.settings.selectedModel ?? 'gemini-2.5-flash';
+              });
+              setStickyNotes(projectData.settings.stickyNotes || []);
+              
+              // --- Tab Rehydration and Validation ---
+              const savedTabs: EditorTab[] = projectData.settings.openTabs ?? [{ id: 'canvas', type: 'canvas' }];
+              // FIX: Cannot find name 'performRenpyAnalysis'.
+              // The function is exported, but was missing from the import statement.
+              // Added it to the import on line 29.
+              const tempAnalysis = performRenpyAnalysis(loadedBlocks); // Pre-run analysis to check for characters
+
+              const validTabs = savedTabs.filter(tab => {
+                  if (tab.type === 'editor' && tab.filePath) {
+                      return blockFilePathMap.has(tab.filePath);
+                  }
+                  if (tab.type === 'image' && tab.filePath) {
+                      return imgMap.has(tab.filePath);
+                  }
+                  if (tab.type === 'audio' && tab.filePath) {
+                      return audioMap.has(tab.filePath);
+                  }
+                  if (tab.type === 'character' && tab.characterTag) {
+                      return tempAnalysis.characters.has(tab.characterTag);
+                  }
+                  return tab.type === 'canvas' || tab.type === 'route-canvas';
+              });
+
+              const rehydratedTabs = validTabs.map(tab => {
+                  if (tab.type === 'editor' && tab.filePath) {
+                      const matchingBlock = blockFilePathMap.get(tab.filePath);
+                      if (matchingBlock) {
+                          return { ...tab, id: matchingBlock.id, blockId: matchingBlock.id };
+                      }
+                  }
+                  return tab;
+              });
+
+              setOpenTabs(rehydratedTabs);
+              
+              const activeTabIsValid = rehydratedTabs.some(t => t.id === projectData.settings.activeTabId);
+              setActiveTabId(activeTabIsValid ? projectData.settings.activeTabId : 'canvas');
+              
           } else {
-            // Reset to defaults for a new/unconfigured project
-            updateProjectSettings(draft => {
-              draft.enableAiFeatures = false;
-              draft.selectedModel = 'gemini-2.5-flash';
-            });
-            setOpenTabs([{ id: 'canvas', type: 'canvas' }]);
-            setActiveTabId('canvas');
-            setStickyNotes([]);
+              // Reset to defaults for a new/unconfigured project
+              updateProjectSettings(draft => {
+                  draft.enableAiFeatures = false;
+                  draft.selectedModel = 'gemini-2.5-flash';
+              });
+              setOpenTabs([{ id: 'canvas', type: 'canvas' }]);
+              setActiveTabId('canvas');
+              setStickyNotes([]);
           }
           
           setHasUnsavedSettings(false);
@@ -780,6 +827,7 @@ const App: React.FC = () => {
           setIsLoading(false);
       }
   }, [setBlocks, setImages, setAudios, updateProjectSettings, addToast, setFileSystemTree, setStickyNotes]);
+
 
   const handleOpenProjectFolder = useCallback(async () => {
     try {
@@ -852,6 +900,25 @@ const App: React.FC = () => {
     });
 
   }, [blocks, projectRootPath, updateBlock, addToast]);
+  
+  const handleSaveProjectSettings = useCallback(async () => {
+    if (!projectRootPath || !window.electronAPI) return;
+    try {
+      const settingsToSave: ProjectSettings = {
+        ...(projectSettings as ProjectSettings),
+        openTabs,
+        activeTabId,
+        stickyNotes: Array.from(stickyNotes),
+      };
+      const settingsPath = await window.electronAPI.path.join(projectRootPath, 'game/project.ide.json');
+      await window.electronAPI.writeFile(settingsPath, JSON.stringify(settingsToSave, null, 2));
+      setHasUnsavedSettings(false);
+    } catch (e) {
+      console.error("Failed to save IDE settings:", e);
+      addToast('Failed to save workspace settings', 'error');
+    }
+  }, [projectRootPath, projectSettings, openTabs, activeTabId, stickyNotes, addToast]);
+
 
   const handleSaveAll = useCallback(async () => {
     setSaveStatus('saving');
@@ -901,20 +968,11 @@ const App: React.FC = () => {
                     if (!res.success) throw new Error(res.error || 'Unknown error saving file');
                 }
             }
-            
-             const settingsToSave: ProjectSettings = {
-                ...projectSettings,
-                openTabs,
-                activeTabId,
-                stickyNotes,
-             };
-             const settingsPath = await window.electronAPI.path.join(projectRootPath!, 'game/project.ide.json');
-             await window.electronAPI.writeFile(settingsPath, JSON.stringify(settingsToSave, null, 2));
+            await handleSaveProjectSettings();
         } 
 
         setDirtyBlockIds(new Set());
         setDirtyEditors(new Set());
-        setHasUnsavedSettings(false);
         setSaveStatus('saved');
         addToast('All changes saved', 'success');
         setTimeout(() => setSaveStatus('saved'), 2000);
@@ -923,7 +981,7 @@ const App: React.FC = () => {
         setSaveStatus('error');
         addToast('Failed to save changes', 'error');
     }
-  }, [blocks, dirtyEditors, dirtyBlockIds, projectRootPath, directoryHandle, projectSettings, openTabs, activeTabId, stickyNotes, addToast, setBlocks]);
+  }, [blocks, dirtyEditors, dirtyBlockIds, projectRootPath, directoryHandle, addToast, setBlocks, handleSaveProjectSettings]);
   
   const handleNewProjectRequest = useCallback(() => {
     const hasUnsaved = dirtyBlockIds.size > 0 || dirtyEditors.size > 0 || hasUnsavedSettings;
@@ -954,17 +1012,18 @@ const App: React.FC = () => {
   
   // --- Tab Management ---
   const handleOpenEditor = useCallback((blockId: string, line?: number) => {
+    const block = blocks.find(b => b.id === blockId);
+    if (!block) return;
+
     const existing = openTabs.find(t => t.id === blockId);
     if (!existing) {
-        const block = blocks.find(b => b.id === blockId);
-        if (block) {
-            setOpenTabs(prev => [...prev, { 
-                id: blockId, 
-                type: 'editor', 
-                blockId, 
-                scrollRequest: line ? { line, key: Date.now() } : undefined 
-            }]);
-        }
+        setOpenTabs(prev => [...prev, { 
+            id: blockId, 
+            type: 'editor', 
+            blockId,
+            filePath: block.filePath, // Ensure filePath is saved for rehydration
+            scrollRequest: line ? { line, key: Date.now() } : undefined 
+        }]);
     } else if (line) {
         setOpenTabs(prev => prev.map(tab => 
             tab.id === blockId 
@@ -1407,13 +1466,21 @@ const App: React.FC = () => {
           },
         });
       });
+      
+      const removeSaveStateListener = window.electronAPI.onSaveIdeStateBeforeQuit(async () => {
+        if (projectRootPath) {
+          await handleSaveProjectSettings();
+        }
+        window.electronAPI!.ideStateSavedForQuit();
+      });
 
       return () => {
         removeCheckListener();
         removeShowModalListener();
+        removeSaveStateListener();
       };
     }
-  }, [dirtyBlockIds, dirtyEditors, hasUnsavedSettings, handleSaveAll]);
+  }, [dirtyBlockIds, dirtyEditors, hasUnsavedSettings, handleSaveAll, handleSaveProjectSettings, projectRootPath]);
 
   const handleEditorMount = useCallback((id: string, editor: monaco.editor.IStandaloneCodeEditor) => {
       editorInstances.current.set(id, editor);

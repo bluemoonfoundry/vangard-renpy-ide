@@ -3,6 +3,7 @@
 
 
 
+
 import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -346,10 +347,15 @@ app.whenReady().then(() => {
         if (hasUnsavedChanges) {
             window.webContents.send('show-exit-modal');
         } else {
-            forceQuit = true;
-            app.quit();
+            // Instead of quitting, ask the renderer to save its state.
+            window.webContents.send('save-ide-state-before-quit');
         }
     }
+  });
+
+  ipcMain.on('ide-state-saved-for-quit', () => {
+    forceQuit = true;
+    app.quit();
   });
 
   ipcMain.on('force-quit', () => {
