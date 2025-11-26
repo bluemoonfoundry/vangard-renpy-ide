@@ -264,10 +264,11 @@ export interface ProjectSettings {
   openTabs: EditorTab[];
   activeTabId: string;
   stickyNotes?: StickyNote[];
+  characterProfiles?: Record<string, string>;
 }
 
 // This type is a mix for components that need both, like SettingsModal
-export interface IdeSettings extends AppSettings, Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes'> {}
+export interface IdeSettings extends AppSettings, Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles'> {}
 
 
 export type ClipboardState = { type: 'copy' | 'cut'; paths: Set<string> } | null;
