@@ -17,7 +17,6 @@ This tool is perfect for writers, designers, and programmers who want a more int
 - **Story Element Management**: A dedicated panel to view, create, and manage Characters, Variables, Images, Audio, and Screens.
 - **Asset Pipeline**: Scan external directories for images and audio, and easily copy them into your project.
 - **File System Integration**: Works directly with your local project folders for a seamless development experience (recommended).
-- **Browser-Only Mode**: Start creating and prototyping without needing a local project folder, then download your work as a `.zip` file.
 - **Expanded Theme Support**: Personalize your workspace with multiple themes, including Light, Dark, Solarized, and Colorful variants.
 - **UI State Persistence**: The editor remembers your theme, sidebar layout, and open tabs between sessions for a consistent workflow.
 - **Customizable Layout**: Sidebars are resizable, allowing you to tailor the interface to your needs.
@@ -82,10 +81,9 @@ The top toolbar provides access to global actions and tools.
 | **Add Block**       | Creates a new, blank `.rpy` file and adds it to the canvas.                                              | `N`                |
 | **Tidy Up Layout**  | Automatically arranges the blocks on the canvas based on the story flow to reduce clutter.               |                    |
 | **Analyze Routes**  | Generates and opens the Route Canvas tab, showing label-to-label connections.                            |                    |
+| **New Project**     | Create a new project                                                                                     |                    |
 | **Open Folder**     | Opens a new project folder, replacing the current workspace.                                             |                    |
 | **Save All**        | Saves all unsaved changes to your local files. Only enabled when a project folder is open.               | `Ctrl+S`           |
-| **Download .zip**   | Downloads all the script files in the current workspace as a `.zip` archive.                             |                    |
-| **Upload .zip**     | Opens a file picker to upload and load a `.zip` project archive.                                         |                    |
 | **Clear Canvas**    | Deletes all blocks and groups from the canvas.                                                           |                    |
 | **Toggle Sidebars** | Shows or hides the left and right sidebars.                                                              |                    |
 | **Toggle Theme**    | Cycles between System, Light, Dark, Solarized Light, Solarized Dark, Colorful, and Colorful Light themes.|                    |
@@ -99,6 +97,7 @@ The central area is your main workspace for visualizing the story. It can contai
 This is the default high-level view of your project.
 
 - **Blocks**: Each block represents a single `.rpy` file. The title displays the file's name or the first label found within it. Blocks show summary information like labels, characters, and content types (dialogue, menus, Python code).
+- **Notes**: Sticky notes feature to add comments that are not part of the Ren'Py project files.
 - **Arrows**: These lines connect blocks, representing `jump` and `call` statements, giving you an immediate sense of your story's structure.
 - **Interactions**:
   - **Pan**: Hold `Shift` and drag the canvas background.
