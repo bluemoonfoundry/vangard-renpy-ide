@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -483,28 +484,34 @@ const App: React.FC = () => {
   }, [setGroups]);
 
 
-  const addBlock = useCallback((filePath: string, content: string) => {
+  const addBlock = useCallback((filePath: string, content: string, initialPosition?: Position) => {
     const id = `block-${Date.now()}`;
     const blockWidth = 320;
     const blockHeight = 200;
 
-    const leftOffset = appSettings.isLeftSidebarOpen ? appSettings.leftSidebarWidth : 0;
-    const rightOffset = appSettings.isRightSidebarOpen ? appSettings.rightSidebarWidth : 0;
-    const topOffset = 64; // h-16 (header)
+    let position: Position;
 
-    const visibleWidth = window.innerWidth - leftOffset - rightOffset;
-    const visibleHeight = window.innerHeight - topOffset;
+    if (initialPosition) {
+        position = initialPosition;
+    } else {
+        const leftOffset = appSettings.isLeftSidebarOpen ? appSettings.leftSidebarWidth : 0;
+        const rightOffset = appSettings.isRightSidebarOpen ? appSettings.rightSidebarWidth : 0;
+        const topOffset = 64; // h-16 (header)
 
-    const screenCenterX = leftOffset + (visibleWidth / 2);
-    const screenCenterY = topOffset + (visibleHeight / 2);
+        const visibleWidth = window.innerWidth - leftOffset - rightOffset;
+        const visibleHeight = window.innerHeight - topOffset;
 
-    const worldCenterX = (screenCenterX - storyCanvasTransform.x) / storyCanvasTransform.scale;
-    const worldCenterY = (screenCenterY - storyCanvasTransform.y) / storyCanvasTransform.scale;
+        const screenCenterX = leftOffset + (visibleWidth / 2);
+        const screenCenterY = topOffset + (visibleHeight / 2);
 
-    const position = {
-        x: worldCenterX - (blockWidth / 2),
-        y: worldCenterY - (blockHeight / 2)
-    };
+        const worldCenterX = (screenCenterX - storyCanvasTransform.x) / storyCanvasTransform.scale;
+        const worldCenterY = (screenCenterY - storyCanvasTransform.y) / storyCanvasTransform.scale;
+
+        position = {
+            x: worldCenterX - (blockWidth / 2),
+            y: worldCenterY - (blockHeight / 2)
+        };
+    }
 
     const newBlock: Block = {
       id,
@@ -574,29 +581,81 @@ const App: React.FC = () => {
     }
   };
 
+  const handleCreateBlockFromCanvas = useCallback(async (type: BlockType, position: Position) => {
+      const timestamp = Date.now();
+      const defaultName = `${type}_${timestamp}`;
+      const fileName = `${defaultName}.rpy`;
+      
+      let content = '';
+      switch (type) {
+        case 'story':
+            content = `label ${defaultName}:\n    "Start writing your story here..."\n    return\n`;
+            break;
+        case 'screen':
+            content = `screen ${defaultName}():\n    zorder 100\n    frame:\n        align (0.5, 0.5)\n        text "New Screen"\n`;
+            break;
+        case 'config':
+            content = `# Configuration for ${defaultName}\ndefine ${defaultName}_enabled = True\n`;
+            break;
+      }
+
+      if (window.electronAPI && projectRootPath) {
+          try {
+              const folderPath = 'game';
+              const fullPath = await window.electronAPI.path.join(projectRootPath, folderPath, fileName);
+              const relativePath = `game/${fileName}`;
+              
+              const res = await window.electronAPI.writeFile(fullPath, content);
+              if (res.success) {
+                  addBlock(relativePath, content, position);
+                  addToast(`Created ${fileName}`, 'success');
+                  const projData = await window.electronAPI.loadProject(projectRootPath);
+                  setFileSystemTree(projData.tree);
+              } else {
+                  throw new Error(res.error || 'Unknown error occurred during file creation');
+              }
+          } catch(e) {
+              console.error(e);
+              const errorMessage = e instanceof Error ? e.message : String(e);
+              addToast(`Failed to create file: ${errorMessage}`, 'error');
+          }
+      } else {
+          addBlock(fileName, content, position);
+          addToast(`Created block ${fileName}`, 'success');
+      }
+  }, [addBlock, projectRootPath, addToast]);
+
   // --- Sticky Note Management ---
-  const addStickyNote = useCallback(() => {
+  const addStickyNote = useCallback((initialPosition?: Position) => {
       const id = `note-${Date.now()}`;
       const width = 200;
       const height = 200;
 
-      const leftOffset = appSettings.isLeftSidebarOpen ? appSettings.leftSidebarWidth : 0;
-      const rightOffset = appSettings.isRightSidebarOpen ? appSettings.rightSidebarWidth : 0;
-      const topOffset = 64; 
+      let position: Position;
+      if (initialPosition) {
+          position = initialPosition;
+          // Center the note on the click position
+          position.x -= width / 2;
+          position.y -= height / 2;
+      } else {
+          const leftOffset = appSettings.isLeftSidebarOpen ? appSettings.leftSidebarWidth : 0;
+          const rightOffset = appSettings.isRightSidebarOpen ? appSettings.rightSidebarWidth : 0;
+          const topOffset = 64; 
 
-      const visibleWidth = window.innerWidth - leftOffset - rightOffset;
-      const visibleHeight = window.innerHeight - topOffset;
+          const visibleWidth = window.innerWidth - leftOffset - rightOffset;
+          const visibleHeight = window.innerHeight - topOffset;
 
-      const screenCenterX = leftOffset + (visibleWidth / 2);
-      const screenCenterY = topOffset + (visibleHeight / 2);
+          const screenCenterX = leftOffset + (visibleWidth / 2);
+          const screenCenterY = topOffset + (visibleHeight / 2);
 
-      const worldCenterX = (screenCenterX - storyCanvasTransform.x) / storyCanvasTransform.scale;
-      const worldCenterY = (screenCenterY - storyCanvasTransform.y) / storyCanvasTransform.scale;
+          const worldCenterX = (screenCenterX - storyCanvasTransform.x) / storyCanvasTransform.scale;
+          const worldCenterY = (screenCenterY - storyCanvasTransform.y) / storyCanvasTransform.scale;
 
-      const position = {
-          x: worldCenterX - (width / 2),
-          y: worldCenterY - (height / 2)
-      };
+          position = {
+              x: worldCenterX - (width / 2),
+              y: worldCenterY - (height / 2)
+          };
+      }
 
       const newNote: StickyNote = {
           id,
@@ -1791,7 +1850,7 @@ const App: React.FC = () => {
             isRightSidebarOpen={appSettings.isRightSidebarOpen}
             setIsRightSidebarOpen={(open) => updateAppSettings(draft => { draft.isRightSidebarOpen = open; })}
             onOpenStaticTab={handleOpenStaticTab}
-            onAddStickyNote={addStickyNote}
+            onAddStickyNote={() => addStickyNote()}
             isGameRunning={isGameRunning}
             onRunGame={handleRunGame}
             onStopGame={handleStopGame}
@@ -1941,6 +2000,8 @@ const App: React.FC = () => {
                         hoverHighlightIds={hoverHighlightIds}
                         transform={storyCanvasTransform}
                         onTransformChange={setStoryCanvasTransform}
+                        onCreateBlock={handleCreateBlockFromCanvas}
+                        onAddStickyNote={addStickyNote}
                     />
                 )}
                 

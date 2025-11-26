@@ -1,11 +1,14 @@
 
 import React, { useState, useRef, useCallback, useMemo, useEffect, forwardRef } from 'react';
+import { createPortal } from 'react-dom';
 import CodeBlock from './CodeBlock';
 import GroupContainer from './GroupContainer';
 import StickyNote from './StickyNote';
 import Minimap from './Minimap';
+import CanvasContextMenu from './CanvasContextMenu';
 import type { MinimapItem } from './Minimap';
 import type { Block, Position, RenpyAnalysisResult, LabelLocation, BlockGroup, Link, StickyNote as StickyNoteType } from '../types';
+import type { BlockType } from './CreateBlockModal';
 
 interface StoryCanvasProps {
   blocks: Block[];
@@ -35,6 +38,8 @@ interface StoryCanvasProps {
   hoverHighlightIds: Set<string> | null;
   transform: { x: number, y: number, scale: number };
   onTransformChange: React.Dispatch<React.SetStateAction<{ x: number, y: number, scale: number }>>;
+  onCreateBlock?: (type: BlockType, position: Position) => void;
+  onAddStickyNote?: (position: Position) => void;
 }
 
 const getBlockById = (blocks: Block[], id: string) => blocks.find(b => b.id === id);
@@ -180,10 +185,11 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
     selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, 
     findUsagesHighlightIds, clearFindUsages, dirtyBlockIds, 
     canvasFilters, setCanvasFilters, centerOnBlockRequest, flashBlockRequest, hoverHighlightIds, 
-    transform, onTransformChange 
+    transform, onTransformChange, onCreateBlock, onAddStickyNote
 }) => {
   const [rubberBandRect, setRubberBandRect] = useState<Rect | null>(null);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
+  const [canvasContextMenu, setCanvasContextMenu] = useState<{ x: number; y: number; worldPos: Position } | null>(null);
   
   // Refs for Imperative DOM updates
   const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -307,7 +313,12 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
   }, [transform.x, transform.y, transform.scale]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    // Only handle left click for interactions (drag/pan)
     if (e.button !== 0) return;
+    
+    // Close context menu if open
+    if (canvasContextMenu) setCanvasContextMenu(null);
+
     const targetEl = e.target as HTMLElement;
     
     if (targetEl.closest('.arrow-interaction-group') || targetEl.closest('.filter-panel')) {
@@ -334,11 +345,6 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
         if (targetEl.closest('.resize-handle')) {
             interactionState.current = { type: 'resizing-note', note };
         } else if (targetEl.closest('.drag-handle') || targetEl.closest('.sticky-note-wrapper')) {
-             // Allow dragging from anywhere on the note if not resizing, 
-             // but text selection inside textarea is handled by browser default usually. 
-             // However, we added a drag-handle to the header. Let's restrict dragging to the header for consistency
-             // OR allow dragging the whole note if not interacting with text.
-             // For now, let's rely on the header .drag-handle for movement to avoid fighting text selection.
              if (targetEl.closest('.drag-handle')) {
                 const currentSelection = selectedNoteIds.includes(noteId) ? selectedNoteIds : [noteId];
                 const dragInitialPositions = new Map<string, Position>();
@@ -614,6 +620,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
                 setSelectedNoteIds([]);
                 if (highlightedPath) setHighlightedPath(null);
                 if (findUsagesHighlightIds) clearFindUsages();
+                if (canvasContextMenu) setCanvasContextMenu(null);
             }
         }
         
@@ -677,6 +684,25 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
       const newY = pointer.y - worldY * newScale;
       return { x: newX, y: newY, scale: newScale };
     });
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+      e.preventDefault();
+      if ((e.target as HTMLElement).closest('.code-block-wrapper') || (e.target as HTMLElement).closest('.group-container-wrapper') || (e.target as HTMLElement).closest('.sticky-note-wrapper')) {
+          return;
+      }
+      
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      
+      const worldX = (e.clientX - rect.left - transform.x) / transform.scale;
+      const worldY = (e.clientY - rect.top - transform.y) / transform.scale;
+      
+      setCanvasContextMenu({
+          x: e.clientX,
+          y: e.clientY,
+          worldPos: { x: worldX, y: worldY }
+      });
   };
 
   const backgroundStyle = {
@@ -750,6 +776,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
       style={backgroundStyle}
       onPointerDown={handlePointerDown}
       onWheel={handleWheel}
+      onContextMenu={handleContextMenu}
     >
         <div className="filter-panel absolute top-4 right-4 z-20 bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 flex flex-col space-y-2">
             <h4 className="text-sm font-semibold text-center px-2">View Filters</h4>
@@ -908,6 +935,16 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
         canvasDimensions={canvasDimensions}
         onTransformChange={onTransformChange}
       />
+      
+      {canvasContextMenu && onCreateBlock && onAddStickyNote && (
+        <CanvasContextMenu
+            x={canvasContextMenu.x}
+            y={canvasContextMenu.y}
+            onClose={() => setCanvasContextMenu(null)}
+            onCreateBlock={(type) => onCreateBlock(type, canvasContextMenu.worldPos)}
+            onAddStickyNote={() => onAddStickyNote(canvasContextMenu.worldPos)}
+        />
+      )}
     </div>
   );
 };
