@@ -1,8 +1,3 @@
-
-
-
-
-
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -26,6 +21,7 @@ import CharacterEditorView from './components/CharacterEditorView';
 import TabContextMenu from './components/TabContextMenu';
 import Sash from './components/Sash';
 import StatusBar from './components/StatusBar';
+import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import { useRenpyAnalysis, performRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import type { 
@@ -344,6 +340,7 @@ const App: React.FC = () => {
   const [createBlockModalOpen, setCreateBlockModalOpen] = useState(false);
   const [unsavedChangesModalInfo, setUnsavedChangesModalInfo] = useState<UnsavedChangesModalInfo | null>(null);
   const [contextMenuInfo, setContextMenuInfo] = useState<{ x: number; y: number; tabId: string } | null>(null);
+  const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false);
   
   // --- State: View Transforms ---
   const [storyCanvasTransform, setStoryCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
@@ -1754,20 +1751,98 @@ const App: React.FC = () => {
         }
     }, []);
 
+    const handleDeleteSelected = useCallback(() => {
+        if (activeTabId !== 'canvas') return;
+        
+        let deletedCount = 0;
+
+        if (selectedBlockIds.length > 0) {
+            setGroups(draft => {
+                draft.forEach(g => {
+                    g.blockIds = g.blockIds.filter(bid => !selectedBlockIds.includes(bid));
+                });
+            });
+            setBlocks(prev => prev.filter(b => !selectedBlockIds.includes(b.id)));
+            // Close tabs for deleted blocks
+            setOpenTabs(prev => prev.filter(t => !t.blockId || !selectedBlockIds.includes(t.blockId)));
+            deletedCount += selectedBlockIds.length;
+            setSelectedBlockIds([]);
+        }
+
+        if (selectedGroupIds.length > 0) {
+             setGroups(draft => {
+                 return draft.filter(g => !selectedGroupIds.includes(g.id));
+             });
+             deletedCount += selectedGroupIds.length;
+             setSelectedGroupIds([]);
+        }
+        
+        if (deletedCount > 0) {
+            addToast(`Deleted ${deletedCount} items`, 'info');
+        }
+    }, [activeTabId, selectedBlockIds, selectedGroupIds, setBlocks, setGroups, setOpenTabs, addToast]);
+
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            // Ignore if input/textarea is focused
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+                return;
+            }
+
+            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+            const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+            // Shortcuts
+            
+            // F5: Run Game
             if (e.key === 'F5') {
                 e.preventDefault();
                 handleRunGame();
             }
-            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+            
+            // Ctrl+Shift+F: Search
+            if (cmdOrCtrl && e.shiftKey && e.key.toLowerCase() === 'f') {
                 e.preventDefault();
                 handleToggleSearch();
+            }
+
+            // Ctrl+S: Save All (if not editor handling it)
+            if (cmdOrCtrl && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                handleSaveAll();
+            }
+
+            // Undo/Redo (Custom implementation for app-wide history)
+            if (cmdOrCtrl && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    if (canRedo) redo();
+                } else {
+                    if (canUndo) undo();
+                }
+            }
+            if (cmdOrCtrl && e.key.toLowerCase() === 'y') {
+                e.preventDefault();
+                if (canRedo) redo();
+            }
+
+            // N: New Block (Context aware, mostly Canvas)
+            if (e.key.toLowerCase() === 'n' && activeTabId === 'canvas') {
+                e.preventDefault();
+                setCreateBlockModalOpen(true);
+            }
+
+            // Delete / Backspace
+            if ((e.key === 'Delete' || e.key === 'Backspace') && activeTabId === 'canvas') {
+                if (selectedBlockIds.length > 0 || selectedGroupIds.length > 0) {
+                    e.preventDefault();
+                    handleDeleteSelected();
+                }
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleRunGame]);
+    }, [handleRunGame, handleToggleSearch, handleSaveAll, canUndo, canRedo, undo, redo, activeTabId, handleDeleteSelected, selectedBlockIds, selectedGroupIds]);
 
     useEffect(() => {
         if (window.electronAPI) {
@@ -1978,6 +2053,7 @@ const App: React.FC = () => {
             onRunGame={handleRunGame}
             onStopGame={handleStopGame}
             onToggleSearch={handleToggleSearch}
+            onOpenShortcuts={() => setShortcutsModalOpen(true)}
         />
       </div>
       
@@ -2294,6 +2370,13 @@ const App: React.FC = () => {
             settings={settingsForModal}
             onSettingsChange={handleSettingsChange}
             availableModels={['gemini-2.5-flash', 'gemini-3-pro-preview']}
+        />
+      )}
+      
+      {shortcutsModalOpen && (
+        <KeyboardShortcutsModal 
+            isOpen={shortcutsModalOpen}
+            onClose={() => setShortcutsModalOpen(false)}
         />
       )}
       
