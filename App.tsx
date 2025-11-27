@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -499,12 +498,29 @@ const App: React.FC = () => {
     
     const root = window.document.documentElement;
     const applyTheme = (theme: Theme) => {
-      root.classList.remove('dark', 'theme-solarized-light', 'theme-solarized-dark', 'theme-colorful', 'theme-colorful-light');
+      root.classList.remove(
+          'dark', 
+          'theme-solarized-light', 
+          'theme-solarized-dark', 
+          'theme-colorful', 
+          'theme-colorful-light',
+          'theme-neon-dark',
+          'theme-ocean-dark',
+          'theme-candy-light',
+          'theme-forest-light'
+      );
+      
       if (theme === 'dark') root.classList.add('dark');
       if (theme === 'solarized-light') root.classList.add('theme-solarized-light');
       if (theme === 'solarized-dark') root.classList.add('dark', 'theme-solarized-dark');
       if (theme === 'colorful') root.classList.add('dark', 'theme-colorful');
       if (theme === 'colorful-light') root.classList.add('theme-colorful-light');
+      
+      // New Themes
+      if (theme === 'neon-dark') root.classList.add('dark', 'theme-neon-dark');
+      if (theme === 'ocean-dark') root.classList.add('dark', 'theme-ocean-dark');
+      if (theme === 'candy-light') root.classList.add('theme-candy-light');
+      if (theme === 'forest-light') root.classList.add('theme-forest-light');
     };
 
     if (appSettings.theme === 'system') {
@@ -1910,7 +1926,7 @@ const App: React.FC = () => {
       }
   }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenStaticTab, handleRunGame, loadProject]);
   
-  // --- Exit Confirmation Handling ---
+  // --- Exit confirmation flow ---
   useEffect(() => {
     if (window.electronAPI) {
       const removeCheckListener = window.electronAPI.onCheckUnsavedChangesBeforeExit(() => {
@@ -2026,7 +2042,7 @@ const App: React.FC = () => {
 
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
+    <div className="fixed inset-0 flex flex-col bg-primary text-primary overflow-hidden">
       {showWelcome && (
         <WelcomeScreen 
             onOpenProject={handleOpenProjectFolder}
@@ -2072,19 +2088,19 @@ const App: React.FC = () => {
         {appSettings.isLeftSidebarOpen && (
             <>
                 <div 
-                    className="flex-none border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden h-full"
+                    className="flex-none border-r border-primary bg-secondary flex flex-col overflow-hidden h-full"
                     style={{ width: appSettings.leftSidebarWidth }}
                 >
-                    <div className="flex-none flex border-b border-gray-200 dark:border-gray-700">
+                    <div className="flex-none flex border-b border-primary">
                         <button
                         onClick={() => setActiveLeftPanel('explorer')}
-                        className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors ${activeLeftPanel === 'explorer' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400' : 'bg-gray-100 dark:bg-gray-900 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors ${activeLeftPanel === 'explorer' ? 'bg-secondary text-accent' : 'bg-primary text-secondary hover:bg-tertiary-hover'}`}
                         >
                         Explorer
                         </button>
                         <button
                         onClick={() => setActiveLeftPanel('search')}
-                        className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors ${activeLeftPanel === 'search' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400' : 'bg-gray-100 dark:bg-gray-900 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors ${activeLeftPanel === 'search' ? 'bg-secondary text-accent' : 'bg-primary text-secondary hover:bg-tertiary-hover'}`}
                         >
                         Search
                         </button>
@@ -2140,8 +2156,8 @@ const App: React.FC = () => {
             </>
         )}
 
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-100 dark:bg-gray-900 relative">
-            <div className="flex-none flex flex-wrap items-center bg-gray-200 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-primary relative">
+            <div className="flex-none flex flex-wrap items-center bg-tertiary border-b border-primary">
                 {openTabs.map(tab => {
                     const block = blocks.find(b => b.id === tab.blockId);
                     let title = 'Unknown';
@@ -2163,16 +2179,16 @@ const App: React.FC = () => {
                             key={tab.id}
                             onClick={() => handleSwitchTab(tab.id)}
                             onContextMenu={(e) => handleTabContextMenu(e, tab.id)}
-                            className={`group flex items-center px-4 py-2 text-sm cursor-pointer border-r border-gray-300 dark:border-gray-700 min-w-[120px] max-w-[200px] flex-shrink-0 ${isActive ? 'bg-white dark:bg-gray-900 font-medium text-indigo-600 dark:text-indigo-400 border-t-2 border-t-indigo-500' : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}`}
+                            className={`group flex items-center px-4 py-2 text-sm cursor-pointer border-r border-primary min-w-[120px] max-w-[200px] flex-shrink-0 ${isActive ? 'bg-secondary font-medium text-accent border-t-2 border-t-accent' : 'bg-tertiary hover:bg-tertiary-hover text-secondary'}`}
                         >
                             <span className="truncate flex-grow flex items-center">
                                 {title}
-                                {isDirty && <span className="text-indigo-500 ml-1.5">•</span>}
+                                {isDirty && <span className="text-accent ml-1.5">•</span>}
                             </span>
                             {tab.id !== 'canvas' && (
                                 <button 
                                     onClick={(e) => handleCloseTab(tab.id, e)}
-                                    className="ml-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className="ml-2 text-secondary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                                 >
                                     ×
                                 </button>
@@ -2312,7 +2328,7 @@ const App: React.FC = () => {
             <>
                 <Sash onDrag={handleRightSashDrag} />
                 <div 
-                    className="flex-none border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col overflow-hidden h-full"
+                    className="flex-none border-l border-primary bg-secondary flex flex-col overflow-hidden h-full"
                     style={{ width: appSettings.rightSidebarWidth }}
                 >
                     <StoryElementsPanel 
@@ -2429,7 +2445,7 @@ const App: React.FC = () => {
             onClose={() => setDeleteConfirmInfo(null)}
         >
             Are you sure you want to permanently delete these items? This action cannot be undone.
-            <ul className="text-xs list-disc list-inside mt-2 max-h-24 overflow-y-auto bg-gray-100 dark:bg-gray-700 p-2 rounded">
+            <ul className="text-xs list-disc list-inside mt-2 max-h-24 overflow-y-auto bg-tertiary rounded p-2 text-secondary">
                 {deleteConfirmInfo.paths.map(p => <li key={p} className="truncate">{p.split('/').pop()}</li>)}
             </ul>
         </ConfirmModal>
@@ -2439,7 +2455,7 @@ const App: React.FC = () => {
         <ConfirmModal
           title="Confirm Global Replace"
           confirmText="Replace All"
-          confirmClassName="bg-indigo-600 hover:bg-indigo-700"
+          confirmClassName="bg-accent hover:bg-accent-hover"
           onConfirm={() => {
             replaceAllConfirmInfo.onConfirm();
             setReplaceAllConfirmInfo(null);
@@ -2452,15 +2468,15 @@ const App: React.FC = () => {
       
       {unsavedChangesModalInfo && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md m-4 flex flex-col p-6">
-            <h2 className="text-xl font-bold mb-4 dark:text-white">{unsavedChangesModalInfo.title}</h2>
-            <p className="text-gray-600 dark:text-gray-300 mb-6">
+          <div className="bg-secondary rounded-lg shadow-2xl w-full max-w-md m-4 flex flex-col p-6 border border-primary">
+            <h2 className="text-xl font-bold mb-4 text-primary">{unsavedChangesModalInfo.title}</h2>
+            <p className="text-secondary mb-6">
               {unsavedChangesModalInfo.message}
             </p>
             <div className="flex justify-end space-x-3">
                <button
                 onClick={unsavedChangesModalInfo.onCancel}
-                className="px-4 py-2 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium"
+                className="px-4 py-2 rounded text-secondary hover:bg-tertiary font-medium"
               >
                 Cancel
               </button>
@@ -2472,7 +2488,7 @@ const App: React.FC = () => {
               </button>
               <button
                 onClick={unsavedChangesModalInfo.onConfirm}
-                className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+                className="px-4 py-2 rounded bg-accent hover:bg-accent-hover text-white font-bold"
               >
                 {unsavedChangesModalInfo.confirmText}
               </button>

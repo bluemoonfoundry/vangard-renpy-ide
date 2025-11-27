@@ -762,7 +762,13 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
         let type: MinimapItem['type'] = 'block';
         if (isScreen) type = 'screen';
         if (isConfig) type = 'config';
-        return { ...b, type };
+        return { 
+            id: b.id, 
+            position: b.position, 
+            width: b.width, 
+            height: b.height, 
+            type 
+        };
     });
     const groupItems: MinimapItem[] = groups.map(g => ({ ...g, type: 'group', width: g.width, height: g.height }));
     const noteItems: MinimapItem[] = canvasFilters.notes ? stickyNotes.map(n => ({ ...n, type: 'note' })) : [];
@@ -772,27 +778,27 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
   return (
     <div
       ref={canvasRef}
-      className="absolute inset-0 overflow-hidden cursor-grab active:cursor-grabbing bg-gray-100 dark:bg-gray-900 bg-[radial-gradient(#d4d4d8_1px,transparent_1px)] dark:bg-[radial-gradient(#4b5563_1px,transparent_1px)]"
+      className="absolute inset-0 overflow-hidden cursor-grab active:cursor-grabbing bg-primary bg-[radial-gradient(var(--dot-color)_1px,transparent_1px)]"
       style={backgroundStyle}
       onPointerDown={handlePointerDown}
       onWheel={handleWheel}
       onContextMenu={handleContextMenu}
     >
-        <div className="filter-panel absolute top-4 right-4 z-20 bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 flex flex-col space-y-2">
-            <h4 className="text-sm font-semibold text-center px-2">View Filters</h4>
-            <label className="flex items-center space-x-2 cursor-pointer text-sm">
+        <div className="filter-panel absolute top-4 right-4 z-20 bg-secondary p-2 rounded-lg shadow-lg border border-primary flex flex-col space-y-2">
+            <h4 className="text-sm font-semibold text-center px-2 text-primary">View Filters</h4>
+            <label className="flex items-center space-x-2 cursor-pointer text-sm text-secondary">
                 <input type="checkbox" checked={canvasFilters.story} onChange={e => setCanvasFilters(f => ({ ...f, story: e.target.checked }))} className="h-4 w-4 rounded focus:ring-indigo-500" style={{ accentColor: 'rgb(79 70 229)' }} />
                 <span>Story Blocks</span>
             </label>
-            <label className="flex items-center space-x-2 cursor-pointer text-sm">
+            <label className="flex items-center space-x-2 cursor-pointer text-sm text-secondary">
                 <input type="checkbox" checked={canvasFilters.screens} onChange={e => setCanvasFilters(f => ({ ...f, screens: e.target.checked }))} className="h-4 w-4 rounded focus:ring-teal-500" style={{ accentColor: 'rgb(13 148 136)' }} />
                 <span>Screen Blocks</span>
             </label>
-             <label className="flex items-center space-x-2 cursor-pointer text-sm">
+             <label className="flex items-center space-x-2 cursor-pointer text-sm text-secondary">
                 <input type="checkbox" checked={canvasFilters.config} onChange={e => setCanvasFilters(f => ({ ...f, config: e.target.checked }))} className="h-4 w-4 rounded focus:ring-red-500" style={{ accentColor: 'rgb(239 68 68)' }} />
                 <span>Config Blocks</span>
             </label>
-            <label className="flex items-center space-x-2 cursor-pointer text-sm">
+            <label className="flex items-center space-x-2 cursor-pointer text-sm text-secondary">
                 <input type="checkbox" checked={canvasFilters.notes} onChange={e => setCanvasFilters(f => ({ ...f, notes: e.target.checked }))} className="h-4 w-4 rounded focus:ring-yellow-500" style={{ accentColor: 'rgb(234 179 8)' }} />
                 <span>Notes</span>
             </label>

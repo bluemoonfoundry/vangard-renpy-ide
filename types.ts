@@ -248,7 +248,7 @@ export interface ToastMessage {
   type: 'success' | 'error' | 'warning' | 'info';
 }
 
-export type Theme = 'system' | 'light' | 'dark' | 'solarized-light' | 'solarized-dark' | 'colorful' | 'colorful-light';
+export type Theme = 'system' | 'light' | 'dark' | 'solarized-light' | 'solarized-dark' | 'colorful' | 'colorful-light' | 'neon-dark' | 'ocean-dark' | 'candy-light' | 'forest-light';
 
 export interface AppSettings {
   theme: Theme;

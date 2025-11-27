@@ -61,8 +61,8 @@ const TabButton: React.FC<{
     onClick={onClick}
     className={`flex-none py-2 px-2 text-sm font-semibold border-b-2 transition-colors duration-200 flex items-center justify-center ${
       isActive
-        ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-gray-800'
-        : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
+        ? 'border-accent text-accent bg-secondary'
+        : 'border-transparent text-secondary hover:text-primary hover:bg-tertiary-hover'
     } ${className}`}
   >
     <span>{label}</span>
@@ -94,11 +94,11 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     };
 
     return (
-        <div className="h-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex flex-col min-h-0">
-            <header className="flex-none p-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="h-full bg-secondary text-primary flex flex-col min-h-0">
+            <header className="flex-none p-4 border-b border-primary">
                 <h2 className="text-xl font-bold">Story Elements</h2>
             </header>
-            <nav className="flex-none flex flex-wrap border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
+            <nav className="flex-none flex flex-wrap border-b border-primary bg-header">
                 <TabButton className="flex-grow" label="Characters" count={characterList.length} isActive={activeTab === 'characters'} onClick={() => setActiveTab('characters')} />
                 <TabButton className="flex-grow" label="Variables" count={analysisResult.variables.size} isActive={activeTab === 'variables'} onClick={() => setActiveTab('variables')} />
                 <TabButton className="flex-grow" label="Images" count={projectImages.size} isActive={activeTab === 'images'} onClick={() => setActiveTab('images')} />
@@ -111,7 +111,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                     <div className="flex-grow overflow-y-auto p-4 overscroll-contain space-y-3">
                         <div className="flex justify-between items-center">
                             <h3 className="font-semibold">Characters ({characterList.length})</h3>
-                            <button onClick={() => onOpenCharacterEditor('new_character')} className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold">+ Add</button>
+                            <button onClick={() => onOpenCharacterEditor('new_character')} className="px-3 py-1 rounded bg-accent hover:bg-accent-hover text-white text-sm font-bold">+ Add</button>
                         </div>
                         <ul className="space-y-2">
                             {characterList.map((char: Character) => (
@@ -119,7 +119,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                                   key={char.tag}
                                   draggable
                                   onDragStart={(e) => handleCharacterDragStart(e, char)}
-                                  className="p-2 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-between cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
+                                  className="p-2 rounded-md bg-secondary border border-primary flex items-center justify-between cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
                                   onMouseEnter={() => onHoverHighlightStart(char.tag, 'character')}
                                   onMouseLeave={onHoverHighlightEnd}
                                   title="Drag to editor to insert dialogue"
@@ -127,22 +127,22 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                                     <div className="flex items-center space-x-3 min-w-0 pointer-events-none">
                                         <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: char.color }}></div>
                                         <div className="min-w-0">
-                                            <p className="font-semibold truncate">{char.name}</p>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 font-mono truncate">{char.tag}</p>
+                                            <p className="font-semibold truncate text-primary">{char.name}</p>
+                                            <p className="text-xs text-secondary font-mono truncate">{char.tag}</p>
                                         </div>
                                     </div>
                                     <div className="flex items-center space-x-1 flex-shrink-0 pl-2">
-                                        <span className="text-xs text-gray-400 dark:text-gray-500 mr-2">({characterUsage.get(char.tag) || 0} lines)</span>
-                                        <button onClick={() => onFindCharacterUsages(char.tag)} title="Find Usages" className="p-1 text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 rounded">
+                                        <span className="text-xs text-secondary mr-2">({characterUsage.get(char.tag) || 0} lines)</span>
+                                        <button onClick={() => onFindCharacterUsages(char.tag)} title="Find Usages" className="p-1 text-secondary hover:text-accent rounded">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                                         </button>
-                                        <button onClick={() => onOpenCharacterEditor(char.tag)} title="Edit Character" className="p-1 text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 rounded">
+                                        <button onClick={() => onOpenCharacterEditor(char.tag)} title="Edit Character" className="p-1 text-secondary hover:text-accent rounded">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" /></svg>
                                         </button>
                                     </div>
                                 </li>
                             ))}
-                            {characterList.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No characters defined yet.</p>}
+                            {characterList.length === 0 && <p className="text-sm text-secondary text-center py-4">No characters defined yet.</p>}
                         </ul>
                     </div>
                 )}

@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import type { FileSystemTreeNode } from '../types';
@@ -211,10 +210,10 @@ const TreeNode: React.FC<TreeNodeProps> = ({
         onDoubleClick={handleDoubleClick}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(e, node); }}
         style={{ paddingLeft: `${level * 16}px` }}
-        className={`group flex items-center space-x-2 py-1 px-2 rounded cursor-pointer relative ${
+        className={`group flex items-center space-x-2 py-1 px-2 rounded cursor-pointer relative text-primary ${
             isDragOver ? 'bg-indigo-200 dark:bg-indigo-900/50' : 
-            isSelected ? 'bg-indigo-100 dark:bg-indigo-900/50' : 
-            'hover:bg-gray-100 dark:hover:bg-gray-700'
+            isSelected ? 'bg-accent-light' : 
+            'hover:bg-tertiary-hover'
         }`}
         draggable={!isRenaming}
         onDragStart={handleDragStart}
@@ -232,7 +231,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             onChange={e => setInputValue(e.target.value)}
             onBlur={handleRenameBlur}
             onKeyDown={handleRenameKeyDown}
-            className="text-sm bg-white dark:bg-gray-600 border border-indigo-500 rounded px-1 -ml-1 h-6 w-full"
+            className="text-sm bg-tertiary border border-accent rounded px-1 -ml-1 h-6 w-full text-primary"
             onClick={e => e.stopPropagation()}
           />
         ) : (
@@ -293,7 +292,7 @@ const NewNodeInput: React.FC<{
                 onBlur={handleCreate}
                 onKeyDown={e => e.key === 'Enter' && handleCreate()}
                 placeholder={type === 'file' ? 'new_file.rpy' : 'new_folder'}
-                className="text-sm bg-white dark:bg-gray-600 border border-indigo-500 rounded px-1 h-6 w-full"
+                className="text-sm bg-tertiary border border-accent rounded px-1 h-6 w-full text-primary"
             />
         </div>
     );
@@ -383,8 +382,8 @@ const FileExplorerPanel: React.FC<FileExplorerPanelProps> = ({
   };
 
   return (
-    <aside className="w-full h-full bg-white dark:bg-gray-800 flex flex-col z-10" onClick={() => { setContextMenu(null); setSelectedPaths(new Set()); }}>
-      <div className="flex-none p-4 border-b border-gray-200 dark:border-gray-700">
+    <aside className="w-full h-full bg-secondary flex flex-col z-10 text-primary" onClick={() => { setContextMenu(null); setSelectedPaths(new Set()); }}>
+      <div className="flex-none p-4 border-b border-primary">
         <h2 className="text-xl font-bold">Project Explorer</h2>
       </div>
       <div className="flex-1 min-h-0 p-2 overflow-y-auto overscroll-contain" onContextMenu={(e) => {
@@ -416,7 +415,7 @@ const FileExplorerPanel: React.FC<FileExplorerPanelProps> = ({
                />
             ))
         ) : (
-          <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4 px-2">
+          <p className="text-sm text-secondary text-center py-4 px-2">
             Open a project folder to see files here.
           </p>
         )}

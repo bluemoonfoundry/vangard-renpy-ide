@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import type { Theme } from '../types';
 import logo from '../vangard-renide-512x512.png';
@@ -44,7 +43,7 @@ const ToolbarButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { 
   return (
     <button
       {...props}
-      className={`flex items-center justify-center rounded-md text-sm font-medium bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${layoutClass}`}
+      className={`flex items-center justify-center rounded-md text-sm font-medium bg-tertiary hover:bg-tertiary-hover text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${layoutClass}`}
     >
       {children}
     </button>
@@ -89,7 +88,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
     switch (saveStatus) {
       case 'saving':
         return (
-          <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
+          <div className="flex items-center space-x-2 text-sm text-secondary">
             <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -117,7 +116,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   };
 
   return (
-    <header className="flex-shrink-0 h-16 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 z-30">
+    <header className="flex-shrink-0 h-16 bg-header border-b border-primary flex items-center justify-between px-4 z-30">
       <div className="flex items-center space-x-4">
         <img src={logo} alt="Ren'Py Visual Novel Accelerator Logo" className="h-12 w-auto" />
       </div>
@@ -129,7 +128,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
         <ToolbarButton onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
         </ToolbarButton>
-        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
+        <div className="h-6 w-px bg-primary"></div>
         <ToolbarButton onClick={addBlock} title="Add New Block (N)">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
             <span>Add Block</span>
@@ -160,7 +159,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 <span>Run</span>
             </button>
         )}
-        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
+        <div className="h-6 w-px bg-primary"></div>
 
         <ToolbarButton
             onClick={handleSave}
@@ -179,7 +178,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
         <SaveStatusIndicator />
 
-        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
+        <div className="h-6 w-px bg-primary"></div>
         <ToolbarButton onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)} title="Toggle Left Sidebar">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm4 2a1 1 0 011-1h6a1 1 0 110 2H8a1 1 0 01-1-1z" clipRule="evenodd" /></svg>
         </ToolbarButton>
