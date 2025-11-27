@@ -258,6 +258,8 @@ export interface AppSettings {
   rightSidebarWidth: number;
   renpyPath: string;
   recentProjects: string[];
+  editorFontFamily: string;
+  editorFontSize: number;
 }
 
 export interface ProjectSettings {

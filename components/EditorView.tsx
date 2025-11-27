@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type { Block, RenpyAnalysisResult, ToastMessage } from '../types';
@@ -14,6 +15,8 @@ interface EditorViewProps {
   onTriggerSave?: (blockId: string) => void;
   onDirtyChange: (blockId: string, isDirty: boolean) => void;
   editorTheme: 'light' | 'dark';
+  editorFontFamily: string;
+  editorFontSize: number;
   enableAiFeatures: boolean;
   availableModels: string[];
   selectedModel: string;
@@ -61,6 +64,8 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     onTriggerSave,
     onDirtyChange,
     editorTheme,
+    editorFontFamily,
+    editorFontSize,
     enableAiFeatures,
     availableModels,
     selectedModel,
@@ -478,7 +483,8 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         beforeMount={handleEditorWillMount}
         options={{
           minimap: { enabled: true },
-          fontSize: 14,
+          fontSize: editorFontSize,
+          fontFamily: editorFontFamily,
           wordWrap: 'on',
           scrollBeyondLastLine: false,
           automaticLayout: true,

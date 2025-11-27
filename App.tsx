@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -362,6 +363,8 @@ const App: React.FC = () => {
     rightSidebarWidth: 300,
     renpyPath: '',
     recentProjects: [],
+    editorFontFamily: "'Consolas', 'Courier New', monospace",
+    editorFontSize: 14,
   });
   const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles'>>({
     enableAiFeatures: false,
@@ -455,7 +458,11 @@ const App: React.FC = () => {
     if (window.electronAPI?.getAppSettings) {
       window.electronAPI.getAppSettings().then(savedSettings => {
         if (savedSettings) {
-          updateAppSettings(draft => { Object.assign(draft, savedSettings) });
+          updateAppSettings(draft => { 
+              Object.assign(draft, savedSettings);
+              if (!draft.editorFontFamily) draft.editorFontFamily = "'Consolas', 'Courier New', monospace";
+              if (!draft.editorFontSize) draft.editorFontSize = 14;
+          });
         }
       }).finally(() => {
         setAppSettingsLoaded(true);
@@ -465,7 +472,11 @@ const App: React.FC = () => {
       if (savedSettings) {
         try {
           const parsed = JSON.parse(savedSettings);
-          updateAppSettings(draft => { Object.assign(draft, parsed) });
+          updateAppSettings(draft => { 
+              Object.assign(draft, parsed);
+              if (!draft.editorFontFamily) draft.editorFontFamily = "'Consolas', 'Courier New', monospace";
+              if (!draft.editorFontSize) draft.editorFontSize = 14;
+          });
         } catch (e) { console.error("Failed to load app settings from localStorage", e); }
       }
       setAppSettingsLoaded(true);
@@ -2243,6 +2254,8 @@ const App: React.FC = () => {
                             else setDirtyEditors(prev => { const s = new Set(prev); s.delete(id); return s; });
                         }}
                         editorTheme={appSettings.theme.includes('dark') || appSettings.theme === 'colorful' ? 'dark' : 'light'}
+                        editorFontFamily={appSettings.editorFontFamily}
+                        editorFontSize={appSettings.editorFontSize}
                         enableAiFeatures={projectSettings.enableAiFeatures}
                         availableModels={['gemini-2.5-flash', 'gemini-3-pro-preview']}
                         selectedModel={projectSettings.selectedModel}
