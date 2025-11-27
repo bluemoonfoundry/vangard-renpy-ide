@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { ProjectImage, ImageMetadata } from '../types';
 import ImageContextMenu from './ImageContextMenu';
@@ -158,6 +159,8 @@ const ImageManager: React.FC<ImageManagerProps> = ({ images, metadata, scanDirec
           text: `show ${imageTag}`
       }));
       e.dataTransfer.setData('text/plain', `show ${imageTag}`);
+      // Add specific path for Scene Composer drop target
+      e.dataTransfer.setData('application/renpy-image-path', image.filePath);
       e.dataTransfer.effectAllowed = 'copy';
   };
 

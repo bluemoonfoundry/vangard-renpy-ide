@@ -1,4 +1,7 @@
 
+
+
+
 import React, { useState, useMemo } from 'react';
 import type { Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, RenpyScreen, RenpyAnalysisResult } from '../types';
 import VariableManager from './VariableManager';
@@ -46,9 +49,15 @@ interface StoryElementsPanelProps {
     // Hover highlight callbacks
     onHoverHighlightStart: (key: string, type: 'character' | 'variable') => void;
     onHoverHighlightEnd: () => void;
+    
+    // Scene Props
+    scenes: { id: string, name: string }[];
+    onOpenScene: (sceneId: string) => void;
+    onCreateScene: (name?: string) => void;
+    onDeleteScene: (sceneId: string) => void;
 }
 
-type Tab = 'characters' | 'variables' | 'images' | 'audio' | 'screens' | 'snippets';
+type Tab = 'characters' | 'variables' | 'images' | 'audio' | 'screens' | 'snippets' | 'scenes';
 
 const TabButton: React.FC<{
   label: string;
@@ -78,7 +87,8 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     projectImages, imageMetadata, onAddImageScanDirectory, onRemoveImageScanDirectory, imageScanDirectories, onCopyImagesToProject, onUpdateImageMetadata, onOpenImageEditor, imagesLastScanned, isRefreshingImages, onRefreshImages,
     projectAudios, audioMetadata, onAddAudioScanDirectory, onRemoveAudioScanDirectory, audioScanDirectories, onCopyAudiosToProject, onUpdateAudioMetadata, onOpenAudioEditor, audiosLastScanned, isRefreshingAudios, onRefreshAudios,
     isFileSystemApiSupported,
-    onHoverHighlightStart, onHoverHighlightEnd
+    onHoverHighlightStart, onHoverHighlightEnd,
+    scenes, onOpenScene, onCreateScene, onDeleteScene
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('characters');
 
@@ -99,12 +109,13 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                 <h2 className="text-xl font-bold">Story Elements</h2>
             </header>
             <nav className="flex-none flex flex-wrap border-b border-primary bg-header">
-                <TabButton className="flex-grow" label="Characters" count={characterList.length} isActive={activeTab === 'characters'} onClick={() => setActiveTab('characters')} />
-                <TabButton className="flex-grow" label="Variables" count={analysisResult.variables.size} isActive={activeTab === 'variables'} onClick={() => setActiveTab('variables')} />
-                <TabButton className="flex-grow" label="Images" count={projectImages.size} isActive={activeTab === 'images'} onClick={() => setActiveTab('images')} />
-                <TabButton className="flex-grow" label="Audio" count={projectAudios.size} isActive={activeTab === 'audio'} onClick={() => setActiveTab('audio')} />
-                <TabButton className="flex-grow" label="Screens" count={analysisResult.screens.size} isActive={activeTab === 'screens'} onClick={() => setActiveTab('screens')} />
-                <TabButton className="flex-grow" label="Snippets" isActive={activeTab === 'snippets'} onClick={() => setActiveTab('snippets')} />
+                <TabButton className="flex-grow" label="Chars" count={characterList.length} isActive={activeTab === 'characters'} onClick={() => setActiveTab('characters')} />
+                <TabButton className="flex-grow" label="Vars" count={analysisResult.variables.size} isActive={activeTab === 'variables'} onClick={() => setActiveTab('variables')} />
+                <TabButton className="flex-grow" label="Img" count={projectImages.size} isActive={activeTab === 'images'} onClick={() => setActiveTab('images')} />
+                <TabButton className="flex-grow" label="Snd" count={projectAudios.size} isActive={activeTab === 'audio'} onClick={() => setActiveTab('audio')} />
+                <TabButton className="flex-grow" label="Scrn" count={analysisResult.screens.size} isActive={activeTab === 'screens'} onClick={() => setActiveTab('screens')} />
+                <TabButton className="flex-grow" label="Scenes" count={scenes.length} isActive={activeTab === 'scenes'} onClick={() => setActiveTab('scenes')} />
+                <TabButton className="flex-grow" label="Code" isActive={activeTab === 'snippets'} onClick={() => setActiveTab('snippets')} />
             </nav>
             <main className="flex-grow flex flex-col min-h-0 overflow-hidden relative">
                 {activeTab === 'characters' && (
@@ -158,19 +169,23 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                     </div>
                 )}
                 {activeTab === 'images' && (
-                    <ImageManager
-                        images={Array.from(projectImages.values())}
-                        metadata={imageMetadata}
-                        scanDirectories={Array.from(imageScanDirectories.keys())}
-                        onAddScanDirectory={onAddImageScanDirectory}
-                        onRemoveScanDirectory={onRemoveImageScanDirectory}
-                        onCopyImagesToProject={onCopyImagesToProject}
-                        onOpenImageEditor={onOpenImageEditor}
-                        isFileSystemApiSupported={isFileSystemApiSupported}
-                        lastScanned={imagesLastScanned}
-                        isRefreshing={isRefreshingImages}
-                        onRefresh={onRefreshImages}
-                    />
+                    <div className="h-full flex flex-col">
+                        <div className="flex-1 overflow-hidden">
+                            <ImageManager
+                                images={Array.from(projectImages.values())}
+                                metadata={imageMetadata}
+                                scanDirectories={Array.from(imageScanDirectories.keys())}
+                                onAddScanDirectory={onAddImageScanDirectory}
+                                onRemoveScanDirectory={onRemoveImageScanDirectory}
+                                onCopyImagesToProject={onCopyImagesToProject}
+                                onOpenImageEditor={onOpenImageEditor}
+                                isFileSystemApiSupported={isFileSystemApiSupported}
+                                lastScanned={imagesLastScanned}
+                                isRefreshing={isRefreshingImages}
+                                onRefresh={onRefreshImages}
+                            />
+                        </div>
+                    </div>
                 )}
                 {activeTab === 'audio' && (
                     <AudioManager
@@ -194,6 +209,31 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                             onAddScreen={onAddScreen}
                             onFindDefinition={onFindScreenDefinition}
                         />
+                    </div>
+                )}
+                {activeTab === 'scenes' && (
+                    <div className="flex-grow overflow-y-auto p-4 overscroll-contain space-y-3">
+                        <div className="flex justify-between items-center">
+                            <h3 className="font-semibold">Scene Compositions ({scenes.length})</h3>
+                            <button onClick={() => onCreateScene()} className="px-3 py-1 rounded bg-accent hover:bg-accent-hover text-white text-sm font-bold">+ New Scene</button>
+                        </div>
+                        <ul className="space-y-2">
+                            {scenes.map(scene => (
+                                <li key={scene.id} className="p-3 rounded-md bg-tertiary border border-primary flex items-center justify-between group hover:shadow-md transition-shadow">
+                                    <div className="flex-grow cursor-pointer" onClick={() => onOpenScene(scene.id)}>
+                                        <p className="font-semibold text-sm">{scene.name}</p>
+                                    </div>
+                                    <button 
+                                        onClick={() => onDeleteScene(scene.id)} 
+                                        className="p-1 text-secondary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Delete Scene"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    </button>
+                                </li>
+                            ))}
+                            {scenes.length === 0 && <p className="text-sm text-secondary text-center py-4">No scenes created yet.</p>}
+                        </ul>
                     </div>
                 )}
                 {activeTab === 'snippets' && (
