@@ -226,10 +226,11 @@ export interface RenpyAnalysisResult {
 // Defines an open tab in the main editor view
 export interface EditorTab {
   id: string; // unique ID for the tab, can be block.id or 'canvas'
-  type: 'canvas' | 'route-canvas' | 'editor' | 'image' | 'audio' | 'character';
+  type: 'canvas' | 'route-canvas' | 'editor' | 'image' | 'audio' | 'character' | 'scene-composer';
   blockId?: string;
   filePath?: string; // Used for image and audio tabs
   characterTag?: string; // Used for character tabs
+  sceneId?: string; // Used for scene composer tabs
   // Used to trigger a scroll-to-line event in the editor component
   scrollRequest?: { line: number; key: number };
 }
@@ -262,6 +263,26 @@ export interface AppSettings {
   editorFontSize: number;
 }
 
+// Scene Composer Types
+export interface SceneSprite {
+    id: string;
+    image: ProjectImage;
+    x: number; // 0.0 to 1.0 (align)
+    y: number; // 0.0 to 1.0 (align)
+    zoom: number;
+    zIndex: number;
+    flipH: boolean;
+    flipV: boolean;
+    rotation: number; // degrees
+    alpha: number; // 0.0 to 1.0
+    blur: number; // pixels
+}
+
+export interface SceneComposition {
+    background: SceneSprite | null;
+    sprites: SceneSprite[];
+}
+
 export interface ProjectSettings {
   enableAiFeatures: boolean;
   selectedModel: string;
@@ -269,10 +290,12 @@ export interface ProjectSettings {
   activeTabId: string;
   stickyNotes?: StickyNote[];
   characterProfiles?: Record<string, string>;
+  sceneCompositions?: Record<string, SceneComposition>;
+  sceneNames?: Record<string, string>;
 }
 
 // This type is a mix for components that need both, like SettingsModal
-export interface IdeSettings extends AppSettings, Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles'> {}
+export interface IdeSettings extends AppSettings, Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'sceneCompositions' | 'sceneNames'> {}
 
 
 export type ClipboardState = { type: 'copy' | 'cut'; paths: Set<string> } | null;

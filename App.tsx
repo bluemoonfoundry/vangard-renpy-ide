@@ -1,3 +1,10 @@
+
+
+
+
+
+
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -18,6 +25,7 @@ import WelcomeScreen from './components/WelcomeScreen';
 import ImageEditorView from './components/ImageEditorView';
 import AudioEditorView from './components/AudioEditorView';
 import CharacterEditorView from './components/CharacterEditorView';
+import SceneComposer from './components/SceneComposer';
 import TabContextMenu from './components/TabContextMenu';
 import Sash from './components/Sash';
 import StatusBar from './components/StatusBar';
@@ -28,7 +36,7 @@ import type {
   Block, BlockGroup, Link, Position, FileSystemTreeNode, EditorTab, 
   ToastMessage, IdeSettings, Theme, ProjectImage, RenpyAudio, 
   ClipboardState, ImageMetadata, AudioMetadata, LabelNode, Character,
-  AppSettings, ProjectSettings, StickyNote, SearchResult
+  AppSettings, ProjectSettings, StickyNote, SearchResult, SceneComposition, SceneSprite
 } from './types';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
@@ -325,6 +333,10 @@ const App: React.FC = () => {
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   
+  // Scene Composer State
+  const [sceneCompositions, setSceneCompositions] = useImmer<Record<string, SceneComposition>>({});
+  const [sceneNames, setSceneNames] = useImmer<Record<string, string>>({});
+  
   const [dirtyBlockIds, setDirtyBlockIds] = useState<Set<string>>(new Set());
   const [dirtyEditors, setDirtyEditors] = useState<Set<string>>(new Set()); // Blocks modified in editor but not synced to block state yet
   const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false); // Track project setting changes like sticky notes
@@ -365,7 +377,7 @@ const App: React.FC = () => {
     editorFontFamily: "'Consolas', 'Courier New', monospace",
     editorFontSize: 14,
   });
-  const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles'>>({
+  const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'sceneCompositions' | 'sceneNames'>>({
     enableAiFeatures: false,
     selectedModel: 'gemini-2.5-flash',
   });
@@ -397,6 +409,64 @@ const App: React.FC = () => {
   // --- Refs ---
   const editorInstances = useRef<Map<string, monaco.editor.IStandaloneCodeEditor>>(new Map());
   const initialLayoutNeeded = useRef(false);
+
+  // --- Scene Composer Management ---
+  const handleCreateScene = useCallback((initialName?: string) => {
+      const id = `scene-${Date.now()}`;
+      const name = initialName || `Scene ${Object.keys(sceneCompositions).length + 1}`;
+      
+      setSceneCompositions(draft => {
+          draft[id] = { background: null, sprites: [] };
+      });
+      setSceneNames(draft => {
+          draft[id] = name;
+      });
+      
+      setOpenTabs(prev => [...prev, { id, type: 'scene-composer', sceneId: id }]);
+      setActiveTabId(id);
+      setHasUnsavedSettings(true);
+  }, [sceneCompositions, setSceneCompositions, setSceneNames]);
+
+  const handleOpenScene = useCallback((sceneId: string) => {
+      setOpenTabs(prev => {
+          if (!prev.find(t => t.id === sceneId)) {
+              return [...prev, { id: sceneId, type: 'scene-composer', sceneId }];
+          }
+          return prev;
+      });
+      setActiveTabId(sceneId);
+  }, []);
+
+  const handleSceneUpdate = useCallback((sceneId: string, value: React.SetStateAction<SceneComposition>) => {
+      setSceneCompositions(draft => {
+          const prev = draft[sceneId] || { background: null, sprites: [] };
+          const next = typeof value === 'function' ? (value as any)(prev) : value;
+          
+          if (JSON.stringify(prev) !== JSON.stringify(next)) {
+              draft[sceneId] = next;
+              setHasUnsavedSettings(true);
+          }
+      });
+  }, [setSceneCompositions]);
+
+  const handleRenameScene = useCallback((sceneId: string, newName: string) => {
+      setSceneNames(draft => {
+          if (draft[sceneId] !== newName) {
+              draft[sceneId] = newName;
+              setHasUnsavedSettings(true);
+          }
+      });
+  }, [setSceneNames]);
+
+  const handleDeleteScene = useCallback((sceneId: string) => {
+      setSceneCompositions(draft => { delete draft[sceneId]; });
+      setSceneNames(draft => { delete draft[sceneId]; });
+      
+      setOpenTabs(prev => prev.filter(t => t.id !== sceneId));
+      if (activeTabId === sceneId) setActiveTabId('canvas');
+      setHasUnsavedSettings(true);
+  }, [setSceneCompositions, setSceneNames, activeTabId]);
+
 
   // --- Sync Explorer with Active Tab ---
   useEffect(() => {
@@ -949,6 +1019,44 @@ const App: React.FC = () => {
               setStickyNotes(projectData.settings.stickyNotes || []);
               setCharacterProfiles(projectData.settings.characterProfiles || {});
               
+              // Load Scene Compositions
+              // Helper to link saved paths back to loaded image objects
+              const rehydrateSprite = (s: any) => {
+                  const path = s.image.filePath;
+                  // Try to find the image in the project images map
+                  // If not found (e.g. was external), create a placeholder. 
+                  const img = imgMap.get(path) || { 
+                      filePath: path, 
+                      fileName: path.split(/[/\\]/).pop() || 'unknown', 
+                      isInProject: false, 
+                      fileHandle: null,
+                      dataUrl: '' 
+                  };
+                  return { ...s, image: img };
+              };
+
+              const rehydrateScene = (sc: any) => ({
+                  background: sc.background ? rehydrateSprite(sc.background) : null,
+                  sprites: (sc.sprites || []).map(rehydrateSprite)
+              });
+
+              if (projectData.settings.sceneCompositions) {
+                  const restoredScenes: Record<string, SceneComposition> = {};
+                  Object.entries(projectData.settings.sceneCompositions as Record<string, any>).forEach(([id, sc]) => {
+                      restoredScenes[id] = rehydrateScene(sc);
+                  });
+                  setSceneCompositions(restoredScenes);
+                  setSceneNames(projectData.settings.sceneNames || {});
+              } else if (projectData.settings.sceneComposition) {
+                  // Migration for legacy single scene
+                  const defaultId = 'scene-default';
+                  setSceneCompositions({ [defaultId]: rehydrateScene(projectData.settings.sceneComposition) });
+                  setSceneNames({ [defaultId]: 'Default Scene' });
+              } else {
+                  setSceneCompositions({});
+                  setSceneNames({});
+              }
+
               const savedTabs: EditorTab[] = projectData.settings.openTabs ?? [{ id: 'canvas', type: 'canvas' }];
               const tempAnalysis = performRenpyAnalysis(loadedBlocks);
 
@@ -965,6 +1073,10 @@ const App: React.FC = () => {
                   if (tab.type === 'character' && tab.characterTag) {
                       return tempAnalysis.characters.has(tab.characterTag);
                   }
+                  if (tab.type === 'scene-composer' && tab.sceneId) {
+                      // We allow opening even if not strictly in state yet (might be migrated)
+                      return true;
+                  }
                   return tab.type === 'canvas' || tab.type === 'route-canvas';
               });
 
@@ -974,6 +1086,10 @@ const App: React.FC = () => {
                       if (matchingBlock) {
                           return { ...tab, id: matchingBlock.id, blockId: matchingBlock.id };
                       }
+                  }
+                  // Migrate old single scene tab
+                  if (tab.type === 'scene-composer' && !tab.sceneId) {
+                      return { ...tab, sceneId: 'scene-default' };
                   }
                   return tab;
               });
@@ -992,6 +1108,8 @@ const App: React.FC = () => {
               setActiveTabId('canvas');
               setStickyNotes([]);
               setCharacterProfiles({});
+              setSceneCompositions({});
+              setSceneNames({});
           }
           
           setHasUnsavedSettings(false);
@@ -1006,7 +1124,7 @@ const App: React.FC = () => {
       } finally {
           setIsLoading(false);
       }
-  }, [setBlocks, setImages, setAudios, updateProjectSettings, addToast, setFileSystemTree, setStickyNotes, setCharacterProfiles, updateAppSettings]);
+  }, [setBlocks, setImages, setAudios, updateProjectSettings, addToast, setFileSystemTree, setStickyNotes, setCharacterProfiles, updateAppSettings, setSceneCompositions, setSceneNames]);
 
 
   const handleOpenProjectFolder = useCallback(async () => {
@@ -1084,12 +1202,28 @@ const App: React.FC = () => {
   const handleSaveProjectSettings = useCallback(async () => {
     if (!projectRootPath || !window.electronAPI) return;
     try {
+      // Serialize scenes: map images to just their paths to avoid circular refs and huge files
+      const serializeSprite = (s: any) => ({
+          ...s,
+          image: { filePath: s.image.filePath }
+      });
+
+      const serializableScenes: Record<string, any> = {};
+      Object.entries(sceneCompositions).forEach(([id, sc]) => {
+          serializableScenes[id] = {
+              background: sc.background ? serializeSprite(sc.background) : null,
+              sprites: sc.sprites.map(serializeSprite)
+          };
+      });
+
       const settingsToSave: ProjectSettings = {
-        ...(projectSettings as Omit<ProjectSettings, 'characterProfiles'>),
+        ...(projectSettings as Omit<ProjectSettings, 'characterProfiles' | 'sceneCompositions' | 'sceneNames'>),
         openTabs,
         activeTabId,
         stickyNotes: Array.from(stickyNotes),
         characterProfiles,
+        sceneCompositions: serializableScenes,
+        sceneNames
       };
       const settingsPath = await window.electronAPI.path.join(projectRootPath, 'game/project.ide.json');
       await window.electronAPI.writeFile(settingsPath, JSON.stringify(settingsToSave, null, 2));
@@ -1098,7 +1232,7 @@ const App: React.FC = () => {
       console.error("Failed to save IDE settings:", e);
       addToast('Failed to save workspace settings', 'error');
     }
-  }, [projectRootPath, projectSettings, openTabs, activeTabId, stickyNotes, characterProfiles, addToast]);
+  }, [projectRootPath, projectSettings, openTabs, activeTabId, stickyNotes, characterProfiles, addToast, sceneCompositions, sceneNames]);
 
 
   const handleSaveAll = useCallback(async () => {
@@ -2163,6 +2297,10 @@ const App: React.FC = () => {
                     let title = 'Unknown';
                     if (tab.type === 'canvas') title = 'Story Canvas';
                     else if (tab.type === 'route-canvas') title = 'Route Canvas';
+                    else if (tab.type === 'scene-composer') {
+                        const name = tab.sceneId ? sceneNames[tab.sceneId] : 'New Scene';
+                        title = `Scene: ${name}`;
+                    }
                     else if (tab.type === 'editor' && block) title = block.title || block.filePath || 'Untitled';
                     else if (tab.type === 'image' && tab.filePath) title = tab.filePath.split(/[/\\]/).pop() || 'Image';
                     else if (tab.type === 'audio' && tab.filePath) title = tab.filePath.split(/[/\\]/).pop() || 'Audio';
@@ -2250,6 +2388,17 @@ const App: React.FC = () => {
                         onOpenEditor={handleOpenEditor}
                         transform={routeCanvasTransform}
                         onTransformChange={setRouteCanvasTransform}
+                    />
+                )}
+
+                {activeTab?.type === 'scene-composer' && activeTab.sceneId && (
+                    <SceneComposer 
+                        images={Array.from(images.values())}
+                        metadata={imageMetadata}
+                        scene={sceneCompositions[activeTab.sceneId] || { background: null, sprites: [] }}
+                        onSceneChange={(val) => handleSceneUpdate(activeTab.sceneId!, val)}
+                        sceneName={sceneNames[activeTab.sceneId] || 'Unnamed Scene'}
+                        onRenameScene={(name) => handleRenameScene(activeTab.sceneId!, name)}
                     />
                 )}
 
@@ -2377,6 +2526,11 @@ const App: React.FC = () => {
                             if(defBlock) setHoverHighlightIds(new Set([defBlock]));
                         }}
                         onHoverHighlightEnd={() => setHoverHighlightIds(null)}
+                        
+                        scenes={Object.entries(sceneNames).map(([id, name]) => ({ id, name }))}
+                        onOpenScene={handleOpenScene}
+                        onCreateScene={handleCreateScene}
+                        onDeleteScene={handleDeleteScene}
                     />
                 </div>
             </>
