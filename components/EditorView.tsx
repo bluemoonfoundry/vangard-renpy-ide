@@ -1,6 +1,3 @@
-
-
-
 import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type { Block, RenpyAnalysisResult, ToastMessage } from '../types';
@@ -24,6 +21,9 @@ interface EditorViewProps {
   onEditorMount: (blockId: string, editor: monaco.editor.IStandaloneCodeEditor) => void;
   onEditorUnmount: (blockId: string) => void;
 }
+
+const LABEL_REGEX = /^\s*label\s+([a-zA-Z0-9_]+):/;
+const JUMP_REGEX = /\b(jump|call)\s+([a-zA-Z0-9_]+)/g;
 
 const Breadcrumbs: React.FC<{ filePath?: string, context?: string }> = ({ filePath, context }) => {
     if (!filePath) return null;
@@ -152,6 +152,14 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const performValidation = (code: string, monacoInstance: typeof monaco): monaco.editor.IMarkerData[] => {
     const markers: monaco.editor.IMarkerData[] = [];
     const lines = code.split('\n');
+    const localLabels = new Set<string>();
+
+    // Pass 1: Find local labels currently defined in editor content
+    lines.forEach(line => {
+        const match = line.match(LABEL_REGEX);
+        if (match) localLabels.add(match[1]);
+    });
+
     let previousIndent = -1;
     let expectIndentedBlock = false;
 
@@ -186,7 +194,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
           endLineNumber: lineNumber,
           endColumn: currentIndent + 1,
           message: 'Indentation error: Use 4 spaces per indentation level.',
-          severity: monacoInstance.MarkerSeverity.Error,
+          severity: monacoInstance.MarkerSeverity.Warning,
         });
       }
 
@@ -207,21 +215,35 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         expectIndentedBlock = true;
         previousIndent = currentIndent;
       }
-    });
 
-    const invalidJumpsForBlock = analysisResult.invalidJumps[block.id] || [];
-    const allJumpsInBlock = analysisResult.jumps[block.id] || [];
+      // Real-time Jump Validation
+      // Replace strings with spaces to preserve indices
+      let sanitizedLine = line.replace(/"[^"\\]*(?:\\.[^"\\]*)*"/g, m => ' '.repeat(m.length)).replace(/'[^'\\]*(?:\\.[^'\\]*)*'/g, m => ' '.repeat(m.length));
+      const commentIndex = sanitizedLine.indexOf('#');
+      if (commentIndex !== -1) sanitizedLine = sanitizedLine.substring(0, commentIndex);
 
-    allJumpsInBlock.forEach(jump => {
-      if (invalidJumpsForBlock.includes(jump.target)) {
-        markers.push({
-          startLineNumber: jump.line,
-          startColumn: jump.columnStart,
-          endLineNumber: jump.line,
-          endColumn: jump.columnEnd,
-          message: `Invalid jump target: Label '${jump.target}' not found.`,
-          severity: monacoInstance.MarkerSeverity.Error,
-        });
+      const lineJumpRegex = new RegExp(JUMP_REGEX);
+      let match;
+      while ((match = lineJumpRegex.exec(sanitizedLine)) !== null) {
+          const target = match[2];
+          if (target === 'expression') continue;
+
+          const isLocal = localLabels.has(target);
+          const globalLabelDef = analysisResultRef.current.labels[target];
+          // Valid if found locally OR (found globally AND NOT associated with this block's old state)
+          const isExternal = globalLabelDef && globalLabelDef.blockId !== blockRef.current.id;
+
+          if (!isLocal && !isExternal) {
+              const targetStart = match.index + match[0].indexOf(target);
+              markers.push({
+                  startLineNumber: lineNumber,
+                  startColumn: targetStart + 1,
+                  endLineNumber: lineNumber,
+                  endColumn: targetStart + 1 + target.length,
+                  message: `Invalid jump: Label '${target}' not found in project.`,
+                  severity: monacoInstance.MarkerSeverity.Error,
+              });
+          }
       }
     });
 
@@ -307,6 +329,9 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         const savedContent = blockRef.current.content;
         const isDirty = currentContent !== savedContent;
         onDirtyChangeRef.current(blockRef.current.id, isDirty);
+        
+        const markers = performValidation(currentContent, monaco);
+        monaco.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
     });
     
     editor.onDidChangeCursorPosition(() => {
@@ -364,15 +389,19 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         setIsGenerateModalOpen(true);
       },
     });
-
-    const disposable = editor.onDidChangeModelContent(() => {
-      const markers = performValidation(editor.getValue(), monaco);
-      monaco.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
-    });
     
+    // Initial validation on mount
     const markers = performValidation(editor.getValue(), monaco);
     monaco.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
   };
+  
+  // Update markers when analysis changes (e.g. newly defined global labels)
+  useEffect(() => {
+      if (isMounted && editorRef.current && monacoRef.current) {
+          const markers = performValidation(editorRef.current.getValue(), monacoRef.current);
+          monacoRef.current.editor.setModelMarkers(editorRef.current.getModel()!, 'renpy', markers);
+      }
+  }, [analysisResult, isMounted]);
   
   // Effect to update decorations when analysis or theme changes
   useEffect(() => {
@@ -396,6 +425,9 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
               });
           }
           else if (!jump.isDynamic) {
+               // We handle errors via markers now, but we can keep a visual style for invalid links if desired
+               // For now, markers provide the "red squiggly", so maybe just leave text normal or style differently
+               // Leaving 'renpy-jump-invalid' for specific styling if needed beyond error marker
                newDecorations.push({
                   range: new monaco.Range(jump.line, jump.columnStart, jump.line, jump.columnEnd),
                   options: {
@@ -417,20 +449,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       decorationIds.current = editor.deltaDecorations(decorationIds.current, newDecorations);
   
   }, [analysisResult, block.id, isMounted]);
-
-  const getHoverMessage = (word: string, type: 'character' | 'image' | 'color'): { value: string, isTrusted: boolean, supportHtml: boolean } | null => {
-      if (type === 'character') {
-          const char = analysisResultRef.current.characters.get(word);
-          if (char) {
-              return {
-                  value: `**Character: ${char.name}**\n\n${char.profile || 'No profile info.'}\n\n<div style="width: 20px; height: 20px; background-color: ${char.color}; border: 1px solid #ccc;"></div>`,
-                  isTrusted: true,
-                  supportHtml: true
-              };
-          }
-      }
-      return null;
-  };
 
   const getCurrentContext = () => {
       if (!editorRef.current) return '';
