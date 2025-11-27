@@ -14,6 +14,7 @@ export interface Block {
   title?: string;
   filePath?: string;
   fileHandle?: FileSystemFileHandle;
+  color?: string;
 }
 
 export interface BlockGroup {
