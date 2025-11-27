@@ -256,6 +256,7 @@ export interface AppSettings {
   isRightSidebarOpen: boolean;
   rightSidebarWidth: number;
   renpyPath: string;
+  recentProjects: string[];
 }
 
 export interface ProjectSettings {
@@ -296,7 +297,7 @@ declare global {
           removeEntry: (path: string) => Promise<{ success: boolean; error?: string }>;
           moveFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
           copyEntry: (sourcePath: string, destPath: string) => Promise<{ success: boolean; error?: string }>;
-          onMenuCommand: (callback: (data: { command: string, type?: 'canvas' | 'route-canvas' }) => void) => () => void;
+          onMenuCommand: (callback: (data: { command: string, type?: 'canvas' | 'route-canvas', path?: string }) => void) => () => void;
           onCheckUnsavedChangesBeforeExit: (callback: () => void) => () => void;
           replyUnsavedChangesBeforeExit: (hasUnsaved: boolean) => void;
           onShowExitModal: (callback: () => void) => () => void;

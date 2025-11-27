@@ -1,4 +1,8 @@
 
+
+
+
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -289,6 +293,16 @@ const App: React.FC = () => {
   
   // --- State: File System & Environment ---
   const [projectRootPath, setProjectRootPath] = useState<string | null>(null);
+  
+  // Update window title based on project path
+  useEffect(() => {
+    if (projectRootPath) {
+      document.title = `Ren'IDE (${projectRootPath})`;
+    } else {
+      document.title = "Ren'IDE";
+    }
+  }, [projectRootPath]);
+
   const [directoryHandle, setDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [fileSystemTree, setFileSystemTree] = useState<FileSystemTreeNode | null>(null);
   const [images, setImages] = useImmer<Map<string, ProjectImage>>(new Map());
@@ -296,9 +310,10 @@ const App: React.FC = () => {
   const [imageMetadata, setImageMetadata] = useImmer<Map<string, ImageMetadata>>(new Map());
   const [audioMetadata, setAudioMetadata] = useImmer<Map<string, AudioMetadata>>(new Map());
   
-  // --- State: File Explorer Selection ---
+  // --- State: File Explorer Selection & Expansion ---
   const [explorerSelectedPaths, setExplorerSelectedPaths] = useState<Set<string>>(new Set());
   const [explorerLastClickedPath, setExplorerLastClickedPath] = useState<string | null>(null);
+  const [explorerExpandedPaths, setExplorerExpandedPaths] = useState<Set<string>>(new Set());
 
   // --- State: Scanning ---
   const [imageScanDirectories, setImageScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
@@ -318,6 +333,7 @@ const App: React.FC = () => {
   const [dirtyEditors, setDirtyEditors] = useState<Set<string>>(new Set()); // Blocks modified in editor but not synced to block state yet
   const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false); // Track project setting changes like sticky notes
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saved');
+  const [statusBarMessage, setStatusBarMessage] = useState('');
   
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -348,6 +364,7 @@ const App: React.FC = () => {
     isRightSidebarOpen: true,
     rightSidebarWidth: 300,
     renpyPath: '',
+    recentProjects: [],
   });
   const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles'>>({
     enableAiFeatures: false,
@@ -381,6 +398,59 @@ const App: React.FC = () => {
   // --- Refs ---
   const editorInstances = useRef<Map<string, monaco.editor.IStandaloneCodeEditor>>(new Map());
   const initialLayoutNeeded = useRef(false);
+
+  // --- Sync Explorer with Active Tab ---
+  useEffect(() => {
+    if (activeTabId === 'canvas' || activeTabId === 'route-canvas') return;
+
+    const activeTab = openTabs.find(t => t.id === activeTabId);
+    let filePathToSync: string | undefined;
+
+    if (activeTab) {
+        if (activeTab.type === 'editor' && activeTab.blockId) {
+            const block = blocks.find(b => b.id === activeTab.blockId);
+            filePathToSync = block?.filePath;
+        } else if (activeTab.type === 'image' || activeTab.type === 'audio') {
+            filePathToSync = activeTab.filePath;
+        }
+    }
+
+    if (filePathToSync) {
+        // 1. Select the file
+        setExplorerSelectedPaths(new Set([filePathToSync]));
+        setExplorerLastClickedPath(filePathToSync);
+
+        // 2. Expand all parent folders
+        const parts = filePathToSync.split('/');
+        parts.pop(); // Remove filename
+        
+        setExplorerExpandedPaths(prev => {
+            const newExpanded = new Set(prev);
+            let currentPath = '';
+            let changed = false;
+            
+            parts.forEach((part, index) => {
+                currentPath += (index > 0 ? '/' : '') + part;
+                if (!newExpanded.has(currentPath)) {
+                    newExpanded.add(currentPath);
+                    changed = true;
+                }
+            });
+            
+            return changed ? newExpanded : prev;
+        });
+    }
+  }, [activeTabId, openTabs, blocks]);
+
+  const handleToggleExpandExplorer = useCallback((path: string) => {
+      setExplorerExpandedPaths(prev => {
+          const newSet = new Set(prev);
+          if (newSet.has(path)) newSet.delete(path);
+          else newSet.add(path);
+          return newSet;
+      });
+  }, []);
+
 
   // --- Initial Load of App Settings & Theme Management ---
   useEffect(() => {
@@ -731,19 +801,26 @@ const App: React.FC = () => {
 
   // --- Layout ---
   const handleTidyUp = useCallback((showToast = true) => {
-    try {
-        const links = analysisResult.links;
-        const newLayout = computeAutoLayout(blocks, links);
-        setBlocks(newLayout);
-        if (showToast) {
-            addToast('Layout organized', 'success');
+    setStatusBarMessage('Organizing layout...');
+    // Use setTimeout to allow the UI to update with the status message before the heavy calculation
+    setTimeout(() => {
+        try {
+            const links = analysisResult.links;
+            const newLayout = computeAutoLayout(blocks, links);
+            setBlocks(newLayout);
+            if (showToast) {
+                addToast('Layout organized', 'success');
+            }
+            setStatusBarMessage('Layout organized.');
+            setTimeout(() => setStatusBarMessage(''), 2000);
+        } catch (e) {
+            console.error("Failed to tidy up layout:", e);
+            if (showToast) {
+                addToast('Failed to organize layout', 'error');
+            }
+            setStatusBarMessage('Error organizing layout.');
         }
-    } catch (e) {
-        console.error("Failed to tidy up layout:", e);
-        if (showToast) {
-            addToast('Failed to organize layout', 'error');
-        }
-    }
+    }, 10);
   }, [blocks, analysisResult, setBlocks, addToast]);
 
   useEffect(() => {
@@ -770,6 +847,7 @@ const App: React.FC = () => {
   const loadProject = useCallback(async (path: string) => {
       setIsLoading(true);
       setLoadingMessage('Reading project files...');
+      setStatusBarMessage(`Loading project from ${path}...`);
       try {
           const projectData = await window.electronAPI!.loadProject(path);
           
@@ -803,6 +881,14 @@ const App: React.FC = () => {
           }
 
           setProjectRootPath(projectData.rootPath);
+          
+          // Update Recent Projects
+          updateAppSettings(draft => {
+              // Remove if exists to move to top
+              const filtered = draft.recentProjects.filter(p => p !== projectData.rootPath);
+              draft.recentProjects = [projectData.rootPath, ...filtered].slice(0, 25);
+          });
+
           setBlocks(loadedBlocks);
           initialLayoutNeeded.current = true;
           setFileSystemTree(projectData.tree);
@@ -887,13 +973,16 @@ const App: React.FC = () => {
           setHasUnsavedSettings(false);
           setShowWelcome(false);
           addToast('Project loaded successfully', 'success');
+          setStatusBarMessage('Project loaded.');
+          setTimeout(() => setStatusBarMessage(''), 3000);
       } catch (err) {
           console.error(err);
           addToast('Failed to load project', 'error');
+          setStatusBarMessage('Error loading project.');
       } finally {
           setIsLoading(false);
       }
-  }, [setBlocks, setImages, setAudios, updateProjectSettings, addToast, setFileSystemTree, setStickyNotes, setCharacterProfiles]);
+  }, [setBlocks, setImages, setAudios, updateProjectSettings, addToast, setFileSystemTree, setStickyNotes, setCharacterProfiles, updateAppSettings]);
 
 
   const handleOpenProjectFolder = useCallback(async () => {
@@ -990,6 +1079,7 @@ const App: React.FC = () => {
 
   const handleSaveAll = useCallback(async () => {
     setSaveStatus('saving');
+    setStatusBarMessage('Saving files...');
     try {
         let currentBlocks = [...blocks];
         const editorUpdates = new Map<string, string>();
@@ -1023,7 +1113,8 @@ const App: React.FC = () => {
              setHasUnsavedSettings(false);
              setSaveStatus('saved');
              addToast('Changes saved to memory', 'success');
-             setTimeout(() => setSaveStatus('saved'), 2000);
+             setStatusBarMessage('Saved to memory.');
+             setTimeout(() => { setSaveStatus('saved'); setStatusBarMessage(''); }, 2000);
              return;
         }
 
@@ -1043,11 +1134,13 @@ const App: React.FC = () => {
         setDirtyEditors(new Set());
         setSaveStatus('saved');
         addToast('All changes saved', 'success');
-        setTimeout(() => setSaveStatus('saved'), 2000);
+        setStatusBarMessage('All files saved.');
+        setTimeout(() => { setSaveStatus('saved'); setStatusBarMessage(''); }, 2000);
     } catch (err) {
         console.error(err);
         setSaveStatus('error');
         addToast('Failed to save changes', 'error');
+        setStatusBarMessage('Error saving files.');
     }
   }, [blocks, dirtyEditors, dirtyBlockIds, projectRootPath, directoryHandle, addToast, setBlocks, handleSaveProjectSettings]);
   
@@ -1360,6 +1453,7 @@ const App: React.FC = () => {
     if (!projectRootPath || !searchQuery.trim() || !window.electronAPI) return;
     setIsSearching(true);
     setSearchResults([]);
+    setStatusBarMessage('Searching...');
     try {
       const results = await window.electronAPI.searchInProject({
         projectPath: projectRootPath,
@@ -1367,9 +1461,12 @@ const App: React.FC = () => {
         ...searchOptions,
       });
       setSearchResults(results);
+      setStatusBarMessage(`Search complete. Found ${results.reduce((acc, r) => acc + r.matches.length, 0)} matches in ${results.length} files.`);
+      setTimeout(() => setStatusBarMessage(''), 3000);
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
       addToast(`Search failed: ${errorMessage}`, 'error');
+      setStatusBarMessage('Search failed.');
     } finally {
       setIsSearching(false);
     }
@@ -1452,18 +1549,24 @@ const App: React.FC = () => {
   }>({ labelNodes: [], routeLinks: [], identifiedRoutes: [] });
 
   const handleAnalyzeRoutes = useCallback(() => {
-      const { labelNodes, routeLinks, identifiedRoutes } = performRouteAnalysis(blocks, analysisResult.labels, analysisResult.jumps);
-      const layoutedNodes = computeAutoLayout(labelNodes, routeLinks);
-      setRouteCanvasData({ labelNodes: layoutedNodes, routeLinks, identifiedRoutes });
-      
-      const tabId = 'route-canvas';
-      setOpenTabs(prev => {
-          if (!prev.some(t => t.id === tabId)) {
-              return [...prev, { id: tabId, type: 'route-canvas' }];
-          }
-          return prev;
-      });
-      setActiveTabId(tabId);
+      setStatusBarMessage('Analyzing route paths...');
+      // Allow render cycle to update status bar before heavy calculation
+      setTimeout(() => {
+          const { labelNodes, routeLinks, identifiedRoutes } = performRouteAnalysis(blocks, analysisResult.labels, analysisResult.jumps);
+          const layoutedNodes = computeAutoLayout(labelNodes, routeLinks);
+          setRouteCanvasData({ labelNodes: layoutedNodes, routeLinks, identifiedRoutes });
+          
+          const tabId = 'route-canvas';
+          setOpenTabs(prev => {
+              if (!prev.some(t => t.id === tabId)) {
+                  return [...prev, { id: tabId, type: 'route-canvas' }];
+              }
+              return prev;
+          });
+          setActiveTabId(tabId);
+          setStatusBarMessage('Route analysis complete.');
+          setTimeout(() => setStatusBarMessage(''), 3000);
+      }, 10);
   }, [blocks, analysisResult]);
 
   // --- Asset Management (Basic Implementation) ---
@@ -1471,6 +1574,7 @@ const App: React.FC = () => {
       if (!projectRootPath || !window.electronAPI) return;
       
       setIsLoading(true);
+      setStatusBarMessage('Copying images to project...');
       try {
           for (const src of sourcePaths) {
               const fileName = src.split(/[/\\]/).pop();
@@ -1491,11 +1595,14 @@ const App: React.FC = () => {
               }
           }
           addToast('Images copied to project', 'success');
+          setStatusBarMessage('Images copied successfully.');
       } catch (e) {
           console.error(e);
           addToast('Failed to copy images', 'error');
+          setStatusBarMessage('Error copying images.');
       } finally {
           setIsLoading(false);
+          setTimeout(() => setStatusBarMessage(''), 3000);
       }
   };
   
@@ -1636,6 +1743,7 @@ const App: React.FC = () => {
         }
 
         await handleSaveAll();
+        setStatusBarMessage('Launching game...');
         window.electronAPI.runGame(appSettings.renpyPath, projectRootPath);
 
     }, [appSettings.renpyPath, projectRootPath, handleSaveAll]);
@@ -1663,10 +1771,18 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (window.electronAPI) {
-            const removeStarted = window.electronAPI.onGameStarted(() => setIsGameRunning(true));
-            const removeStopped = window.electronAPI.onGameStopped(() => setIsGameRunning(false));
+            const removeStarted = window.electronAPI.onGameStarted(() => {
+                setIsGameRunning(true);
+                setStatusBarMessage('Game running.');
+            });
+            const removeStopped = window.electronAPI.onGameStopped(() => {
+                setIsGameRunning(false);
+                setStatusBarMessage('Game stopped.');
+                setTimeout(() => setStatusBarMessage(''), 3000);
+            });
             const removeError = window.electronAPI.onGameError((error) => {
                 addToast(`Failed to launch game: ${error}`, 'error');
+                setStatusBarMessage('Error launching game.');
                 setIsGameRunning(false);
             });
             return () => {
@@ -1697,11 +1813,16 @@ const App: React.FC = () => {
                           handleOpenStaticTab(data.type);
                       }
                       break;
+                  case 'open-recent':
+                      if (data.path) {
+                          loadProject(data.path);
+                      }
+                      break;
               }
           });
           return () => removeListener();
       }
-  }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenStaticTab, handleRunGame]);
+  }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenStaticTab, handleRunGame, loadProject]);
   
   // --- Exit Confirmation Handling ---
   useEffect(() => {
@@ -1825,6 +1946,8 @@ const App: React.FC = () => {
             onOpenProject={handleOpenProjectFolder}
             onCreateProject={handleNewProjectRequest}
             isElectron={!!window.electronAPI}
+            recentProjects={appSettings.recentProjects}
+            onOpenRecent={loadProject}
         />
       )}
       <div className="flex-none z-40">
@@ -1902,6 +2025,8 @@ const App: React.FC = () => {
                                 setSelectedPaths={setExplorerSelectedPaths}
                                 lastClickedPath={explorerLastClickedPath}
                                 setLastClickedPath={setExplorerLastClickedPath}
+                                expandedPaths={explorerExpandedPaths}
+                                onToggleExpand={handleToggleExpandExplorer}
                             />
                         )}
                         </div>
@@ -2158,6 +2283,7 @@ const App: React.FC = () => {
           totalWords={projectWordStats.totalWords}
           currentFileWords={projectWordStats.currentFileWords}
           readingTime={projectWordStats.readingTime}
+          statusMessage={statusBarMessage}
         />
       )}
 

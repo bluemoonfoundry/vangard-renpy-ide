@@ -63,12 +63,18 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const [isRenaming, setIsRenaming] = useState(false);
   const [inputValue, setInputValue] = useState(node.name);
   const inputRef = useRef<HTMLInputElement>(null);
+  const nodeRef = useRef<HTMLDivElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
-  // FIX: Define isExpanded based on whether the node's path is in the expandedPaths set.
   const isExpanded = expandedPaths.has(node.path);
-
   const isSelected = selectedPaths.has(node.path);
+
+  // Auto-scroll to selected node
+  useEffect(() => {
+    if (isSelected && nodeRef.current) {
+        nodeRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [isSelected]);
 
   useEffect(() => {
     if (renamingPath === node.path) {
@@ -200,6 +206,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   return (
     <div>
       <div
+        ref={nodeRef}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(e, node); }}
@@ -311,14 +318,17 @@ interface FileExplorerPanelProps {
   setSelectedPaths: React.Dispatch<React.SetStateAction<Set<string>>>;
   lastClickedPath: string | null;
   setLastClickedPath: React.Dispatch<React.SetStateAction<string | null>>;
+  // Expansion (Lifted State)
+  expandedPaths: Set<string>;
+  onToggleExpand: (path: string) => void;
 }
 
 const FileExplorerPanel: React.FC<FileExplorerPanelProps> = ({ 
     tree, onFileOpen, onCreateNode, onRenameNode, onDeleteNode, onMoveNode, 
     clipboard, onCut, onCopy, onPaste, onCenterOnBlock,
-    selectedPaths, setSelectedPaths, lastClickedPath, setLastClickedPath 
+    selectedPaths, setSelectedPaths, lastClickedPath, setLastClickedPath,
+    expandedPaths, onToggleExpand
 }) => {
-  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: FileSystemTreeNode } | null>(null);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [creatingIn, setCreatingIn] = useState<{ path: string, type: 'file' | 'folder' } | null>(null);
@@ -335,24 +345,6 @@ const FileExplorerPanel: React.FC<FileExplorerPanelProps> = ({
       tree.children?.forEach(traverse);
       return flatList;
   }, [tree, expandedPaths]);
-
-  useEffect(() => {
-    if (tree) {
-        const newExpanded = new Set([tree.path]);
-        const gameDir = tree.children?.find(c => c.name === 'game');
-        if(gameDir) newExpanded.add(gameDir.path);
-        setExpandedPaths(newExpanded);
-    }
-  }, [tree]);
-
-  const toggleExpand = (path: string) => {
-    setExpandedPaths(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(path)) newSet.delete(path);
-      else newSet.add(path);
-      return newSet;
-    });
-  };
 
   const handleContextMenu = (event: React.MouseEvent, node: FileSystemTreeNode) => {
     if (!selectedPaths.has(node.path)) {
@@ -384,7 +376,10 @@ const FileExplorerPanel: React.FC<FileExplorerPanelProps> = ({
   const handleStartCreate = (parentPath: string, type: 'file' | 'folder') => {
       setCreatingIn({ path: parentPath, type });
       setContextMenu(null);
-      setExpandedPaths(prev => new Set(prev).add(parentPath));
+      // Force expand parent
+      if(!expandedPaths.has(parentPath)) {
+          onToggleExpand(parentPath);
+      }
   };
 
   return (
@@ -403,7 +398,7 @@ const FileExplorerPanel: React.FC<FileExplorerPanelProps> = ({
                 node={child} 
                 onFileOpen={onFileOpen}
                 expandedPaths={expandedPaths} 
-                toggleExpand={toggleExpand} 
+                toggleExpand={onToggleExpand} 
                 level={0}
                 onContextMenu={handleContextMenu}
                 renamingPath={renamingPath}

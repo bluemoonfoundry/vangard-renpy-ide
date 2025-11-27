@@ -1,6 +1,8 @@
 {
   "name": "vangard-renpy-renide",
-  "version": "0.2.0",
+    "version": "0.3.0",
+    "description": "An integrated development environment for Ren'Py projects.",
+    "author": "Blue Moon Foundry (gsh@bluemoonfoundry.com)",
   "type": "module",
   "main": "electron.js",
   "scripts": {

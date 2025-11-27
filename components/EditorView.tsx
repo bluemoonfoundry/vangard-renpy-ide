@@ -1,4 +1,6 @@
 
+
+
 import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type { Block, RenpyAnalysisResult, ToastMessage } from '../types';
@@ -22,6 +24,31 @@ interface EditorViewProps {
   onEditorMount: (blockId: string, editor: monaco.editor.IStandaloneCodeEditor) => void;
   onEditorUnmount: (blockId: string) => void;
 }
+
+const Breadcrumbs: React.FC<{ filePath?: string, context?: string }> = ({ filePath, context }) => {
+    if (!filePath) return null;
+    
+    const parts = filePath.split(/[/\\]/);
+    
+    return (
+        <div className="flex items-center space-x-1 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-1.5 select-none overflow-hidden">
+            {parts.map((part, i) => (
+                <React.Fragment key={i}>
+                    {i > 0 && <span className="opacity-50">/</span>}
+                    <span className={i === parts.length - 1 && !context ? "font-semibold text-gray-700 dark:text-gray-200" : ""}>{part}</span>
+                </React.Fragment>
+            ))}
+            {context && (
+                <>
+                    <span className="opacity-50">&gt;</span>
+                    <span className="font-semibold text-indigo-600 dark:text-indigo-400 flex items-center">
+                        {context}
+                    </span>
+                </>
+            )}
+        </div>
+    );
+};
 
 const EditorView: React.FC<EditorViewProps> = (props) => {
   const { 
@@ -47,6 +74,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const decorationIds = useRef<string[]>([]);
+  const [currentContext, setCurrentContext] = useState<string>('');
   
   // Refs to keep track of latest props for closures
   const onDirtyChangeRef = useRef(onDirtyChange);
@@ -200,12 +228,42 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     return markers;
   };
 
+  const updateContext = () => {
+      if (!editorRef.current) return;
+      const position = editorRef.current.getPosition();
+      if (!position) return;
+
+      const lineNumber = position.lineNumber;
+      const labels = Object.values(analysisResultRef.current.labels)
+          .filter(l => l.blockId === blockRef.current.id && l.line <= lineNumber)
+          .sort((a, b) => b.line - a.line);
+      
+      const screens = Array.from(analysisResultRef.current.screens.values())
+          .filter(s => s.definedInBlockId === blockRef.current.id && s.line <= lineNumber)
+          .sort((a, b) => b.line - a.line);
+
+      let bestContext = '';
+      let bestLine = -1;
+
+      if (labels.length > 0) {
+          bestContext = `label ${labels[0].label}`;
+          bestLine = labels[0].line;
+      }
+
+      if (screens.length > 0 && screens[0].line > bestLine) {
+          bestContext = `screen ${screens[0].name}`;
+      }
+
+      setCurrentContext(bestContext);
+  };
+
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
     onEditorMount(block.id, editor);
     editor.focus();
     setIsMounted(true);
+    updateContext(); // Initial context
 
     aiFeaturesEnabledContextKey.current = editor.createContextKey('aiFeaturesEnabled', enableAiFeatures);
 
@@ -249,6 +307,10 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         const savedContent = blockRef.current.content;
         const isDirty = currentContent !== savedContent;
         onDirtyChangeRef.current(blockRef.current.id, isDirty);
+    });
+    
+    editor.onDidChangeCursorPosition(() => {
+        updateContext();
     });
 
     // Use addAction instead of addCommand for cleaner action registration
@@ -387,6 +449,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
+      <Breadcrumbs filePath={block.filePath} context={currentContext} />
       <Editor
         height="100%"
         defaultLanguage="renpy"

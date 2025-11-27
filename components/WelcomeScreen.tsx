@@ -1,3 +1,4 @@
+
 import React from 'react';
 import logo from '../vangard-renide-512x512.png';
 import packageJson from '../package.json';
@@ -6,12 +7,16 @@ interface WelcomeScreenProps {
   onOpenProject: () => void;
   onCreateProject: () => void;
   isElectron: boolean;
+  recentProjects?: string[];
+  onOpenRecent?: (path: string) => void;
 }
 
 const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ 
   onOpenProject, 
   onCreateProject, 
-  isElectron 
+  isElectron,
+  recentProjects = [],
+  onOpenRecent
 }) => {
   return (
     <div className="fixed inset-0 z-50 flex bg-white dark:bg-gray-900 font-sans">
@@ -27,7 +32,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
       </div>
 
       {/* Right Side - Actions */}
-      <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-8 bg-gray-50 dark:bg-gray-900">
+      <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-8 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
         <div className="w-full max-w-md space-y-8">
             <div className="text-center md:text-left">
                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Get Started</h2>
@@ -69,6 +74,35 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
                     </div>
                 )}
             </div>
+
+            {recentProjects.length > 0 && onOpenRecent && (
+              <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Recent Projects</h3>
+                <div className="max-h-60 overflow-y-auto space-y-1 pr-2 custom-scrollbar">
+                  {recentProjects.map((path, index) => {
+                    const folderName = path.replace(/[/\\]$/, '').split(/[/\\]/).pop();
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => onOpenRecent(path)}
+                        className="w-full text-left p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group flex items-center"
+                      >
+                        <div className="flex-shrink-0 mr-3 text-gray-400 dark:text-gray-500 group-hover:text-indigo-500 dark:group-hover:text-indigo-400">
+                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1H8a3 3 0 00-3 3v1.5a1.5 1.5 0 01-3 0V6z" clipRule="evenodd" />
+                              <path d="M6 12a2 2 0 012-2h8a2 2 0 012 2v2a2 2 0 01-2 2H2h2a2 2 0 002-2v-2z" />
+                           </svg>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{folderName}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-500 truncate" title={path}>{path}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
         </div>
       </div>
     </div>
