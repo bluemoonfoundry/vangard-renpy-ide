@@ -14,6 +14,7 @@ export interface Block {
   title?: string;
   filePath?: string;
   fileHandle?: FileSystemFileHandle;
+  color?: string;
 }
 
 export interface BlockGroup {
@@ -247,7 +248,7 @@ export interface ToastMessage {
   type: 'success' | 'error' | 'warning' | 'info';
 }
 
-export type Theme = 'system' | 'light' | 'dark' | 'solarized-light' | 'solarized-dark' | 'colorful' | 'colorful-light';
+export type Theme = 'system' | 'light' | 'dark' | 'solarized-light' | 'solarized-dark' | 'colorful' | 'colorful-light' | 'neon-dark' | 'ocean-dark' | 'candy-light' | 'forest-light';
 
 export interface AppSettings {
   theme: Theme;
@@ -256,6 +257,9 @@ export interface AppSettings {
   isRightSidebarOpen: boolean;
   rightSidebarWidth: number;
   renpyPath: string;
+  recentProjects: string[];
+  editorFontFamily: string;
+  editorFontSize: number;
 }
 
 export interface ProjectSettings {
@@ -296,7 +300,7 @@ declare global {
           removeEntry: (path: string) => Promise<{ success: boolean; error?: string }>;
           moveFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
           copyEntry: (sourcePath: string, destPath: string) => Promise<{ success: boolean; error?: string }>;
-          onMenuCommand: (callback: (data: { command: string, type?: 'canvas' | 'route-canvas' }) => void) => () => void;
+          onMenuCommand: (callback: (data: { command: string, type?: 'canvas' | 'route-canvas', path?: string }) => void) => () => void;
           onCheckUnsavedChangesBeforeExit: (callback: () => void) => () => void;
           replyUnsavedChangesBeforeExit: (hasUnsaved: boolean) => void;
           onShowExitModal: (callback: () => void) => () => void;

@@ -1,9 +1,14 @@
 
 import React, { useState, useRef, useCallback, useMemo, useEffect, forwardRef } from 'react';
+import { createPortal } from 'react-dom';
 import CodeBlock from './CodeBlock';
 import GroupContainer from './GroupContainer';
 import StickyNote from './StickyNote';
+import Minimap from './Minimap';
+import CanvasContextMenu from './CanvasContextMenu';
+import type { MinimapItem } from './Minimap';
 import type { Block, Position, RenpyAnalysisResult, LabelLocation, BlockGroup, Link, StickyNote as StickyNoteType } from '../types';
+import type { BlockType } from './CreateBlockModal';
 
 interface StoryCanvasProps {
   blocks: Block[];
@@ -33,6 +38,8 @@ interface StoryCanvasProps {
   hoverHighlightIds: Set<string> | null;
   transform: { x: number, y: number, scale: number };
   onTransformChange: React.Dispatch<React.SetStateAction<{ x: number, y: number, scale: number }>>;
+  onCreateBlock?: (type: BlockType, position: Position) => void;
+  onAddStickyNote?: (position: Position) => void;
 }
 
 const getBlockById = (blocks: Block[], id: string) => blocks.find(b => b.id === id);
@@ -178,10 +185,11 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
     selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, 
     findUsagesHighlightIds, clearFindUsages, dirtyBlockIds, 
     canvasFilters, setCanvasFilters, centerOnBlockRequest, flashBlockRequest, hoverHighlightIds, 
-    transform, onTransformChange 
+    transform, onTransformChange, onCreateBlock, onAddStickyNote
 }) => {
   const [rubberBandRect, setRubberBandRect] = useState<Rect | null>(null);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
+  const [canvasContextMenu, setCanvasContextMenu] = useState<{ x: number; y: number; worldPos: Position } | null>(null);
   
   // Refs for Imperative DOM updates
   const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -199,6 +207,19 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
   const [flashingBlockId, setFlashingBlockId] = useState<string | null>(null);
   const lastHandledRequestKey = useRef<number | null>(null);
   const lastHandledFlashKey = useRef<number | null>(null);
+  const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    const observer = new ResizeObserver(entries => {
+        if (entries[0]) {
+            const { width, height } = entries[0].contentRect;
+            setCanvasDimensions({ width, height });
+        }
+    });
+    observer.observe(canvasRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!centerOnBlockRequest || !canvasRef.current) return;
@@ -292,7 +313,12 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
   }, [transform.x, transform.y, transform.scale]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    // Only handle left click for interactions (drag/pan)
     if (e.button !== 0) return;
+    
+    // Close context menu if open
+    if (canvasContextMenu) setCanvasContextMenu(null);
+
     const targetEl = e.target as HTMLElement;
     
     if (targetEl.closest('.arrow-interaction-group') || targetEl.closest('.filter-panel')) {
@@ -319,11 +345,6 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
         if (targetEl.closest('.resize-handle')) {
             interactionState.current = { type: 'resizing-note', note };
         } else if (targetEl.closest('.drag-handle') || targetEl.closest('.sticky-note-wrapper')) {
-             // Allow dragging from anywhere on the note if not resizing, 
-             // but text selection inside textarea is handled by browser default usually. 
-             // However, we added a drag-handle to the header. Let's restrict dragging to the header for consistency
-             // OR allow dragging the whole note if not interacting with text.
-             // For now, let's rely on the header .drag-handle for movement to avoid fighting text selection.
              if (targetEl.closest('.drag-handle')) {
                 const currentSelection = selectedNoteIds.includes(noteId) ? selectedNoteIds : [noteId];
                 const dragInitialPositions = new Map<string, Position>();
@@ -599,6 +620,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
                 setSelectedNoteIds([]);
                 if (highlightedPath) setHighlightedPath(null);
                 if (findUsagesHighlightIds) clearFindUsages();
+                if (canvasContextMenu) setCanvasContextMenu(null);
             }
         }
         
@@ -664,6 +686,25 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
     });
   };
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+      e.preventDefault();
+      if ((e.target as HTMLElement).closest('.code-block-wrapper') || (e.target as HTMLElement).closest('.group-container-wrapper') || (e.target as HTMLElement).closest('.sticky-note-wrapper')) {
+          return;
+      }
+      
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      
+      const worldX = (e.clientX - rect.left - transform.x) / transform.scale;
+      const worldY = (e.clientY - rect.top - transform.y) / transform.scale;
+      
+      setCanvasContextMenu({
+          x: e.clientX,
+          y: e.clientY,
+          worldPos: { x: worldX, y: worldY }
+      });
+  };
+
   const backgroundStyle = {
     backgroundSize: `${32 * transform.scale}px ${32 * transform.scale}px`,
     backgroundPosition: `${transform.x}px ${transform.y}px`,
@@ -714,29 +755,50 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
     };
   }, [visibleBlocks]);
 
+  const minimapItems = useMemo((): MinimapItem[] => {
+    const blockItems: MinimapItem[] = visibleBlocks.map(b => {
+        const isScreen = analysisResult.screenOnlyBlockIds.has(b.id);
+        const isConfig = analysisResult.configBlockIds.has(b.id);
+        let type: MinimapItem['type'] = 'block';
+        if (isScreen) type = 'screen';
+        if (isConfig) type = 'config';
+        return { 
+            id: b.id, 
+            position: b.position, 
+            width: b.width, 
+            height: b.height, 
+            type 
+        };
+    });
+    const groupItems: MinimapItem[] = groups.map(g => ({ ...g, type: 'group', width: g.width, height: g.height }));
+    const noteItems: MinimapItem[] = canvasFilters.notes ? stickyNotes.map(n => ({ ...n, type: 'note' })) : [];
+    return [...blockItems, ...groupItems, ...noteItems];
+  }, [visibleBlocks, groups, stickyNotes, canvasFilters.notes, analysisResult]);
+
   return (
     <div
       ref={canvasRef}
-      className="absolute inset-0 overflow-hidden cursor-grab active:cursor-grabbing bg-gray-100 dark:bg-gray-900 bg-[radial-gradient(#d4d4d8_1px,transparent_1px)] dark:bg-[radial-gradient(#4b5563_1px,transparent_1px)]"
+      className="absolute inset-0 overflow-hidden cursor-grab active:cursor-grabbing bg-primary bg-[radial-gradient(var(--dot-color)_1px,transparent_1px)]"
       style={backgroundStyle}
       onPointerDown={handlePointerDown}
       onWheel={handleWheel}
+      onContextMenu={handleContextMenu}
     >
-        <div className="filter-panel absolute top-4 right-4 z-20 bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 flex flex-col space-y-2">
-            <h4 className="text-sm font-semibold text-center px-2">View Filters</h4>
-            <label className="flex items-center space-x-2 cursor-pointer text-sm">
+        <div className="filter-panel absolute top-4 right-4 z-20 bg-secondary p-2 rounded-lg shadow-lg border border-primary flex flex-col space-y-2">
+            <h4 className="text-sm font-semibold text-center px-2 text-primary">View Filters</h4>
+            <label className="flex items-center space-x-2 cursor-pointer text-sm text-secondary">
                 <input type="checkbox" checked={canvasFilters.story} onChange={e => setCanvasFilters(f => ({ ...f, story: e.target.checked }))} className="h-4 w-4 rounded focus:ring-indigo-500" style={{ accentColor: 'rgb(79 70 229)' }} />
                 <span>Story Blocks</span>
             </label>
-            <label className="flex items-center space-x-2 cursor-pointer text-sm">
+            <label className="flex items-center space-x-2 cursor-pointer text-sm text-secondary">
                 <input type="checkbox" checked={canvasFilters.screens} onChange={e => setCanvasFilters(f => ({ ...f, screens: e.target.checked }))} className="h-4 w-4 rounded focus:ring-teal-500" style={{ accentColor: 'rgb(13 148 136)' }} />
                 <span>Screen Blocks</span>
             </label>
-             <label className="flex items-center space-x-2 cursor-pointer text-sm">
+             <label className="flex items-center space-x-2 cursor-pointer text-sm text-secondary">
                 <input type="checkbox" checked={canvasFilters.config} onChange={e => setCanvasFilters(f => ({ ...f, config: e.target.checked }))} className="h-4 w-4 rounded focus:ring-red-500" style={{ accentColor: 'rgb(239 68 68)' }} />
                 <span>Config Blocks</span>
             </label>
-            <label className="flex items-center space-x-2 cursor-pointer text-sm">
+            <label className="flex items-center space-x-2 cursor-pointer text-sm text-secondary">
                 <input type="checkbox" checked={canvasFilters.notes} onChange={e => setCanvasFilters(f => ({ ...f, notes: e.target.checked }))} className="h-4 w-4 rounded focus:ring-yellow-500" style={{ accentColor: 'rgb(234 179 8)' }} />
                 <span>Notes</span>
             </label>
@@ -873,6 +935,22 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
             />
         ))}
       </div>
+      <Minimap
+        items={minimapItems}
+        transform={transform}
+        canvasDimensions={canvasDimensions}
+        onTransformChange={onTransformChange}
+      />
+      
+      {canvasContextMenu && onCreateBlock && onAddStickyNote && (
+        <CanvasContextMenu
+            x={canvasContextMenu.x}
+            y={canvasContextMenu.y}
+            onClose={() => setCanvasContextMenu(null)}
+            onCreateBlock={(type) => onCreateBlock(type, canvasContextMenu.worldPos)}
+            onAddStickyNote={() => onAddStickyNote(canvasContextMenu.worldPos)}
+        />
+      )}
     </div>
   );
 };

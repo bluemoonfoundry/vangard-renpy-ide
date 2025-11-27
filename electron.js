@@ -1,5 +1,6 @@
 
 
+
 import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -123,30 +124,18 @@ async function readProjectFiles(rootPath) {
 
 let forceQuit = false;
 
-async function createWindow() {
-  const savedState = await loadWindowState();
+async function updateApplicationMenu() {
+  const settings = await loadAppSettings();
+  const recentProjects = settings?.recentProjects || [];
 
-  const mainWindow = new BrowserWindow({
-    width: savedState?.width || 1280,
-    height: savedState?.height || 800,
-    x: savedState?.x,
-    y: savedState?.y,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
-    icon: path.join(__dirname, 'vangard-renide-512x512.png')
-  });
-
-  mainWindow.on('close', (e) => {
-    if (forceQuit) {
-      saveWindowState(mainWindow);
-      return;
-    }
-    e.preventDefault();
-    mainWindow.webContents.send('check-unsaved-changes-before-exit');
-  });
+  const openRecentSubmenu = recentProjects.length > 0
+    ? recentProjects.map(p => ({
+        label: p,
+        click: (item, focusedWindow) => {
+          if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-recent', path: p });
+        }
+      }))
+    : [{ label: 'No Recent Projects', enabled: false }];
 
   const menuTemplate = [
     ...(process.platform === 'darwin' ? [{
@@ -169,18 +158,22 @@ async function createWindow() {
             { 
                 label: 'New Project...',
                 accelerator: 'CmdOrCtrl+N',
-                click: () => mainWindow.webContents.send('menu-command', { command: 'new-project' })
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'new-project' }); }
             },
             { 
                 label: 'Open Project...',
                 accelerator: 'CmdOrCtrl+O',
-                click: () => mainWindow.webContents.send('menu-command', { command: 'open-project' })
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-project' }); }
+            },
+            {
+                label: 'Open Recent',
+                submenu: openRecentSubmenu
             },
             { type: 'separator' },
             {
                 label: 'Run Project',
                 accelerator: 'F5',
-                click: () => mainWindow.webContents.send('menu-command', { command: 'run-project' })
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'run-project' }); }
             },
             { type: 'separator' },
             process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' }
@@ -206,11 +199,11 @@ async function createWindow() {
             { type: 'separator' },
             { 
               label: 'Story Canvas',
-              click: () => mainWindow.webContents.send('menu-command', { command: 'open-static-tab', type: 'canvas' })
+              click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-static-tab', type: 'canvas' }); }
             },
             { 
               label: 'Route Canvas',
-              click: () => mainWindow.webContents.send('menu-command', { command: 'open-static-tab', type: 'route-canvas' })
+              click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-static-tab', type: 'route-canvas' }); }
             },
             { type: 'separator' },
             { role: 'resetZoom' },
@@ -231,6 +224,34 @@ async function createWindow() {
 
   const menu = Menu.buildFromTemplate(menuTemplate);
   Menu.setApplicationMenu(menu);
+}
+
+async function createWindow() {
+  const savedState = await loadWindowState();
+
+  const mainWindow = new BrowserWindow({
+    width: savedState?.width || 1280,
+    height: savedState?.height || 800,
+    x: savedState?.x,
+    y: savedState?.y,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+    icon: path.join(__dirname, 'vangard-renide-512x512.png')
+  });
+
+  mainWindow.on('close', (e) => {
+    if (forceQuit) {
+      saveWindowState(mainWindow);
+      return;
+    }
+    e.preventDefault();
+    mainWindow.webContents.send('check-unsaved-changes-before-exit');
+  });
+
+  await updateApplicationMenu();
 
   mainWindow.loadFile(path.join(__dirname, 'dist/index.html'));
 }
@@ -449,8 +470,14 @@ app.whenReady().then(() => {
   ipcMain.handle('app:get-settings', async () => {
     return await loadAppSettings();
   });
+  
   ipcMain.handle('app:save-settings', async (event, settings) => {
-      return await saveAppSettings(settings);
+      const result = await saveAppSettings(settings);
+      if (result.success) {
+          // Rebuild menu to update Recent Projects list
+          await updateApplicationMenu();
+      }
+      return result;
   });
 
   ipcMain.handle('project:search', async (event, { projectPath, query, ...options }) => {

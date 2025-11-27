@@ -74,6 +74,7 @@ html.dark .heatmap-highlight {
   --accent-border: #6366f1; /* indigo-500 */
   --text-on-accent: #ffffff;
   --accent-border-hover-pulse: rgba(56, 189, 248, 0.6); /* sky-400 */
+  --dot-color: #d4d4d8; /* gray-300 */
 }
 .dark {
   --bg-primary: #111827; /* gray-900 */
@@ -90,6 +91,7 @@ html.dark .heatmap-highlight {
   --accent-border: #818cf8; /* indigo-400 */
   --text-on-accent: #ffffff;
   --accent-border-hover-pulse: rgba(14, 165, 233, 0.6); /* sky-500 */
+  --dot-color: #4b5563; /* gray-600 */
 }
 
 /* Solarized Light: A warm, low-contrast theme */
@@ -107,6 +109,7 @@ html.dark .heatmap-highlight {
   --accent-text: #cb4b16;     /* orange */
   --accent-border: #268bd2;
   --text-on-accent: #fdf6e3;
+  --dot-color: #93a1a1;
 }
 
 /* Solarized Dark: A cool, low-contrast theme */
@@ -124,6 +127,7 @@ html.dark .heatmap-highlight {
   --accent-text: #b58900;     /* yellow */
   --accent-border: #2aa198;
   --text-on-accent: #002b36;
+  --dot-color: #586e75;
 }
 
 /* Colorful (Dark): A vibrant, high-contrast synthwave theme */
@@ -141,6 +145,7 @@ html.dark .heatmap-highlight {
   --accent-text: #865DFF;          /* Bright Purple */
   --accent-border: #FFA3FD;
   --text-on-accent: #191825;       /* Dark text on bright button */
+  --dot-color: #413f57;
 }
 
 /* Colorful Light: A vibrant, high-contrast lavender theme */
@@ -158,6 +163,83 @@ html.dark .heatmap-highlight {
   --accent-text: #C738BD;             /* Magenta */
   --accent-border: #865DFF;
   --text-on-accent: #FFFFFF;
+  --dot-color: #C3ADF1;
+}
+
+/* Neon Dark: Hacker/Cyberpunk */
+.dark.theme-neon-dark {
+  --bg-primary: #000000;
+  --bg-secondary: #111111;
+  --bg-tertiary: #171717;
+  --bg-tertiary-hover: #262626;
+  --bg-header: #000000;
+  --text-primary: #e5e5e5;
+  --text-secondary: #a3a3a3;
+  --border-primary: #262626;
+  --accent-primary: #39ff14; /* Neon Green */
+  --accent-primary-hover: #32e612;
+  --accent-text: #39ff14;
+  --accent-border: #39ff14;
+  --text-on-accent: #000000;
+  --accent-border-hover-pulse: rgba(57, 255, 20, 0.6);
+  --dot-color: #262626;
+}
+
+/* Ocean Dark: Deep blue tones */
+.dark.theme-ocean-dark {
+  --bg-primary: #001e3c; /* Dark Blue */
+  --bg-secondary: #0a1929;
+  --bg-tertiary: #132f4c;
+  --bg-tertiary-hover: #173a5e;
+  --bg-header: #001e3c;
+  --text-primary: #f0f4f8;
+  --text-secondary: #b2bac2;
+  --border-primary: #1e4976;
+  --accent-primary: #00e5ff; /* Cyan A400 */
+  --accent-primary-hover: #00b8cc;
+  --accent-text: #00e5ff;
+  --accent-border: #00e5ff;
+  --text-on-accent: #001e3c;
+  --accent-border-hover-pulse: rgba(0, 229, 255, 0.6);
+  --dot-color: #132f4c;
+}
+
+/* Candy Light: Pink/Rose */
+.theme-candy-light {
+  --bg-primary: #fff5f8; /* Lavender Blushish */
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #ffe6f0;
+  --bg-tertiary-hover: #ffd1df;
+  --bg-header: #fff0f5;
+  --text-primary: #880e4f; /* Deep Pink */
+  --text-secondary: #ad1457;
+  --border-primary: #f8bbd0;
+  --accent-primary: #f50057; /* Pink A400 */
+  --accent-primary-hover: #c51162;
+  --accent-text: #c51162;
+  --accent-border: #f50057;
+  --text-on-accent: #ffffff;
+  --accent-border-hover-pulse: rgba(245, 0, 87, 0.5);
+  --dot-color: #f8bbd0;
+}
+
+/* Forest Light: Mint/Green */
+.theme-forest-light {
+  --bg-primary: #f1f8e9; /* Light Green */
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #dcedc8;
+  --bg-tertiary-hover: #c5e1a5;
+  --bg-header: #f1f8e9;
+  --text-primary: #1b5e20; /* Dark Green */
+  --text-secondary: #33691e;
+  --border-primary: #aed581;
+  --accent-primary: #00c853; /* Green A700 */
+  --accent-primary-hover: #009624;
+  --accent-text: #00c853;
+  --accent-border: #00c853;
+  --text-on-accent: #ffffff;
+  --accent-border-hover-pulse: rgba(0, 200, 83, 0.5);
+  --dot-color: #aed581;
 }
 
 /* --- Tailwind Class Overrides --- */
@@ -189,6 +271,7 @@ html.dark .heatmap-highlight {
 .dark.theme-solarized-dark .bg-accent-light { opacity: 0.25; }
 .dark.theme-colorful .bg-accent-light { opacity: 0.2; }
 .theme-colorful-light .bg-accent-light { background-color: var(--accent-text); opacity: 0.15; }
+.dark.theme-neon-dark .bg-accent-light { background-color: var(--accent-text); opacity: 0.1; }
 
 /* Other overrides */
 .renpy-jump-link { color: var(--accent-primary); }

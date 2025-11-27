@@ -21,6 +21,7 @@ import CharacterEditorView from './components/CharacterEditorView';
 import TabContextMenu from './components/TabContextMenu';
 import Sash from './components/Sash';
 import StatusBar from './components/StatusBar';
+import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import { useRenpyAnalysis, performRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import type { 
@@ -288,6 +289,16 @@ const App: React.FC = () => {
   
   // --- State: File System & Environment ---
   const [projectRootPath, setProjectRootPath] = useState<string | null>(null);
+  
+  // Update window title based on project path
+  useEffect(() => {
+    if (projectRootPath) {
+      document.title = `Ren'IDE (${projectRootPath})`;
+    } else {
+      document.title = "Ren'IDE";
+    }
+  }, [projectRootPath]);
+
   const [directoryHandle, setDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [fileSystemTree, setFileSystemTree] = useState<FileSystemTreeNode | null>(null);
   const [images, setImages] = useImmer<Map<string, ProjectImage>>(new Map());
@@ -295,9 +306,10 @@ const App: React.FC = () => {
   const [imageMetadata, setImageMetadata] = useImmer<Map<string, ImageMetadata>>(new Map());
   const [audioMetadata, setAudioMetadata] = useImmer<Map<string, AudioMetadata>>(new Map());
   
-  // --- State: File Explorer Selection ---
+  // --- State: File Explorer Selection & Expansion ---
   const [explorerSelectedPaths, setExplorerSelectedPaths] = useState<Set<string>>(new Set());
   const [explorerLastClickedPath, setExplorerLastClickedPath] = useState<string | null>(null);
+  const [explorerExpandedPaths, setExplorerExpandedPaths] = useState<Set<string>>(new Set());
 
   // --- State: Scanning ---
   const [imageScanDirectories, setImageScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
@@ -317,6 +329,7 @@ const App: React.FC = () => {
   const [dirtyEditors, setDirtyEditors] = useState<Set<string>>(new Set()); // Blocks modified in editor but not synced to block state yet
   const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false); // Track project setting changes like sticky notes
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saved');
+  const [statusBarMessage, setStatusBarMessage] = useState('');
   
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -327,6 +340,7 @@ const App: React.FC = () => {
   const [createBlockModalOpen, setCreateBlockModalOpen] = useState(false);
   const [unsavedChangesModalInfo, setUnsavedChangesModalInfo] = useState<UnsavedChangesModalInfo | null>(null);
   const [contextMenuInfo, setContextMenuInfo] = useState<{ x: number; y: number; tabId: string } | null>(null);
+  const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false);
   
   // --- State: View Transforms ---
   const [storyCanvasTransform, setStoryCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
@@ -347,6 +361,9 @@ const App: React.FC = () => {
     isRightSidebarOpen: true,
     rightSidebarWidth: 300,
     renpyPath: '',
+    recentProjects: [],
+    editorFontFamily: "'Consolas', 'Courier New', monospace",
+    editorFontSize: 14,
   });
   const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles'>>({
     enableAiFeatures: false,
@@ -381,13 +398,70 @@ const App: React.FC = () => {
   const editorInstances = useRef<Map<string, monaco.editor.IStandaloneCodeEditor>>(new Map());
   const initialLayoutNeeded = useRef(false);
 
+  // --- Sync Explorer with Active Tab ---
+  useEffect(() => {
+    if (activeTabId === 'canvas' || activeTabId === 'route-canvas') return;
+
+    const activeTab = openTabs.find(t => t.id === activeTabId);
+    let filePathToSync: string | undefined;
+
+    if (activeTab) {
+        if (activeTab.type === 'editor' && activeTab.blockId) {
+            const block = blocks.find(b => b.id === activeTab.blockId);
+            filePathToSync = block?.filePath;
+        } else if (activeTab.type === 'image' || activeTab.type === 'audio') {
+            filePathToSync = activeTab.filePath;
+        }
+    }
+
+    if (filePathToSync) {
+        // 1. Select the file
+        setExplorerSelectedPaths(new Set([filePathToSync]));
+        setExplorerLastClickedPath(filePathToSync);
+
+        // 2. Expand all parent folders
+        const parts = filePathToSync.split('/');
+        parts.pop(); // Remove filename
+        
+        setExplorerExpandedPaths(prev => {
+            const newExpanded = new Set(prev);
+            let currentPath = '';
+            let changed = false;
+            
+            parts.forEach((part, index) => {
+                currentPath += (index > 0 ? '/' : '') + part;
+                if (!newExpanded.has(currentPath)) {
+                    newExpanded.add(currentPath);
+                    changed = true;
+                }
+            });
+            
+            return changed ? newExpanded : prev;
+        });
+    }
+  }, [activeTabId, openTabs, blocks]);
+
+  const handleToggleExpandExplorer = useCallback((path: string) => {
+      setExplorerExpandedPaths(prev => {
+          const newSet = new Set(prev);
+          if (newSet.has(path)) newSet.delete(path);
+          else newSet.add(path);
+          return newSet;
+      });
+  }, []);
+
+
   // --- Initial Load of App Settings & Theme Management ---
   useEffect(() => {
     // Load app-level settings from Electron main process or fallback to localStorage
     if (window.electronAPI?.getAppSettings) {
       window.electronAPI.getAppSettings().then(savedSettings => {
         if (savedSettings) {
-          updateAppSettings(draft => { Object.assign(draft, savedSettings) });
+          updateAppSettings(draft => { 
+              Object.assign(draft, savedSettings);
+              if (!draft.editorFontFamily) draft.editorFontFamily = "'Consolas', 'Courier New', monospace";
+              if (!draft.editorFontSize) draft.editorFontSize = 14;
+          });
         }
       }).finally(() => {
         setAppSettingsLoaded(true);
@@ -397,7 +471,11 @@ const App: React.FC = () => {
       if (savedSettings) {
         try {
           const parsed = JSON.parse(savedSettings);
-          updateAppSettings(draft => { Object.assign(draft, parsed) });
+          updateAppSettings(draft => { 
+              Object.assign(draft, parsed);
+              if (!draft.editorFontFamily) draft.editorFontFamily = "'Consolas', 'Courier New', monospace";
+              if (!draft.editorFontSize) draft.editorFontSize = 14;
+          });
         } catch (e) { console.error("Failed to load app settings from localStorage", e); }
       }
       setAppSettingsLoaded(true);
@@ -420,12 +498,29 @@ const App: React.FC = () => {
     
     const root = window.document.documentElement;
     const applyTheme = (theme: Theme) => {
-      root.classList.remove('dark', 'theme-solarized-light', 'theme-solarized-dark', 'theme-colorful', 'theme-colorful-light');
+      root.classList.remove(
+          'dark', 
+          'theme-solarized-light', 
+          'theme-solarized-dark', 
+          'theme-colorful', 
+          'theme-colorful-light',
+          'theme-neon-dark',
+          'theme-ocean-dark',
+          'theme-candy-light',
+          'theme-forest-light'
+      );
+      
       if (theme === 'dark') root.classList.add('dark');
       if (theme === 'solarized-light') root.classList.add('theme-solarized-light');
       if (theme === 'solarized-dark') root.classList.add('dark', 'theme-solarized-dark');
       if (theme === 'colorful') root.classList.add('dark', 'theme-colorful');
       if (theme === 'colorful-light') root.classList.add('theme-colorful-light');
+      
+      // New Themes
+      if (theme === 'neon-dark') root.classList.add('dark', 'theme-neon-dark');
+      if (theme === 'ocean-dark') root.classList.add('dark', 'theme-ocean-dark');
+      if (theme === 'candy-light') root.classList.add('theme-candy-light');
+      if (theme === 'forest-light') root.classList.add('theme-forest-light');
     };
 
     if (appSettings.theme === 'system') {
@@ -483,28 +578,34 @@ const App: React.FC = () => {
   }, [setGroups]);
 
 
-  const addBlock = useCallback((filePath: string, content: string) => {
+  const addBlock = useCallback((filePath: string, content: string, initialPosition?: Position) => {
     const id = `block-${Date.now()}`;
     const blockWidth = 320;
     const blockHeight = 200;
 
-    const leftOffset = appSettings.isLeftSidebarOpen ? appSettings.leftSidebarWidth : 0;
-    const rightOffset = appSettings.isRightSidebarOpen ? appSettings.rightSidebarWidth : 0;
-    const topOffset = 64; // h-16 (header)
+    let position: Position;
 
-    const visibleWidth = window.innerWidth - leftOffset - rightOffset;
-    const visibleHeight = window.innerHeight - topOffset;
+    if (initialPosition) {
+        position = initialPosition;
+    } else {
+        const leftOffset = appSettings.isLeftSidebarOpen ? appSettings.leftSidebarWidth : 0;
+        const rightOffset = appSettings.isRightSidebarOpen ? appSettings.rightSidebarWidth : 0;
+        const topOffset = 64; // h-16 (header)
 
-    const screenCenterX = leftOffset + (visibleWidth / 2);
-    const screenCenterY = topOffset + (visibleHeight / 2);
+        const visibleWidth = window.innerWidth - leftOffset - rightOffset;
+        const visibleHeight = window.innerHeight - topOffset;
 
-    const worldCenterX = (screenCenterX - storyCanvasTransform.x) / storyCanvasTransform.scale;
-    const worldCenterY = (screenCenterY - storyCanvasTransform.y) / storyCanvasTransform.scale;
+        const screenCenterX = leftOffset + (visibleWidth / 2);
+        const screenCenterY = topOffset + (visibleHeight / 2);
 
-    const position = {
-        x: worldCenterX - (blockWidth / 2),
-        y: worldCenterY - (blockHeight / 2)
-    };
+        const worldCenterX = (screenCenterX - storyCanvasTransform.x) / storyCanvasTransform.scale;
+        const worldCenterY = (screenCenterY - storyCanvasTransform.y) / storyCanvasTransform.scale;
+
+        position = {
+            x: worldCenterX - (blockWidth / 2),
+            y: worldCenterY - (blockHeight / 2)
+        };
+    }
 
     const newBlock: Block = {
       id,
@@ -574,29 +675,81 @@ const App: React.FC = () => {
     }
   };
 
+  const handleCreateBlockFromCanvas = useCallback(async (type: BlockType, position: Position) => {
+      const timestamp = Date.now();
+      const defaultName = `${type}_${timestamp}`;
+      const fileName = `${defaultName}.rpy`;
+      
+      let content = '';
+      switch (type) {
+        case 'story':
+            content = `label ${defaultName}:\n    "Start writing your story here..."\n    return\n`;
+            break;
+        case 'screen':
+            content = `screen ${defaultName}():\n    zorder 100\n    frame:\n        align (0.5, 0.5)\n        text "New Screen"\n`;
+            break;
+        case 'config':
+            content = `# Configuration for ${defaultName}\ndefine ${defaultName}_enabled = True\n`;
+            break;
+      }
+
+      if (window.electronAPI && projectRootPath) {
+          try {
+              const folderPath = 'game';
+              const fullPath = await window.electronAPI.path.join(projectRootPath, folderPath, fileName);
+              const relativePath = `game/${fileName}`;
+              
+              const res = await window.electronAPI.writeFile(fullPath, content);
+              if (res.success) {
+                  addBlock(relativePath, content, position);
+                  addToast(`Created ${fileName}`, 'success');
+                  const projData = await window.electronAPI.loadProject(projectRootPath);
+                  setFileSystemTree(projData.tree);
+              } else {
+                  throw new Error(res.error || 'Unknown error occurred during file creation');
+              }
+          } catch(e) {
+              console.error(e);
+              const errorMessage = e instanceof Error ? e.message : String(e);
+              addToast(`Failed to create file: ${errorMessage}`, 'error');
+          }
+      } else {
+          addBlock(fileName, content, position);
+          addToast(`Created block ${fileName}`, 'success');
+      }
+  }, [addBlock, projectRootPath, addToast]);
+
   // --- Sticky Note Management ---
-  const addStickyNote = useCallback(() => {
+  const addStickyNote = useCallback((initialPosition?: Position) => {
       const id = `note-${Date.now()}`;
       const width = 200;
       const height = 200;
 
-      const leftOffset = appSettings.isLeftSidebarOpen ? appSettings.leftSidebarWidth : 0;
-      const rightOffset = appSettings.isRightSidebarOpen ? appSettings.rightSidebarWidth : 0;
-      const topOffset = 64; 
+      let position: Position;
+      if (initialPosition) {
+          position = initialPosition;
+          // Center the note on the click position
+          position.x -= width / 2;
+          position.y -= height / 2;
+      } else {
+          const leftOffset = appSettings.isLeftSidebarOpen ? appSettings.leftSidebarWidth : 0;
+          const rightOffset = appSettings.isRightSidebarOpen ? appSettings.rightSidebarWidth : 0;
+          const topOffset = 64; 
 
-      const visibleWidth = window.innerWidth - leftOffset - rightOffset;
-      const visibleHeight = window.innerHeight - topOffset;
+          const visibleWidth = window.innerWidth - leftOffset - rightOffset;
+          const visibleHeight = window.innerHeight - topOffset;
 
-      const screenCenterX = leftOffset + (visibleWidth / 2);
-      const screenCenterY = topOffset + (visibleHeight / 2);
+          const screenCenterX = leftOffset + (visibleWidth / 2);
+          const screenCenterY = topOffset + (visibleHeight / 2);
 
-      const worldCenterX = (screenCenterX - storyCanvasTransform.x) / storyCanvasTransform.scale;
-      const worldCenterY = (screenCenterY - storyCanvasTransform.y) / storyCanvasTransform.scale;
+          const worldCenterX = (screenCenterX - storyCanvasTransform.x) / storyCanvasTransform.scale;
+          const worldCenterY = (screenCenterY - storyCanvasTransform.y) / storyCanvasTransform.scale;
 
-      const position = {
-          x: worldCenterX - (width / 2),
-          y: worldCenterY - (height / 2)
-      };
+          position = {
+              x: worldCenterX - (width / 2),
+              y: worldCenterY - (height / 2)
+          };
+      }
 
       const newNote: StickyNote = {
           id,
@@ -672,19 +825,26 @@ const App: React.FC = () => {
 
   // --- Layout ---
   const handleTidyUp = useCallback((showToast = true) => {
-    try {
-        const links = analysisResult.links;
-        const newLayout = computeAutoLayout(blocks, links);
-        setBlocks(newLayout);
-        if (showToast) {
-            addToast('Layout organized', 'success');
+    setStatusBarMessage('Organizing layout...');
+    // Use setTimeout to allow the UI to update with the status message before the heavy calculation
+    setTimeout(() => {
+        try {
+            const links = analysisResult.links;
+            const newLayout = computeAutoLayout(blocks, links);
+            setBlocks(newLayout);
+            if (showToast) {
+                addToast('Layout organized', 'success');
+            }
+            setStatusBarMessage('Layout organized.');
+            setTimeout(() => setStatusBarMessage(''), 2000);
+        } catch (e) {
+            console.error("Failed to tidy up layout:", e);
+            if (showToast) {
+                addToast('Failed to organize layout', 'error');
+            }
+            setStatusBarMessage('Error organizing layout.');
         }
-    } catch (e) {
-        console.error("Failed to tidy up layout:", e);
-        if (showToast) {
-            addToast('Failed to organize layout', 'error');
-        }
-    }
+    }, 10);
   }, [blocks, analysisResult, setBlocks, addToast]);
 
   useEffect(() => {
@@ -711,6 +871,7 @@ const App: React.FC = () => {
   const loadProject = useCallback(async (path: string) => {
       setIsLoading(true);
       setLoadingMessage('Reading project files...');
+      setStatusBarMessage(`Loading project from ${path}...`);
       try {
           const projectData = await window.electronAPI!.loadProject(path);
           
@@ -744,6 +905,14 @@ const App: React.FC = () => {
           }
 
           setProjectRootPath(projectData.rootPath);
+          
+          // Update Recent Projects
+          updateAppSettings(draft => {
+              // Remove if exists to move to top
+              const filtered = draft.recentProjects.filter(p => p !== projectData.rootPath);
+              draft.recentProjects = [projectData.rootPath, ...filtered].slice(0, 25);
+          });
+
           setBlocks(loadedBlocks);
           initialLayoutNeeded.current = true;
           setFileSystemTree(projectData.tree);
@@ -828,13 +997,16 @@ const App: React.FC = () => {
           setHasUnsavedSettings(false);
           setShowWelcome(false);
           addToast('Project loaded successfully', 'success');
+          setStatusBarMessage('Project loaded.');
+          setTimeout(() => setStatusBarMessage(''), 3000);
       } catch (err) {
           console.error(err);
           addToast('Failed to load project', 'error');
+          setStatusBarMessage('Error loading project.');
       } finally {
           setIsLoading(false);
       }
-  }, [setBlocks, setImages, setAudios, updateProjectSettings, addToast, setFileSystemTree, setStickyNotes, setCharacterProfiles]);
+  }, [setBlocks, setImages, setAudios, updateProjectSettings, addToast, setFileSystemTree, setStickyNotes, setCharacterProfiles, updateAppSettings]);
 
 
   const handleOpenProjectFolder = useCallback(async () => {
@@ -931,6 +1103,7 @@ const App: React.FC = () => {
 
   const handleSaveAll = useCallback(async () => {
     setSaveStatus('saving');
+    setStatusBarMessage('Saving files...');
     try {
         let currentBlocks = [...blocks];
         const editorUpdates = new Map<string, string>();
@@ -964,7 +1137,8 @@ const App: React.FC = () => {
              setHasUnsavedSettings(false);
              setSaveStatus('saved');
              addToast('Changes saved to memory', 'success');
-             setTimeout(() => setSaveStatus('saved'), 2000);
+             setStatusBarMessage('Saved to memory.');
+             setTimeout(() => { setSaveStatus('saved'); setStatusBarMessage(''); }, 2000);
              return;
         }
 
@@ -984,11 +1158,13 @@ const App: React.FC = () => {
         setDirtyEditors(new Set());
         setSaveStatus('saved');
         addToast('All changes saved', 'success');
-        setTimeout(() => setSaveStatus('saved'), 2000);
+        setStatusBarMessage('All files saved.');
+        setTimeout(() => { setSaveStatus('saved'); setStatusBarMessage(''); }, 2000);
     } catch (err) {
         console.error(err);
         setSaveStatus('error');
         addToast('Failed to save changes', 'error');
+        setStatusBarMessage('Error saving files.');
     }
   }, [blocks, dirtyEditors, dirtyBlockIds, projectRootPath, directoryHandle, addToast, setBlocks, handleSaveProjectSettings]);
   
@@ -1301,6 +1477,7 @@ const App: React.FC = () => {
     if (!projectRootPath || !searchQuery.trim() || !window.electronAPI) return;
     setIsSearching(true);
     setSearchResults([]);
+    setStatusBarMessage('Searching...');
     try {
       const results = await window.electronAPI.searchInProject({
         projectPath: projectRootPath,
@@ -1308,9 +1485,12 @@ const App: React.FC = () => {
         ...searchOptions,
       });
       setSearchResults(results);
+      setStatusBarMessage(`Search complete. Found ${results.reduce((acc, r) => acc + r.matches.length, 0)} matches in ${results.length} files.`);
+      setTimeout(() => setStatusBarMessage(''), 3000);
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
       addToast(`Search failed: ${errorMessage}`, 'error');
+      setStatusBarMessage('Search failed.');
     } finally {
       setIsSearching(false);
     }
@@ -1393,18 +1573,24 @@ const App: React.FC = () => {
   }>({ labelNodes: [], routeLinks: [], identifiedRoutes: [] });
 
   const handleAnalyzeRoutes = useCallback(() => {
-      const { labelNodes, routeLinks, identifiedRoutes } = performRouteAnalysis(blocks, analysisResult.labels, analysisResult.jumps);
-      const layoutedNodes = computeAutoLayout(labelNodes, routeLinks);
-      setRouteCanvasData({ labelNodes: layoutedNodes, routeLinks, identifiedRoutes });
-      
-      const tabId = 'route-canvas';
-      setOpenTabs(prev => {
-          if (!prev.some(t => t.id === tabId)) {
-              return [...prev, { id: tabId, type: 'route-canvas' }];
-          }
-          return prev;
-      });
-      setActiveTabId(tabId);
+      setStatusBarMessage('Analyzing route paths...');
+      // Allow render cycle to update status bar before heavy calculation
+      setTimeout(() => {
+          const { labelNodes, routeLinks, identifiedRoutes } = performRouteAnalysis(blocks, analysisResult.labels, analysisResult.jumps);
+          const layoutedNodes = computeAutoLayout(labelNodes, routeLinks);
+          setRouteCanvasData({ labelNodes: layoutedNodes, routeLinks, identifiedRoutes });
+          
+          const tabId = 'route-canvas';
+          setOpenTabs(prev => {
+              if (!prev.some(t => t.id === tabId)) {
+                  return [...prev, { id: tabId, type: 'route-canvas' }];
+              }
+              return prev;
+          });
+          setActiveTabId(tabId);
+          setStatusBarMessage('Route analysis complete.');
+          setTimeout(() => setStatusBarMessage(''), 3000);
+      }, 10);
   }, [blocks, analysisResult]);
 
   // --- Asset Management (Basic Implementation) ---
@@ -1412,6 +1598,7 @@ const App: React.FC = () => {
       if (!projectRootPath || !window.electronAPI) return;
       
       setIsLoading(true);
+      setStatusBarMessage('Copying images to project...');
       try {
           for (const src of sourcePaths) {
               const fileName = src.split(/[/\\]/).pop();
@@ -1432,11 +1619,14 @@ const App: React.FC = () => {
               }
           }
           addToast('Images copied to project', 'success');
+          setStatusBarMessage('Images copied successfully.');
       } catch (e) {
           console.error(e);
           addToast('Failed to copy images', 'error');
+          setStatusBarMessage('Error copying images.');
       } finally {
           setIsLoading(false);
+          setTimeout(() => setStatusBarMessage(''), 3000);
       }
   };
   
@@ -1577,6 +1767,7 @@ const App: React.FC = () => {
         }
 
         await handleSaveAll();
+        setStatusBarMessage('Launching game...');
         window.electronAPI.runGame(appSettings.renpyPath, projectRootPath);
 
     }, [appSettings.renpyPath, projectRootPath, handleSaveAll]);
@@ -1587,27 +1778,113 @@ const App: React.FC = () => {
         }
     }, []);
 
+    const handleDeleteSelected = useCallback(() => {
+        if (activeTabId !== 'canvas') return;
+        
+        let deletedCount = 0;
+
+        if (selectedBlockIds.length > 0) {
+            setGroups(draft => {
+                draft.forEach(g => {
+                    g.blockIds = g.blockIds.filter(bid => !selectedBlockIds.includes(bid));
+                });
+            });
+            setBlocks(prev => prev.filter(b => !selectedBlockIds.includes(b.id)));
+            // Close tabs for deleted blocks
+            setOpenTabs(prev => prev.filter(t => !t.blockId || !selectedBlockIds.includes(t.blockId)));
+            deletedCount += selectedBlockIds.length;
+            setSelectedBlockIds([]);
+        }
+
+        if (selectedGroupIds.length > 0) {
+             setGroups(draft => {
+                 return draft.filter(g => !selectedGroupIds.includes(g.id));
+             });
+             deletedCount += selectedGroupIds.length;
+             setSelectedGroupIds([]);
+        }
+        
+        if (deletedCount > 0) {
+            addToast(`Deleted ${deletedCount} items`, 'info');
+        }
+    }, [activeTabId, selectedBlockIds, selectedGroupIds, setBlocks, setGroups, setOpenTabs, addToast]);
+
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            // Ignore if input/textarea is focused
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+                return;
+            }
+
+            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+            const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+            // Shortcuts
+            
+            // F5: Run Game
             if (e.key === 'F5') {
                 e.preventDefault();
                 handleRunGame();
             }
-            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+            
+            // Ctrl+Shift+F: Search
+            if (cmdOrCtrl && e.shiftKey && e.key.toLowerCase() === 'f') {
                 e.preventDefault();
                 handleToggleSearch();
+            }
+
+            // Ctrl+S: Save All (if not editor handling it)
+            if (cmdOrCtrl && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                handleSaveAll();
+            }
+
+            // Undo/Redo (Custom implementation for app-wide history)
+            if (cmdOrCtrl && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    if (canRedo) redo();
+                } else {
+                    if (canUndo) undo();
+                }
+            }
+            if (cmdOrCtrl && e.key.toLowerCase() === 'y') {
+                e.preventDefault();
+                if (canRedo) redo();
+            }
+
+            // N: New Block (Context aware, mostly Canvas)
+            if (e.key.toLowerCase() === 'n' && activeTabId === 'canvas') {
+                e.preventDefault();
+                setCreateBlockModalOpen(true);
+            }
+
+            // Delete / Backspace
+            if ((e.key === 'Delete' || e.key === 'Backspace') && activeTabId === 'canvas') {
+                if (selectedBlockIds.length > 0 || selectedGroupIds.length > 0) {
+                    e.preventDefault();
+                    handleDeleteSelected();
+                }
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleRunGame]);
+    }, [handleRunGame, handleToggleSearch, handleSaveAll, canUndo, canRedo, undo, redo, activeTabId, handleDeleteSelected, selectedBlockIds, selectedGroupIds]);
 
     useEffect(() => {
         if (window.electronAPI) {
-            const removeStarted = window.electronAPI.onGameStarted(() => setIsGameRunning(true));
-            const removeStopped = window.electronAPI.onGameStopped(() => setIsGameRunning(false));
+            const removeStarted = window.electronAPI.onGameStarted(() => {
+                setIsGameRunning(true);
+                setStatusBarMessage('Game running.');
+            });
+            const removeStopped = window.electronAPI.onGameStopped(() => {
+                setIsGameRunning(false);
+                setStatusBarMessage('Game stopped.');
+                setTimeout(() => setStatusBarMessage(''), 3000);
+            });
             const removeError = window.electronAPI.onGameError((error) => {
                 addToast(`Failed to launch game: ${error}`, 'error');
+                setStatusBarMessage('Error launching game.');
                 setIsGameRunning(false);
             });
             return () => {
@@ -1638,13 +1915,18 @@ const App: React.FC = () => {
                           handleOpenStaticTab(data.type);
                       }
                       break;
+                  case 'open-recent':
+                      if (data.path) {
+                          loadProject(data.path);
+                      }
+                      break;
               }
           });
           return () => removeListener();
       }
-  }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenStaticTab, handleRunGame]);
+  }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenStaticTab, handleRunGame, loadProject]);
   
-  // --- Exit Confirmation Handling ---
+  // --- Exit confirmation flow ---
   useEffect(() => {
     if (window.electronAPI) {
       const removeCheckListener = window.electronAPI.onCheckUnsavedChangesBeforeExit(() => {
@@ -1760,12 +2042,14 @@ const App: React.FC = () => {
 
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
+    <div className="fixed inset-0 flex flex-col bg-primary text-primary overflow-hidden">
       {showWelcome && (
         <WelcomeScreen 
             onOpenProject={handleOpenProjectFolder}
             onCreateProject={handleNewProjectRequest}
             isElectron={!!window.electronAPI}
+            recentProjects={appSettings.recentProjects}
+            onOpenRecent={loadProject}
         />
       )}
       <div className="flex-none z-40">
@@ -1791,11 +2075,12 @@ const App: React.FC = () => {
             isRightSidebarOpen={appSettings.isRightSidebarOpen}
             setIsRightSidebarOpen={(open) => updateAppSettings(draft => { draft.isRightSidebarOpen = open; })}
             onOpenStaticTab={handleOpenStaticTab}
-            onAddStickyNote={addStickyNote}
+            onAddStickyNote={() => addStickyNote()}
             isGameRunning={isGameRunning}
             onRunGame={handleRunGame}
             onStopGame={handleStopGame}
             onToggleSearch={handleToggleSearch}
+            onOpenShortcuts={() => setShortcutsModalOpen(true)}
         />
       </div>
       
@@ -1803,19 +2088,19 @@ const App: React.FC = () => {
         {appSettings.isLeftSidebarOpen && (
             <>
                 <div 
-                    className="flex-none border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden h-full"
+                    className="flex-none border-r border-primary bg-secondary flex flex-col overflow-hidden h-full"
                     style={{ width: appSettings.leftSidebarWidth }}
                 >
-                    <div className="flex-none flex border-b border-gray-200 dark:border-gray-700">
+                    <div className="flex-none flex border-b border-primary">
                         <button
                         onClick={() => setActiveLeftPanel('explorer')}
-                        className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors ${activeLeftPanel === 'explorer' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400' : 'bg-gray-100 dark:bg-gray-900 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors ${activeLeftPanel === 'explorer' ? 'bg-secondary text-accent' : 'bg-primary text-secondary hover:bg-tertiary-hover'}`}
                         >
                         Explorer
                         </button>
                         <button
                         onClick={() => setActiveLeftPanel('search')}
-                        className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors ${activeLeftPanel === 'search' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400' : 'bg-gray-100 dark:bg-gray-900 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors ${activeLeftPanel === 'search' ? 'bg-secondary text-accent' : 'bg-primary text-secondary hover:bg-tertiary-hover'}`}
                         >
                         Search
                         </button>
@@ -1843,6 +2128,8 @@ const App: React.FC = () => {
                                 setSelectedPaths={setExplorerSelectedPaths}
                                 lastClickedPath={explorerLastClickedPath}
                                 setLastClickedPath={setExplorerLastClickedPath}
+                                expandedPaths={explorerExpandedPaths}
+                                onToggleExpand={handleToggleExpandExplorer}
                             />
                         )}
                         </div>
@@ -1869,8 +2156,8 @@ const App: React.FC = () => {
             </>
         )}
 
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-100 dark:bg-gray-900 relative">
-            <div className="flex-none flex flex-wrap items-center bg-gray-200 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-primary relative">
+            <div className="flex-none flex flex-wrap items-center bg-tertiary border-b border-primary">
                 {openTabs.map(tab => {
                     const block = blocks.find(b => b.id === tab.blockId);
                     let title = 'Unknown';
@@ -1892,16 +2179,16 @@ const App: React.FC = () => {
                             key={tab.id}
                             onClick={() => handleSwitchTab(tab.id)}
                             onContextMenu={(e) => handleTabContextMenu(e, tab.id)}
-                            className={`group flex items-center px-4 py-2 text-sm cursor-pointer border-r border-gray-300 dark:border-gray-700 min-w-[120px] max-w-[200px] flex-shrink-0 ${isActive ? 'bg-white dark:bg-gray-900 font-medium text-indigo-600 dark:text-indigo-400 border-t-2 border-t-indigo-500' : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}`}
+                            className={`group flex items-center px-4 py-2 text-sm cursor-pointer border-r border-primary min-w-[120px] max-w-[200px] flex-shrink-0 ${isActive ? 'bg-secondary font-medium text-accent border-t-2 border-t-accent' : 'bg-tertiary hover:bg-tertiary-hover text-secondary'}`}
                         >
                             <span className="truncate flex-grow flex items-center">
                                 {title}
-                                {isDirty && <span className="text-indigo-500 ml-1.5">•</span>}
+                                {isDirty && <span className="text-accent ml-1.5">•</span>}
                             </span>
                             {tab.id !== 'canvas' && (
                                 <button 
                                     onClick={(e) => handleCloseTab(tab.id, e)}
-                                    className="ml-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className="ml-2 text-secondary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                                 >
                                     ×
                                 </button>
@@ -1941,6 +2228,8 @@ const App: React.FC = () => {
                         hoverHighlightIds={hoverHighlightIds}
                         transform={storyCanvasTransform}
                         onTransformChange={setStoryCanvasTransform}
+                        onCreateBlock={handleCreateBlockFromCanvas}
+                        onAddStickyNote={addStickyNote}
                     />
                 )}
                 
@@ -1981,6 +2270,8 @@ const App: React.FC = () => {
                             else setDirtyEditors(prev => { const s = new Set(prev); s.delete(id); return s; });
                         }}
                         editorTheme={appSettings.theme.includes('dark') || appSettings.theme === 'colorful' ? 'dark' : 'light'}
+                        editorFontFamily={appSettings.editorFontFamily}
+                        editorFontSize={appSettings.editorFontSize}
                         enableAiFeatures={projectSettings.enableAiFeatures}
                         availableModels={['gemini-2.5-flash', 'gemini-3-pro-preview']}
                         selectedModel={projectSettings.selectedModel}
@@ -2037,7 +2328,7 @@ const App: React.FC = () => {
             <>
                 <Sash onDrag={handleRightSashDrag} />
                 <div 
-                    className="flex-none border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col overflow-hidden h-full"
+                    className="flex-none border-l border-primary bg-secondary flex flex-col overflow-hidden h-full"
                     style={{ width: appSettings.rightSidebarWidth }}
                 >
                     <StoryElementsPanel 
@@ -2097,6 +2388,7 @@ const App: React.FC = () => {
           totalWords={projectWordStats.totalWords}
           currentFileWords={projectWordStats.currentFileWords}
           readingTime={projectWordStats.readingTime}
+          statusMessage={statusBarMessage}
         />
       )}
 
@@ -2107,6 +2399,13 @@ const App: React.FC = () => {
             settings={settingsForModal}
             onSettingsChange={handleSettingsChange}
             availableModels={['gemini-2.5-flash', 'gemini-3-pro-preview']}
+        />
+      )}
+      
+      {shortcutsModalOpen && (
+        <KeyboardShortcutsModal 
+            isOpen={shortcutsModalOpen}
+            onClose={() => setShortcutsModalOpen(false)}
         />
       )}
       
@@ -2146,7 +2445,7 @@ const App: React.FC = () => {
             onClose={() => setDeleteConfirmInfo(null)}
         >
             Are you sure you want to permanently delete these items? This action cannot be undone.
-            <ul className="text-xs list-disc list-inside mt-2 max-h-24 overflow-y-auto bg-gray-100 dark:bg-gray-700 p-2 rounded">
+            <ul className="text-xs list-disc list-inside mt-2 max-h-24 overflow-y-auto bg-tertiary rounded p-2 text-secondary">
                 {deleteConfirmInfo.paths.map(p => <li key={p} className="truncate">{p.split('/').pop()}</li>)}
             </ul>
         </ConfirmModal>
@@ -2156,7 +2455,7 @@ const App: React.FC = () => {
         <ConfirmModal
           title="Confirm Global Replace"
           confirmText="Replace All"
-          confirmClassName="bg-indigo-600 hover:bg-indigo-700"
+          confirmClassName="bg-accent hover:bg-accent-hover"
           onConfirm={() => {
             replaceAllConfirmInfo.onConfirm();
             setReplaceAllConfirmInfo(null);
@@ -2169,15 +2468,15 @@ const App: React.FC = () => {
       
       {unsavedChangesModalInfo && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md m-4 flex flex-col p-6">
-            <h2 className="text-xl font-bold mb-4 dark:text-white">{unsavedChangesModalInfo.title}</h2>
-            <p className="text-gray-600 dark:text-gray-300 mb-6">
+          <div className="bg-secondary rounded-lg shadow-2xl w-full max-w-md m-4 flex flex-col p-6 border border-primary">
+            <h2 className="text-xl font-bold mb-4 text-primary">{unsavedChangesModalInfo.title}</h2>
+            <p className="text-secondary mb-6">
               {unsavedChangesModalInfo.message}
             </p>
             <div className="flex justify-end space-x-3">
                <button
                 onClick={unsavedChangesModalInfo.onCancel}
-                className="px-4 py-2 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium"
+                className="px-4 py-2 rounded text-secondary hover:bg-tertiary font-medium"
               >
                 Cancel
               </button>
@@ -2189,7 +2488,7 @@ const App: React.FC = () => {
               </button>
               <button
                 onClick={unsavedChangesModalInfo.onConfirm}
-                className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+                className="px-4 py-2 rounded bg-accent hover:bg-accent-hover text-white font-bold"
               >
                 {unsavedChangesModalInfo.confirmText}
               </button>

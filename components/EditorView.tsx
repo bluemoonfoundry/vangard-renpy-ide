@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type { Block, RenpyAnalysisResult, ToastMessage } from '../types';
@@ -14,6 +15,8 @@ interface EditorViewProps {
   onTriggerSave?: (blockId: string) => void;
   onDirtyChange: (blockId: string, isDirty: boolean) => void;
   editorTheme: 'light' | 'dark';
+  editorFontFamily: string;
+  editorFontSize: number;
   enableAiFeatures: boolean;
   availableModels: string[];
   selectedModel: string;
@@ -21,6 +24,34 @@ interface EditorViewProps {
   onEditorMount: (blockId: string, editor: monaco.editor.IStandaloneCodeEditor) => void;
   onEditorUnmount: (blockId: string) => void;
 }
+
+const LABEL_REGEX = /^\s*label\s+([a-zA-Z0-9_]+):/;
+const JUMP_REGEX = /\b(jump|call)\s+([a-zA-Z0-9_]+)/g;
+
+const Breadcrumbs: React.FC<{ filePath?: string, context?: string }> = ({ filePath, context }) => {
+    if (!filePath) return null;
+    
+    const parts = filePath.split(/[/\\]/);
+    
+    return (
+        <div className="flex items-center space-x-1 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-1.5 select-none overflow-hidden">
+            {parts.map((part, i) => (
+                <React.Fragment key={i}>
+                    {i > 0 && <span className="opacity-50">/</span>}
+                    <span className={i === parts.length - 1 && !context ? "font-semibold text-gray-700 dark:text-gray-200" : ""}>{part}</span>
+                </React.Fragment>
+            ))}
+            {context && (
+                <>
+                    <span className="opacity-50">&gt;</span>
+                    <span className="font-semibold text-indigo-600 dark:text-indigo-400 flex items-center">
+                        {context}
+                    </span>
+                </>
+            )}
+        </div>
+    );
+};
 
 const EditorView: React.FC<EditorViewProps> = (props) => {
   const { 
@@ -33,6 +64,8 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     onTriggerSave,
     onDirtyChange,
     editorTheme,
+    editorFontFamily,
+    editorFontSize,
     enableAiFeatures,
     availableModels,
     selectedModel,
@@ -46,6 +79,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const decorationIds = useRef<string[]>([]);
+  const [currentContext, setCurrentContext] = useState<string>('');
   
   // Refs to keep track of latest props for closures
   const onDirtyChangeRef = useRef(onDirtyChange);
@@ -123,6 +157,14 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const performValidation = (code: string, monacoInstance: typeof monaco): monaco.editor.IMarkerData[] => {
     const markers: monaco.editor.IMarkerData[] = [];
     const lines = code.split('\n');
+    const localLabels = new Set<string>();
+
+    // Pass 1: Find local labels currently defined in editor content
+    lines.forEach(line => {
+        const match = line.match(LABEL_REGEX);
+        if (match) localLabels.add(match[1]);
+    });
+
     let previousIndent = -1;
     let expectIndentedBlock = false;
 
@@ -157,7 +199,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
           endLineNumber: lineNumber,
           endColumn: currentIndent + 1,
           message: 'Indentation error: Use 4 spaces per indentation level.',
-          severity: monacoInstance.MarkerSeverity.Error,
+          severity: monacoInstance.MarkerSeverity.Warning,
         });
       }
 
@@ -178,25 +220,68 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         expectIndentedBlock = true;
         previousIndent = currentIndent;
       }
-    });
 
-    const invalidJumpsForBlock = analysisResult.invalidJumps[block.id] || [];
-    const allJumpsInBlock = analysisResult.jumps[block.id] || [];
+      // Real-time Jump Validation
+      // Replace strings with spaces to preserve indices
+      let sanitizedLine = line.replace(/"[^"\\]*(?:\\.[^"\\]*)*"/g, m => ' '.repeat(m.length)).replace(/'[^'\\]*(?:\\.[^'\\]*)*'/g, m => ' '.repeat(m.length));
+      const commentIndex = sanitizedLine.indexOf('#');
+      if (commentIndex !== -1) sanitizedLine = sanitizedLine.substring(0, commentIndex);
 
-    allJumpsInBlock.forEach(jump => {
-      if (invalidJumpsForBlock.includes(jump.target)) {
-        markers.push({
-          startLineNumber: jump.line,
-          startColumn: jump.columnStart,
-          endLineNumber: jump.line,
-          endColumn: jump.columnEnd,
-          message: `Invalid jump target: Label '${jump.target}' not found.`,
-          severity: monacoInstance.MarkerSeverity.Error,
-        });
+      const lineJumpRegex = new RegExp(JUMP_REGEX);
+      let match;
+      while ((match = lineJumpRegex.exec(sanitizedLine)) !== null) {
+          const target = match[2];
+          if (target === 'expression') continue;
+
+          const isLocal = localLabels.has(target);
+          const globalLabelDef = analysisResultRef.current.labels[target];
+          // Valid if found locally OR (found globally AND NOT associated with this block's old state)
+          const isExternal = globalLabelDef && globalLabelDef.blockId !== blockRef.current.id;
+
+          if (!isLocal && !isExternal) {
+              const targetStart = match.index + match[0].indexOf(target);
+              markers.push({
+                  startLineNumber: lineNumber,
+                  startColumn: targetStart + 1,
+                  endLineNumber: lineNumber,
+                  endColumn: targetStart + 1 + target.length,
+                  message: `Invalid jump: Label '${target}' not found in project.`,
+                  severity: monacoInstance.MarkerSeverity.Error,
+              });
+          }
       }
     });
 
     return markers;
+  };
+
+  const updateContext = () => {
+      if (!editorRef.current) return;
+      const position = editorRef.current.getPosition();
+      if (!position) return;
+
+      const lineNumber = position.lineNumber;
+      const labels = Object.values(analysisResultRef.current.labels)
+          .filter(l => l.blockId === blockRef.current.id && l.line <= lineNumber)
+          .sort((a, b) => b.line - a.line);
+      
+      const screens = Array.from(analysisResultRef.current.screens.values())
+          .filter(s => s.definedInBlockId === blockRef.current.id && s.line <= lineNumber)
+          .sort((a, b) => b.line - a.line);
+
+      let bestContext = '';
+      let bestLine = -1;
+
+      if (labels.length > 0) {
+          bestContext = `label ${labels[0].label}`;
+          bestLine = labels[0].line;
+      }
+
+      if (screens.length > 0 && screens[0].line > bestLine) {
+          bestContext = `screen ${screens[0].name}`;
+      }
+
+      setCurrentContext(bestContext);
   };
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
@@ -205,19 +290,68 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     onEditorMount(block.id, editor);
     editor.focus();
     setIsMounted(true);
+    updateContext(); // Initial context
 
     aiFeaturesEnabledContextKey.current = editor.createContextKey('aiFeaturesEnabled', enableAiFeatures);
+
+    // Setup Drop Handler
+    const editorNode = editor.getDomNode();
+    if (editorNode) {
+      editorNode.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer) {
+            e.dataTransfer.dropEffect = 'copy';
+        }
+      });
+
+      editorNode.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // Stop native handling which might insert text as a snippet ($0)
+        const data = e.dataTransfer?.getData('application/renpy-dnd');
+        if (data) {
+          try {
+            const payload = JSON.parse(data);
+            const target = editor.getTargetAtClientPoint(e.clientX, e.clientY);
+            if (target && target.position) {
+              const position = target.position;
+              editor.executeEdits('dnd', [{
+                range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+                text: payload.text,
+                forceMoveMarkers: true
+              }]);
+              editor.setPosition(position);
+              editor.focus();
+            }
+          } catch (err) {
+            console.error("Failed to parse drop data", err);
+          }
+        }
+      });
+    }
 
     editor.onDidChangeModelContent(() => {
         const currentContent = editor.getValue();
         const savedContent = blockRef.current.content;
         const isDirty = currentContent !== savedContent;
         onDirtyChangeRef.current(blockRef.current.id, isDirty);
+        
+        const markers = performValidation(currentContent, monaco);
+        monaco.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
+    });
+    
+    editor.onDidChangeCursorPosition(() => {
+        updateContext();
     });
 
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-        if (onTriggerSaveRef.current) {
-            onTriggerSaveRef.current(blockRef.current.id);
+    // Use addAction instead of addCommand for cleaner action registration
+    editor.addAction({
+        id: 'save-block',
+        label: 'Save',
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
+        run: () => {
+            if (onTriggerSaveRef.current) {
+                onTriggerSaveRef.current(blockRef.current.id);
+            }
         }
     });
 
@@ -260,15 +394,19 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         setIsGenerateModalOpen(true);
       },
     });
-
-    const disposable = editor.onDidChangeModelContent(() => {
-      const markers = performValidation(editor.getValue(), monaco);
-      monaco.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
-    });
     
+    // Initial validation on mount
     const markers = performValidation(editor.getValue(), monaco);
     monaco.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
   };
+  
+  // Update markers when analysis changes (e.g. newly defined global labels)
+  useEffect(() => {
+      if (isMounted && editorRef.current && monacoRef.current) {
+          const markers = performValidation(editorRef.current.getValue(), monacoRef.current);
+          monacoRef.current.editor.setModelMarkers(editorRef.current.getModel()!, 'renpy', markers);
+      }
+  }, [analysisResult, isMounted]);
   
   // Effect to update decorations when analysis or theme changes
   useEffect(() => {
@@ -287,16 +425,19 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                   range: new monaco.Range(jump.line, jump.columnStart, jump.line, jump.columnEnd),
                   options: {
                       inlineClassName: 'renpy-jump-link',
-                      hoverMessage: { value: `Cmd/Ctrl + click to follow link to '${jump.target}'` }
+                      hoverMessage: { value: `Cmd/Ctrl + click to follow link to '${jump.target}'`, isTrusted: true, supportHtml: true }
                   }
               });
           }
           else if (!jump.isDynamic) {
+               // We handle errors via markers now, but we can keep a visual style for invalid links if desired
+               // For now, markers provide the "red squiggly", so maybe just leave text normal or style differently
+               // Leaving 'renpy-jump-invalid' for specific styling if needed beyond error marker
                newDecorations.push({
                   range: new monaco.Range(jump.line, jump.columnStart, jump.line, jump.columnEnd),
                   options: {
                       inlineClassName: 'renpy-jump-invalid',
-                      hoverMessage: { value: `Label '${jump.target}' not found.` }
+                      hoverMessage: { value: `Label '${jump.target}' not found.`, isTrusted: true, supportHtml: true }
                   }
               });
           } else { // is dynamic
@@ -304,7 +445,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                   range: new monaco.Range(jump.line, jump.columnStart, jump.line, jump.columnEnd),
                   options: {
                       inlineClassName: 'renpy-jump-dynamic',
-                      hoverMessage: { value: `Dynamic jump to expression '${jump.target}'. Cannot verify.` }
+                      hoverMessage: { value: `Dynamic jump to expression '${jump.target}'. Cannot verify.`, isTrusted: true, supportHtml: true }
                   }
               });
           }
@@ -331,6 +472,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
+      <Breadcrumbs filePath={block.filePath} context={currentContext} />
       <Editor
         height="100%"
         defaultLanguage="renpy"
@@ -341,12 +483,17 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         beforeMount={handleEditorWillMount}
         options={{
           minimap: { enabled: true },
-          fontSize: 14,
+          fontSize: editorFontSize,
+          fontFamily: editorFontFamily,
           wordWrap: 'on',
           scrollBeyondLastLine: false,
           automaticLayout: true,
           tabSize: 4,
           insertSpaces: true,
+          hover: {
+              enabled: true,
+              delay: 300,
+          }
         }}
       />
       <GenerateContentModal
