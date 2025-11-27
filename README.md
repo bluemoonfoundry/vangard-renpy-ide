@@ -1,7 +1,6 @@
-# Ren'Py Visual Novel Accelerator
+# Ren'IDE - the Ren'Py Visual Development Environemnt
 
-The Ren'Py Visual Novel Accelerator is a powerful, web-based visual editor designed to streamline and enhance the development process for Ren'Py projects. It provides a dynamic canvas where your Ren'Py script files (`.rpy`) are represented as draggable blocks. The editor automatically analyzes your code to draw connections for `jump` and `call` statements, helping you visualize your story's flow and structure at a glance.
-
+Ren'Py Visual Novel Accelerator is a visual IDE designed to streamline the development of Ren'Py visual novels. It features a node-based Story Canvas to visualize game flow, an intelligent Monaco code editor with Ren'Py syntax highlighting, and comprehensive asset management tools. It empowers creators to write, organize, and visualize their non-linear narratives more effectively than traditional text editors.
 This tool is perfect for writers, designers, and programmers who want a more intuitive and organized way to manage complex branching narratives.
 
 Here is a link to a short video demonstrating the features in the initial beta version: https://youtu.be/87wSuV8RESg
