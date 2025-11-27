@@ -85,6 +85,14 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     const { characters, characterUsage } = analysisResult;
     const characterList = Array.from(characters.values()).sort((a: Character, b: Character) => a.name.localeCompare(b.name));
 
+    const handleCharacterDragStart = (e: React.DragEvent, char: Character) => {
+        e.dataTransfer.setData('application/renpy-dnd', JSON.stringify({
+            text: `${char.tag} "..."`
+        }));
+        e.dataTransfer.setData('text/plain', `${char.tag} "..."`);
+        e.dataTransfer.effectAllowed = 'copy';
+    };
+
     return (
         <div className="h-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex flex-col min-h-0">
             <header className="flex-none p-4 border-b border-gray-200 dark:border-gray-700">
@@ -109,11 +117,14 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                             {characterList.map((char: Character) => (
                                 <li
                                   key={char.tag}
-                                  className="p-2 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-between"
+                                  draggable
+                                  onDragStart={(e) => handleCharacterDragStart(e, char)}
+                                  className="p-2 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-between cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
                                   onMouseEnter={() => onHoverHighlightStart(char.tag, 'character')}
                                   onMouseLeave={onHoverHighlightEnd}
+                                  title="Drag to editor to insert dialogue"
                                 >
-                                    <div className="flex items-center space-x-3 min-w-0">
+                                    <div className="flex items-center space-x-3 min-w-0 pointer-events-none">
                                         <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: char.color }}></div>
                                         <div className="min-w-0">
                                             <p className="font-semibold truncate">{char.name}</p>

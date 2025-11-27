@@ -152,6 +152,15 @@ const ImageManager: React.FC<ImageManagerProps> = ({ images, metadata, scanDirec
     handleCloseContextMenu();
   };
 
+  const handleDragStart = (e: React.DragEvent, image: ProjectImage) => {
+      const imageTag = getRenpyImageTag(image);
+      e.dataTransfer.setData('application/renpy-dnd', JSON.stringify({
+          text: `show ${imageTag}`
+      }));
+      e.dataTransfer.setData('text/plain', `show ${imageTag}`);
+      e.dataTransfer.effectAllowed = 'copy';
+  };
+
   return (
     <div className="h-full flex flex-col p-4">
       <div className="flex-none space-y-4 mb-4">
@@ -233,6 +242,7 @@ const ImageManager: React.FC<ImageManagerProps> = ({ images, metadata, scanDirec
                   onSelect={handleSelectImage}
                   onDoubleClick={onOpenImageEditor}
                   onContextMenu={handleContextMenu}
+                  onDragStart={(e) => handleDragStart(e, image)}
                 />
               </div>
             ))}

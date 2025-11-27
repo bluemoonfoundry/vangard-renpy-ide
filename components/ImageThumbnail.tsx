@@ -17,9 +17,10 @@ interface ImageThumbnailProps {
   onSelect: (filePath: string, isSelected: boolean) => void;
   onDoubleClick: (filePath: string) => void;
   onContextMenu: (event: React.MouseEvent, image: ProjectImage) => void;
+  onDragStart: (event: React.DragEvent) => void;
 }
 
-const ImageThumbnail: React.FC<ImageThumbnailProps> = ({ image, isSelected, onSelect, onDoubleClick, onContextMenu }) => {
+const ImageThumbnail: React.FC<ImageThumbnailProps> = ({ image, isSelected, onSelect, onDoubleClick, onContextMenu, onDragStart }) => {
   const [imageUrl, setImageUrl] = React.useState<string | undefined>(image.dataUrl);
   const [isLoading, setIsLoading] = React.useState(!image.dataUrl);
 
@@ -61,6 +62,8 @@ const ImageThumbnail: React.FC<ImageThumbnailProps> = ({ image, isSelected, onSe
       onClick={() => onSelect(image.filePath, isSelected)}
       onDoubleClick={() => onDoubleClick(image.filePath)}
       onContextMenu={(e) => onContextMenu(e, image)}
+      draggable
+      onDragStart={onDragStart}
     >
       {isLoading ? (
         <div className="w-full h-full flex items-center justify-center">

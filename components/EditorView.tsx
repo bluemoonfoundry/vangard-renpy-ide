@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type { Block, RenpyAnalysisResult, ToastMessage } from '../types';
@@ -208,6 +209,41 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
     aiFeaturesEnabledContextKey.current = editor.createContextKey('aiFeaturesEnabled', enableAiFeatures);
 
+    // Setup Drop Handler
+    const editorNode = editor.getDomNode();
+    if (editorNode) {
+      editorNode.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer) {
+            e.dataTransfer.dropEffect = 'copy';
+        }
+      });
+
+      editorNode.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // Stop native handling which might insert text as a snippet ($0)
+        const data = e.dataTransfer?.getData('application/renpy-dnd');
+        if (data) {
+          try {
+            const payload = JSON.parse(data);
+            const target = editor.getTargetAtClientPoint(e.clientX, e.clientY);
+            if (target && target.position) {
+              const position = target.position;
+              editor.executeEdits('dnd', [{
+                range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+                text: payload.text,
+                forceMoveMarkers: true
+              }]);
+              editor.setPosition(position);
+              editor.focus();
+            }
+          } catch (err) {
+            console.error("Failed to parse drop data", err);
+          }
+        }
+      });
+    }
+
     editor.onDidChangeModelContent(() => {
         const currentContent = editor.getValue();
         const savedContent = blockRef.current.content;
@@ -215,9 +251,15 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         onDirtyChangeRef.current(blockRef.current.id, isDirty);
     });
 
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-        if (onTriggerSaveRef.current) {
-            onTriggerSaveRef.current(blockRef.current.id);
+    // Use addAction instead of addCommand for cleaner action registration
+    editor.addAction({
+        id: 'save-block',
+        label: 'Save',
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
+        run: () => {
+            if (onTriggerSaveRef.current) {
+                onTriggerSaveRef.current(blockRef.current.id);
+            }
         }
     });
 
@@ -287,7 +329,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                   range: new monaco.Range(jump.line, jump.columnStart, jump.line, jump.columnEnd),
                   options: {
                       inlineClassName: 'renpy-jump-link',
-                      hoverMessage: { value: `Cmd/Ctrl + click to follow link to '${jump.target}'` }
+                      hoverMessage: { value: `Cmd/Ctrl + click to follow link to '${jump.target}'`, isTrusted: true, supportHtml: true }
                   }
               });
           }
@@ -296,7 +338,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                   range: new monaco.Range(jump.line, jump.columnStart, jump.line, jump.columnEnd),
                   options: {
                       inlineClassName: 'renpy-jump-invalid',
-                      hoverMessage: { value: `Label '${jump.target}' not found.` }
+                      hoverMessage: { value: `Label '${jump.target}' not found.`, isTrusted: true, supportHtml: true }
                   }
               });
           } else { // is dynamic
@@ -304,7 +346,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                   range: new monaco.Range(jump.line, jump.columnStart, jump.line, jump.columnEnd),
                   options: {
                       inlineClassName: 'renpy-jump-dynamic',
-                      hoverMessage: { value: `Dynamic jump to expression '${jump.target}'. Cannot verify.` }
+                      hoverMessage: { value: `Dynamic jump to expression '${jump.target}'. Cannot verify.`, isTrusted: true, supportHtml: true }
                   }
               });
           }
@@ -313,6 +355,20 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       decorationIds.current = editor.deltaDecorations(decorationIds.current, newDecorations);
   
   }, [analysisResult, block.id, isMounted]);
+
+  const getHoverMessage = (word: string, type: 'character' | 'image' | 'color'): { value: string, isTrusted: boolean, supportHtml: boolean } | null => {
+      if (type === 'character') {
+          const char = analysisResultRef.current.characters.get(word);
+          if (char) {
+              return {
+                  value: `**Character: ${char.name}**\n\n${char.profile || 'No profile info.'}\n\n<div style="width: 20px; height: 20px; background-color: ${char.color}; border: 1px solid #ccc;"></div>`,
+                  isTrusted: true,
+                  supportHtml: true
+              };
+          }
+      }
+      return null;
+  };
 
   const getCurrentContext = () => {
       if (!editorRef.current) return '';
@@ -347,6 +403,10 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
           automaticLayout: true,
           tabSize: 4,
           insertSpaces: true,
+          hover: {
+              enabled: true,
+              delay: 300,
+          }
         }}
       />
       <GenerateContentModal

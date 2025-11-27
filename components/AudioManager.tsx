@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { RenpyAudio, AudioMetadata } from '../types';
 import AudioContextMenu from './AudioContextMenu';
 
@@ -22,7 +23,10 @@ const AudioItem: React.FC<{
   onSelect: (filePath: string, isSelected: boolean) => void;
   onDoubleClick: (filePath: string) => void;
   onContextMenu: (event: React.MouseEvent, audio: RenpyAudio) => void;
-}> = ({ audio, isSelected, onSelect, onDoubleClick, onContextMenu }) => {
+  onDragStart: (event: React.DragEvent) => void;
+  isPlaying: boolean;
+  onTogglePlay: () => void;
+}> = ({ audio, isSelected, onSelect, onDoubleClick, onContextMenu, onDragStart, isPlaying, onTogglePlay }) => {
   const borderClass = audio.isInProject ? 'border-red-500 dark:border-red-400' : 'border-transparent';
   const selectionClass = isSelected ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-indigo-400 ring-offset-gray-50 dark:ring-offset-gray-900' : '';
 
@@ -33,8 +37,21 @@ const AudioItem: React.FC<{
       onClick={() => onSelect(audio.filePath, isSelected)}
       onDoubleClick={() => onDoubleClick(audio.filePath)}
       onContextMenu={(e) => onContextMenu(e, audio)}
+      draggable
+      onDragStart={onDragStart}
     >
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 dark:text-gray-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" /></svg>
+      <button 
+        onClick={(e) => { e.stopPropagation(); onTogglePlay(); }}
+        className="p-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors focus:outline-none flex-shrink-0"
+        title={isPlaying ? "Stop" : "Play Preview"}
+      >
+        {isPlaying ? (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" /></svg>
+        ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
+        )}
+      </button>
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 dark:text-gray-400 flex-shrink-0 opacity-50" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" /></svg>
       <p className="text-sm font-mono truncate">{audio.fileName}</p>
     </div>
   );
@@ -45,6 +62,18 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
   const [selectedSource, setSelectedSource] = useState('all');
   const [selectedAudioPaths, setSelectedAudioPaths] = useState(new Set<string>());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; audio: RenpyAudio } | null>(null);
+  
+  const [playingFile, setPlayingFile] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+      return () => {
+          if (audioRef.current) {
+              audioRef.current.pause();
+              audioRef.current = null;
+          }
+      };
+  }, []);
 
   const sources = useMemo(() => {
     return ['all', 'Project (game/audio)', ...scanDirectories];
@@ -111,12 +140,57 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
     return `${name}${tags ? ` ${tags}` : ''}`.trim().replace(/\s+/g, ' ');
   };
 
+  // Helper to get clean path for drag/drop and clipboard
+  const getSmartAudioPath = (audio: RenpyAudio) => {
+      let path = audio.projectFilePath || audio.filePath;
+      // Normalize separators to forward slashes
+      path = path.replace(/\\/g, '/');
+      
+      // Ren'Py searches game/audio recursively by default, so we can strip that prefix
+      // to make the code cleaner (e.g. play music "track.mp3" instead of "game/audio/track.mp3")
+      if (path.startsWith('game/audio/')) {
+          return path.substring('game/audio/'.length);
+      }
+      return path;
+  };
+
   const handleContextMenuSelect = (type: 'play' | 'queue') => {
     if (!contextMenu) return;
-    const filePath = contextMenu.audio.projectFilePath || contextMenu.audio.filePath;
+    const filePath = getSmartAudioPath(contextMenu.audio);
     const command = `${type} audio "${filePath}"`;
     navigator.clipboard.writeText(command);
     setContextMenu(null);
+  };
+
+  const handleTogglePlay = (audio: RenpyAudio) => {
+      if (playingFile === audio.filePath) {
+          audioRef.current?.pause();
+          setPlayingFile(null);
+      } else {
+          if (audioRef.current) {
+              audioRef.current.pause();
+          } else {
+              audioRef.current = new Audio();
+              audioRef.current.onended = () => setPlayingFile(null);
+              audioRef.current.onerror = () => {
+                  console.error("Audio playback error");
+                  setPlayingFile(null);
+              };
+          }
+          audioRef.current.src = audio.dataUrl;
+          audioRef.current.play().catch(e => console.error("Playback failed", e));
+          setPlayingFile(audio.filePath);
+      }
+  };
+
+  const handleDragStart = (e: React.DragEvent, audio: RenpyAudio) => {
+      const filePath = getSmartAudioPath(audio);
+      const statement = `play audio "${filePath}"`;
+      e.dataTransfer.setData('application/renpy-dnd', JSON.stringify({
+          text: statement
+      }));
+      e.dataTransfer.setData('text/plain', statement);
+      e.dataTransfer.effectAllowed = 'copy';
   };
 
   return (
@@ -199,6 +273,9 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
               onSelect={handleSelectAudio}
               onDoubleClick={onOpenAudioEditor}
               onContextMenu={handleContextMenu}
+              onDragStart={(e) => handleDragStart(e, audio)}
+              isPlaying={playingFile === audio.filePath}
+              onTogglePlay={() => handleTogglePlay(audio)}
             />
           ))}
         </div>
@@ -209,7 +286,7 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
         <AudioContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
-          filePath={contextMenu.audio.projectFilePath || contextMenu.audio.filePath}
+          filePath={getSmartAudioPath(contextMenu.audio)}
           onSelect={handleContextMenuSelect}
           onClose={() => setContextMenu(null)}
         />
