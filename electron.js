@@ -1,6 +1,8 @@
 
 
 
+
+
 import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -353,6 +355,12 @@ app.whenReady().then(() => {
         dialog.showErrorBox('Project Creation Failed', `Could not create project directory: ${error.message}`);
         return null;
     }
+  });
+
+  ipcMain.handle('dialog:showSaveDialog', async (event, options) => {
+    const { canceled, filePath } = await dialog.showSaveDialog(options);
+    if (canceled) return null;
+    return filePath;
   });
 
   ipcMain.handle('project:load', async (event, rootPath) => {

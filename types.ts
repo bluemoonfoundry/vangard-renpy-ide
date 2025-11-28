@@ -276,6 +276,7 @@ export interface SceneSprite {
     rotation: number; // degrees
     alpha: number; // 0.0 to 1.0
     blur: number; // pixels
+    visible?: boolean;
 }
 
 export interface SceneComposition {
@@ -348,6 +349,12 @@ declare global {
               isWholeWord?: boolean; 
               isRegex?: boolean; 
           }) => Promise<SearchResult[]>;
+          showSaveDialog: (options: {
+              title?: string;
+              defaultPath?: string;
+              buttonLabel?: string;
+              filters?: { name: string; extensions: string[] }[];
+          }) => Promise<string | null>;
       }
   }
 }
