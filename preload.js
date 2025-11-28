@@ -1,5 +1,7 @@
 
 
+
+
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -72,4 +74,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   // --- Search ---
   searchInProject: (options) => ipcRenderer.invoke('project:search', options),
+  // --- Dialogs ---
+  showSaveDialog: (options) => ipcRenderer.invoke('dialog:showSaveDialog', options),
 });

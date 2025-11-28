@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { ProjectImage, ImageMetadata, SceneComposition, SceneSprite } from '../types';
 
@@ -16,14 +18,36 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
     const [draggingId, setDraggingId] = useState<string | null>(null);
     const [isRenaming, setIsRenaming] = useState(false);
     const [editName, setEditName] = useState(sceneName);
+    const [isolateSelection, setIsolateSelection] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
     
     // Layer List Drag State
-    // dragOverInfo: { id: string, position: 'top' | 'bottom' }
     const [dragOverInfo, setDragOverInfo] = useState<{ id: string, position: 'top' | 'bottom' } | null>(null);
     
     const stageRef = useRef<HTMLDivElement>(null);
+    const viewportRef = useRef<HTMLDivElement>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+
+    // Reference resolution for the project (standard 1080p)
+    const REF_WIDTH = 1920;
+    const REF_HEIGHT = 1080;
+    
+    const [viewportSize, setViewportSize] = useState({ w: 0, h: 0 });
+
+    useEffect(() => {
+        if (!viewportRef.current) return;
+        const obs = new ResizeObserver(entries => {
+            if(entries[0]) {
+                setViewportSize({ w: entries[0].contentRect.width, h: entries[0].contentRect.height });
+            }
+        });
+        obs.observe(viewportRef.current);
+        return () => obs.disconnect();
+    }, []);
+
+    // Calculate scale to fit the 1920x1080 stage into the available viewport with some padding
+    const stageScale = Math.min(viewportSize.w / REF_WIDTH, viewportSize.h / REF_HEIGHT) * 0.95 || 0.1;
 
     useEffect(() => {
         setEditName(sceneName);
@@ -87,7 +111,6 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         const container = containerRef.current;
         if (container) {
             container.addEventListener('keydown', handleKeyDown);
-            // Ensure container can receive focus
             container.tabIndex = 0;
         }
         return () => {
@@ -129,7 +152,8 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                 id: 'background',
                 image,
                 x: 0.5, y: 0.5, zoom: 1.0, zIndex: 0,
-                flipH: false, flipV: false, rotation: 0, alpha: 1.0, blur: 0
+                flipH: false, flipV: false, rotation: 0, alpha: 1.0, blur: 0,
+                visible: true
             };
             onSceneChange(prev => ({ ...prev, background: newBg }));
             setSelectedSpriteId('background');
@@ -152,7 +176,8 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                     flipV: false,
                     rotation: 0,
                     alpha: 1.0,
-                    blur: 0
+                    blur: 0,
+                    visible: true
                 };
                 onSceneChange(prev => ({ ...prev, sprites: [...prev.sprites, newSprite] }));
                 setSelectedSpriteId(newSprite.id);
@@ -177,6 +202,15 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         }
     };
 
+    const toggleVisibility = (id: string) => {
+        if (id === 'background') {
+            if (scene.background) updateSprite('background', { visible: !(scene.background.visible ?? true) });
+        } else {
+            const sprite = scene.sprites.find(s => s.id === id);
+            if (sprite) updateSprite(id, { visible: !(sprite.visible ?? true) });
+        }
+    };
+
     const removeSprite = (id: string) => {
         if (id === 'background') {
             onSceneChange(prev => ({ ...prev, background: null }));
@@ -194,15 +228,13 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
     const moveSpriteToGap = (fromIndex: number, gapIndex: number) => {
         onSceneChange(prev => {
             const newSprites = [...prev.sprites];
-            // If moving from lower index to higher gap, gap index needs adjustment because of removal
             const insertionIndex = fromIndex < gapIndex ? gapIndex - 1 : gapIndex;
             
-            if (fromIndex === insertionIndex) return prev; // No move needed
+            if (fromIndex === insertionIndex) return prev;
 
             const [moved] = newSprites.splice(fromIndex, 1);
             newSprites.splice(insertionIndex, 0, moved);
             
-            // Re-normalize Z-indices
             newSprites.forEach((s, i) => s.zIndex = i + 1);
             return { ...prev, sprites: newSprites };
         });
@@ -216,8 +248,8 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             const newBg: SceneSprite = {
                 ...sprite,
                 id: 'background',
-                x: 0.5, y: 0.5, // Reset position for BG
-                zIndex: 0, // Reset Z for BG
+                x: 0.5, y: 0.5,
+                zIndex: 0,
             };
             
             const newSprites = prev.sprites.filter(s => s.id !== id);
@@ -232,11 +264,107 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         setSelectedSpriteId('background');
     };
 
+    // Export Logic
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            // 1. Setup Canvas
+            const canvas = document.createElement('canvas');
+            canvas.width = REF_WIDTH;
+            canvas.height = REF_HEIGHT;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error("Could not create canvas context");
+
+            // 2. Load Images helper
+            const loadImage = (src: string): Promise<HTMLImageElement> => {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = reject;
+                    img.src = src;
+                });
+            };
+
+            // 3. Draw Background
+            if (scene.background && scene.background.visible !== false && scene.background.image.dataUrl) {
+                const bgSprite = scene.background;
+                const img = await loadImage(bgSprite.image.dataUrl);
+                
+                ctx.save();
+                ctx.translate(REF_WIDTH / 2, REF_HEIGHT / 2);
+                ctx.rotate(bgSprite.rotation * Math.PI / 180);
+                ctx.scale((bgSprite.zoom || 1) * (bgSprite.flipH ? -1 : 1), (bgSprite.zoom || 1) * (bgSprite.flipV ? -1 : 1));
+                ctx.globalAlpha = bgSprite.alpha ?? 1;
+                if (bgSprite.blur) ctx.filter = `blur(${bgSprite.blur}px)`;
+                
+                // Draw centered
+                ctx.drawImage(img, -REF_WIDTH / 2, -REF_HEIGHT / 2, REF_WIDTH, REF_HEIGHT);
+                ctx.restore();
+            }
+
+            // 4. Draw Sprites
+            for (const sprite of scene.sprites) {
+                if (sprite.visible !== false && sprite.image.dataUrl) {
+                    const img = await loadImage(sprite.image.dataUrl);
+                    
+                    ctx.save();
+                    ctx.translate(sprite.x * REF_WIDTH, sprite.y * REF_HEIGHT);
+                    ctx.rotate(sprite.rotation * Math.PI / 180);
+                    ctx.scale((sprite.zoom || 1) * (sprite.flipH ? -1 : 1), (sprite.zoom || 1) * (sprite.flipV ? -1 : 1));
+                    ctx.globalAlpha = sprite.alpha ?? 1;
+                    if (sprite.blur) ctx.filter = `blur(${sprite.blur}px)`;
+                    
+                    // Draw centered at natural size
+                    ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+                    ctx.restore();
+                }
+            }
+
+            // 5. Save
+            if (window.electronAPI) {
+                const filePath = await window.electronAPI.showSaveDialog({
+                    title: 'Export Scene Composition',
+                    defaultPath: `${sceneName}.png`,
+                    filters: [
+                        { name: 'PNG Image', extensions: ['png'] },
+                        { name: 'JPEG Image', extensions: ['jpg', 'jpeg'] }
+                    ]
+                });
+
+                if (filePath) {
+                    const isJpeg = filePath.toLowerCase().endsWith('.jpg') || filePath.toLowerCase().endsWith('.jpeg');
+                    const mimeType = isJpeg ? 'image/jpeg' : 'image/png';
+                    const dataUrl = canvas.toDataURL(mimeType, 0.9);
+                    const base64Data = dataUrl.split(',')[1];
+                    
+                    const res = await window.electronAPI.writeFile(filePath, base64Data, 'base64');
+                    if (!res.success) {
+                        alert(`Failed to save image: ${res.error}`);
+                    }
+                }
+            } else {
+                // Browser mode download
+                const dataUrl = canvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.download = `${sceneName}.png`;
+                link.href = dataUrl;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+
+        } catch (error) {
+            console.error("Export failed:", error);
+            alert("Failed to export image.");
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     // Canvas Interaction
     const handlePointerDown = (e: React.PointerEvent, id: string) => {
         e.stopPropagation();
         setSelectedSpriteId(id);
-        // Do not allow dragging the background
         if (id !== 'background') {
             setDraggingId(id);
             (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -244,8 +372,13 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
     };
 
     const handleStagePointerDown = () => {
-        // If clicking on empty stage (where no sprite is), deselect
+        // Only deselect if we aren't clicking a sprite (handled by propagation stop above)
+        // AND if we aren't dragging the stage itself (future feature?)
         if (!scene.background) {
+            setSelectedSpriteId(null);
+        }
+        // If focusing background, do nothing special, let it bubble
+        if (selectedSpriteId && selectedSpriteId !== 'background') {
             setSelectedSpriteId(null);
         }
     };
@@ -292,7 +425,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         if (editName.trim()) {
             onRenameScene(editName.trim());
         } else {
-            setEditName(sceneName); // Revert if empty
+            setEditName(sceneName);
         }
         setIsRenaming(false);
     };
@@ -307,7 +440,6 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
 
     // Code Generation
     const generatedCode = useMemo(() => {
-        // Sprites are stored in array order which implies Z-order (0 is back, N is front)
         let code = '';
         if (scene.background) {
             const bg = scene.background;
@@ -320,11 +452,17 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             if (bg.alpha !== 1.0) transforms.push(`alpha ${bg.alpha}`);
             if (bg.blur > 0) transforms.push(`blur ${bg.blur}`);
             
+            let bgCode = '';
             if (transforms.length > 0) {
-                code += `scene ${tag}:\n    ${transforms.join('\n    ')}\n`;
+                bgCode = `scene ${tag}:\n    ${transforms.join('\n    ')}\n`;
             } else {
-                code += `scene ${tag}\n`;
+                bgCode = `scene ${tag}\n`;
             }
+
+            if (bg.visible === false) {
+                bgCode = bgCode.split('\n').map(l => l.trim() ? `# ${l}` : l).join('\n');
+            }
+            code += bgCode;
         } else {
             code += `# No background selected\n`;
         }
@@ -340,10 +478,16 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             const rotateStr = sprite.rotation !== 0 ? ` rotate ${sprite.rotation}` : '';
             const alphaStr = sprite.alpha !== 1.0 ? ` alpha ${sprite.alpha}` : '';
             const blurStr = sprite.blur > 0 ? ` blur ${sprite.blur}` : '';
-            // Assign zorder explicitly based on array position to guarantee consistency
+            
             const zStr = ` zorder ${index + 1}`;
             
-            code += `show ${tag}:\n    xalign ${x} yalign ${y}${zoomStr}${xzoomStr}${yzoomStr}${rotateStr}${alphaStr}${blurStr}${zStr}\n`;
+            // Ren'Py xcenter/ycenter aligns with the visual editor's center point logic
+            let spriteCode = `show ${tag}${zStr}:\n    xcenter ${x} ycenter ${y}${zoomStr}${xzoomStr}${yzoomStr}${rotateStr}${alphaStr}${blurStr}\n`;
+            
+            if (sprite.visible === false) {
+                spriteCode = spriteCode.split('\n').map(l => l.trim() ? `# ${l}` : l).join('\n');
+            }
+            code += spriteCode;
         });
         return code;
     }, [scene, metadata]);
@@ -357,8 +501,6 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         return scene.sprites.find(s => s.id === selectedSpriteId) || null;
     }, [scene, selectedSpriteId]);
 
-    // Layer List Preparation
-    // We reverse the sprite array so the highest index (foreground) appears at the top of the UI list
     const layersReversed = useMemo(() => {
         return scene.sprites.map((s, index) => ({ sprite: s, originalIndex: index })).reverse();
     }, [scene.sprites]);
@@ -368,10 +510,11 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         <img 
             src={sprite.image.dataUrl} 
             style={{ 
-                height: isBackground ? '100%' : '100%',
+                height: isBackground ? '100%' : 'auto',
                 width: isBackground ? '100%' : 'auto',
-                objectFit: isBackground ? 'cover' : undefined,
+                objectFit: isBackground ? 'fill' : undefined,
                 maxWidth: 'none',
+                maxHeight: 'none',
                 transform: `rotate(${sprite.rotation}deg) scale(${sprite.zoom || 1}) scaleX(${sprite.flipH ? -1 : 1}) scaleY(${sprite.flipV ? -1 : 1})`,
                 transformOrigin: 'center center',
                 opacity: sprite.alpha ?? 1,
@@ -383,7 +526,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
 
     const ControlGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
         <div className="flex flex-col space-y-1.5 p-2 bg-gray-50 dark:bg-gray-700/50 rounded border border-gray-200 dark:border-gray-600">
-            <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{label}</span>
+            <span className="text-[10px] font-bold text-gray-50 dark:text-gray-400 uppercase tracking-wide">{label}</span>
             <div className="flex items-center space-x-2">
                 {children}
             </div>
@@ -394,9 +537,6 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         e.preventDefault();
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
-        // In reversed list:
-        // Top half means "Above this item" -> "Higher Index" (Gap = index + 1)
-        // Bottom half means "Below this item" -> "Lower Index" (Gap = index)
         const isTopHalf = e.clientY < midY;
         setDragOverInfo({ id, position: isTopHalf ? 'top' : 'bottom' });
     };
@@ -409,9 +549,6 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         if (fromIdxStr) {
             const fromIdx = parseInt(fromIdxStr);
             if (!isNaN(fromIdx) && dragOverInfo) {
-                // Determine target Gap Index in the sprites array
-                // If dropping on Top Half (UI), we want to be *after* this element in array -> Gap = targetIndex + 1
-                // If dropping on Bottom Half (UI), we want to be *before* this element in array -> Gap = targetIndex
                 const gapIndex = dragOverInfo.position === 'top' ? targetOriginalIndex + 1 : targetOriginalIndex;
                 moveSpriteToGap(fromIdx, gapIndex);
             }
@@ -422,44 +559,76 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         <div ref={containerRef} className="flex h-full bg-gray-100 dark:bg-gray-900 overflow-hidden flex-col outline-none">
             {/* Toolbar */}
             <div className="h-12 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 justify-between flex-shrink-0">
-                <div className="flex items-center space-x-3">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Scene Name:</span>
-                    {isRenaming ? (
-                        <input
-                            ref={nameInputRef}
-                            type="text"
-                            value={editName}
-                            onChange={e => setEditName(e.target.value)}
-                            onBlur={handleNameBlur}
-                            onKeyDown={handleNameKeyDown}
-                            className="text-sm font-semibold bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded border border-indigo-500 outline-none text-gray-900 dark:text-white w-48"
-                        />
-                    ) : (
-                        <span 
-                            className="text-sm font-semibold text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 px-2 py-1 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
-                            onClick={() => setIsRenaming(true)}
-                            title="Click to rename"
-                        >
-                            {sceneName}
-                        </span>
-                    )}
+                <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Scene Name:</span>
+                        {isRenaming ? (
+                            <input
+                                ref={nameInputRef}
+                                type="text"
+                                value={editName}
+                                onChange={e => setEditName(e.target.value)}
+                                onBlur={handleNameBlur}
+                                onKeyDown={handleNameKeyDown}
+                                className="text-sm font-semibold bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded border border-indigo-500 outline-none text-gray-900 dark:text-white w-48"
+                            />
+                        ) : (
+                            <span 
+                                className="text-sm font-semibold text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 px-2 py-1 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
+                                onClick={() => setIsRenaming(true)}
+                                title="Click to rename"
+                            >
+                                {sceneName}
+                            </span>
+                        )}
+                    </div>
+                    <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
+                    <button
+                        onClick={() => setIsolateSelection(!isolateSelection)}
+                        className={`flex items-center space-x-2 px-3 py-1 rounded text-xs font-bold transition-colors ${isolateSelection ? 'bg-indigo-600 text-white shadow-inner' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                        title="When enabled, only the selected sprite can be dragged or zoomed. Useful for working on sprites obscured by others."
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                        </svg>
+                        <span>{isolateSelection ? 'Locked to Active' : 'Isolate Active'}</span>
+                    </button>
+                    <button
+                        onClick={handleExport}
+                        disabled={isExporting}
+                        className="flex items-center space-x-2 px-3 py-1 rounded text-xs font-bold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Export current composition as an image"
+                    >
+                        {isExporting ? (
+                            <svg className="animate-spin h-4 w-4 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                        )}
+                        <span>{isExporting ? 'Exporting...' : 'Export Image'}</span>
+                    </button>
                 </div>
                 <div className="flex items-center space-x-2 text-xs text-gray-400">
-                    <span className="hidden md:inline">Shift + Arrow to Nudge</span>
+                    <span className="hidden md:inline">Ref: 1920x1080 • Shift + Arrow to Nudge</span>
                     <span className="w-px h-3 bg-gray-300 dark:bg-gray-600 mx-2"></span>
                     <span>Drag images from right panel</span>
                 </div>
             </div>
 
             {/* Stage Area */}
-            <div className="flex-1 p-8 flex items-center justify-center bg-gray-200/50 dark:bg-black/50 overflow-hidden relative" onPointerDown={handleStagePointerDown}>
+            <div ref={viewportRef} className="flex-1 flex items-center justify-center bg-gray-200/50 dark:bg-black/50 overflow-hidden relative" onPointerDown={handleStagePointerDown}>
                 <div 
                     ref={stageRef}
                     className="relative bg-white dark:bg-gray-800 shadow-2xl overflow-hidden group"
                     style={{ 
-                        aspectRatio: '16/9', 
-                        width: '100%', 
-                        maxHeight: '100%',
+                        width: REF_WIDTH,
+                        height: REF_HEIGHT,
+                        transform: `scale(${stageScale})`,
+                        transformOrigin: 'center center',
                         backgroundImage: 'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)',
                         backgroundSize: '20px 20px',
                         backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px' 
@@ -469,10 +638,14 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
                 >
-                    {scene.background && (
+                    {scene.background && scene.background.visible !== false && (
                         <div 
                             className={`absolute inset-0 w-full h-full ${selectedSpriteId === 'background' ? 'ring-4 ring-indigo-500 ring-inset' : ''}`}
-                            style={{ zIndex: 0 }}
+                            style={{ 
+                                zIndex: 0,
+                                // If isolation is on AND background is NOT selected, pass events through
+                                pointerEvents: (isolateSelection && selectedSpriteId && selectedSpriteId !== 'background') ? 'none' : 'auto'
+                            }}
                             onPointerDown={(e) => handlePointerDown(e, 'background')}
                         >
                             {renderSpriteImage(scene.background, true)}
@@ -488,27 +661,37 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                         </div>
                     )}
 
-                    {scene.sprites.map((sprite, index) => (
-                        <div
-                            key={sprite.id}
-                            className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-move select-none ${selectedSpriteId === sprite.id ? 'ring-2 ring-indigo-500' : ''}`}
-                            style={{
-                                left: `${sprite.x * 100}%`,
-                                top: `${sprite.y * 100}%`,
-                                height: '85%',
-                                zIndex: index + 1, // Visual stacking matches array order
-                            }}
-                            onPointerDown={(e) => handlePointerDown(e, sprite.id)}
-                            onWheel={(e) => handleWheel(e, sprite.id)}
-                        >
-                            {renderSpriteImage(sprite, false)}
-                            {selectedSpriteId === sprite.id && (
-                                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black/70 text-white text-xs px-2 py-1 rounded whitespace-nowrap pointer-events-none z-[9999]">
-                                    X: {sprite.x.toFixed(2)} Y: {sprite.y.toFixed(2)}
-                                </div>
-                            )}
-                        </div>
-                    ))}
+                    {scene.sprites.map((sprite, index) => {
+                        if (sprite.visible === false) return null;
+                        
+                        const isSelected = selectedSpriteId === sprite.id;
+                        // If isolation mode is active and we have a selection,
+                        // only the selected sprite catches mouse events.
+                        // If nothing is selected, everything is interactive.
+                        const isInteractable = !isolateSelection || !selectedSpriteId || isSelected;
+
+                        return (
+                            <div
+                                key={sprite.id}
+                                className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-move select-none ${isSelected ? 'ring-2 ring-indigo-500' : ''}`}
+                                style={{
+                                    left: `${sprite.x * 100}%`,
+                                    top: `${sprite.y * 100}%`,
+                                    zIndex: index + 1,
+                                    pointerEvents: isInteractable ? 'auto' : 'none'
+                                }}
+                                onPointerDown={(e) => handlePointerDown(e, sprite.id)}
+                                onWheel={(e) => handleWheel(e, sprite.id)}
+                            >
+                                {renderSpriteImage(sprite, false)}
+                                {isSelected && (
+                                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black/70 text-white text-xs px-2 py-1 rounded whitespace-nowrap pointer-events-none z-[9999]">
+                                        X: {sprite.x.toFixed(2)} Y: {sprite.y.toFixed(2)}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
 
@@ -649,6 +832,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                             // Check if this item is being hovered during drag
                             const isDragOverTop = dragOverInfo?.id === sprite.id && dragOverInfo.position === 'top';
                             const isDragOverBottom = dragOverInfo?.id === sprite.id && dragOverInfo.position === 'bottom';
+                            const isHidden = sprite.visible === false;
                             
                             return (
                                 <div key={sprite.id} className="relative">
@@ -669,14 +853,31 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                                         onClick={() => setSelectedSpriteId(sprite.id)}
                                         className={`flex items-center p-2 rounded cursor-pointer group border ${selectedSpriteId === sprite.id ? 'bg-indigo-100 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-700' : 'hover:bg-gray-100 dark:hover:bg-gray-700 border-transparent'}`}
                                     >
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); toggleVisibility(sprite.id); }}
+                                            className="p-1 text-gray-400 hover:text-gray-900 dark:hover:text-white mr-1"
+                                            title={isHidden ? "Show Layer" : "Hide Layer"}
+                                        >
+                                            {isHidden ? (
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+                                                    <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.064 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+                                                </svg>
+                                            ) : (
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                                                    <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                                                </svg>
+                                            )}
+                                        </button>
                                         <div className="text-gray-400 mr-2 cursor-grab active:cursor-grabbing hover:text-gray-600 dark:hover:text-gray-300">
                                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
                                         </div>
-                                        <div className="w-8 h-8 rounded bg-gray-200 dark:bg-gray-600 overflow-hidden flex-shrink-0 mr-2 border border-gray-300 dark:border-gray-500">
+                                        <div className={`w-8 h-8 rounded bg-gray-200 dark:bg-gray-600 overflow-hidden flex-shrink-0 mr-2 border border-gray-300 dark:border-gray-500 ${isHidden ? 'opacity-50' : ''}`}>
                                             <img src={sprite.image.dataUrl} className="w-full h-full object-cover" />
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className={`text-xs font-semibold truncate ${selectedSpriteId === sprite.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-300'}`}>
+                                            <p className={`text-xs font-semibold truncate ${selectedSpriteId === sprite.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-300'} ${isHidden ? 'opacity-50 line-through decoration-gray-400' : ''}`}>
                                                 {getRenpyTag(sprite.image)}
                                             </p>
                                         </div>
@@ -696,13 +897,30 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                                 onClick={() => setSelectedSpriteId('background')}
                                 className={`flex items-center p-2 rounded cursor-pointer mt-2 border-t-2 border-dashed border-gray-200 dark:border-gray-700 pt-2 ${selectedSpriteId === 'background' ? 'bg-indigo-100 dark:bg-indigo-900/50' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                             >
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); toggleVisibility('background'); }}
+                                    className="p-1 text-gray-400 hover:text-gray-900 dark:hover:text-white mr-1"
+                                    title={scene.background.visible === false ? "Show Layer" : "Hide Layer"}
+                                >
+                                    {scene.background.visible === false ? (
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+                                            <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.064 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+                                        </svg>
+                                    ) : (
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                                            <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                                        </svg>
+                                    )}
+                                </button>
                                 <div className="w-3 h-3 mr-2"></div> 
-                                <div className="w-8 h-8 rounded bg-gray-200 dark:bg-gray-600 overflow-hidden flex-shrink-0 mr-2 border border-gray-300 dark:border-gray-500">
+                                <div className={`w-8 h-8 rounded bg-gray-200 dark:bg-gray-600 overflow-hidden flex-shrink-0 mr-2 border border-gray-300 dark:border-gray-500 ${scene.background.visible === false ? 'opacity-50' : ''}`}>
                                     <img src={scene.background.image.dataUrl} className="w-full h-full object-cover" />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-0.5">Background</p>
-                                    <p className={`text-xs truncate ${selectedSpriteId === 'background' ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-300'}`}>
+                                    <p className={`text-xs truncate ${selectedSpriteId === 'background' ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-300'} ${scene.background.visible === false ? 'opacity-50 line-through decoration-gray-400' : ''}`}>
                                         {getRenpyTag(scene.background.image)}
                                     </p>
                                 </div>
