@@ -1,8 +1,4 @@
 
-
-
-
-
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { ProjectImage, ImageMetadata, SceneComposition, SceneSprite } from '../types';
 
@@ -21,8 +17,13 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
     const [isRenaming, setIsRenaming] = useState(false);
     const [editName, setEditName] = useState(sceneName);
     
+    // Layer List Drag State
+    // dragOverInfo: { id: string, position: 'top' | 'bottom' }
+    const [dragOverInfo, setDragOverInfo] = useState<{ id: string, position: 'top' | 'bottom' } | null>(null);
+    
     const stageRef = useRef<HTMLDivElement>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         setEditName(sceneName);
@@ -34,6 +35,66 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             nameInputRef.current.select();
         }
     }, [isRenaming]);
+
+    // Keyboard Shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ignore if typing in an input
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+            
+            if (!selectedSpriteId) return;
+
+            if (e.key === 'Escape') {
+                setSelectedSpriteId(null);
+                return;
+            }
+
+            if (selectedSpriteId !== 'background') {
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    removeSprite(selectedSpriteId);
+                    return;
+                }
+
+                // Nudging
+                const step = e.shiftKey ? 0.05 : 0.01;
+                let dx = 0;
+                let dy = 0;
+
+                if (e.key === 'ArrowLeft') dx = -step;
+                if (e.key === 'ArrowRight') dx = step;
+                if (e.key === 'ArrowUp') dy = -step;
+                if (e.key === 'ArrowDown') dy = step;
+
+                if (dx !== 0 || dy !== 0) {
+                    e.preventDefault();
+                    onSceneChange(prev => ({
+                        ...prev,
+                        sprites: prev.sprites.map(s => {
+                            if (s.id === selectedSpriteId) {
+                                return {
+                                    ...s,
+                                    x: Math.max(0, Math.min(1, s.x + dx)),
+                                    y: Math.max(0, Math.min(1, s.y + dy))
+                                };
+                            }
+                            return s;
+                        })
+                    }));
+                }
+            }
+        };
+
+        const container = containerRef.current;
+        if (container) {
+            container.addEventListener('keydown', handleKeyDown);
+            // Ensure container can receive focus
+            container.tabIndex = 0;
+        }
+        return () => {
+            if (container) container.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [selectedSpriteId, onSceneChange]);
+
 
     // Helpers to get display names
     const getRenpyTag = (image: ProjectImage) => {
@@ -79,6 +140,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                 const x = (e.clientX - rect.left) / rect.width;
                 const y = (e.clientY - rect.top) / rect.height;
                 
+                // Add to end of array (top of stack)
                 const newSprite: SceneSprite = {
                     id: `sprite-${Date.now()}`,
                     image,
@@ -119,25 +181,30 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         if (id === 'background') {
             onSceneChange(prev => ({ ...prev, background: null }));
         } else {
-            onSceneChange(prev => ({
-                ...prev,
-                sprites: prev.sprites.filter(s => s.id !== id)
-            }));
+            onSceneChange(prev => {
+                const newSprites = prev.sprites.filter(s => s.id !== id);
+                // Re-normalize Z-indices
+                newSprites.forEach((s, i) => s.zIndex = i + 1);
+                return { ...prev, sprites: newSprites };
+            });
         }
         if (selectedSpriteId === id) setSelectedSpriteId(null);
     };
 
-    const moveSpriteToFront = (id: string) => {
-        if (id === 'background') return; // Background is always back
+    const moveSpriteToGap = (fromIndex: number, gapIndex: number) => {
         onSceneChange(prev => {
-            const sprite = prev.sprites.find(s => s.id === id);
-            if (!sprite) return prev;
-            // Also update Z-index to be higher than max
-            const maxZ = Math.max(0, ...(prev.sprites.map(s => s.zIndex)), (prev.background?.zIndex || 0));
-            const updatedSprite = { ...sprite, zIndex: maxZ + 1 };
+            const newSprites = [...prev.sprites];
+            // If moving from lower index to higher gap, gap index needs adjustment because of removal
+            const insertionIndex = fromIndex < gapIndex ? gapIndex - 1 : gapIndex;
             
-            const others = prev.sprites.filter(s => s.id !== id);
-            return { ...prev, sprites: [...others, updatedSprite] };
+            if (fromIndex === insertionIndex) return prev; // No move needed
+
+            const [moved] = newSprites.splice(fromIndex, 1);
+            newSprites.splice(insertionIndex, 0, moved);
+            
+            // Re-normalize Z-indices
+            newSprites.forEach((s, i) => s.zIndex = i + 1);
+            return { ...prev, sprites: newSprites };
         });
     };
 
@@ -152,10 +219,14 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                 x: 0.5, y: 0.5, // Reset position for BG
                 zIndex: 0, // Reset Z for BG
             };
+            
+            const newSprites = prev.sprites.filter(s => s.id !== id);
+            newSprites.forEach((s, i) => s.zIndex = i + 1);
+
             return {
                 ...prev,
                 background: newBg,
-                sprites: prev.sprites.filter(s => s.id !== id)
+                sprites: newSprites
             };
         });
         setSelectedSpriteId('background');
@@ -236,10 +307,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
 
     // Code Generation
     const generatedCode = useMemo(() => {
-        // Sort items by zIndex for code generation order (Ren'Py renders in order of execution/zorder)
-        const allSprites = [...scene.sprites];
-        allSprites.sort((a, b) => a.zIndex - b.zIndex);
-
+        // Sprites are stored in array order which implies Z-order (0 is back, N is front)
         let code = '';
         if (scene.background) {
             const bg = scene.background;
@@ -251,8 +319,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             if (bg.rotation !== 0) transforms.push(`rotate ${bg.rotation}`);
             if (bg.alpha !== 1.0) transforms.push(`alpha ${bg.alpha}`);
             if (bg.blur > 0) transforms.push(`blur ${bg.blur}`);
-            if (bg.zIndex !== 0) transforms.push(`zorder ${bg.zIndex}`);
-
+            
             if (transforms.length > 0) {
                 code += `scene ${tag}:\n    ${transforms.join('\n    ')}\n`;
             } else {
@@ -262,7 +329,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             code += `# No background selected\n`;
         }
 
-        allSprites.forEach(sprite => {
+        scene.sprites.forEach((sprite, index) => {
             const tag = getRenpyTag(sprite.image);
             const x = sprite.x.toFixed(2);
             const y = sprite.y.toFixed(2);
@@ -273,7 +340,8 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             const rotateStr = sprite.rotation !== 0 ? ` rotate ${sprite.rotation}` : '';
             const alphaStr = sprite.alpha !== 1.0 ? ` alpha ${sprite.alpha}` : '';
             const blurStr = sprite.blur > 0 ? ` blur ${sprite.blur}` : '';
-            const zStr = ` zorder ${sprite.zIndex}`;
+            // Assign zorder explicitly based on array position to guarantee consistency
+            const zStr = ` zorder ${index + 1}`;
             
             code += `show ${tag}:\n    xalign ${x} yalign ${y}${zoomStr}${xzoomStr}${yzoomStr}${rotateStr}${alphaStr}${blurStr}${zStr}\n`;
         });
@@ -289,16 +357,11 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         return scene.sprites.find(s => s.id === selectedSpriteId) || null;
     }, [scene, selectedSpriteId]);
 
-    const assetOptions = useMemo(() => {
-        const opts = [];
-        if (scene.background) {
-            opts.push({ id: 'background', label: `Background (${getRenpyTag(scene.background.image)})` });
-        }
-        scene.sprites.forEach((s, idx) => {
-            opts.push({ id: s.id, label: `Sprite ${idx + 1} (${getRenpyTag(s.image)})` });
-        });
-        return opts;
-    }, [scene, metadata]);
+    // Layer List Preparation
+    // We reverse the sprite array so the highest index (foreground) appears at the top of the UI list
+    const layersReversed = useMemo(() => {
+        return scene.sprites.map((s, index) => ({ sprite: s, originalIndex: index })).reverse();
+    }, [scene.sprites]);
 
     // Render Helpers
     const renderSpriteImage = (sprite: SceneSprite, isBackground: boolean) => (
@@ -318,11 +381,49 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         />
     );
 
+    const ControlGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+        <div className="flex flex-col space-y-1.5 p-2 bg-gray-50 dark:bg-gray-700/50 rounded border border-gray-200 dark:border-gray-600">
+            <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{label}</span>
+            <div className="flex items-center space-x-2">
+                {children}
+            </div>
+        </div>
+    );
+
+    const handleLayerListDragOver = (e: React.DragEvent, id: string, originalIndex: number) => {
+        e.preventDefault();
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        // In reversed list:
+        // Top half means "Above this item" -> "Higher Index" (Gap = index + 1)
+        // Bottom half means "Below this item" -> "Lower Index" (Gap = index)
+        const isTopHalf = e.clientY < midY;
+        setDragOverInfo({ id, position: isTopHalf ? 'top' : 'bottom' });
+    };
+
+    const handleLayerListDrop = (e: React.DragEvent, targetOriginalIndex: number) => {
+        e.preventDefault();
+        setDragOverInfo(null);
+        
+        const fromIdxStr = e.dataTransfer.getData('application/renpy-layer-index');
+        if (fromIdxStr) {
+            const fromIdx = parseInt(fromIdxStr);
+            if (!isNaN(fromIdx) && dragOverInfo) {
+                // Determine target Gap Index in the sprites array
+                // If dropping on Top Half (UI), we want to be *after* this element in array -> Gap = targetIndex + 1
+                // If dropping on Bottom Half (UI), we want to be *before* this element in array -> Gap = targetIndex
+                const gapIndex = dragOverInfo.position === 'top' ? targetOriginalIndex + 1 : targetOriginalIndex;
+                moveSpriteToGap(fromIdx, gapIndex);
+            }
+        }
+    };
+
     return (
-        <div className="flex h-full bg-gray-100 dark:bg-gray-900 overflow-hidden flex-col">
-            <div className="h-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 justify-between flex-shrink-0">
-                <div className="flex items-center space-x-2">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Scene:</span>
+        <div ref={containerRef} className="flex h-full bg-gray-100 dark:bg-gray-900 overflow-hidden flex-col outline-none">
+            {/* Toolbar */}
+            <div className="h-12 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 justify-between flex-shrink-0">
+                <div className="flex items-center space-x-3">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Scene Name:</span>
                     {isRenaming ? (
                         <input
                             ref={nameInputRef}
@@ -331,11 +432,11 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                             onChange={e => setEditName(e.target.value)}
                             onBlur={handleNameBlur}
                             onKeyDown={handleNameKeyDown}
-                            className="text-sm font-semibold bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded border border-indigo-500 outline-none text-gray-900 dark:text-white"
+                            className="text-sm font-semibold bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded border border-indigo-500 outline-none text-gray-900 dark:text-white w-48"
                         />
                     ) : (
                         <span 
-                            className="text-sm font-semibold text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 px-2 py-1 rounded"
+                            className="text-sm font-semibold text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 px-2 py-1 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
                             onClick={() => setIsRenaming(true)}
                             title="Click to rename"
                         >
@@ -343,238 +444,277 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                         </span>
                     )}
                 </div>
-                <div className="text-xs text-gray-400">Drag images from the Images panel on the right</div>
+                <div className="flex items-center space-x-2 text-xs text-gray-400">
+                    <span className="hidden md:inline">Shift + Arrow to Nudge</span>
+                    <span className="w-px h-3 bg-gray-300 dark:bg-gray-600 mx-2"></span>
+                    <span>Drag images from right panel</span>
+                </div>
             </div>
 
-            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                <div className="flex-1 p-8 flex items-center justify-center bg-gray-200/50 dark:bg-black/50 overflow-hidden relative" onPointerDown={handleStagePointerDown}>
-                    {/* The Stage */}
-                    <div 
-                        ref={stageRef}
-                        className="relative bg-white dark:bg-gray-800 shadow-2xl overflow-hidden group"
-                        style={{ 
-                            aspectRatio: '16/9', 
-                            width: '100%', 
-                            maxHeight: '100%',
-                            backgroundImage: 'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)',
-                            backgroundSize: '20px 20px',
-                            backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px' 
-                        }}
-                        onDrop={handleDropOnStage}
-                        onDragOver={handleStageDragOver}
-                        onPointerMove={handlePointerMove}
-                        onPointerUp={handlePointerUp}
-                    >
-                        {scene.background && (
-                            <div 
-                                className={`absolute inset-0 w-full h-full ${selectedSpriteId === 'background' ? 'ring-4 ring-indigo-500 ring-inset' : ''}`}
-                                style={{ zIndex: scene.background.zIndex }}
-                                onPointerDown={(e) => handlePointerDown(e, 'background')}
-                            >
-                                {renderSpriteImage(scene.background, true)}
-                            </div>
-                        )}
-                        
-                        {!scene.background && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 font-bold pointer-events-none space-y-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                                <span>Drag images from the Images panel on the right</span>
-                            </div>
-                        )}
+            {/* Stage Area */}
+            <div className="flex-1 p-8 flex items-center justify-center bg-gray-200/50 dark:bg-black/50 overflow-hidden relative" onPointerDown={handleStagePointerDown}>
+                <div 
+                    ref={stageRef}
+                    className="relative bg-white dark:bg-gray-800 shadow-2xl overflow-hidden group"
+                    style={{ 
+                        aspectRatio: '16/9', 
+                        width: '100%', 
+                        maxHeight: '100%',
+                        backgroundImage: 'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)',
+                        backgroundSize: '20px 20px',
+                        backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px' 
+                    }}
+                    onDrop={handleDropOnStage}
+                    onDragOver={handleStageDragOver}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                >
+                    {scene.background && (
+                        <div 
+                            className={`absolute inset-0 w-full h-full ${selectedSpriteId === 'background' ? 'ring-4 ring-indigo-500 ring-inset' : ''}`}
+                            style={{ zIndex: 0 }}
+                            onPointerDown={(e) => handlePointerDown(e, 'background')}
+                        >
+                            {renderSpriteImage(scene.background, true)}
+                        </div>
+                    )}
+                    
+                    {!scene.background && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 font-bold pointer-events-none space-y-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span>Drop Background Image Here</span>
+                        </div>
+                    )}
 
-                        {scene.sprites.map(sprite => (
-                            <div
-                                key={sprite.id}
-                                className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-move select-none ${selectedSpriteId === sprite.id ? 'ring-2 ring-indigo-500' : ''}`}
-                                style={{
-                                    left: `${sprite.x * 100}%`,
-                                    top: `${sprite.y * 100}%`,
-                                    height: '85%',
-                                    zIndex: sprite.zIndex,
-                                }}
-                                onPointerDown={(e) => handlePointerDown(e, sprite.id)}
-                                onWheel={(e) => handleWheel(e, sprite.id)}
-                            >
-                                {renderSpriteImage(sprite, false)}
-                                {selectedSpriteId === sprite.id && (
-                                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black/70 text-white text-xs px-2 py-1 rounded whitespace-nowrap pointer-events-none z-[9999]">
-                                        X: {sprite.x.toFixed(2)} Y: {sprite.y.toFixed(2)} | Z: {sprite.zIndex}
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
+                    {scene.sprites.map((sprite, index) => (
+                        <div
+                            key={sprite.id}
+                            className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-move select-none ${selectedSpriteId === sprite.id ? 'ring-2 ring-indigo-500' : ''}`}
+                            style={{
+                                left: `${sprite.x * 100}%`,
+                                top: `${sprite.y * 100}%`,
+                                height: '85%',
+                                zIndex: index + 1, // Visual stacking matches array order
+                            }}
+                            onPointerDown={(e) => handlePointerDown(e, sprite.id)}
+                            onWheel={(e) => handleWheel(e, sprite.id)}
+                        >
+                            {renderSpriteImage(sprite, false)}
+                            {selectedSpriteId === sprite.id && (
+                                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black/70 text-white text-xs px-2 py-1 rounded whitespace-nowrap pointer-events-none z-[9999]">
+                                    X: {sprite.x.toFixed(2)} Y: {sprite.y.toFixed(2)}
+                                </div>
+                            )}
+                        </div>
+                    ))}
                 </div>
+            </div>
 
-                {/* Code Generation Panel */}
-                <div className="h-64 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex flex-col flex-shrink-0">
+            {/* Bottom Panel */}
+            <div className="h-72 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex flex-row flex-shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10">
+                
+                {/* Properties Pane (Left) */}
+                <div className="flex-1 flex flex-col min-w-0">
                     <div className="flex-none p-2 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
-                        <span className="font-bold text-sm ml-2 text-gray-700 dark:text-gray-300">Generated Scene Code</span>
+                        <span className="font-bold text-xs ml-2 text-gray-700 dark:text-gray-300 uppercase tracking-wider">Properties</span>
                         <div className="flex space-x-2">
-                            <button onClick={() => onSceneChange({ background: null, sprites: [] })} className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 dark:text-gray-300">Clear Stage</button>
-                            <button onClick={copyToClipboard} className="px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 font-bold">Copy Code</button>
+                            <button onClick={() => onSceneChange({ background: null, sprites: [] })} className="px-3 py-1 text-xs bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300 rounded hover:bg-red-200 font-medium">Clear All</button>
                         </div>
                     </div>
                     
-                    {/* Controls Row */}
-                    <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center space-x-4 overflow-x-auto min-h-[80px]">
-                        {/* Asset Selection Dropdown */}
-                        <div className="flex flex-col min-w-[150px] max-w-[200px] border-r border-gray-200 dark:border-gray-700 pr-4 mr-2">
-                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1">Selected Asset</label>
-                            <select 
-                                value={selectedSpriteId || ''} 
-                                onChange={(e) => setSelectedSpriteId(e.target.value || null)}
-                                className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-xs truncate"
-                            >
-                                <option value="">None</option>
-                                {assetOptions.map(opt => (
-                                    <option key={opt.id} value={opt.id}>{opt.label}</option>
-                                ))}
-                            </select>
-                        </div>
-
+                    {/* Properties Controls */}
+                    <div className="p-4 overflow-x-auto flex-1 flex items-start">
                         {activeSprite ? (
-                            <>
-                                <div className="flex items-center space-x-2 border-r border-gray-200 dark:border-gray-700 pr-4">
-                                    <button 
-                                        onClick={() => updateSprite(activeSprite.id, { flipH: !activeSprite.flipH })} 
-                                        className={`p-2 rounded text-xs font-bold flex items-center space-x-1 ${activeSprite.flipH ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}
-                                        title="Flip Horizontal"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-                                    </button>
-                                    <button 
-                                        onClick={() => updateSprite(activeSprite.id, { flipV: !activeSprite.flipV })} 
-                                        className={`p-2 rounded text-xs font-bold flex items-center space-x-1 ${activeSprite.flipV ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}
-                                        title="Flip Vertical"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 transform rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-                                    </button>
-                                </div>
-
-                                <div className="flex items-center space-x-6">
-                                    {/* Z-Index Control */}
-                                    <div className="flex flex-col w-16 flex-shrink-0">
-                                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                            <span>Z-Index</span>
-                                        </div>
-                                        <input 
-                                            type="number" 
-                                            value={activeSprite.zIndex} 
-                                            onChange={(e) => updateSprite(activeSprite.id, { zIndex: parseInt(e.target.value) || 0 })}
-                                            className="w-full text-xs p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-center"
-                                        />
+                            <div className="flex items-start space-x-4">
+                                <ControlGroup label="Transform">
+                                    <div className="flex space-x-1">
+                                        <button 
+                                            onClick={() => updateSprite(activeSprite.id, { flipH: !activeSprite.flipH })} 
+                                            className={`p-1.5 rounded ${activeSprite.flipH ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}`}
+                                            title="Flip Horizontal"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                                        </button>
+                                        <button 
+                                            onClick={() => updateSprite(activeSprite.id, { flipV: !activeSprite.flipV })} 
+                                            className={`p-1.5 rounded ${activeSprite.flipV ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}`}
+                                            title="Flip Vertical"
+                                        >
+                                            <svg className="w-4 h-4 transform rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                                        </button>
                                     </div>
+                                </ControlGroup>
 
-                                    {/* Zoom Control */}
-                                    <div className="flex flex-col w-40 flex-shrink-0">
-                                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                            <span>Zoom</span>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
+                                <ControlGroup label="Scale & Rotation">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="flex flex-col w-20">
+                                            <span className="text-[9px] text-gray-400 mb-0.5">Zoom</span>
                                             <input 
-                                                type="range" min="0.1" max="3" step="0.05" value={activeSprite.zoom || 1} 
-                                                onChange={(e) => updateSprite(activeSprite.id, { zoom: parseFloat(e.target.value) })}
-                                                className="h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 flex-grow w-full"
-                                            />
-                                            <input 
-                                                type="number" 
-                                                min="0.1" 
-                                                max="5" 
-                                                step="0.1" 
-                                                value={activeSprite.zoom || 1} 
-                                                onChange={(e) => updateSprite(activeSprite.id, { zoom: Math.max(0.1, parseFloat(e.target.value)) || 1 })}
-                                                className="w-14 text-xs p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-center"
+                                                type="number" step="0.1" value={activeSprite.zoom || 1} 
+                                                onChange={(e) => updateSprite(activeSprite.id, { zoom: Math.max(0.1, parseFloat(e.target.value)) })}
+                                                className="w-full text-xs p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
                                             />
                                         </div>
-                                    </div>
-
-                                    <div className="flex flex-col w-40 flex-shrink-0">
-                                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                            <span>Rotate</span>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
+                                        <div className="flex flex-col w-20">
+                                            <span className="text-[9px] text-gray-400 mb-0.5">Angle</span>
                                             <input 
-                                                type="range" min="-180" max="180" value={activeSprite.rotation} 
+                                                type="number" value={activeSprite.rotation} 
                                                 onChange={(e) => updateSprite(activeSprite.id, { rotation: parseInt(e.target.value) })}
-                                                className="h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 flex-grow w-full"
-                                            />
-                                            <input 
-                                                type="number" 
-                                                min="-180" 
-                                                max="180" 
-                                                value={activeSprite.rotation} 
-                                                onChange={(e) => updateSprite(activeSprite.id, { rotation: parseInt(e.target.value) || 0 })}
-                                                className="w-14 text-xs p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-center"
+                                                className="w-full text-xs p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
                                             />
                                         </div>
                                     </div>
-                                    <div className="flex flex-col w-40 flex-shrink-0">
-                                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                            <span>Opacity</span>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
+                                </ControlGroup>
+
+                                <ControlGroup label="Appearance">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="flex flex-col w-28">
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="text-[9px] text-gray-400">Opacity</span>
+                                                <input 
+                                                    type="number" 
+                                                    min="0" max="1" step="0.05" 
+                                                    value={activeSprite.alpha ?? 1} 
+                                                    onChange={(e) => updateSprite(activeSprite.id, { alpha: Math.min(1, Math.max(0, parseFloat(e.target.value))) })}
+                                                    className="w-12 text-[10px] p-0.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-right"
+                                                />
+                                            </div>
                                             <input 
                                                 type="range" min="0" max="1" step="0.05" value={activeSprite.alpha ?? 1} 
                                                 onChange={(e) => updateSprite(activeSprite.id, { alpha: parseFloat(e.target.value) })}
-                                                className="h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 flex-grow w-full"
-                                            />
-                                            <input 
-                                                type="number" 
-                                                min="0" 
-                                                max="1" 
-                                                step="0.1" 
-                                                value={activeSprite.alpha ?? 1} 
-                                                onChange={(e) => updateSprite(activeSprite.id, { alpha: Math.min(1, Math.max(0, parseFloat(e.target.value))) || 1 })}
-                                                className="w-14 text-xs p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-center"
+                                                className="h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-600 w-full"
                                             />
                                         </div>
-                                    </div>
-                                    <div className="flex flex-col w-40 flex-shrink-0">
-                                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                            <span>Blur</span>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
+                                        <div className="flex flex-col w-28">
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="text-[9px] text-gray-400">Blur (px)</span>
+                                                <input 
+                                                    type="number" 
+                                                    min="0" max="50" step="1" 
+                                                    value={activeSprite.blur ?? 0} 
+                                                    onChange={(e) => updateSprite(activeSprite.id, { blur: Math.max(0, parseInt(e.target.value) || 0) })}
+                                                    className="w-12 text-[10px] p-0.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-right"
+                                                />
+                                            </div>
                                             <input 
-                                                type="range" min="0" max="20" step="1" value={activeSprite.blur ?? 0} 
+                                                type="range" min="0" max="50" step="1" value={activeSprite.blur ?? 0} 
                                                 onChange={(e) => updateSprite(activeSprite.id, { blur: parseInt(e.target.value) })}
-                                                className="h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 flex-grow w-full"
-                                            />
-                                            <input 
-                                                type="number" 
-                                                min="0" 
-                                                max="50" 
-                                                value={activeSprite.blur ?? 0} 
-                                                onChange={(e) => updateSprite(activeSprite.id, { blur: Math.max(0, parseInt(e.target.value) || 0) })}
-                                                className="w-14 text-xs p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-center"
+                                                className="h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-600 w-full"
                                             />
                                         </div>
                                     </div>
-                                </div>
+                                </ControlGroup>
 
                                 <div className="flex items-center space-x-2 border-l border-gray-200 dark:border-gray-700 pl-4 ml-auto">
                                     {selectedSpriteId !== 'background' && (
                                         <>
-                                            <button onClick={() => setSpriteAsBackground(activeSprite.id)} className="px-3 py-1 text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 rounded hover:bg-indigo-200 dark:hover:bg-indigo-800">Set BG</button>
-                                            <button onClick={() => moveSpriteToFront(activeSprite.id)} className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 dark:text-gray-300" title="Move visually to front by increasing Z-index">Front</button>
+                                            <button onClick={() => setSpriteAsBackground(activeSprite.id)} className="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 font-medium whitespace-nowrap">Make BG</button>
+                                            <button onClick={() => removeSprite(activeSprite.id)} className="px-3 py-1.5 text-xs bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/50 font-medium">Delete</button>
                                         </>
                                     )}
-                                    <button onClick={() => removeSprite(activeSprite.id)} className="px-3 py-1 text-xs bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400 rounded hover:bg-red-200">Remove</button>
+                                    {selectedSpriteId === 'background' && (
+                                        <button onClick={() => removeSprite('background')} className="px-3 py-1.5 text-xs bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/50 font-medium">Clear BG</button>
+                                    )}
                                 </div>
-                            </>
+                            </div>
                         ) : (
-                            <div className="w-full flex items-center justify-center">
-                                <p className="text-sm text-gray-400 dark:text-gray-500 italic">Select a sprite or the background to edit properties.</p>
+                            <div className="w-full h-16 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                                <p className="text-sm text-gray-400 dark:text-gray-500 font-medium">Select a layer to edit properties</p>
                             </div>
                         )}
                     </div>
 
-                    <pre className="flex-1 p-4 font-mono text-sm overflow-auto text-gray-700 dark:text-gray-300 select-text">
-                        {generatedCode}
-                    </pre>
+                    {/* Code Preview */}
+                    <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex-shrink-0">
+                        <div className="flex justify-between items-center px-2 py-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase">Code Preview</span>
+                            <button onClick={copyToClipboard} className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline font-medium">Copy to Clipboard</button>
+                        </div>
+                        <pre className="p-3 font-mono text-xs overflow-auto text-gray-600 dark:text-gray-400 select-text max-h-24 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                            {generatedCode}
+                        </pre>
+                    </div>
                 </div>
+
+                {/* Layers Pane (Right) */}
+                <div className="w-64 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col flex-shrink-0">
+                    <div className="p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Layers (Foreground Top)</h3>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                        {/* Draggable Layer List */}
+                        {layersReversed.map(({ sprite, originalIndex }, i) => {
+                            // Check if this item is being hovered during drag
+                            const isDragOverTop = dragOverInfo?.id === sprite.id && dragOverInfo.position === 'top';
+                            const isDragOverBottom = dragOverInfo?.id === sprite.id && dragOverInfo.position === 'bottom';
+                            
+                            return (
+                                <div key={sprite.id} className="relative">
+                                    {/* Top Drop Indicator Line */}
+                                    {isDragOverTop && (
+                                        <div className="absolute -top-1 left-0 right-0 h-1 bg-indigo-500 rounded z-20 pointer-events-none" />
+                                    )}
+                                    
+                                    <div 
+                                        draggable
+                                        onDragStart={(e) => {
+                                            e.dataTransfer.setData('application/renpy-layer-index', originalIndex.toString());
+                                            e.dataTransfer.effectAllowed = 'move';
+                                        }}
+                                        onDragOver={(e) => handleLayerListDragOver(e, sprite.id, originalIndex)}
+                                        onDragLeave={() => setDragOverInfo(null)}
+                                        onDrop={(e) => handleLayerListDrop(e, originalIndex)}
+                                        onClick={() => setSelectedSpriteId(sprite.id)}
+                                        className={`flex items-center p-2 rounded cursor-pointer group border ${selectedSpriteId === sprite.id ? 'bg-indigo-100 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-700' : 'hover:bg-gray-100 dark:hover:bg-gray-700 border-transparent'}`}
+                                    >
+                                        <div className="text-gray-400 mr-2 cursor-grab active:cursor-grabbing hover:text-gray-600 dark:hover:text-gray-300">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                                        </div>
+                                        <div className="w-8 h-8 rounded bg-gray-200 dark:bg-gray-600 overflow-hidden flex-shrink-0 mr-2 border border-gray-300 dark:border-gray-500">
+                                            <img src={sprite.image.dataUrl} className="w-full h-full object-cover" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-xs font-semibold truncate ${selectedSpriteId === sprite.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-300'}`}>
+                                                {getRenpyTag(sprite.image)}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Bottom Drop Indicator Line */}
+                                    {isDragOverBottom && (
+                                        <div className="absolute -bottom-1 left-0 right-0 h-1 bg-indigo-500 rounded z-20 pointer-events-none" />
+                                    )}
+                                </div>
+                            );
+                        })}
+                        
+                        {/* Background Entry (Pinned to Bottom) */}
+                        {scene.background ? (
+                            <div 
+                                onClick={() => setSelectedSpriteId('background')}
+                                className={`flex items-center p-2 rounded cursor-pointer mt-2 border-t-2 border-dashed border-gray-200 dark:border-gray-700 pt-2 ${selectedSpriteId === 'background' ? 'bg-indigo-100 dark:bg-indigo-900/50' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                            >
+                                <div className="w-3 h-3 mr-2"></div> 
+                                <div className="w-8 h-8 rounded bg-gray-200 dark:bg-gray-600 overflow-hidden flex-shrink-0 mr-2 border border-gray-300 dark:border-gray-500">
+                                    <img src={scene.background.image.dataUrl} className="w-full h-full object-cover" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-0.5">Background</p>
+                                    <p className={`text-xs truncate ${selectedSpriteId === 'background' ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-300'}`}>
+                                        {getRenpyTag(scene.background.image)}
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-4 text-center text-xs text-gray-400 italic border-t-2 border-dashed border-gray-200 dark:border-gray-700 mt-2">
+                                No background
+                            </div>
+                        )}
+                    </div>
+                </div>
+
             </div>
         </div>
     );
