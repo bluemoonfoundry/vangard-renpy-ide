@@ -18,7 +18,8 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
     const [editName, setEditName] = useState(sceneName);
     
     // Layer List Drag State
-    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+    // dragOverInfo: { id: string, position: 'top' | 'bottom' }
+    const [dragOverInfo, setDragOverInfo] = useState<{ id: string, position: 'top' | 'bottom' } | null>(null);
     
     const stageRef = useRef<HTMLDivElement>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
@@ -190,13 +191,18 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         if (selectedSpriteId === id) setSelectedSpriteId(null);
     };
 
-    const moveSpriteToIndex = (fromIndex: number, toIndex: number) => {
-        if (fromIndex === toIndex) return;
+    const moveSpriteToGap = (fromIndex: number, gapIndex: number) => {
         onSceneChange(prev => {
             const newSprites = [...prev.sprites];
+            // If moving from lower index to higher gap, gap index needs adjustment because of removal
+            const insertionIndex = fromIndex < gapIndex ? gapIndex - 1 : gapIndex;
+            
+            if (fromIndex === insertionIndex) return prev; // No move needed
+
             const [moved] = newSprites.splice(fromIndex, 1);
-            newSprites.splice(toIndex, 0, moved);
-            // Re-normalize Z-indices to match array order
+            newSprites.splice(insertionIndex, 0, moved);
+            
+            // Re-normalize Z-indices
             newSprites.forEach((s, i) => s.zIndex = i + 1);
             return { ...prev, sprites: newSprites };
         });
@@ -313,7 +319,6 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             if (bg.rotation !== 0) transforms.push(`rotate ${bg.rotation}`);
             if (bg.alpha !== 1.0) transforms.push(`alpha ${bg.alpha}`);
             if (bg.blur > 0) transforms.push(`blur ${bg.blur}`);
-            // Background is usually implicitly zorder 0, but explicit doesn't hurt if we want to layer it
             
             if (transforms.length > 0) {
                 code += `scene ${tag}:\n    ${transforms.join('\n    ')}\n`;
@@ -384,6 +389,34 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             </div>
         </div>
     );
+
+    const handleLayerListDragOver = (e: React.DragEvent, id: string, originalIndex: number) => {
+        e.preventDefault();
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        // In reversed list:
+        // Top half means "Above this item" -> "Higher Index" (Gap = index + 1)
+        // Bottom half means "Below this item" -> "Lower Index" (Gap = index)
+        const isTopHalf = e.clientY < midY;
+        setDragOverInfo({ id, position: isTopHalf ? 'top' : 'bottom' });
+    };
+
+    const handleLayerListDrop = (e: React.DragEvent, targetOriginalIndex: number) => {
+        e.preventDefault();
+        setDragOverInfo(null);
+        
+        const fromIdxStr = e.dataTransfer.getData('application/renpy-layer-index');
+        if (fromIdxStr) {
+            const fromIdx = parseInt(fromIdxStr);
+            if (!isNaN(fromIdx) && dragOverInfo) {
+                // Determine target Gap Index in the sprites array
+                // If dropping on Top Half (UI), we want to be *after* this element in array -> Gap = targetIndex + 1
+                // If dropping on Bottom Half (UI), we want to be *before* this element in array -> Gap = targetIndex
+                const gapIndex = dragOverInfo.position === 'top' ? targetOriginalIndex + 1 : targetOriginalIndex;
+                moveSpriteToGap(fromIdx, gapIndex);
+            }
+        }
+    };
 
     return (
         <div ref={containerRef} className="flex h-full bg-gray-100 dark:bg-gray-900 overflow-hidden flex-col outline-none">
@@ -612,46 +645,50 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                     </div>
                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
                         {/* Draggable Layer List */}
-                        {layersReversed.map(({ sprite, originalIndex }, i) => (
-                            <div 
-                                key={sprite.id}
-                                draggable
-                                onDragStart={(e) => {
-                                    e.dataTransfer.setData('application/renpy-layer-index', originalIndex.toString());
-                                    e.dataTransfer.effectAllowed = 'move';
-                                }}
-                                onDragOver={(e) => {
-                                    e.preventDefault();
-                                    setDragOverIndex(originalIndex);
-                                }}
-                                onDragLeave={() => setDragOverIndex(null)}
-                                onDrop={(e) => {
-                                    e.preventDefault();
-                                    setDragOverIndex(null);
-                                    const fromIdxStr = e.dataTransfer.getData('application/renpy-layer-index');
-                                    if (fromIdxStr) {
-                                        const fromIdx = parseInt(fromIdxStr);
-                                        if (!isNaN(fromIdx)) {
-                                            moveSpriteToIndex(fromIdx, originalIndex);
-                                        }
-                                    }
-                                }}
-                                onClick={() => setSelectedSpriteId(sprite.id)}
-                                className={`flex items-center p-2 rounded cursor-pointer group border ${selectedSpriteId === sprite.id ? 'bg-indigo-100 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-700' : 'hover:bg-gray-100 dark:hover:bg-gray-700 border-transparent'} ${dragOverIndex === originalIndex ? 'border-t-2 border-t-indigo-500' : ''}`}
-                            >
-                                <div className="text-gray-400 mr-2 cursor-grab active:cursor-grabbing hover:text-gray-600 dark:hover:text-gray-300">
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                        {layersReversed.map(({ sprite, originalIndex }, i) => {
+                            // Check if this item is being hovered during drag
+                            const isDragOverTop = dragOverInfo?.id === sprite.id && dragOverInfo.position === 'top';
+                            const isDragOverBottom = dragOverInfo?.id === sprite.id && dragOverInfo.position === 'bottom';
+                            
+                            return (
+                                <div key={sprite.id} className="relative">
+                                    {/* Top Drop Indicator Line */}
+                                    {isDragOverTop && (
+                                        <div className="absolute -top-1 left-0 right-0 h-1 bg-indigo-500 rounded z-20 pointer-events-none" />
+                                    )}
+                                    
+                                    <div 
+                                        draggable
+                                        onDragStart={(e) => {
+                                            e.dataTransfer.setData('application/renpy-layer-index', originalIndex.toString());
+                                            e.dataTransfer.effectAllowed = 'move';
+                                        }}
+                                        onDragOver={(e) => handleLayerListDragOver(e, sprite.id, originalIndex)}
+                                        onDragLeave={() => setDragOverInfo(null)}
+                                        onDrop={(e) => handleLayerListDrop(e, originalIndex)}
+                                        onClick={() => setSelectedSpriteId(sprite.id)}
+                                        className={`flex items-center p-2 rounded cursor-pointer group border ${selectedSpriteId === sprite.id ? 'bg-indigo-100 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-700' : 'hover:bg-gray-100 dark:hover:bg-gray-700 border-transparent'}`}
+                                    >
+                                        <div className="text-gray-400 mr-2 cursor-grab active:cursor-grabbing hover:text-gray-600 dark:hover:text-gray-300">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                                        </div>
+                                        <div className="w-8 h-8 rounded bg-gray-200 dark:bg-gray-600 overflow-hidden flex-shrink-0 mr-2 border border-gray-300 dark:border-gray-500">
+                                            <img src={sprite.image.dataUrl} className="w-full h-full object-cover" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-xs font-semibold truncate ${selectedSpriteId === sprite.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-300'}`}>
+                                                {getRenpyTag(sprite.image)}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Bottom Drop Indicator Line */}
+                                    {isDragOverBottom && (
+                                        <div className="absolute -bottom-1 left-0 right-0 h-1 bg-indigo-500 rounded z-20 pointer-events-none" />
+                                    )}
                                 </div>
-                                <div className="w-8 h-8 rounded bg-gray-200 dark:bg-gray-600 overflow-hidden flex-shrink-0 mr-2 border border-gray-300 dark:border-gray-500">
-                                    <img src={sprite.image.dataUrl} className="w-full h-full object-cover" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className={`text-xs font-semibold truncate ${selectedSpriteId === sprite.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-300'}`}>
-                                        {getRenpyTag(sprite.image)}
-                                    </p>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                         
                         {/* Background Entry (Pinned to Bottom) */}
                         {scene.background ? (
