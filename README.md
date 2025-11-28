@@ -6,7 +6,7 @@ This tool is perfect for writers, designers, and programmers who want a more int
 Here is a link to a short video demonstrating the features in the initial beta version: https://youtu.be/87wSuV8RESg
 
 > [!IMPORTANT]  
-> Full discloure, this application was developed with the help of Google's Gemini Code Builder. 
+> Full discloure, this application was developed with the help of Google's Gemini AI Code Builder. 
 
 ## Key Features
 
@@ -22,7 +22,8 @@ Here is a link to a short video demonstrating the features in the initial beta v
 - **Expanded Theme Support**: Personalize your workspace with multiple themes, including Light, Dark, Solarized, and Colorful variants.
 - **UI State Persistence**: The editor remembers your theme, sidebar layout, and open tabs between sessions for a consistent workflow.
 - **Customizable Layout**: Sidebars are resizable, allowing you to tailor the interface to your needs.
-- **Ren'py Engine Integration**: Run the Ren'Py project by clicking on a Run button. Edit code and reload in Ren'Py for side-by-side development and testing. 
+- **Ren'py Engine Integration**: Run the Ren'Py project by clicking on a Run button. Edit code and reload in Ren'Py for side-by-side development and testing.
+- **Scene Composer**: Compose scenes by layering background and sprites visually, to generate transform code that can be copied into Ren'Py script
 
 ---
 
