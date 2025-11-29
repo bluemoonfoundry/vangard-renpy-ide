@@ -1,9 +1,3 @@
-
-
-
-
-
-
 import React, { useState, useMemo } from 'react';
 import type { Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, RenpyScreen, RenpyAnalysisResult } from '../types';
 import VariableManager from './VariableManager';
@@ -11,6 +5,7 @@ import ImageManager from './ImageManager';
 import AudioManager from './AudioManager';
 import SnippetManager from './SnippetManager';
 import ScreenManager from './ScreenManager';
+import MenuConstructor from './MenuConstructor';
 
 interface StoryElementsPanelProps {
     analysisResult: RenpyAnalysisResult;
@@ -63,7 +58,7 @@ interface StoryElementsPanelProps {
     onToggleSnippetCategory: (name: string, isOpen: boolean) => void;
 }
 
-type Tab = 'characters' | 'variables' | 'images' | 'audio' | 'screens' | 'snippets' | 'scenes';
+type Tab = 'characters' | 'variables' | 'images' | 'audio' | 'screens' | 'snippets' | 'scenes' | 'menus';
 
 const TabButton: React.FC<{
   label: string;
@@ -122,6 +117,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                 <TabButton className="flex-grow" label="Snd" count={projectAudios.size} isActive={activeTab === 'audio'} onClick={() => setActiveTab('audio')} />
                 <TabButton className="flex-grow" label="Scrn" count={analysisResult.screens.size} isActive={activeTab === 'screens'} onClick={() => setActiveTab('screens')} />
                 <TabButton className="flex-grow" label="Scenes" count={scenes.length} isActive={activeTab === 'scenes'} onClick={() => setActiveTab('scenes')} />
+                <TabButton className="flex-grow" label="Menus" isActive={activeTab === 'menus'} onClick={() => setActiveTab('menus')} />
                 <TabButton className="flex-grow" label="Code" isActive={activeTab === 'snippets'} onClick={() => setActiveTab('snippets')} />
             </nav>
             <main className="flex-grow flex flex-col min-h-0 overflow-hidden relative">
@@ -241,6 +237,11 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                             ))}
                             {scenes.length === 0 && <p className="text-sm text-secondary text-center py-4">No scenes created yet.</p>}
                         </ul>
+                    </div>
+                )}
+                {activeTab === 'menus' && (
+                    <div className="flex-grow h-full overflow-hidden">
+                        <MenuConstructor analysisResult={analysisResult} />
                     </div>
                 )}
                 {activeTab === 'snippets' && (
