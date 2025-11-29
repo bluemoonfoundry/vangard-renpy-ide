@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import LabelBlock from './LabelBlock';
 import ViewRoutesPanel from './ViewRoutesPanel';
@@ -114,9 +112,9 @@ const Arrow: React.FC<{
           <path
               d={pathData}
               stroke={color}
-              strokeWidth="2.5"
+              strokeWidth="4"
               fill="none"
-              strokeDasharray={type === 'implicit' ? "5, 5" : "none"}
+              strokeDasharray={type === 'implicit' ? "10, 6" : "none"}
               markerEnd={`url(#arrowhead-${color.replace('#', '')})`}
           />
         </g>
@@ -451,15 +449,16 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
           style={{ left: svgBounds.left, top: svgBounds.top, width: svgBounds.width, height: svgBounds.height, zIndex: 5 }}
         >
           <defs>
-            <marker id="arrowhead-4f46e5" viewBox="-14 0 14 10" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
-              <polygon points="-14 0, 0 3.5, -14 7" fill="#4f46e5" />
+            {/* Markers: viewBox="0 0 10 10", triangle shape M0,0 L10,5 L0,10 z, bigger size 12x12 */}
+            <marker id="arrowhead-4f46e5" viewBox="0 0 10 10" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#4f46e5" />
             </marker>
-             <marker id="arrowhead-94a3b8" viewBox="-14 0 14 10" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
-              <polygon points="-14 0, 0 3.5, -14 7" fill="#94a3b8" />
+             <marker id="arrowhead-94a3b8" viewBox="0 0 10 10" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8" />
             </marker>
             {identifiedRoutes.map(route => (
-                <marker key={route.id} id={`arrowhead-${route.color.replace('#', '')}`} viewBox="-14 0 14 10" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
-                    <polygon points="-14 0, 0 3.5, -14 7" fill={route.color} />
+                <marker key={route.id} id={`arrowhead-${route.color.replace('#', '')}`} viewBox="0 0 10 10" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+                    <path d="M0,0 L10,5 L0,10 z" fill={route.color} />
                 </marker>
             ))}
           </defs>
