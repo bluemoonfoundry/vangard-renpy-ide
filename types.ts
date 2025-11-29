@@ -170,6 +170,7 @@ export interface LabelNode {
   id: string; // composite key: `${blockId}:${label}`
   label: string;
   blockId: string;
+  containerName?: string; // The name of the file/block containing this label
   startLine: number;
   position: Position;
   width: number;
@@ -261,6 +262,7 @@ export interface AppSettings {
   recentProjects: string[];
   editorFontFamily: string;
   editorFontSize: number;
+  snippetCategoriesState?: Record<string, boolean>;
 }
 
 // Scene Composer Types

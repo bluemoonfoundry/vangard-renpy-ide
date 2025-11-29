@@ -2,6 +2,8 @@
 
 
 
+
+
 import React, { useState, useMemo } from 'react';
 import type { Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, RenpyScreen, RenpyAnalysisResult } from '../types';
 import VariableManager from './VariableManager';
@@ -55,6 +57,10 @@ interface StoryElementsPanelProps {
     onOpenScene: (sceneId: string) => void;
     onCreateScene: (name?: string) => void;
     onDeleteScene: (sceneId: string) => void;
+
+    // Snippet Props
+    snippetCategoriesState: Record<string, boolean>;
+    onToggleSnippetCategory: (name: string, isOpen: boolean) => void;
 }
 
 type Tab = 'characters' | 'variables' | 'images' | 'audio' | 'screens' | 'snippets' | 'scenes';
@@ -88,7 +94,8 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     projectAudios, audioMetadata, onAddAudioScanDirectory, onRemoveAudioScanDirectory, audioScanDirectories, onCopyAudiosToProject, onUpdateAudioMetadata, onOpenAudioEditor, audiosLastScanned, isRefreshingAudios, onRefreshAudios,
     isFileSystemApiSupported,
     onHoverHighlightStart, onHoverHighlightEnd,
-    scenes, onOpenScene, onCreateScene, onDeleteScene
+    scenes, onOpenScene, onCreateScene, onDeleteScene,
+    snippetCategoriesState, onToggleSnippetCategory
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('characters');
 
@@ -238,7 +245,10 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                 )}
                 {activeTab === 'snippets' && (
                     <div className="flex-grow overflow-y-auto p-4 overscroll-contain">
-                        <SnippetManager />
+                        <SnippetManager 
+                            categoriesState={snippetCategoriesState}
+                            onToggleCategory={onToggleSnippetCategory}
+                        />
                     </div>
                 )}
             </main>

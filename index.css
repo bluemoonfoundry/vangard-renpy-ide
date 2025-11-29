@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,15 +8,18 @@
   color: #4f46e5; /* indigo-600 */
   text-decoration: underline;
   cursor: pointer;
+  font-weight: 500;
 }
 .dark .renpy-jump-link {
   color: #818cf8; /* indigo-400 */
 }
 .renpy-jump-link:hover {
   color: #312e81; /* indigo-900 */
+  background-color: rgba(79, 70, 229, 0.1);
 }
 .dark .renpy-jump-link:hover {
   color: #c7d2fe; /* indigo-200 */
+  background-color: rgba(129, 140, 248, 0.1);
 }
 .renpy-jump-invalid {
   color: #ef4444; /* red-500 */

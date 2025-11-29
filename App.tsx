@@ -1,10 +1,5 @@
 
 
-
-
-
-
-
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -82,12 +77,20 @@ interface LayoutEdge {
     targetId: string;
 }
 
-const computeAutoLayout = <T extends LayoutNode>(nodes: T[], edges: LayoutEdge[]): T[] => {
+interface LayoutOptions {
+    paddingX?: number;
+    paddingY?: number;
+    componentSpacing?: number;
+    direction?: 'LR' | 'TB';
+}
+
+const computeAutoLayout = <T extends LayoutNode>(nodes: T[], edges: LayoutEdge[], options?: LayoutOptions): T[] => {
     if (!nodes || nodes.length === 0) return [];
 
-    const PADDING_X = 100;
-    const PADDING_Y = 80;
-    const COMPONENT_SPACING = 200;
+    const PADDING_X = options?.paddingX ?? 100;
+    const PADDING_Y = options?.paddingY ?? 80;
+    const COMPONENT_SPACING = options?.componentSpacing ?? 200;
+    const DIRECTION = options?.direction ?? 'LR';
     const DEFAULT_WIDTH = 300;
     const DEFAULT_HEIGHT = 150;
 
@@ -214,37 +217,76 @@ const computeAutoLayout = <T extends LayoutNode>(nodes: T[], edges: LayoutEdge[]
         if (remaining.length > 0) layers.push(remaining);
 
         // Position layers
-        let layerX = 0;
-        layers.forEach(layer => {
-            let maxW = 0;
-            let totalH = 0;
-            layer.forEach(id => {
-                const n = nodeMap.get(id);
-                if (n) {
-                    maxW = Math.max(maxW, n.width);
-                    totalH += n.height;
-                }
+        if (DIRECTION === 'LR') {
+            let layerX = 0;
+            layers.forEach(layer => {
+                let maxW = 0;
+                let totalH = 0;
+                layer.forEach(id => {
+                    const n = nodeMap.get(id);
+                    if (n) {
+                        maxW = Math.max(maxW, n.width);
+                        totalH += n.height;
+                    }
+                });
+                totalH += (layer.length - 1) * PADDING_Y;
+
+                let currentY = -totalH / 2;
+                layer.forEach(id => {
+                    const n = nodeMap.get(id);
+                    if (n) {
+                        const x = layerX + (maxW - n.width) / 2;
+                        finalPositions.set(id, {
+                            x: currentOffsetX + x,
+                            y: currentY + 100 // Offset to avoid top edge
+                        });
+                        currentY += n.height + PADDING_Y;
+                    }
+                });
+
+                layerX += maxW + PADDING_X;
             });
-            totalH += (layer.length - 1) * PADDING_Y;
-
-            let currentY = -totalH / 2;
-            layer.forEach(id => {
-                const n = nodeMap.get(id);
-                if (n) {
-                    const x = layerX + (maxW - n.width) / 2;
-                    finalPositions.set(id, {
-                        x: currentOffsetX + x,
-                        y: currentY + 100 // Offset to avoid top edge
-                    });
-                    currentY += n.height + PADDING_Y;
-                }
+            currentOffsetX += layerX + COMPONENT_SPACING;
+        } else {
+            // TB Direction (Top to Bottom)
+            let layerY = 0;
+            let componentMaxWidth = 0;
+            
+            // First pass to determine max width of component layers
+            layers.forEach(layer => {
+                 let w = 0;
+                 layer.forEach(id => { const n = nodeMap.get(id); if(n) w += n.width; });
+                 w += (layer.length - 1) * PADDING_X;
+                 componentMaxWidth = Math.max(componentMaxWidth, w);
             });
 
-            layerX += maxW + PADDING_X;
-        });
+            layers.forEach(layer => {
+                let maxH = 0;
+                let totalW = 0;
+                layer.forEach(id => {
+                    const n = nodeMap.get(id);
+                    if (n) {
+                        maxH = Math.max(maxH, n.height);
+                        totalW += n.width;
+                    }
+                });
+                totalW += (layer.length - 1) * PADDING_X;
 
-        const componentWidth = Math.max(layerX - PADDING_X, DEFAULT_WIDTH); 
-        currentOffsetX += componentWidth + COMPONENT_SPACING;
+                let currentX = -totalW / 2;
+                layer.forEach(id => {
+                    const n = nodeMap.get(id);
+                    if (n) {
+                        finalPositions.set(id, {
+                            x: currentOffsetX + currentX,
+                            y: layerY + 100
+                        });
+                        currentX += n.width + PADDING_X;
+                    }
+                });
+                layerY += maxH + PADDING_Y;
+            });
+            currentOffsetX += Math.max(componentMaxWidth, DEFAULT_WIDTH) + COMPONENT_SPACING;
+        }
     });
 
     // Normalize Y
@@ -256,7 +298,7 @@ const computeAutoLayout = <T extends LayoutNode>(nodes: T[], edges: LayoutEdge[]
         const shift = targetY - minY;
         finalPositions.forEach(p => { p.y += shift; });
     } else {
-         // Fallback for completely disconnected single nodes if algorithm somehow failed
+         // Fallback
          let x = 50;
          let y = 100;
          nodes.forEach(n => {
@@ -376,6 +418,7 @@ const App: React.FC = () => {
     recentProjects: [],
     editorFontFamily: "'Consolas', 'Courier New', monospace",
     editorFontSize: 14,
+    snippetCategoriesState: {}, // Initialize empty
   });
   const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'sceneCompositions' | 'sceneNames'>>({
     enableAiFeatures: false,
@@ -531,6 +574,7 @@ const App: React.FC = () => {
               Object.assign(draft, savedSettings);
               if (!draft.editorFontFamily) draft.editorFontFamily = "'Consolas', 'Courier New', monospace";
               if (!draft.editorFontSize) draft.editorFontSize = 14;
+              if (!draft.snippetCategoriesState) draft.snippetCategoriesState = {};
           });
         }
       }).finally(() => {
@@ -545,6 +589,7 @@ const App: React.FC = () => {
               Object.assign(draft, parsed);
               if (!draft.editorFontFamily) draft.editorFontFamily = "'Consolas', 'Courier New', monospace";
               if (!draft.editorFontSize) draft.editorFontSize = 14;
+              if (!draft.snippetCategoriesState) draft.snippetCategoriesState = {};
           });
         } catch (e) { console.error("Failed to load app settings from localStorage", e); }
       }
@@ -1209,7 +1254,7 @@ const App: React.FC = () => {
       });
 
       const serializableScenes: Record<string, any> = {};
-      Object.entries(sceneCompositions).forEach(([id, sc]) => {
+      Object.entries(sceneCompositions as Record<string, SceneComposition>).forEach(([id, sc]) => {
           serializableScenes[id] = {
               background: sc.background ? serializeSprite(sc.background) : null,
               sprites: sc.sprites.map(serializeSprite)
@@ -1225,7 +1270,7 @@ const App: React.FC = () => {
         sceneCompositions: serializableScenes,
         sceneNames
       };
-      const settingsPath = await window.electronAPI.path.join(projectRootPath, 'game/project.ide.json');
+      const settingsPath = await window.electronAPI.path.join(projectRootPath!, 'game/project.ide.json');
       await window.electronAPI.writeFile(settingsPath, JSON.stringify(settingsToSave, null, 2));
       setHasUnsavedSettings(false);
     } catch (e) {
@@ -1708,11 +1753,135 @@ const App: React.FC = () => {
 
   const handleAnalyzeRoutes = useCallback(() => {
       setStatusBarMessage('Analyzing route paths...');
-      // Allow render cycle to update status bar before heavy calculation
       setTimeout(() => {
-          const { labelNodes, routeLinks, identifiedRoutes } = performRouteAnalysis(blocks, analysisResult.labels, analysisResult.jumps);
-          const layoutedNodes = computeAutoLayout(labelNodes, routeLinks);
-          setRouteCanvasData({ labelNodes: layoutedNodes, routeLinks, identifiedRoutes });
+          // 1. Get detailed labels and their connections
+          const { labelNodes: rawLabelNodes, routeLinks, identifiedRoutes } = performRouteAnalysis(blocks, analysisResult.labels, analysisResult.jumps);
+          
+          // 2. Group labels by block ID to create "Super Nodes" for the layout engine
+          const blockGroups = new Map<string, LabelNode[]>();
+          rawLabelNodes.forEach(node => {
+              if (!blockGroups.has(node.blockId)) blockGroups.set(node.blockId, []);
+              blockGroups.get(node.blockId)!.push(node);
+          });
+
+          // Layout constants
+          const BLOCK_PADDING = 40;
+          const HEADER_HEIGHT = 40;
+
+          // 3. Perform Internal Layout for each Block
+          const blockLayouts = new Map<string, { width: number, height: number, positions: Map<string, Position> }>();
+
+          blockGroups.forEach((nodes, blockId) => {
+              // Find intra-block edges
+              const internalEdges = routeLinks.filter(l => 
+                  nodes.some(n => n.id === l.sourceId) && 
+                  nodes.some(n => n.id === l.targetId)
+              );
+
+              // Create temporary LayoutNodes for the internal graph
+              const layoutNodes = nodes.map(n => ({
+                  id: n.id,
+                  width: 180, // Standard label node width
+                  height: 40, // Standard label node height
+                  position: { x: 0, y: 0 }
+              }));
+
+              // Run layout with TB setting for internal flow to avoid flat lines
+              const layoutedNodes = computeAutoLayout(layoutNodes, internalEdges, { 
+                  paddingX: 40, 
+                  paddingY: 40, 
+                  componentSpacing: 50,
+                  direction: 'TB'
+              });
+
+              if (layoutedNodes.length > 0) {
+                  // Calculate bounding box of the internal layout
+                  let minX = Infinity, minY = Infinity;
+                  let maxX = -Infinity, maxY = -Infinity;
+
+                  layoutedNodes.forEach(n => {
+                      minX = Math.min(minX, n.position.x);
+                      minY = Math.min(minY, n.position.y);
+                      maxX = Math.max(maxX, n.position.x + n.width);
+                      maxY = Math.max(maxY, n.position.y + n.height);
+                  });
+
+                  // Normalize positions to (0,0) relative to the bounding box
+                  const positions = new Map<string, Position>();
+                  layoutedNodes.forEach(n => {
+                      positions.set(n.id, {
+                          x: n.position.x - minX,
+                          y: n.position.y - minY
+                      });
+                  });
+
+                  blockLayouts.set(blockId, {
+                      width: maxX - minX,
+                      height: maxY - minY,
+                      positions
+                  });
+              } else {
+                  blockLayouts.set(blockId, { width: 200, height: 100, positions: new Map() });
+              }
+          });
+
+          // 4. Create Super Nodes for Global Layout using computed dimensions
+          const superNodes: LayoutNode[] = [];
+          blockGroups.forEach((_, blockId) => {
+              const layout = blockLayouts.get(blockId)!;
+              superNodes.push({
+                  id: blockId,
+                  // Add padding for the container box and header
+                  width: layout.width + (BLOCK_PADDING * 2),
+                  height: layout.height + (BLOCK_PADDING * 2) + HEADER_HEIGHT,
+                  position: { x: 0, y: 0 }
+              });
+          });
+
+          // 5. Create Super Edges (Block to Block connections)
+          const superEdges: LayoutEdge[] = [];
+          const processedEdges = new Set<string>();
+          
+          routeLinks.forEach(link => {
+              const sourceNode = rawLabelNodes.find(n => n.id === link.sourceId);
+              const targetNode = rawLabelNodes.find(n => n.id === link.targetId);
+              
+              if (sourceNode && targetNode && sourceNode.blockId !== targetNode.blockId) {
+                  const edgeKey = `${sourceNode.blockId}-${targetNode.blockId}`;
+                  if (!processedEdges.has(edgeKey)) {
+                      superEdges.push({ sourceId: sourceNode.blockId, targetId: targetNode.blockId });
+                      processedEdges.add(edgeKey);
+                  }
+              }
+          });
+
+          // 6. Run Global Layout on Super Nodes (Left-to-Right)
+          const layoutedSuperNodes = computeAutoLayout(superNodes, superEdges, {
+              paddingX: 150, 
+              paddingY: 100,
+              componentSpacing: 300,
+              direction: 'LR'
+          });
+          const superNodePositionMap = new Map(layoutedSuperNodes.map(n => [n.id, n.position]));
+
+          // 7. Calculate absolute positions for individual labels
+          const finalLabelNodes = rawLabelNodes.map(node => {
+              const blockPos = superNodePositionMap.get(node.blockId) || { x: 0, y: 0 };
+              const internalLayout = blockLayouts.get(node.blockId)!;
+              const relPos = internalLayout.positions.get(node.id) || { x: 0, y: 0 };
+              
+              return {
+                  ...node,
+                  width: 180,
+                  height: 40,
+                  position: {
+                      x: blockPos.x + BLOCK_PADDING + relPos.x,
+                      y: blockPos.y + HEADER_HEIGHT + BLOCK_PADDING + relPos.y
+                  }
+              };
+          });
+
+          setRouteCanvasData({ labelNodes: finalLabelNodes, routeLinks, identifiedRoutes });
           
           const tabId = 'route-canvas';
           setOpenTabs(prev => {
@@ -2125,6 +2294,16 @@ const App: React.FC = () => {
     });
   }, [updateAppSettings]);
 
+  // Snippet Category Toggle Handler
+  const handleToggleSnippetCategory = useCallback((categoryName: string, isOpen: boolean) => {
+      updateAppSettings(draft => {
+          if (!draft.snippetCategoriesState) {
+              draft.snippetCategoriesState = {};
+          }
+          draft.snippetCategoriesState[categoryName] = isOpen;
+      });
+  }, [updateAppSettings]);
+
 
   // --- Render Helpers ---
   const activeBlock = useMemo(() => blocks.find(b => b.id === activeTabId), [blocks, activeTabId]);
@@ -2395,7 +2574,7 @@ const App: React.FC = () => {
                     <SceneComposer 
                         images={Array.from(images.values())}
                         metadata={imageMetadata}
-                        scene={sceneCompositions[activeTab.sceneId] || { background: null, sprites: [] }}
+                        scene={(sceneCompositions as Record<string, SceneComposition>)[activeTab.sceneId] || { background: null, sprites: [] }}
                         onSceneChange={(val) => handleSceneUpdate(activeTab.sceneId!, val)}
                         sceneName={sceneNames[activeTab.sceneId] || 'Unnamed Scene'}
                         onRenameScene={(name) => handleRenameScene(activeTab.sceneId!, name)}
@@ -2433,6 +2612,7 @@ const App: React.FC = () => {
                 {activeTab?.type === 'image' && activeTab.filePath && (
                     <ImageEditorView 
                         image={images.get(activeTab.filePath) || { filePath: activeTab.filePath, fileName: 'Unknown', isInProject: false, fileHandle: null, dataUrl: '' }}
+                        allImages={Array.from(images.values())}
                         metadata={imageMetadata.get(activeTab.filePath) || (images.get(activeTab.filePath)?.projectFilePath ? imageMetadata.get(images.get(activeTab.filePath)!.projectFilePath!) : undefined)}
                         onUpdateMetadata={(path, meta) => {
                              setImageMetadata(draft => { draft.set(path, meta); });
@@ -2531,6 +2711,9 @@ const App: React.FC = () => {
                         onOpenScene={handleOpenScene}
                         onCreateScene={handleCreateScene}
                         onDeleteScene={handleDeleteScene}
+
+                        snippetCategoriesState={appSettings.snippetCategoriesState || {}}
+                        onToggleSnippetCategory={handleToggleSnippetCategory}
                     />
                 </div>
             </>

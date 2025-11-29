@@ -1,3 +1,5 @@
+
+
 import { useMemo } from 'react';
 import type { Block, Link, RenpyAnalysisResult, LabelLocation, JumpLocation, Character, DialogueLine, Variable, VariableUsage, RenpyScreen, LabelNode, RouteLink, IdentifiedRoute } from '../types';
 
@@ -477,6 +479,7 @@ export const performRouteAnalysis = (
             id: nodeId,
             label: label,
             blockId: block.id,
+            containerName: block.title || block.filePath?.split('/').pop() || 'Untitled', // Store block name
             startLine: startLine,
             position: { x: 0, y: 0 },
             width: 180,
