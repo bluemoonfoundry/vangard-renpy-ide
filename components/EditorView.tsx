@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type { Block, RenpyAnalysisResult, ToastMessage } from '../types';
@@ -145,6 +144,33 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const handleEditorWillMount: BeforeMount = (monaco) => {
     if (!monaco.languages.getLanguages().some(({ id }) => id === 'renpy')) {
       monaco.languages.register({ id: 'renpy' });
+      
+      // Define language configuration for comments and brackets
+      monaco.languages.setLanguageConfiguration('renpy', {
+        comments: {
+          lineComment: '#',
+        },
+        brackets: [
+          ['(', ')'],
+          ['{', '}'],
+          ['[', ']'],
+        ],
+        autoClosingPairs: [
+          { open: '(', close: ')' },
+          { open: '{', close: '}' },
+          { open: '[', close: ']' },
+          { open: '"', close: '"' },
+          { open: "'", close: "'" },
+        ],
+        surroundingPairs: [
+          { open: '(', close: ')' },
+          { open: '{', close: '}' },
+          { open: '[', close: ']' },
+          { open: '"', close: '"' },
+          { open: "'", close: "'" },
+        ],
+      });
+
       monaco.languages.setMonarchTokensProvider('renpy', {
         keywords: ['label', 'jump', 'call', 'menu', 'scene', 'show', 'hide', 'with', 'define', 'python', 'if', 'elif', 'else', 'return', 'expression'],
         tokenizer: { root: [[/#.*$/, 'comment'], [/"/, 'string', '@string_double'], [/'/, 'string', '@string_single'], [/\b[a-zA-Z_]\w*/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }], [/\b\d+/, 'number'], [/[:=+\-*/!<>]+/, 'operator'], [/[(),.]/, 'punctuation']], string_double: [[/[^\\"]+/, 'string'], [/\\./, 'string.escape'], [/"/, 'string', '@pop']], string_single: [[/[^\\']+/, 'string'], [/\\./, 'string.escape'], [/'/, 'string', '@pop']] },

@@ -1,5 +1,3 @@
-
-
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -77,20 +75,12 @@ interface LayoutEdge {
     targetId: string;
 }
 
-interface LayoutOptions {
-    paddingX?: number;
-    paddingY?: number;
-    componentSpacing?: number;
-    direction?: 'LR' | 'TB';
-}
-
-const computeAutoLayout = <T extends LayoutNode>(nodes: T[], edges: LayoutEdge[], options?: LayoutOptions): T[] => {
+const computeAutoLayout = <T extends LayoutNode>(nodes: T[], edges: LayoutEdge[]): T[] => {
     if (!nodes || nodes.length === 0) return [];
 
-    const PADDING_X = options?.paddingX ?? 100;
-    const PADDING_Y = options?.paddingY ?? 80;
-    const COMPONENT_SPACING = options?.componentSpacing ?? 200;
-    const DIRECTION = options?.direction ?? 'LR';
+    const PADDING_X = 100;
+    const PADDING_Y = 80;
+    const COMPONENT_SPACING = 200;
     const DEFAULT_WIDTH = 300;
     const DEFAULT_HEIGHT = 150;
 
@@ -217,76 +207,37 @@ const computeAutoLayout = <T extends LayoutNode>(nodes: T[], edges: LayoutEdge[]
         if (remaining.length > 0) layers.push(remaining);
 
         // Position layers
-        if (DIRECTION === 'LR') {
-            let layerX = 0;
-            layers.forEach(layer => {
-                let maxW = 0;
-                let totalH = 0;
-                layer.forEach(id => {
-                    const n = nodeMap.get(id);
-                    if (n) {
-                        maxW = Math.max(maxW, n.width);
-                        totalH += n.height;
-                    }
-                });
-                totalH += (layer.length - 1) * PADDING_Y;
-
-                let currentY = -totalH / 2;
-                layer.forEach(id => {
-                    const n = nodeMap.get(id);
-                    if (n) {
-                        const x = layerX + (maxW - n.width) / 2;
-                        finalPositions.set(id, {
-                            x: currentOffsetX + x,
-                            y: currentY + 100 // Offset to avoid top edge
-                        });
-                        currentY += n.height + PADDING_Y;
-                    }
-                });
-
-                layerX += maxW + PADDING_X;
+        let layerX = 0;
+        layers.forEach(layer => {
+            let maxW = 0;
+            let totalH = 0;
+            layer.forEach(id => {
+                const n = nodeMap.get(id);
+                if (n) {
+                    maxW = Math.max(maxW, n.width);
+                    totalH += n.height;
+                }
             });
-            currentOffsetX += layerX + COMPONENT_SPACING;
-        } else {
-            // TB Direction (Top to Bottom)
-            let layerY = 0;
-            let componentMaxWidth = 0;
-            
-            // First pass to determine max width of component layers
-            layers.forEach(layer => {
-                 let w = 0;
-                 layer.forEach(id => { const n = nodeMap.get(id); if(n) w += n.width; });
-                 w += (layer.length - 1) * PADDING_X;
-                 componentMaxWidth = Math.max(componentMaxWidth, w);
+            totalH += (layer.length - 1) * PADDING_Y;
+
+            let currentY = -totalH / 2;
+            layer.forEach(id => {
+                const n = nodeMap.get(id);
+                if (n) {
+                    const x = layerX + (maxW - n.width) / 2;
+                    finalPositions.set(id, {
+                        x: currentOffsetX + x,
+                        y: currentY + 100 // Offset to avoid top edge
+                    });
+                    currentY += n.height + PADDING_Y;
+                }
             });
 
-            layers.forEach(layer => {
-                let maxH = 0;
-                let totalW = 0;
-                layer.forEach(id => {
-                    const n = nodeMap.get(id);
-                    if (n) {
-                        maxH = Math.max(maxH, n.height);
-                        totalW += n.width;
-                    }
-                });
-                totalW += (layer.length - 1) * PADDING_X;
+            layerX += maxW + PADDING_X;
+        });
 
-                let currentX = -totalW / 2;
-                layer.forEach(id => {
-                    const n = nodeMap.get(id);
-                    if (n) {
-                        finalPositions.set(id, {
-                            x: currentOffsetX + currentX,
-                            y: layerY + 100
-                        });
-                        currentX += n.width + PADDING_X;
-                    }
-                });
-                layerY += maxH + PADDING_Y;
-            });
-            currentOffsetX += Math.max(componentMaxWidth, DEFAULT_WIDTH) + COMPONENT_SPACING;
-        }
+        const componentWidth = Math.max(layerX - PADDING_X, DEFAULT_WIDTH); 
+        currentOffsetX += componentWidth + COMPONENT_SPACING;
     });
 
     // Normalize Y
@@ -298,7 +249,7 @@ const computeAutoLayout = <T extends LayoutNode>(nodes: T[], edges: LayoutEdge[]
         const shift = targetY - minY;
         finalPositions.forEach(p => { p.y += shift; });
     } else {
-         // Fallback
+         // Fallback for completely disconnected single nodes if algorithm somehow failed
          let x = 50;
          let y = 100;
          nodes.forEach(n => {
@@ -351,10 +302,12 @@ const App: React.FC = () => {
 
   const [directoryHandle, setDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [fileSystemTree, setFileSystemTree] = useState<FileSystemTreeNode | null>(null);
-  const [images, setImages] = useImmer<Map<string, ProjectImage>>(new Map());
-  const [audios, setAudios] = useImmer<Map<string, RenpyAudio>>(new Map());
-  const [imageMetadata, setImageMetadata] = useImmer<Map<string, ImageMetadata>>(new Map());
-  const [audioMetadata, setAudioMetadata] = useImmer<Map<string, AudioMetadata>>(new Map());
+  
+  // Use standard useState for Maps to avoid Immer proxy issues with native Maps
+  const [images, setImages] = useState<Map<string, ProjectImage>>(new Map());
+  const [audios, setAudios] = useState<Map<string, RenpyAudio>>(new Map());
+  const [imageMetadata, setImageMetadata] = useState<Map<string, ImageMetadata>>(new Map());
+  const [audioMetadata, setAudioMetadata] = useState<Map<string, AudioMetadata>>(new Map());
   
   // --- State: File Explorer Selection & Expansion ---
   const [explorerSelectedPaths, setExplorerSelectedPaths] = useState<Set<string>>(new Set());
@@ -418,9 +371,8 @@ const App: React.FC = () => {
     recentProjects: [],
     editorFontFamily: "'Consolas', 'Courier New', monospace",
     editorFontSize: 14,
-    snippetCategoriesState: {}, // Initialize empty
   });
-  const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'sceneCompositions' | 'sceneNames'>>({
+  const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>>({
     enableAiFeatures: false,
     selectedModel: 'gemini-2.5-flash',
   });
@@ -574,7 +526,6 @@ const App: React.FC = () => {
               Object.assign(draft, savedSettings);
               if (!draft.editorFontFamily) draft.editorFontFamily = "'Consolas', 'Courier New', monospace";
               if (!draft.editorFontSize) draft.editorFontSize = 14;
-              if (!draft.snippetCategoriesState) draft.snippetCategoriesState = {};
           });
         }
       }).finally(() => {
@@ -589,7 +540,6 @@ const App: React.FC = () => {
               Object.assign(draft, parsed);
               if (!draft.editorFontFamily) draft.editorFontFamily = "'Consolas', 'Courier New', monospace";
               if (!draft.editorFontSize) draft.editorFontSize = 14;
-              if (!draft.snippetCategoriesState) draft.snippetCategoriesState = {};
           });
         } catch (e) { console.error("Failed to load app settings from localStorage", e); }
       }
@@ -1102,6 +1052,57 @@ const App: React.FC = () => {
                   setSceneNames({});
               }
 
+              // Restore Scan Directories
+              if (projectData.settings.scannedImagePaths) {
+                  const paths = projectData.settings.scannedImagePaths;
+                  const map = new Map<string, FileSystemDirectoryHandle>();
+                  paths.forEach((p: string) => map.set(p, {} as any));
+                  setImageScanDirectories(map);
+                  
+                  // Trigger scan
+                  if (window.electronAPI) {
+                       paths.forEach((dirPath: string) => {
+                           window.electronAPI!.scanDirectory(dirPath).then(({ images: scanned }) => {
+                               setImages(prev => {
+                                   const next = new Map(prev);
+                                   scanned.forEach((img: any) => {
+                                       if (!next.has(img.path)) {
+                                           // Ensure external images also have filePath set correctly
+                                           next.set(img.path, { ...img, filePath: img.path, isInProject: false, fileHandle: null });
+                                       }
+                                   });
+                                   return next;
+                               });
+                           });
+                       });
+                  }
+              }
+              
+              if (projectData.settings.scannedAudioPaths) {
+                  const paths = projectData.settings.scannedAudioPaths;
+                  const map = new Map<string, FileSystemDirectoryHandle>();
+                  paths.forEach((p: string) => map.set(p, {} as any));
+                  setAudioScanDirectories(map);
+
+                  // Trigger scan
+                  if (window.electronAPI) {
+                       paths.forEach((dirPath: string) => {
+                           window.electronAPI!.scanDirectory(dirPath).then(({ audios: scanned }) => {
+                               setAudios(prev => {
+                                   const next = new Map(prev);
+                                   scanned.forEach((aud: any) => {
+                                       if (!next.has(aud.path)) {
+                                           // Ensure external audio also has filePath set correctly
+                                           next.set(aud.path, { ...aud, filePath: aud.path, isInProject: false, fileHandle: null });
+                                       }
+                                   });
+                                   return next;
+                               });
+                           });
+                       });
+                  }
+              }
+
               const savedTabs: EditorTab[] = projectData.settings.openTabs ?? [{ id: 'canvas', type: 'canvas' }];
               const tempAnalysis = performRenpyAnalysis(loadedBlocks);
 
@@ -1254,7 +1255,7 @@ const App: React.FC = () => {
       });
 
       const serializableScenes: Record<string, any> = {};
-      Object.entries(sceneCompositions as Record<string, SceneComposition>).forEach(([id, sc]) => {
+      Object.entries(sceneCompositions).forEach(([id, sc]) => {
           serializableScenes[id] = {
               background: sc.background ? serializeSprite(sc.background) : null,
               sprites: sc.sprites.map(serializeSprite)
@@ -1262,22 +1263,24 @@ const App: React.FC = () => {
       });
 
       const settingsToSave: ProjectSettings = {
-        ...(projectSettings as Omit<ProjectSettings, 'characterProfiles' | 'sceneCompositions' | 'sceneNames'>),
+        ...(projectSettings as Omit<ProjectSettings, 'characterProfiles' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>),
         openTabs,
         activeTabId,
         stickyNotes: Array.from(stickyNotes),
         characterProfiles,
         sceneCompositions: serializableScenes,
-        sceneNames
+        sceneNames,
+        scannedImagePaths: Array.from(imageScanDirectories.keys()),
+        scannedAudioPaths: Array.from(audioScanDirectories.keys()),
       };
-      const settingsPath = await window.electronAPI.path.join(projectRootPath!, 'game/project.ide.json');
+      const settingsPath = await window.electronAPI.path.join(projectRootPath, 'game/project.ide.json');
       await window.electronAPI.writeFile(settingsPath, JSON.stringify(settingsToSave, null, 2));
       setHasUnsavedSettings(false);
     } catch (e) {
       console.error("Failed to save IDE settings:", e);
       addToast('Failed to save workspace settings', 'error');
     }
-  }, [projectRootPath, projectSettings, openTabs, activeTabId, stickyNotes, characterProfiles, addToast, sceneCompositions, sceneNames]);
+  }, [projectRootPath, projectSettings, openTabs, activeTabId, stickyNotes, characterProfiles, addToast, sceneCompositions, sceneNames, imageScanDirectories, audioScanDirectories]);
 
 
   const handleSaveAll = useCallback(async () => {
@@ -1753,135 +1756,11 @@ const App: React.FC = () => {
 
   const handleAnalyzeRoutes = useCallback(() => {
       setStatusBarMessage('Analyzing route paths...');
+      // Allow render cycle to update status bar before heavy calculation
       setTimeout(() => {
-          // 1. Get detailed labels and their connections
-          const { labelNodes: rawLabelNodes, routeLinks, identifiedRoutes } = performRouteAnalysis(blocks, analysisResult.labels, analysisResult.jumps);
-          
-          // 2. Group labels by block ID to create "Super Nodes" for the layout engine
-          const blockGroups = new Map<string, LabelNode[]>();
-          rawLabelNodes.forEach(node => {
-              if (!blockGroups.has(node.blockId)) blockGroups.set(node.blockId, []);
-              blockGroups.get(node.blockId)!.push(node);
-          });
-
-          // Layout constants
-          const BLOCK_PADDING = 40;
-          const HEADER_HEIGHT = 40;
-
-          // 3. Perform Internal Layout for each Block
-          const blockLayouts = new Map<string, { width: number, height: number, positions: Map<string, Position> }>();
-
-          blockGroups.forEach((nodes, blockId) => {
-              // Find intra-block edges
-              const internalEdges = routeLinks.filter(l => 
-                  nodes.some(n => n.id === l.sourceId) && 
-                  nodes.some(n => n.id === l.targetId)
-              );
-
-              // Create temporary LayoutNodes for the internal graph
-              const layoutNodes = nodes.map(n => ({
-                  id: n.id,
-                  width: 180, // Standard label node width
-                  height: 40, // Standard label node height
-                  position: { x: 0, y: 0 }
-              }));
-
-              // Run layout with TB setting for internal flow to avoid flat lines
-              const layoutedNodes = computeAutoLayout(layoutNodes, internalEdges, { 
-                  paddingX: 40, 
-                  paddingY: 40, 
-                  componentSpacing: 50,
-                  direction: 'TB'
-              });
-
-              if (layoutedNodes.length > 0) {
-                  // Calculate bounding box of the internal layout
-                  let minX = Infinity, minY = Infinity;
-                  let maxX = -Infinity, maxY = -Infinity;
-
-                  layoutedNodes.forEach(n => {
-                      minX = Math.min(minX, n.position.x);
-                      minY = Math.min(minY, n.position.y);
-                      maxX = Math.max(maxX, n.position.x + n.width);
-                      maxY = Math.max(maxY, n.position.y + n.height);
-                  });
-
-                  // Normalize positions to (0,0) relative to the bounding box
-                  const positions = new Map<string, Position>();
-                  layoutedNodes.forEach(n => {
-                      positions.set(n.id, {
-                          x: n.position.x - minX,
-                          y: n.position.y - minY
-                      });
-                  });
-
-                  blockLayouts.set(blockId, {
-                      width: maxX - minX,
-                      height: maxY - minY,
-                      positions
-                  });
-              } else {
-                  blockLayouts.set(blockId, { width: 200, height: 100, positions: new Map() });
-              }
-          });
-
-          // 4. Create Super Nodes for Global Layout using computed dimensions
-          const superNodes: LayoutNode[] = [];
-          blockGroups.forEach((_, blockId) => {
-              const layout = blockLayouts.get(blockId)!;
-              superNodes.push({
-                  id: blockId,
-                  // Add padding for the container box and header
-                  width: layout.width + (BLOCK_PADDING * 2),
-                  height: layout.height + (BLOCK_PADDING * 2) + HEADER_HEIGHT,
-                  position: { x: 0, y: 0 }
-              });
-          });
-
-          // 5. Create Super Edges (Block to Block connections)
-          const superEdges: LayoutEdge[] = [];
-          const processedEdges = new Set<string>();
-          
-          routeLinks.forEach(link => {
-              const sourceNode = rawLabelNodes.find(n => n.id === link.sourceId);
-              const targetNode = rawLabelNodes.find(n => n.id === link.targetId);
-              
-              if (sourceNode && targetNode && sourceNode.blockId !== targetNode.blockId) {
-                  const edgeKey = `${sourceNode.blockId}-${targetNode.blockId}`;
-                  if (!processedEdges.has(edgeKey)) {
-                      superEdges.push({ sourceId: sourceNode.blockId, targetId: targetNode.blockId });
-                      processedEdges.add(edgeKey);
-                  }
-              }
-          });
-
-          // 6. Run Global Layout on Super Nodes (Left-to-Right)
-          const layoutedSuperNodes = computeAutoLayout(superNodes, superEdges, {
-              paddingX: 150, 
-              paddingY: 100,
-              componentSpacing: 300,
-              direction: 'LR'
-          });
-          const superNodePositionMap = new Map(layoutedSuperNodes.map(n => [n.id, n.position]));
-
-          // 7. Calculate absolute positions for individual labels
-          const finalLabelNodes = rawLabelNodes.map(node => {
-              const blockPos = superNodePositionMap.get(node.blockId) || { x: 0, y: 0 };
-              const internalLayout = blockLayouts.get(node.blockId)!;
-              const relPos = internalLayout.positions.get(node.id) || { x: 0, y: 0 };
-              
-              return {
-                  ...node,
-                  width: 180,
-                  height: 40,
-                  position: {
-                      x: blockPos.x + BLOCK_PADDING + relPos.x,
-                      y: blockPos.y + HEADER_HEIGHT + BLOCK_PADDING + relPos.y
-                  }
-              };
-          });
-
-          setRouteCanvasData({ labelNodes: finalLabelNodes, routeLinks, identifiedRoutes });
+          const { labelNodes, routeLinks, identifiedRoutes } = performRouteAnalysis(blocks, analysisResult.labels, analysisResult.jumps);
+          const layoutedNodes = computeAutoLayout(labelNodes, routeLinks);
+          setRouteCanvasData({ labelNodes: layoutedNodes, routeLinks, identifiedRoutes });
           
           const tabId = 'route-canvas';
           setOpenTabs(prev => {
@@ -1896,37 +1775,319 @@ const App: React.FC = () => {
       }, 10);
   }, [blocks, analysisResult]);
 
-  // --- Asset Management (Basic Implementation) ---
+  // --- Asset Management ---
+  const handleAddImageScanDirectory = useCallback(async () => {
+      if (!window.electronAPI) return;
+      
+      const path = await window.electronAPI.openDirectory();
+      if (!path) return;
+
+      setIsRefreshingImages(true);
+      try {
+          const { images } = await window.electronAPI.scanDirectory(path);
+          
+          setImages(prev => {
+              const next = new Map(prev);
+              images.forEach((img: any) => {
+                  const key = img.path;
+                  if (!next.has(key)) {
+                      // Ensure filePath is set correctly for external images
+                      next.set(key, { ...img, filePath: img.path, isInProject: false, fileHandle: null });
+                  }
+              });
+              return next;
+          });
+          
+          setImageScanDirectories(prev => new Map(prev).set(path, {} as any));
+          setImagesLastScanned(Date.now());
+          setHasUnsavedSettings(true);
+          addToast(`Scanned ${images.length} images from ${path}`, 'success');
+      } catch (e) {
+          console.error(e);
+          addToast('Failed to scan image directory', 'error');
+      } finally {
+          setIsRefreshingImages(false);
+      }
+  }, [addToast]);
+
+  const handleAddAudioScanDirectory = useCallback(async () => {
+      if (!window.electronAPI) return;
+      
+      const path = await window.electronAPI.openDirectory();
+      if (!path) return;
+
+      setIsRefreshingAudios(true);
+      try {
+          const { audios } = await window.electronAPI.scanDirectory(path);
+          
+          setAudios(prev => {
+              const next = new Map(prev);
+              audios.forEach((aud: any) => {
+                  const key = aud.path;
+                  if (!next.has(key)) {
+                      // Ensure filePath is set correctly for external audio
+                      next.set(key, { ...aud, filePath: aud.path, isInProject: false, fileHandle: null });
+                  }
+              });
+              return next;
+          });
+          
+          setAudioScanDirectories(prev => new Map(prev).set(path, {} as any));
+          setAudiosLastScanned(Date.now());
+          setHasUnsavedSettings(true);
+          addToast(`Scanned ${audios.length} audio files from ${path}`, 'success');
+      } catch (e) {
+          console.error(e);
+          addToast('Failed to scan audio directory', 'error');
+      } finally {
+          setIsRefreshingAudios(false);
+      }
+  }, [addToast]);
+
+  const handleRefreshImages = useCallback(async () => {
+      if (!window.electronAPI) return;
+      setIsRefreshingImages(true);
+      try {
+          const scanDirs = Array.from(imageScanDirectories.keys());
+          const newScannedImages = new Map<string, ProjectImage>();
+
+          // Re-scan all directories
+          for (const dirPath of scanDirs) {
+              const { images: scanned } = await window.electronAPI.scanDirectory(dirPath);
+              scanned.forEach((img: any) => {
+                  newScannedImages.set(img.path, { ...img, filePath: img.path, isInProject: false, fileHandle: null });
+              });
+          }
+
+          setImages(prev => {
+              const next = new Map<string, ProjectImage>();
+              // Keep all project images
+              prev.forEach((val, key) => {
+                  if (val.isInProject) {
+                      next.set(key, val);
+                  }
+              });
+              // Add freshly scanned images
+              newScannedImages.forEach((val, key) => {
+                  if (!next.has(key)) {
+                      next.set(key, val);
+                  }
+              });
+              return next;
+          });
+
+          setImagesLastScanned(Date.now());
+          addToast('Images refreshed', 'success');
+      } catch (e) {
+          console.error(e);
+          addToast('Failed to refresh images', 'error');
+      } finally {
+          setIsRefreshingImages(false);
+      }
+  }, [imageScanDirectories, addToast]);
+
+  const handleRemoveImageScanDirectory = useCallback((dirPath: string) => {
+      setImageScanDirectories(prev => {
+          const next = new Map(prev);
+          next.delete(dirPath);
+          return next;
+      });
+      
+      setImages(prev => {
+          const next = new Map<string, ProjectImage>();
+          prev.forEach((val, key) => {
+              // If it's a project file, keep it.
+              // If it's an external file, keep it ONLY if it doesn't start with the removed directory path.
+              if (val.isInProject || !val.filePath.startsWith(dirPath)) {
+                  next.set(key, val);
+              }
+          });
+          return next;
+      });
+      setHasUnsavedSettings(true);
+  }, []);
+
+  const handleRefreshAudios = useCallback(async () => {
+      if (!window.electronAPI) return;
+      setIsRefreshingAudios(true);
+      try {
+          const scanDirs = Array.from(audioScanDirectories.keys());
+          const newScannedAudios = new Map<string, RenpyAudio>();
+
+          for (const dirPath of scanDirs) {
+              const { audios: scanned } = await window.electronAPI.scanDirectory(dirPath);
+              scanned.forEach((aud: any) => {
+                  newScannedAudios.set(aud.path, { ...aud, filePath: aud.path, isInProject: false, fileHandle: null });
+              });
+          }
+
+          setAudios(prev => {
+              const next = new Map<string, RenpyAudio>();
+              prev.forEach((val, key) => {
+                  if (val.isInProject) {
+                      next.set(key, val);
+                  }
+              });
+              newScannedAudios.forEach((val, key) => {
+                  if (!next.has(key)) {
+                      next.set(key, val);
+                  }
+              });
+              return next;
+          });
+
+          setAudiosLastScanned(Date.now());
+          addToast('Audio files refreshed', 'success');
+      } catch (e) {
+          console.error(e);
+          addToast('Failed to refresh audio files', 'error');
+      } finally {
+          setIsRefreshingAudios(false);
+      }
+  }, [audioScanDirectories, addToast]);
+
+  const handleRemoveAudioScanDirectory = useCallback((dirPath: string) => {
+      setAudioScanDirectories(prev => {
+          const next = new Map(prev);
+          next.delete(dirPath);
+          return next;
+      });
+      
+      setAudios(prev => {
+          const next = new Map<string, RenpyAudio>();
+          prev.forEach((val, key) => {
+              if (val.isInProject || !val.filePath.startsWith(dirPath)) {
+                  next.set(key, val);
+              }
+          });
+          return next;
+      });
+      setHasUnsavedSettings(true);
+  }, []);
+
   const handleCopyImagesToProject = async (sourcePaths: string[]) => {
       if (!projectRootPath || !window.electronAPI) return;
       
       setIsLoading(true);
       setStatusBarMessage('Copying images to project...');
       try {
+          // Prepare updates first
+          const updates: { src: string, newData: any }[] = [];
+
           for (const src of sourcePaths) {
               const fileName = src.split(/[/\\]/).pop();
               if (!fileName) continue;
+              
+              const relativeDest = `game/images/${fileName}`;
               const destPath = await window.electronAPI.path.join(projectRootPath, 'game', 'images', fileName);
               
               const img = (Array.from(images.values()) as ProjectImage[]).find(i => i.filePath === src);
-              if (img && img.dataUrl) {
-                 const base64Data = img.dataUrl.split(',')[1];
-                 await window.electronAPI.writeFile(destPath, base64Data, 'base64');
+              if (img) {
+                 await window.electronAPI.copyEntry(img.filePath, destPath);
                  
-                 setImages(draft => {
-                     const existing = draft.get(src);
-                     if (existing) existing.isInProject = true;
-                     const relativePath = `game/images/${fileName}`;
-                     draft.set(relativePath, { ...existing!, filePath: relativePath, isInProject: true, projectFilePath: relativePath });
+                 // Robust URL Construction
+                 // destPath is absolute OS path
+                 // We need to normalize it for URL and encode it safely
+                 const normalized = destPath.replace(/\\/g, '/');
+                 // Ensure path starts with / for URL pathname construction if it's absolute
+                 const urlPath = normalized.startsWith('/') ? normalized : `/${normalized}`;
+                 
+                 // Split into segments to encode component-wise to handle #, ?, etc.
+                 const encodedPath = urlPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
+                 const mediaUrl = `media://${encodedPath}`;
+                 
+                 updates.push({
+                     src,
+                     newData: {
+                         filePath: relativeDest,
+                         fileName,
+                         isInProject: true,
+                         projectFilePath: relativeDest,
+                         dataUrl: mediaUrl,
+                         size: img.size,
+                         lastModified: Date.now()
+                     }
                  });
               }
           }
+
+          // Apply state updates synchronously
+          setImages(prev => {
+             const next = new Map(prev);
+             updates.forEach(({ src, newData }) => {
+                 next.set(newData.filePath, { ...newData, fileHandle: null });
+             });
+             return next;
+          });
+
           addToast('Images copied to project', 'success');
           setStatusBarMessage('Images copied successfully.');
       } catch (e) {
           console.error(e);
           addToast('Failed to copy images', 'error');
           setStatusBarMessage('Error copying images.');
+      } finally {
+          setIsLoading(false);
+          setTimeout(() => setStatusBarMessage(''), 3000);
+      }
+  };
+
+  const handleCopyAudiosToProject = async (sourcePaths: string[]) => {
+      if (!projectRootPath || !window.electronAPI) return;
+      
+      setIsLoading(true);
+      setStatusBarMessage('Copying audio to project...');
+      try {
+          const updates: { src: string, newData: any }[] = [];
+
+          for (const src of sourcePaths) {
+              const fileName = src.split(/[/\\]/).pop();
+              if (!fileName) continue;
+              
+              const relativeDest = `game/audio/${fileName}`;
+              const destPath = await window.electronAPI.path.join(projectRootPath, 'game', 'audio', fileName);
+              
+              const aud = (Array.from(audios.values()) as RenpyAudio[]).find(a => a.filePath === src);
+              if (aud) {
+                 await window.electronAPI.copyEntry(aud.filePath, destPath);
+                 
+                 // Robust URL Construction
+                 const normalized = destPath.replace(/\\/g, '/');
+                 const urlPath = normalized.startsWith('/') ? normalized : `/${normalized}`;
+                 
+                 // Split into segments to encode component-wise to handle #, ?, etc.
+                 const encodedPath = urlPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
+                 const mediaUrl = `media://${encodedPath}`;
+                 
+                 updates.push({
+                     src,
+                     newData: {
+                         filePath: relativeDest,
+                         fileName,
+                         isInProject: true,
+                         projectFilePath: relativeDest,
+                         dataUrl: mediaUrl,
+                         size: aud.size,
+                         lastModified: Date.now()
+                     }
+                 });
+              }
+          }
+
+          setAudios(prev => {
+             const next = new Map(prev);
+             updates.forEach(({ src, newData }) => {
+                 next.set(newData.filePath, { ...newData, fileHandle: null });
+             });
+             return next;
+          });
+
+          addToast('Audio files copied to project', 'success');
+          setStatusBarMessage('Audio files copied successfully.');
+      } catch (e) {
+          console.error(e);
+          addToast('Failed to copy audio files', 'error');
+          setStatusBarMessage('Error copying audio files.');
       } finally {
           setIsLoading(false);
           setTimeout(() => setStatusBarMessage(''), 3000);
@@ -2294,16 +2455,6 @@ const App: React.FC = () => {
     });
   }, [updateAppSettings]);
 
-  // Snippet Category Toggle Handler
-  const handleToggleSnippetCategory = useCallback((categoryName: string, isOpen: boolean) => {
-      updateAppSettings(draft => {
-          if (!draft.snippetCategoriesState) {
-              draft.snippetCategoriesState = {};
-          }
-          draft.snippetCategoriesState[categoryName] = isOpen;
-      });
-  }, [updateAppSettings]);
-
 
   // --- Render Helpers ---
   const activeBlock = useMemo(() => blocks.find(b => b.id === activeTabId), [blocks, activeTabId]);
@@ -2574,7 +2725,7 @@ const App: React.FC = () => {
                     <SceneComposer 
                         images={Array.from(images.values())}
                         metadata={imageMetadata}
-                        scene={(sceneCompositions as Record<string, SceneComposition>)[activeTab.sceneId] || { background: null, sprites: [] }}
+                        scene={sceneCompositions[activeTab.sceneId] || { background: null, sprites: [] }}
                         onSceneChange={(val) => handleSceneUpdate(activeTab.sceneId!, val)}
                         sceneName={sceneNames[activeTab.sceneId] || 'Unnamed Scene'}
                         onRenameScene={(name) => handleRenameScene(activeTab.sceneId!, name)}
@@ -2615,28 +2766,41 @@ const App: React.FC = () => {
                         allImages={Array.from(images.values())}
                         metadata={imageMetadata.get(activeTab.filePath) || (images.get(activeTab.filePath)?.projectFilePath ? imageMetadata.get(images.get(activeTab.filePath)!.projectFilePath!) : undefined)}
                         onUpdateMetadata={(path, meta) => {
-                             setImageMetadata(draft => { draft.set(path, meta); });
+                             setImageMetadata(prev => {
+                                const next = new Map(prev);
+                                next.set(path, meta);
+                                return next;
+                             });
                              addToast('Image metadata saved', 'success');
                         }}
                         onCopyToProject={(src, meta) => {
                             handleCopyImagesToProject([src]);
                             const fileName = src.split(/[/\\]/).pop() || '';
                             const projectPath = `game/images/${fileName}`;
-                            setImageMetadata(draft => { draft.set(projectPath, meta); });
+                            setImageMetadata(prev => {
+                                const next = new Map(prev);
+                                next.set(projectPath, meta);
+                                return next;
+                            });
                         }}
                     />
                 )}
 
                 {activeTab?.type === 'audio' && activeTab.filePath && (
                     <AudioEditorView 
+                        key={activeTab.filePath} // Force re-render on file switch
                         audio={audios.get(activeTab.filePath) || { filePath: activeTab.filePath, fileName: 'Unknown', dataUrl: '', fileHandle: null, isInProject: false }}
                         metadata={audioMetadata.get(activeTab.filePath) || (audios.get(activeTab.filePath)?.projectFilePath ? audioMetadata.get(audios.get(activeTab.filePath)!.projectFilePath!) : undefined)}
                         onUpdateMetadata={(path, meta) => {
-                             setAudioMetadata(draft => { draft.set(path, meta); });
+                             setAudioMetadata(prev => {
+                                const next = new Map(prev);
+                                next.set(path, meta);
+                                return next;
+                             });
                              addToast('Audio metadata saved', 'success');
                         }}
                         onCopyToProject={(src, meta) => {
-                             addToast('Copy not implemented fully', 'warning');
+                             handleCopyAudiosToProject([src]);
                         }}
                     />
                 )}
@@ -2671,22 +2835,34 @@ const App: React.FC = () => {
                         projectImages={images}
                         imageMetadata={imageMetadata}
                         imageScanDirectories={imageScanDirectories}
-                        onAddImageScanDirectory={() => {}}
-                        onRemoveImageScanDirectory={() => {}}
+                        onAddImageScanDirectory={handleAddImageScanDirectory}
+                        onRemoveImageScanDirectory={handleRemoveImageScanDirectory}
                         onCopyImagesToProject={handleCopyImagesToProject}
-                        onUpdateImageMetadata={() => {}}
+                        onUpdateImageMetadata={(path, meta) => {
+                             setImageMetadata(prev => {
+                                const next = new Map(prev);
+                                next.set(path, meta);
+                                return next;
+                             });
+                        }}
                         onOpenImageEditor={handleOpenImageEditorTab}
                         imagesLastScanned={imagesLastScanned}
                         isRefreshingImages={isRefreshingImages}
-                        onRefreshImages={() => {}}
+                        onRefreshImages={handleRefreshImages}
                         
                         projectAudios={audios}
                         audioMetadata={audioMetadata}
                         audioScanDirectories={audioScanDirectories}
-                        onAddAudioScanDirectory={() => {}}
-                        onRemoveAudioScanDirectory={() => {}}
-                        onCopyAudiosToProject={() => {}}
-                        onUpdateAudioMetadata={() => {}}
+                        onAddAudioScanDirectory={handleAddAudioScanDirectory}
+                        onRemoveAudioScanDirectory={handleRemoveAudioScanDirectory}
+                        onCopyAudiosToProject={handleCopyAudiosToProject}
+                        onUpdateAudioMetadata={(path, meta) => {
+                             setAudioMetadata(prev => {
+                                const next = new Map(prev);
+                                next.set(path, meta);
+                                return next;
+                             });
+                        }}
                         onOpenAudioEditor={(path) => {
                             const tabId = `aud-${path}`;
                             setOpenTabs(prev => {
@@ -2699,7 +2875,7 @@ const App: React.FC = () => {
                         }}
                         audiosLastScanned={audiosLastScanned}
                         isRefreshingAudios={isRefreshingAudios}
-                        onRefreshAudios={() => {}}
+                        onRefreshAudios={handleRefreshAudios}
                         isFileSystemApiSupported={!!window.electronAPI}
                         onHoverHighlightStart={(id) => {
                             const defBlock = analysisResult.variables.get(id)?.definedInBlockId;
@@ -2713,7 +2889,12 @@ const App: React.FC = () => {
                         onDeleteScene={handleDeleteScene}
 
                         snippetCategoriesState={appSettings.snippetCategoriesState || {}}
-                        onToggleSnippetCategory={handleToggleSnippetCategory}
+                        onToggleSnippetCategory={(name, isOpen) => {
+                            updateAppSettings(draft => {
+                                if (!draft.snippetCategoriesState) draft.snippetCategoriesState = {};
+                                draft.snippetCategoriesState[name] = isOpen;
+                            });
+                        }}
                     />
                 </div>
             </>

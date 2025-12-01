@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect } from 'react';
 import type { RenpyAudio, AudioMetadata } from '../types';
 
@@ -44,7 +46,7 @@ const AudioEditorView: React.FC<AudioEditorViewProps> = ({ audio, metadata, onUp
     <div className="w-full h-full flex flex-col bg-gray-100 dark:bg-gray-900 overflow-hidden">
       <div className="flex-grow p-4 flex flex-col items-center justify-center">
           <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">{audio.fileName}</h2>
-          <audio controls src={audio.dataUrl} className="w-full max-w-lg">
+          <audio key={audio.filePath || audio.dataUrl} controls src={audio.dataUrl} className="w-full max-w-lg">
             Your browser does not support the audio element.
           </audio>
       </div>
