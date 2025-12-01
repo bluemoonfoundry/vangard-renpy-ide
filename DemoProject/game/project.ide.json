@@ -7,48 +7,41 @@
       "type": "canvas"
     },
     {
-      "id": "route-canvas",
-      "type": "route-canvas"
+      "id": "scene-1764262740876",
+      "type": "scene-composer",
+      "sceneId": "scene-1764262740876"
     },
     {
-      "id": "char-mc",
-      "type": "character",
-      "characterTag": "mc"
+      "id": "scene-1764262795876",
+      "type": "scene-composer",
+      "sceneId": "scene-1764262795876"
     },
     {
-      "id": "img-game/images/bg/garden.png",
-      "type": "image",
-      "filePath": "game/images/bg/garden.png"
-    },
-    {
-      "id": "img-game/images/bg/gym.png",
-      "type": "image",
-      "filePath": "game/images/bg/gym.png"
-    },
-    {
-      "id": "img-game/images/bg/computer_lab.png",
-      "type": "image",
-      "filePath": "game/images/bg/computer_lab.png"
-    },
-    {
-      "id": "block-3-1764176743262",
+      "id": "block-6-1764355352264",
       "type": "editor",
-      "blockId": "block-3-1764176743262",
-      "filePath": "game/scenes/scene_01_start.rpy"
+      "blockId": "block-6-1764355352264",
+      "filePath": "game/scenes/scene_03_book_club.rpy"
     },
     {
-      "id": "img-game/images/bg/library.png",
-      "type": "image",
-      "filePath": "game/images/bg/library.png"
-    },
-    {
-      "id": "block-7-1764176743262",
+      "id": "block-12-1764355352264",
       "type": "editor",
-      "blockId": "block-7-1764176743262",
-      "filePath": "game/scenes/scene_05_meet_sakura.rpy"
+      "blockId": "block-12-1764355352264",
+      "filePath": "game/scenes/scene_09_reflection.rpy"
+    },
+    {
+      "id": "block-11-1764355352264",
+      "type": "editor",
+      "blockId": "block-11-1764355352264",
+      "filePath": "game/scenes/scene_08_gaming_club.rpy"
+    },
+    {
+      "id": "block-9-1764355352264",
+      "type": "editor",
+      "blockId": "block-9-1764355352264",
+      "filePath": "game/scenes/scene_06_second_choice.rpy"
     }
   ],
-  "activeTabId": "block-7-1764176743262",
+  "activeTabId": "block-11-1764355352264",
   "stickyNotes": [
     {
       "id": "note-1764176814595",
@@ -62,5 +55,124 @@
       "color": "green"
     }
   ],
-  "characterProfiles": {}
+  "characterProfiles": {},
+  "sceneCompositions": {
+    "scene-1764262740876": {
+      "background": {
+        "id": "background",
+        "image": {
+          "filePath": "game/images/bg/garden.png"
+        },
+        "x": 0.5,
+        "y": 0.5,
+        "zoom": 1,
+        "zIndex": 0,
+        "flipH": false,
+        "flipV": false,
+        "rotation": 0,
+        "alpha": 1,
+        "blur": 3
+      },
+      "sprites": [
+        {
+          "id": "sprite-1764262754679",
+          "image": {
+            "filePath": "game/images/cg/m.png"
+          },
+          "x": 0.8395140664961641,
+          "y": 0.7504159733777039,
+          "zoom": 1,
+          "zIndex": 1,
+          "flipH": false,
+          "flipV": false,
+          "rotation": 0,
+          "alpha": 1,
+          "blur": 0
+        },
+        {
+          "id": "sprite-1764262756852",
+          "image": {
+            "filePath": "game/images/cg/s.png"
+          },
+          "x": 0.2928388746803069,
+          "y": 0.7237936772046589,
+          "zoom": 1,
+          "zIndex": 2,
+          "flipH": false,
+          "flipV": false,
+          "rotation": 0,
+          "alpha": 1,
+          "blur": 0
+        }
+      ]
+    },
+    "scene-1764262795876": {
+      "background": {
+        "id": "background",
+        "image": {
+          "filePath": "game/images/bg/computer_lab.png"
+        },
+        "x": 0.5,
+        "y": 0.5,
+        "zoom": 1,
+        "zIndex": 0,
+        "flipH": false,
+        "flipV": false,
+        "rotation": 0,
+        "alpha": 1,
+        "blur": 0
+      },
+      "sprites": [
+        {
+          "id": "sprite-1764262867132",
+          "image": {
+            "filePath": "game/images/cg/h.png"
+          },
+          "x": 0.6860613810741695,
+          "y": 0.6220562137588967,
+          "zoom": 1.5,
+          "zIndex": 1,
+          "flipH": false,
+          "flipV": false,
+          "rotation": 0,
+          "alpha": 1,
+          "blur": 0
+        },
+        {
+          "id": "sprite-1764262862643",
+          "image": {
+            "filePath": "game/images/cg/l.png"
+          },
+          "x": 0.5895140664961639,
+          "y": 0.7789421223475923,
+          "zoom": 2,
+          "zIndex": 2,
+          "flipH": true,
+          "flipV": false,
+          "rotation": 0,
+          "alpha": 1,
+          "blur": 0
+        },
+        {
+          "id": "sprite-1764304934135",
+          "image": {
+            "filePath": "game/images/cg/m.png"
+          },
+          "x": 0.49296675191816025,
+          "y": 0.7923930269413618,
+          "zoom": 2,
+          "zIndex": 3,
+          "flipH": false,
+          "flipV": false,
+          "rotation": 0,
+          "alpha": 1,
+          "blur": 0
+        }
+      ]
+    }
+  },
+  "sceneNames": {
+    "scene-1764262740876": "Garden",
+    "scene-1764262795876": "Nascent"
+  }
 }
