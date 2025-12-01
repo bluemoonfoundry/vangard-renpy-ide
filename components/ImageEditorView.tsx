@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo } from 'react';
 import type { ProjectImage, ImageMetadata } from '../types';
 
@@ -247,6 +246,10 @@ const ImageEditorView: React.FC<ImageEditorViewProps> = ({ image, allImages, met
                 >
                     Save Metadata
                 </button>
+            ) : image.projectFilePath ? (
+                 <div className="text-center text-sm text-green-600 dark:text-green-400 font-bold p-2 border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/30 rounded">
+                    Copied to Project
+                 </div>
             ) : (
                 <button 
                     onClick={handleCopyToProject}

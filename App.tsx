@@ -1067,8 +1067,19 @@ const App: React.FC = () => {
                                    const next = new Map(prev);
                                    scanned.forEach((img: any) => {
                                        if (!next.has(img.path)) {
+                                           // Check if this file exists in the project
+                                           const fileName = img.path.split('/').pop();
+                                           const potentialProjectPath = `game/images/${fileName}`;
+                                           const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
+
                                            // Ensure external images also have filePath set correctly
-                                           next.set(img.path, { ...img, filePath: img.path, isInProject: false, fileHandle: null });
+                                           next.set(img.path, { 
+                                             ...img, 
+                                             filePath: img.path, 
+                                             isInProject: false, 
+                                             fileHandle: null,
+                                             projectFilePath: linkedPath 
+                                           });
                                        }
                                    });
                                    return next;
@@ -1092,8 +1103,19 @@ const App: React.FC = () => {
                                    const next = new Map(prev);
                                    scanned.forEach((aud: any) => {
                                        if (!next.has(aud.path)) {
+                                           // Check if this file exists in the project
+                                           const fileName = aud.path.split('/').pop();
+                                           const potentialProjectPath = `game/audio/${fileName}`;
+                                           const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
+
                                            // Ensure external audio also has filePath set correctly
-                                           next.set(aud.path, { ...aud, filePath: aud.path, isInProject: false, fileHandle: null });
+                                           next.set(aud.path, { 
+                                             ...aud, 
+                                             filePath: aud.path, 
+                                             isInProject: false, 
+                                             fileHandle: null,
+                                             projectFilePath: linkedPath
+                                           });
                                        }
                                    });
                                    return next;
@@ -1791,8 +1813,17 @@ const App: React.FC = () => {
               images.forEach((img: any) => {
                   const key = img.path;
                   if (!next.has(key)) {
-                      // Ensure filePath is set correctly for external images
-                      next.set(key, { ...img, filePath: img.path, isInProject: false, fileHandle: null });
+                      const fileName = img.path.split('/').pop();
+                      const potentialProjectPath = `game/images/${fileName}`;
+                      const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
+
+                      next.set(key, { 
+                        ...img, 
+                        filePath: img.path, 
+                        isInProject: false, 
+                        fileHandle: null,
+                        projectFilePath: linkedPath 
+                      });
                   }
               });
               return next;
@@ -1825,8 +1856,17 @@ const App: React.FC = () => {
               audios.forEach((aud: any) => {
                   const key = aud.path;
                   if (!next.has(key)) {
-                      // Ensure filePath is set correctly for external audio
-                      next.set(key, { ...aud, filePath: aud.path, isInProject: false, fileHandle: null });
+                      const fileName = aud.path.split('/').pop();
+                      const potentialProjectPath = `game/audio/${fileName}`;
+                      const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
+
+                      next.set(key, { 
+                        ...aud, 
+                        filePath: aud.path, 
+                        isInProject: false, 
+                        fileHandle: null,
+                        projectFilePath: linkedPath 
+                      });
                   }
               });
               return next;
@@ -1870,7 +1910,11 @@ const App: React.FC = () => {
               // Add freshly scanned images
               newScannedImages.forEach((val, key) => {
                   if (!next.has(key)) {
-                      next.set(key, val);
+                      const fileName = val.filePath.split('/').pop();
+                      const potentialProjectPath = `game/images/${fileName}`;
+                      const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
+
+                      next.set(key, { ...val, projectFilePath: linkedPath });
                   }
               });
               return next;
@@ -1930,7 +1974,11 @@ const App: React.FC = () => {
               });
               newScannedAudios.forEach((val, key) => {
                   if (!next.has(key)) {
-                      next.set(key, val);
+                      const fileName = val.filePath.split('/').pop();
+                      const potentialProjectPath = `game/audio/${fileName}`;
+                      const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
+
+                      next.set(key, { ...val, projectFilePath: linkedPath });
                   }
               });
               return next;
@@ -1981,7 +2029,7 @@ const App: React.FC = () => {
               const relativeDest = `game/images/${fileName}`;
               const destPath = await window.electronAPI.path.join(projectRootPath, 'game', 'images', fileName);
               
-              const img = (Array.from(images.values()) as ProjectImage[]).find(i => i.filePath === src);
+              const img = images.get(src);
               if (img) {
                  await window.electronAPI.copyEntry(img.filePath, destPath);
                  
@@ -2015,10 +2063,21 @@ const App: React.FC = () => {
           setImages(prev => {
              const next = new Map(prev);
              updates.forEach(({ src, newData }) => {
+                 // Add the new project-local image
                  next.set(newData.filePath, { ...newData, fileHandle: null });
+                 
+                 // Update the original scanned image to link to the project file
+                 const sourceImg = next.get(src);
+                 if (sourceImg) {
+                     next.set(src, { ...sourceImg, projectFilePath: newData.filePath });
+                 }
              });
              return next;
           });
+
+          // Refresh file explorer tree without reading file contents
+          const projData = await window.electronAPI.refreshProjectTree(projectRootPath);
+          setFileSystemTree(projData.tree);
 
           addToast('Images copied to project', 'success');
           setStatusBarMessage('Images copied successfully.');
@@ -2047,7 +2106,7 @@ const App: React.FC = () => {
               const relativeDest = `game/audio/${fileName}`;
               const destPath = await window.electronAPI.path.join(projectRootPath, 'game', 'audio', fileName);
               
-              const aud = (Array.from(audios.values()) as RenpyAudio[]).find(a => a.filePath === src);
+              const aud = audios.get(src);
               if (aud) {
                  await window.electronAPI.copyEntry(aud.filePath, destPath);
                  
@@ -2077,10 +2136,21 @@ const App: React.FC = () => {
           setAudios(prev => {
              const next = new Map(prev);
              updates.forEach(({ src, newData }) => {
+                 // Add the new project-local audio
                  next.set(newData.filePath, { ...newData, fileHandle: null });
+
+                 // Update the original scanned audio to link to the project file
+                 const sourceAud = next.get(src);
+                 if (sourceAud) {
+                     next.set(src, { ...sourceAud, projectFilePath: newData.filePath });
+                 }
              });
              return next;
           });
+
+          // Refresh file explorer tree without reading file contents
+          const projData = await window.electronAPI.refreshProjectTree(projectRootPath);
+          setFileSystemTree(projData.tree);
 
           addToast('Audio files copied to project', 'success');
           setStatusBarMessage('Audio files copied successfully.');
@@ -2781,7 +2851,7 @@ const App: React.FC = () => {
                                 const next = new Map(prev);
                                 next.set(projectPath, meta);
                                 return next;
-                            });
+                             });
                         }}
                     />
                 )}

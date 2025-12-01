@@ -12,8 +12,8 @@ interface ImageThumbnailProps {
 }
 
 const ImageThumbnail: React.FC<ImageThumbnailProps> = ({ image, isSelected, onSelect, onDoubleClick, onContextMenu, onDragStart }) => {
-  // Use a green border to indicate the image is part of the project.
-  const borderClass = image.isInProject ? 'border-green-500 dark:border-green-400' : 'border-transparent';
+  // Use a green border to indicate the image is part of the project (or has been copied).
+  const borderClass = (image.isInProject || image.projectFilePath) ? 'border-green-500 dark:border-green-400' : 'border-transparent';
   const selectionClass = isSelected ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-indigo-400 ring-offset-gray-50 dark:ring-offset-gray-900' : '';
 
   return (
