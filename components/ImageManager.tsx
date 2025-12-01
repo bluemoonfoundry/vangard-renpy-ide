@@ -16,13 +16,14 @@ interface ImageManagerProps {
   lastScanned: number | null;
   isRefreshing: boolean;
   onRefresh: () => void;
+  onCreatePlaceholder?: () => void;
 }
 
 const GRID_ITEM_WIDTH = 120;
 const GRID_ITEM_HEIGHT = 120;
 const GAP = 12;
 
-const ImageManager: React.FC<ImageManagerProps> = ({ images, metadata, scanDirectories, onAddScanDirectory, onRemoveScanDirectory, onCopyImagesToProject, onOpenImageEditor, isFileSystemApiSupported, lastScanned, isRefreshing, onRefresh }) => {
+const ImageManager: React.FC<ImageManagerProps> = ({ images, metadata, scanDirectories, onAddScanDirectory, onRemoveScanDirectory, onCopyImagesToProject, onOpenImageEditor, isFileSystemApiSupported, lastScanned, isRefreshing, onRefresh, onCreatePlaceholder }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSource, setSelectedSource] = useState('all');
   const [selectedImagePaths, setSelectedImagePaths] = useState(new Set<string>());
@@ -50,8 +51,18 @@ const ImageManager: React.FC<ImageManagerProps> = ({ images, metadata, scanDirec
       if (selectedSource === 'Project (game/images)') {
         visibleImages = visibleImages.filter(img => img.isInProject);
       } else {
-        visibleImages = visibleImages.filter(img => img.filePath.startsWith(`${selectedSource}/`));
+        // Normalize selectedSource to match internal forward-slash paths
+        const normalizedSource = selectedSource.replace(/\\/g, '/').replace(/\/$/, '');
+        visibleImages = visibleImages.filter(img => {
+             const normalizedPath = img.filePath.replace(/\\/g, '/');
+             return normalizedPath.startsWith(`${normalizedSource}/`);
+        });
       }
+    } else {
+      // When viewing 'all', hide external images that have already been copied to the project
+      // to avoid showing duplicates (one external, one project).
+      // We keep images that are IN the project, OR external images that haven't been copied yet.
+      visibleImages = visibleImages.filter(img => img.isInProject || !img.projectFilePath);
     }
     
     if (searchTerm) {
@@ -207,15 +218,28 @@ const ImageManager: React.FC<ImageManagerProps> = ({ images, metadata, scanDirec
                     </button>
                 )}
             </div>
-            <button
-                onClick={onAddScanDirectory}
-                disabled={!isFileSystemApiSupported}
-                title={isFileSystemApiSupported ? "Add external folder to scan for images" : "Open a project folder to enable this feature"}
-                className="w-full mt-2 px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
-                <span>Add Directory to Scan</span>
-            </button>
+            <div className="flex space-x-2 mt-2">
+                <button
+                    onClick={onAddScanDirectory}
+                    disabled={!isFileSystemApiSupported}
+                    title={isFileSystemApiSupported ? "Add external folder to scan for images" : "Open a project folder to enable this feature"}
+                    className="flex-1 px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
+                    <span>Scan Dir</span>
+                </button>
+                {onCreatePlaceholder && (
+                    <button
+                        onClick={onCreatePlaceholder}
+                        disabled={!isFileSystemApiSupported}
+                        title="Generate a dummy image"
+                        className="flex-1 px-3 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" /></svg>
+                        <span>Placeholder</span>
+                    </button>
+                )}
+            </div>
         </div>
         <div className="flex items-center space-x-2 mt-4">
             <input
@@ -230,7 +254,7 @@ const ImageManager: React.FC<ImageManagerProps> = ({ images, metadata, scanDirec
                 disabled={selectedImagePaths.size === 0}
                 className="px-3 py-2 rounded bg-green-600 hover:bg-green-700 text-white text-sm font-bold disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-                Copy to Project ({selectedImagePaths.size})
+                Copy ({selectedImagePaths.size})
             </button>
         </div>
       </div>
@@ -251,8 +275,11 @@ const ImageManager: React.FC<ImageManagerProps> = ({ images, metadata, scanDirec
             ))}
           </div>
         )}
-        {images.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No images found. Add a source directory to get started.</p>}
-        {images.length > 0 && filteredImages.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No images match your filter.</p>}
+        {filteredImages.length === 0 && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                No images found matching criteria.
+            </p>
+        )}
       </div>
       {contextMenu && (
         <ImageContextMenu

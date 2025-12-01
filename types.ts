@@ -1,5 +1,6 @@
 
 
+
 export interface Position {
   x: number;
   y: number;
@@ -325,6 +326,7 @@ declare global {
           openDirectory: () => Promise<string | null>;
           createProject?: () => Promise<string | null>;
           loadProject: (path: string) => Promise<any>;
+          refreshProjectTree: (path: string) => Promise<any>;
           writeFile: (path: string, content: string, encoding?: string) => Promise<{ success: boolean; error?: string }>;
           createDirectory: (path: string) => Promise<{ success: boolean; error?: string }>;
           removeEntry: (path: string) => Promise<{ success: boolean; error?: string }>;

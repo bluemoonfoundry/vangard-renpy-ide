@@ -78,7 +78,7 @@ async function saveAppSettings(settings) {
 }
 
 
-async function readProjectFiles(rootPath) {
+async function readProjectFiles(rootPath, { readContent = true } = {}) {
     const results = {
         rootPath,
         files: [],
@@ -101,8 +101,10 @@ async function readProjectFiles(rootPath) {
                 await readDirRecursive(fullPath, childNode);
             } else if (entry.isFile()) {
                 if (/\.(rpy)$/i.test(entry.name)) {
-                    const content = await fs.readFile(fullPath, 'utf-8');
-                    results.files.push({ path: relativePath, content });
+                    if (readContent) {
+                        const content = await fs.readFile(fullPath, 'utf-8');
+                        results.files.push({ path: relativePath, content });
+                    }
                 } else if (/\.(png|jpe?g|webp)$/i.test(entry.name)) {
                     const stats = await fs.stat(fullPath);
                     const mediaUrl = pathToFileURL(fullPath).toString().replace(/^file:/, 'media:');
@@ -259,6 +261,11 @@ async function updateApplicationMenu() {
                 label: 'Run Project',
                 accelerator: 'F5',
                 click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'run-project' }); }
+            },
+            { type: 'separator' },
+            {
+                label: 'About',
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-about' }); }
             },
             { type: 'separator' },
             process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' }
@@ -499,6 +506,10 @@ app.whenReady().then(() => {
     return await readProjectFiles(rootPath);
   });
 
+  ipcMain.handle('project:refresh-tree', async (event, rootPath) => {
+    return await readProjectFiles(rootPath, { readContent: false });
+  });
+
   ipcMain.handle('fs:writeFile', async (event, filePath, content, encoding) => {
     try {
       await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -539,6 +550,8 @@ app.whenReady().then(() => {
 
   ipcMain.handle('fs:copyEntry', async (event, sourcePath, destPath) => {
     try {
+      // Ensure the directory exists before copying
+      await fs.mkdir(path.dirname(destPath), { recursive: true });
       await fs.cp(sourcePath, destPath, { recursive: true });
       return { success: true };
     } catch (error) {

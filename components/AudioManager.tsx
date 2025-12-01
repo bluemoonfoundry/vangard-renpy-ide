@@ -27,7 +27,7 @@ const AudioItem: React.FC<{
   isPlaying: boolean;
   onTogglePlay: () => void;
 }> = ({ audio, isSelected, onSelect, onDoubleClick, onContextMenu, onDragStart, isPlaying, onTogglePlay }) => {
-  const borderClass = audio.isInProject ? 'border-red-500 dark:border-red-400' : 'border-transparent';
+  const borderClass = (audio.isInProject || audio.projectFilePath) ? 'border-red-500 dark:border-red-400' : 'border-transparent';
   const selectionClass = isSelected ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-indigo-400 ring-offset-gray-50 dark:ring-offset-gray-900' : '';
 
   return (
@@ -93,8 +93,17 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
       if (selectedSource === 'Project (game/audio)') {
         visibleAudios = visibleAudios.filter(aud => aud.isInProject);
       } else {
-        visibleAudios = visibleAudios.filter(aud => aud.filePath.startsWith(`${selectedSource}/`));
+        // Normalize selectedSource to match internal forward-slash paths
+        const normalizedSource = selectedSource.replace(/\\/g, '/').replace(/\/$/, '');
+        visibleAudios = visibleAudios.filter(aud => {
+             const normalizedPath = aud.filePath.replace(/\\/g, '/');
+             return normalizedPath.startsWith(`${normalizedSource}/`);
+        });
       }
+    } else {
+      // When viewing 'all', hide external audios that have already been copied to the project
+      // to avoid showing duplicates.
+      visibleAudios = visibleAudios.filter(aud => aud.isInProject || !aud.projectFilePath);
     }
 
     if (searchTerm) {

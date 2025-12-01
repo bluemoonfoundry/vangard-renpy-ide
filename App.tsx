@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -23,6 +24,7 @@ import TabContextMenu from './components/TabContextMenu';
 import Sash from './components/Sash';
 import StatusBar from './components/StatusBar';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
+import AboutModal from './components/AboutModal';
 import { useRenpyAnalysis, performRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import type { 
@@ -348,6 +350,7 @@ const App: React.FC = () => {
   const [unsavedChangesModalInfo, setUnsavedChangesModalInfo] = useState<UnsavedChangesModalInfo | null>(null);
   const [contextMenuInfo, setContextMenuInfo] = useState<{ x: number; y: number; tabId: string } | null>(null);
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false);
+  const [aboutModalOpen, setAboutModalOpen] = useState(false);
   
   // --- State: View Transforms ---
   const [storyCanvasTransform, setStoryCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
@@ -724,7 +727,7 @@ const App: React.FC = () => {
             if (res.success) {
                 const id = addBlock(relativePath, content);
                 addToast(`Created ${fileName} in ${cleanFolderPath || 'root'}`, 'success');
-                const projData = await window.electronAPI.loadProject(projectRootPath);
+                const projData = await window.electronAPI.loadProject(projectRootPath!);
                 setFileSystemTree(projData.tree);
             } else {
                 throw new Error(res.error || 'Unknown error occurred during file creation');
@@ -1038,7 +1041,11 @@ const App: React.FC = () => {
               if (projectData.settings.sceneCompositions) {
                   const restoredScenes: Record<string, SceneComposition> = {};
                   Object.entries(projectData.settings.sceneCompositions as Record<string, any>).forEach(([id, sc]) => {
-                      restoredScenes[id] = rehydrateScene(sc);
+                      const comp = sc as SceneComposition;
+                      restoredScenes[id] = {
+                          background: comp.background ? rehydrateSprite(comp.background) : null,
+                          sprites: comp.sprites.map(rehydrateSprite)
+                      };
                   });
                   setSceneCompositions(restoredScenes);
                   setSceneNames(projectData.settings.sceneNames || {});
@@ -1067,8 +1074,19 @@ const App: React.FC = () => {
                                    const next = new Map(prev);
                                    scanned.forEach((img: any) => {
                                        if (!next.has(img.path)) {
+                                           // Check if this file exists in the project
+                                           const fileName = img.path.split('/').pop();
+                                           const potentialProjectPath = `game/images/${fileName}`;
+                                           const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
+
                                            // Ensure external images also have filePath set correctly
-                                           next.set(img.path, { ...img, filePath: img.path, isInProject: false, fileHandle: null });
+                                           next.set(img.path, { 
+                                             ...img, 
+                                             filePath: img.path, 
+                                             isInProject: false, 
+                                             fileHandle: null,
+                                             projectFilePath: linkedPath 
+                                           });
                                        }
                                    });
                                    return next;
@@ -1092,8 +1110,19 @@ const App: React.FC = () => {
                                    const next = new Map(prev);
                                    scanned.forEach((aud: any) => {
                                        if (!next.has(aud.path)) {
+                                           // Check if this file exists in the project
+                                           const fileName = aud.path.split('/').pop();
+                                           const potentialProjectPath = `game/audio/${fileName}`;
+                                           const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
+
                                            // Ensure external audio also has filePath set correctly
-                                           next.set(aud.path, { ...aud, filePath: aud.path, isInProject: false, fileHandle: null });
+                                           next.set(aud.path, { 
+                                             ...aud, 
+                                             filePath: aud.path, 
+                                             isInProject: false, 
+                                             fileHandle: null, 
+                                             projectFilePath: linkedPath
+                                           });
                                        }
                                    });
                                    return next;
@@ -1256,9 +1285,10 @@ const App: React.FC = () => {
 
       const serializableScenes: Record<string, any> = {};
       Object.entries(sceneCompositions).forEach(([id, sc]) => {
+          const comp = sc as SceneComposition;
           serializableScenes[id] = {
-              background: sc.background ? serializeSprite(sc.background) : null,
-              sprites: sc.sprites.map(serializeSprite)
+              background: comp.background ? serializeSprite(comp.background) : null,
+              sprites: comp.sprites.map(serializeSprite)
           };
       });
 
@@ -1791,8 +1821,17 @@ const App: React.FC = () => {
               images.forEach((img: any) => {
                   const key = img.path;
                   if (!next.has(key)) {
-                      // Ensure filePath is set correctly for external images
-                      next.set(key, { ...img, filePath: img.path, isInProject: false, fileHandle: null });
+                      const fileName = img.path.split('/').pop();
+                      const potentialProjectPath = `game/images/${fileName}`;
+                      const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
+
+                      next.set(key, { 
+                        ...img, 
+                        filePath: img.path, 
+                        isInProject: false, 
+                        fileHandle: null,
+                        projectFilePath: linkedPath 
+                      });
                   }
               });
               return next;
@@ -1825,8 +1864,17 @@ const App: React.FC = () => {
               audios.forEach((aud: any) => {
                   const key = aud.path;
                   if (!next.has(key)) {
-                      // Ensure filePath is set correctly for external audio
-                      next.set(key, { ...aud, filePath: aud.path, isInProject: false, fileHandle: null });
+                      const fileName = aud.path.split('/').pop();
+                      const potentialProjectPath = `game/audio/${fileName}`;
+                      const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
+
+                      next.set(key, { 
+                        ...aud, 
+                        filePath: aud.path, 
+                        isInProject: false, 
+                        fileHandle: null, 
+                        projectFilePath: linkedPath 
+                      });
                   }
               });
               return next;
@@ -1870,7 +1918,11 @@ const App: React.FC = () => {
               // Add freshly scanned images
               newScannedImages.forEach((val, key) => {
                   if (!next.has(key)) {
-                      next.set(key, val);
+                      const fileName = val.filePath.split('/').pop();
+                      const potentialProjectPath = `game/images/${fileName}`;
+                      const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
+
+                      next.set(key, { ...val, projectFilePath: linkedPath });
                   }
               });
               return next;
@@ -1930,7 +1982,11 @@ const App: React.FC = () => {
               });
               newScannedAudios.forEach((val, key) => {
                   if (!next.has(key)) {
-                      next.set(key, val);
+                      const fileName = val.filePath.split('/').pop();
+                      const potentialProjectPath = `game/audio/${fileName}`;
+                      const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
+
+                      next.set(key, { ...val, projectFilePath: linkedPath });
                   }
               });
               return next;
@@ -1981,7 +2037,7 @@ const App: React.FC = () => {
               const relativeDest = `game/images/${fileName}`;
               const destPath = await window.electronAPI.path.join(projectRootPath, 'game', 'images', fileName);
               
-              const img = (Array.from(images.values()) as ProjectImage[]).find(i => i.filePath === src);
+              const img = images.get(src);
               if (img) {
                  await window.electronAPI.copyEntry(img.filePath, destPath);
                  
@@ -2015,10 +2071,21 @@ const App: React.FC = () => {
           setImages(prev => {
              const next = new Map(prev);
              updates.forEach(({ src, newData }) => {
+                 // Add the new project-local image
                  next.set(newData.filePath, { ...newData, fileHandle: null });
+                 
+                 // Update the original scanned image to link to the project file
+                 const sourceImg = next.get(src);
+                 if (sourceImg) {
+                     next.set(src, { ...sourceImg, projectFilePath: newData.filePath });
+                 }
              });
              return next;
           });
+
+          // Refresh file explorer tree without reading file contents
+          const projData = await window.electronAPI.refreshProjectTree(projectRootPath);
+          setFileSystemTree(projData.tree);
 
           addToast('Images copied to project', 'success');
           setStatusBarMessage('Images copied successfully.');
@@ -2047,7 +2114,7 @@ const App: React.FC = () => {
               const relativeDest = `game/audio/${fileName}`;
               const destPath = await window.electronAPI.path.join(projectRootPath, 'game', 'audio', fileName);
               
-              const aud = (Array.from(audios.values()) as RenpyAudio[]).find(a => a.filePath === src);
+              const aud = audios.get(src);
               if (aud) {
                  await window.electronAPI.copyEntry(aud.filePath, destPath);
                  
@@ -2077,10 +2144,21 @@ const App: React.FC = () => {
           setAudios(prev => {
              const next = new Map(prev);
              updates.forEach(({ src, newData }) => {
+                 // Add the new project-local audio
                  next.set(newData.filePath, { ...newData, fileHandle: null });
+
+                 // Update the original scanned audio to link to the project file
+                 const sourceAud = next.get(src);
+                 if (sourceAud) {
+                     next.set(src, { ...sourceAud, projectFilePath: newData.filePath });
+                 }
              });
              return next;
           });
+
+          // Refresh file explorer tree without reading file contents
+          const projData = await window.electronAPI.refreshProjectTree(projectRootPath);
+          setFileSystemTree(projData.tree);
 
           addToast('Audio files copied to project', 'success');
           setStatusBarMessage('Audio files copied successfully.');
@@ -2232,7 +2310,7 @@ const App: React.FC = () => {
 
         await handleSaveAll();
         setStatusBarMessage('Launching game...');
-        window.electronAPI.runGame(appSettings.renpyPath, projectRootPath);
+        window.electronAPI!.runGame(appSettings.renpyPath, projectRootPath!);
 
     }, [appSettings.renpyPath, projectRootPath, handleSaveAll]);
 
@@ -2363,7 +2441,7 @@ const App: React.FC = () => {
   // --- Menu Command Listener ---
   useEffect(() => {
       if (window.electronAPI?.onMenuCommand) {
-          const removeListener = window.electronAPI.onMenuCommand((data) => {
+          const removeListener = window.electronAPI.onMenuCommand((data: any) => {
               switch (data.command) {
                   case 'new-project':
                       handleNewProjectRequest();
@@ -2380,9 +2458,12 @@ const App: React.FC = () => {
                       }
                       break;
                   case 'open-recent':
-                      if (data.path) {
-                          loadProject(data.path);
+                      if (data.path && typeof data.path === 'string') {
+                          loadProject(String(data.path));
                       }
+                      break;
+                  case 'open-about':
+                      setAboutModalOpen(true);
                       break;
               }
           });
@@ -2461,9 +2542,9 @@ const App: React.FC = () => {
   const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId), [openTabs, activeTabId]);
 
   const settingsForModal: IdeSettings = useMemo(() => ({
-      ...appSettings,
-      ...projectSettings,
-  }), [appSettings, projectSettings]);
+      ...(appSettings as any),
+      ...(projectSettings as any),
+  } as IdeSettings), [appSettings, projectSettings]);
 
   const handleSettingsChange = useCallback((key: keyof IdeSettings, value: any) => {
       updateAppSettings(draft => {
@@ -2781,7 +2862,7 @@ const App: React.FC = () => {
                                 const next = new Map(prev);
                                 next.set(projectPath, meta);
                                 return next;
-                            });
+                             });
                         }}
                     />
                 )}
@@ -2926,6 +3007,13 @@ const App: React.FC = () => {
             onClose={() => setShortcutsModalOpen(false)}
         />
       )}
+
+      {aboutModalOpen && (
+        <AboutModal 
+            isOpen={aboutModalOpen}
+            onClose={() => setAboutModalOpen(false)}
+        />
+      )}
       
       {showConfigureRenpyModal && (
         <ConfigureRenpyModal
@@ -2938,7 +3026,7 @@ const App: React.FC = () => {
                 setTimeout(() => {
                     if (window.electronAPI) {
                         handleSaveAll().then(() => {
-                            window.electronAPI.runGame(path, projectRootPath);
+                            window.electronAPI!.runGame(path, projectRootPath!);
                         });
                     }
                 }, 100);
