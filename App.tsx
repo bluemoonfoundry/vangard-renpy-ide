@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -23,6 +24,7 @@ import TabContextMenu from './components/TabContextMenu';
 import Sash from './components/Sash';
 import StatusBar from './components/StatusBar';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
+import AboutModal from './components/AboutModal';
 import { useRenpyAnalysis, performRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import type { 
@@ -348,6 +350,7 @@ const App: React.FC = () => {
   const [unsavedChangesModalInfo, setUnsavedChangesModalInfo] = useState<UnsavedChangesModalInfo | null>(null);
   const [contextMenuInfo, setContextMenuInfo] = useState<{ x: number; y: number; tabId: string } | null>(null);
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false);
+  const [aboutModalOpen, setAboutModalOpen] = useState(false);
   
   // --- State: View Transforms ---
   const [storyCanvasTransform, setStoryCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
@@ -724,7 +727,7 @@ const App: React.FC = () => {
             if (res.success) {
                 const id = addBlock(relativePath, content);
                 addToast(`Created ${fileName} in ${cleanFolderPath || 'root'}`, 'success');
-                const projData = await window.electronAPI.loadProject(projectRootPath);
+                const projData = await window.electronAPI.loadProject(projectRootPath!);
                 setFileSystemTree(projData.tree);
             } else {
                 throw new Error(res.error || 'Unknown error occurred during file creation');
@@ -1038,7 +1041,11 @@ const App: React.FC = () => {
               if (projectData.settings.sceneCompositions) {
                   const restoredScenes: Record<string, SceneComposition> = {};
                   Object.entries(projectData.settings.sceneCompositions as Record<string, any>).forEach(([id, sc]) => {
-                      restoredScenes[id] = rehydrateScene(sc);
+                      const comp = sc as SceneComposition;
+                      restoredScenes[id] = {
+                          background: comp.background ? rehydrateSprite(comp.background) : null,
+                          sprites: comp.sprites.map(rehydrateSprite)
+                      };
                   });
                   setSceneCompositions(restoredScenes);
                   setSceneNames(projectData.settings.sceneNames || {});
@@ -1113,7 +1120,7 @@ const App: React.FC = () => {
                                              ...aud, 
                                              filePath: aud.path, 
                                              isInProject: false, 
-                                             fileHandle: null,
+                                             fileHandle: null, 
                                              projectFilePath: linkedPath
                                            });
                                        }
@@ -1278,9 +1285,10 @@ const App: React.FC = () => {
 
       const serializableScenes: Record<string, any> = {};
       Object.entries(sceneCompositions).forEach(([id, sc]) => {
+          const comp = sc as SceneComposition;
           serializableScenes[id] = {
-              background: sc.background ? serializeSprite(sc.background) : null,
-              sprites: sc.sprites.map(serializeSprite)
+              background: comp.background ? serializeSprite(comp.background) : null,
+              sprites: comp.sprites.map(serializeSprite)
           };
       });
 
@@ -1864,7 +1872,7 @@ const App: React.FC = () => {
                         ...aud, 
                         filePath: aud.path, 
                         isInProject: false, 
-                        fileHandle: null,
+                        fileHandle: null, 
                         projectFilePath: linkedPath 
                       });
                   }
@@ -2302,7 +2310,7 @@ const App: React.FC = () => {
 
         await handleSaveAll();
         setStatusBarMessage('Launching game...');
-        window.electronAPI.runGame(appSettings.renpyPath, projectRootPath);
+        window.electronAPI!.runGame(appSettings.renpyPath, projectRootPath!);
 
     }, [appSettings.renpyPath, projectRootPath, handleSaveAll]);
 
@@ -2433,7 +2441,7 @@ const App: React.FC = () => {
   // --- Menu Command Listener ---
   useEffect(() => {
       if (window.electronAPI?.onMenuCommand) {
-          const removeListener = window.electronAPI.onMenuCommand((data) => {
+          const removeListener = window.electronAPI.onMenuCommand((data: any) => {
               switch (data.command) {
                   case 'new-project':
                       handleNewProjectRequest();
@@ -2450,9 +2458,12 @@ const App: React.FC = () => {
                       }
                       break;
                   case 'open-recent':
-                      if (data.path) {
-                          loadProject(data.path);
+                      if (data.path && typeof data.path === 'string') {
+                          loadProject(String(data.path));
                       }
+                      break;
+                  case 'open-about':
+                      setAboutModalOpen(true);
                       break;
               }
           });
@@ -2531,9 +2542,9 @@ const App: React.FC = () => {
   const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId), [openTabs, activeTabId]);
 
   const settingsForModal: IdeSettings = useMemo(() => ({
-      ...appSettings,
-      ...projectSettings,
-  }), [appSettings, projectSettings]);
+      ...(appSettings as any),
+      ...(projectSettings as any),
+  } as IdeSettings), [appSettings, projectSettings]);
 
   const handleSettingsChange = useCallback((key: keyof IdeSettings, value: any) => {
       updateAppSettings(draft => {
@@ -2996,6 +3007,13 @@ const App: React.FC = () => {
             onClose={() => setShortcutsModalOpen(false)}
         />
       )}
+
+      {aboutModalOpen && (
+        <AboutModal 
+            isOpen={aboutModalOpen}
+            onClose={() => setAboutModalOpen(false)}
+        />
+      )}
       
       {showConfigureRenpyModal && (
         <ConfigureRenpyModal
@@ -3008,7 +3026,7 @@ const App: React.FC = () => {
                 setTimeout(() => {
                     if (window.electronAPI) {
                         handleSaveAll().then(() => {
-                            window.electronAPI.runGame(path, projectRootPath);
+                            window.electronAPI!.runGame(path, projectRootPath!);
                         });
                     }
                 }, 100);

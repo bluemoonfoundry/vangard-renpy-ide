@@ -263,6 +263,11 @@ async function updateApplicationMenu() {
                 click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'run-project' }); }
             },
             { type: 'separator' },
+            {
+                label: 'About',
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-about' }); }
+            },
+            { type: 'separator' },
             process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' }
         ]
     },

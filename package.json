@@ -1,8 +1,6 @@
 {
   "name": "vangard-renpy-renide",
-    "version": "0.3.0",
-    "description": "An integrated development environment for Ren'Py projects.",
-    "author": "Blue Moon Foundry (gsh@bluemoonfoundry.com)",
+  "version": "0.1.0",
   "type": "module",
   "main": "electron.js",
   "scripts": {
@@ -17,23 +15,23 @@
     "@google/genai": "^0.12.0",
     "@monaco-editor/react": "^4.6.0",
     "immer": "^10.1.1",
+    "use-immer": "^0.10.0",
     "jszip": "^3.10.1",
     "monaco-editor": "^0.45.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "use-immer": "^0.10.0"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.19",
-    "electron": "^39.2.3",
+    "electron": "^29.1.5",
     "electron-builder": "^24.13.3",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
     "typescript": "^5.2.2",
-    "vite": "^7.2.4"
+    "vite": "^5.2.0"
   },
   "build": {
     "appId": "com.vangard.renpy.renide",
@@ -49,15 +47,25 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "vangard-renide-512x512.png"
+      "icon": "vangard-renide-512x512.png",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Ren'Py Visual Editor"
     },
     "mac": {
       "target": "dmg",
-      "icon": "vangard-renide-512x512.png"
+      "icon": "vangard-renide-512x512.png",
+      "artifactName": "${productName}-${version}.${ext}"
     },
     "linux": {
       "target": "AppImage",
-      "icon": "vangard-renide-512x512.png"
+      "icon": "vangard-renide-512x512.png",
+      "artifactName": "${productName}-${version}.${ext}"
     }
   }
 }
