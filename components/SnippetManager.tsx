@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 
 interface Snippet {
@@ -68,18 +69,63 @@ const SNIPPETS: SnippetCategory[] = [
     ]
   },
   {
-    name: "Visuals & Effects",
+    name: "Images",
     snippets: [
       {
         title: "Show Image",
-        description: "Display a character or image on screen.",
+        description: "Display an image or character sprite.",
         code: `show eileen happy`
       },
       {
-        title: "Show Image with Position",
-        description: "Display an image at a specific location.",
-        code: `show eileen happy at left`
+        title: "Show at Position",
+        description: "Display an image at a specific screen position.",
+        code: `show eileen happy at right`
       },
+      {
+        title: "Scene Statement",
+        description: "Clear the screen and show a background.",
+        code: `scene bg classroom`
+      },
+      {
+        title: "Hide Image",
+        description: "Remove an image from the screen.",
+        code: `hide eileen`
+      },
+      {
+        title: "Image Definition",
+        description: "Define an image tag pointing to a file.",
+        code: `image bg school = "bg/school_day.jpg"`
+      },
+      {
+        title: "Solid Color Definition",
+        description: "Create a solid color image.",
+        code: `image black = Solid("#000000")`
+      },
+      {
+        title: "Placeholder Definition",
+        description: "A placeholder image for prototyping.",
+        code: `image eileen = Placeholder("girl")`
+      },
+      {
+        title: "Simple Animation",
+        description: "Frame-by-frame animation.",
+        code: `image rain:\n    "rain1.png"\n    0.1\n    "rain2.png"\n    0.1\n    "rain3.png"\n    0.1\n    repeat`
+      },
+      {
+        title: "Condition Switch",
+        description: "Show different images based on variable states.",
+        code: `image eileen = ConditionSwitch(\n    "mood == 'happy'", "eileen_happy.png",\n    "mood == 'sad'", "eileen_sad.png",\n    "True", "eileen_neutral.png"\n)`
+      },
+      {
+        title: "Layered Image",
+        description: "Modern layered character sprite definition.",
+        code: `layeredimage eileen:\n    always "eileen_base.png"\n    group outfit auto:\n        attribute uniform default\n        attribute casual\n    group face auto:\n        attribute happy default\n        attribute sad`
+      }
+    ]
+  },
+  {
+    name: "Visuals & Effects",
+    snippets: [
       {
         title: "Scene with Transition",
         description: "Clear the screen and show a new background with a fade.",
@@ -97,7 +143,47 @@ const SNIPPETS: SnippetCategory[] = [
       },
     ]
   },
-    {
+  {
+    name: "ATL & Transforms",
+    snippets: [
+      {
+        title: "Basic Transform Definition",
+        description: "Define a named transform to reuse later.",
+        code: `transform slight_right:\n    xalign 0.75\n    yalign 1.0`
+      },
+      {
+        title: "Linear Movement",
+        description: "Move an image from left to right over 2 seconds.",
+        code: `transform move_across:\n    xalign 0.0\n    linear 2.0 xalign 1.0`
+      },
+      {
+        title: "Fade In & Out",
+        description: "Change opacity (alpha) over time.",
+        code: `transform ghost_fade:\n    alpha 0.0\n    linear 1.0 alpha 0.5\n    pause 1.0\n    linear 1.0 alpha 0.0`
+      },
+      {
+        title: "Zoom Pop Effect",
+        description: "Scale an image up quickly using an easing function.",
+        code: `transform pop_in:\n    zoom 0.0\n    easein_back 0.5 zoom 1.0`
+      },
+      {
+        title: "Repeating Bobbing",
+        description: "Continuous up and down motion.",
+        code: `transform hovering:\n    yoffset 0\n    easein 1.0 yoffset -20\n    easeout 1.0 yoffset 0\n    repeat`
+      },
+      {
+        title: "Parallel Animation",
+        description: "Run multiple property changes (e.g. move + rotate) simultaneously.",
+        code: `transform roll_across:\n    parallel:\n        xalign 0.0\n        linear 3.0 xalign 1.0\n    parallel:\n        rotate 0\n        linear 3.0 rotate 360`
+      },
+      {
+        title: "On Show/Hide Events",
+        description: "Trigger specific animations when the image appears or disappears.",
+        code: `transform slide_in_out:\n    on show:\n        xalign 0.0\n        linear 0.5 xalign 0.5\n    on hide:\n        linear 0.5 xalign 1.0`
+      }
+    ]
+  },
+  {
     name: "Audio",
     snippets: [
       {
@@ -124,7 +210,12 @@ const SNIPPETS: SnippetCategory[] = [
   },
 ];
 
-const SnippetManager: React.FC = () => {
+interface SnippetManagerProps {
+    categoriesState?: Record<string, boolean>;
+    onToggleCategory?: (name: string, isOpen: boolean) => void;
+}
+
+const SnippetManager: React.FC<SnippetManagerProps> = ({ categoriesState = {}, onToggleCategory }) => {
     const [copiedSnippet, setCopiedSnippet] = useState<string | null>(null);
 
     const handleCopy = (code: string, title: string) => {
@@ -136,35 +227,43 @@ const SnippetManager: React.FC = () => {
     return (
         <div className="space-y-4">
             <h3 className="font-semibold">Code Snippets</h3>
-            {SNIPPETS.map(category => (
-                <details key={category.name} open className="group">
-                    <summary className="font-semibold text-gray-600 dark:text-gray-400 cursor-pointer list-none flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 transition-transform group-open:rotate-90" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
-                        {category.name}
-                    </summary>
-                    <div className="pl-4 mt-2 space-y-3">
-                        {category.snippets.map(snippet => (
-                            <div key={snippet.title} className="p-3 rounded-md bg-gray-50 dark:bg-gray-700/50">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="font-semibold">{snippet.title}</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{snippet.description}</p>
+            {SNIPPETS.map(category => {
+                const isOpen = categoriesState[category.name] ?? (category.name !== "ATL & Transforms");
+                return (
+                    <details 
+                        key={category.name} 
+                        open={isOpen} 
+                        className="group"
+                        onToggle={(e) => onToggleCategory && onToggleCategory(category.name, (e.currentTarget as HTMLDetailsElement).open)}
+                    >
+                        <summary className="font-semibold text-gray-600 dark:text-gray-400 cursor-pointer list-none flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 transition-transform group-open:rotate-90" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
+                            {category.name}
+                        </summary>
+                        <div className="pl-4 mt-2 space-y-3">
+                            {category.snippets.map(snippet => (
+                                <div key={snippet.title} className="p-3 rounded-md bg-gray-50 dark:bg-gray-700/50">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="font-semibold">{snippet.title}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{snippet.description}</p>
+                                        </div>
+                                        <button
+                                            onClick={() => handleCopy(snippet.code, snippet.title)}
+                                            className={`px-2 py-1 text-xs font-semibold rounded ${copiedSnippet === snippet.title ? 'bg-green-600 text-white' : 'bg-gray-200 dark:bg-gray-600 hover:bg-indigo-100 dark:hover:bg-indigo-800'}`}
+                                        >
+                                            {copiedSnippet === snippet.title ? 'Copied!' : 'Copy'}
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={() => handleCopy(snippet.code, snippet.title)}
-                                        className={`px-2 py-1 text-xs font-semibold rounded ${copiedSnippet === snippet.title ? 'bg-green-600 text-white' : 'bg-gray-200 dark:bg-gray-600 hover:bg-indigo-100 dark:hover:bg-indigo-800'}`}
-                                    >
-                                        {copiedSnippet === snippet.title ? 'Copied!' : 'Copy'}
-                                    </button>
+                                    <pre className="bg-gray-800 text-white p-2 rounded text-xs font-mono whitespace-pre-wrap">
+                                        <code>{snippet.code}</code>
+                                    </pre>
                                 </div>
-                                <pre className="bg-gray-800 text-white p-2 rounded text-xs font-mono whitespace-pre-wrap">
-                                    <code>{snippet.code}</code>
-                                </pre>
-                            </div>
-                        ))}
-                    </div>
-                </details>
-            ))}
+                            ))}
+                        </div>
+                    </details>
+                );
+            })}
         </div>
     );
 };

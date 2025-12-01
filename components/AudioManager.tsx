@@ -70,6 +70,7 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
       return () => {
           if (audioRef.current) {
               audioRef.current.pause();
+              audioRef.current.src = "";
               audioRef.current = null;
           }
       };
@@ -164,21 +165,37 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
 
   const handleTogglePlay = (audio: RenpyAudio) => {
       if (playingFile === audio.filePath) {
-          audioRef.current?.pause();
-          setPlayingFile(null);
-      } else {
+          // If currently playing, just stop it.
           if (audioRef.current) {
               audioRef.current.pause();
-          } else {
-              audioRef.current = new Audio();
-              audioRef.current.onended = () => setPlayingFile(null);
-              audioRef.current.onerror = () => {
-                  console.error("Audio playback error");
-                  setPlayingFile(null);
-              };
+              audioRef.current.currentTime = 0;
           }
-          audioRef.current.src = audio.dataUrl;
-          audioRef.current.play().catch(e => console.error("Playback failed", e));
+          setPlayingFile(null);
+      } else {
+          // Stop any previous audio
+          if (audioRef.current) {
+              audioRef.current.pause();
+              audioRef.current = null;
+          }
+
+          // Create a new Audio object to avoid reuse issues
+          const newAudio = new Audio();
+          audioRef.current = newAudio;
+          
+          newAudio.onended = () => {
+              setPlayingFile(null);
+          };
+          newAudio.onerror = (e) => {
+              console.error("Audio playback error", e);
+              setPlayingFile(null);
+          };
+          
+          newAudio.src = audio.dataUrl;
+          newAudio.play().catch(e => {
+              console.error("Playback failed", e);
+              setPlayingFile(null);
+          });
+          
           setPlayingFile(audio.filePath);
       }
   };

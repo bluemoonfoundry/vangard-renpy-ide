@@ -1,7 +1,3 @@
-
-
-
-
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -13,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeEntry: (entryPath) => ipcRenderer.invoke('fs:removeEntry', entryPath),
   moveFile: (oldPath, newPath) => ipcRenderer.invoke('fs:moveFile', oldPath, newPath),
   copyEntry: (sourcePath, destPath) => ipcRenderer.invoke('fs:copyEntry', sourcePath, destPath),
+  scanDirectory: (dirPath) => ipcRenderer.invoke('fs:scanDirectory', dirPath),
   onMenuCommand: (callback) => {
     const subscription = (_event, ...args) => callback(...args);
     ipcRenderer.on('menu-command', subscription);

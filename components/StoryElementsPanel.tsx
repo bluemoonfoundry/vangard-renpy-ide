@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useState, useMemo } from 'react';
 import type { Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, RenpyScreen, RenpyAnalysisResult } from '../types';
 import VariableManager from './VariableManager';
@@ -9,6 +5,7 @@ import ImageManager from './ImageManager';
 import AudioManager from './AudioManager';
 import SnippetManager from './SnippetManager';
 import ScreenManager from './ScreenManager';
+import MenuConstructor from './MenuConstructor';
 
 interface StoryElementsPanelProps {
     analysisResult: RenpyAnalysisResult;
@@ -55,9 +52,13 @@ interface StoryElementsPanelProps {
     onOpenScene: (sceneId: string) => void;
     onCreateScene: (name?: string) => void;
     onDeleteScene: (sceneId: string) => void;
+
+    // Snippet Props
+    snippetCategoriesState: Record<string, boolean>;
+    onToggleSnippetCategory: (name: string, isOpen: boolean) => void;
 }
 
-type Tab = 'characters' | 'variables' | 'images' | 'audio' | 'screens' | 'snippets' | 'scenes';
+type Tab = 'characters' | 'variables' | 'images' | 'audio' | 'screens' | 'snippets' | 'scenes' | 'menus';
 
 const TabButton: React.FC<{
   label: string;
@@ -88,7 +89,8 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     projectAudios, audioMetadata, onAddAudioScanDirectory, onRemoveAudioScanDirectory, audioScanDirectories, onCopyAudiosToProject, onUpdateAudioMetadata, onOpenAudioEditor, audiosLastScanned, isRefreshingAudios, onRefreshAudios,
     isFileSystemApiSupported,
     onHoverHighlightStart, onHoverHighlightEnd,
-    scenes, onOpenScene, onCreateScene, onDeleteScene
+    scenes, onOpenScene, onCreateScene, onDeleteScene,
+    snippetCategoriesState, onToggleSnippetCategory
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('characters');
 
@@ -115,6 +117,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                 <TabButton className="flex-grow" label="Snd" count={projectAudios.size} isActive={activeTab === 'audio'} onClick={() => setActiveTab('audio')} />
                 <TabButton className="flex-grow" label="Scrn" count={analysisResult.screens.size} isActive={activeTab === 'screens'} onClick={() => setActiveTab('screens')} />
                 <TabButton className="flex-grow" label="Scenes" count={scenes.length} isActive={activeTab === 'scenes'} onClick={() => setActiveTab('scenes')} />
+                <TabButton className="flex-grow" label="Menus" isActive={activeTab === 'menus'} onClick={() => setActiveTab('menus')} />
                 <TabButton className="flex-grow" label="Code" isActive={activeTab === 'snippets'} onClick={() => setActiveTab('snippets')} />
             </nav>
             <main className="flex-grow flex flex-col min-h-0 overflow-hidden relative">
@@ -236,9 +239,17 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                         </ul>
                     </div>
                 )}
+                {activeTab === 'menus' && (
+                    <div className="flex-grow h-full overflow-hidden">
+                        <MenuConstructor analysisResult={analysisResult} />
+                    </div>
+                )}
                 {activeTab === 'snippets' && (
                     <div className="flex-grow overflow-y-auto p-4 overscroll-contain">
-                        <SnippetManager />
+                        <SnippetManager 
+                            categoriesState={snippetCategoriesState}
+                            onToggleCategory={onToggleSnippetCategory}
+                        />
                     </div>
                 )}
             </main>

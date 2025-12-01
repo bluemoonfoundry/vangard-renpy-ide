@@ -100,11 +100,12 @@ export interface RenpyScreen {
 export interface ProjectImage {
   filePath: string; // A unique path for the image, e.g., "ScannedDir/subdir/img.png" or "game/images/img.png"
   fileName: string;
-  dataUrl?: string; // Made optional for lazy loading
+  dataUrl?: string; // Can be a blob: URL (Browser) or media:// URL (Electron) or base64 (legacy)
   fileHandle: FileSystemFileHandle | null;
   isInProject: boolean; // True if it's inside game/images
   projectFilePath?: string; // The path within the project if copied, e.g., "game/images/img.png"
   lastModified?: number;
+  size?: number; // File size in bytes
 }
 
 export interface ImageMetadata {
@@ -121,6 +122,7 @@ export interface RenpyAudio {
   isInProject: boolean; // True if it's inside game/audio
   projectFilePath?: string; // The path within the project if copied, e.g., "game/audio/sound.ogg"
   lastModified?: number;
+  size?: number; // File size in bytes
 }
 
 export interface AudioMetadata {
@@ -170,6 +172,7 @@ export interface LabelNode {
   id: string; // composite key: `${blockId}:${label}`
   label: string;
   blockId: string;
+  containerName?: string; // The name of the file/block containing this label
   startLine: number;
   position: Position;
   width: number;
@@ -261,6 +264,7 @@ export interface AppSettings {
   recentProjects: string[];
   editorFontFamily: string;
   editorFontSize: number;
+  snippetCategoriesState?: Record<string, boolean>;
 }
 
 // Scene Composer Types
@@ -293,10 +297,12 @@ export interface ProjectSettings {
   characterProfiles?: Record<string, string>;
   sceneCompositions?: Record<string, SceneComposition>;
   sceneNames?: Record<string, string>;
+  scannedImagePaths?: string[];
+  scannedAudioPaths?: string[];
 }
 
 // This type is a mix for components that need both, like SettingsModal
-export interface IdeSettings extends AppSettings, Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'sceneCompositions' | 'sceneNames'> {}
+export interface IdeSettings extends AppSettings, Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'> {}
 
 
 export type ClipboardState = { type: 'copy' | 'cut'; paths: Set<string> } | null;
@@ -324,6 +330,7 @@ declare global {
           removeEntry: (path: string) => Promise<{ success: boolean; error?: string }>;
           moveFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
           copyEntry: (sourcePath: string, destPath: string) => Promise<{ success: boolean; error?: string }>;
+          scanDirectory: (path: string) => Promise<{ images: any[], audios: any[] }>;
           onMenuCommand: (callback: (data: { command: string, type?: 'canvas' | 'route-canvas', path?: string }) => void) => () => void;
           onCheckUnsavedChangesBeforeExit: (callback: () => void) => () => void;
           replyUnsavedChangesBeforeExit: (hasUnsaved: boolean) => void;

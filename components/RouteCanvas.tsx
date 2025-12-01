@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import LabelBlock from './LabelBlock';
 import ViewRoutesPanel from './ViewRoutesPanel';
@@ -27,31 +28,59 @@ const getAttachmentPoint = (node: LabelNode, side: 'left' | 'right' | 'top' | 'b
 }
 
 const getOptimalPath = (sourceNode: LabelNode, targetNode: LabelNode): [Position, Position] => {
-    const sourcePoints = {
-        right: getAttachmentPoint(sourceNode, 'right'),
-        left: getAttachmentPoint(sourceNode, 'left'),
-        bottom: getAttachmentPoint(sourceNode, 'bottom'),
-        top: getAttachmentPoint(sourceNode, 'top'),
-    };
-    const targetPoints = {
-        left: getAttachmentPoint(targetNode, 'left'),
-        right: getAttachmentPoint(targetNode, 'right'),
-        top: getAttachmentPoint(targetNode, 'top'),
-        bottom: getAttachmentPoint(targetNode, 'bottom'),
-    };
+    // If predominantly vertical alignment, prefer top/bottom connections
+    const isVertical = Math.abs(targetNode.position.y - sourceNode.position.y) > Math.abs(targetNode.position.x - sourceNode.position.x);
 
-    let bestPath: [Position, Position] = [sourcePoints.right, targetPoints.left];
+    let sourcePoints, targetPoints;
+
+    if (isVertical) {
+        sourcePoints = {
+            bottom: getAttachmentPoint(sourceNode, 'bottom'),
+            top: getAttachmentPoint(sourceNode, 'top'),
+        };
+        targetPoints = {
+            top: getAttachmentPoint(targetNode, 'top'),
+            bottom: getAttachmentPoint(targetNode, 'bottom'),
+        };
+    } else {
+        sourcePoints = {
+            right: getAttachmentPoint(sourceNode, 'right'),
+            left: getAttachmentPoint(sourceNode, 'left'),
+        };
+        targetPoints = {
+            left: getAttachmentPoint(targetNode, 'left'),
+            right: getAttachmentPoint(targetNode, 'right'),
+        };
+    }
+
+    let bestPath: [Position, Position] | null = null;
     let minDistance = Infinity;
 
-    for (const sKey of Object.keys(sourcePoints) as Array<keyof typeof sourcePoints>) {
-        for (const tKey of Object.keys(targetPoints) as Array<keyof typeof targetPoints>) {
-            const dist = Math.hypot(sourcePoints[sKey].x - targetPoints[tKey].x, sourcePoints[sKey].y - targetPoints[tKey].y);
-            if (dist < minDistance) {
-                minDistance = dist;
-                bestPath = [sourcePoints[sKey], targetPoints[tKey]];
+    for (const sKey of Object.keys(sourcePoints)) {
+        for (const tKey of Object.keys(targetPoints)) {
+            // @ts-ignore
+            const p1 = sourcePoints[sKey];
+            // @ts-ignore
+            const p2 = targetPoints[tKey];
+            const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+            
+            // Penalize "backward" links slightly to encourage flow
+            let penalty = 0;
+            if (!isVertical && p1.x > p2.x) penalty = 100;
+            if (isVertical && p1.y > p2.y) penalty = 100;
+
+            if (dist + penalty < minDistance) {
+                minDistance = dist + penalty;
+                bestPath = [p1, p2];
             }
         }
     }
+    
+    // Fallback if something went wrong
+    if (!bestPath) {
+        return [getAttachmentPoint(sourceNode, 'right'), getAttachmentPoint(targetNode, 'left')];
+    }
+
     return bestPath;
 };
 
@@ -62,22 +91,30 @@ const Arrow: React.FC<{
   color: string;
   isDimmed: boolean;
 }> = ({ sourcePos, targetPos, type, color, isDimmed }) => {
-    const dx = targetPos.x - sourcePos.x;
-    const dy = targetPos.y - sourcePos.y;
+    const isVertical = Math.abs(targetPos.y - sourcePos.y) > Math.abs(targetPos.x - sourcePos.x);
     
-    const controlX = sourcePos.x + dx / 2 + (dy / 5);
-    const controlY = sourcePos.y + dy / 2 - (dx / 5);
-
-    const pathData = `M${sourcePos.x},${sourcePos.y} Q${controlX},${controlY} ${targetPos.x},${targetPos.y}`;
+    let pathData = '';
+    
+    if (isVertical) {
+        const dy = targetPos.y - sourcePos.y;
+        const midY = sourcePos.y + dy / 2;
+        // Cubic Bezier for vertical flow (Top-Down)
+        pathData = `M${sourcePos.x},${sourcePos.y} C${sourcePos.x},${midY} ${targetPos.x},${midY} ${targetPos.x},${targetPos.y}`;
+    } else {
+        const dx = targetPos.x - sourcePos.x;
+        const midX = sourcePos.x + dx / 2;
+        // Cubic Bezier for horizontal flow (Left-Right)
+        pathData = `M${sourcePos.x},${sourcePos.y} C${midX},${sourcePos.y} ${midX},${targetPos.y} ${targetPos.x},${targetPos.y}`;
+    }
 
     return (
         <g className={`pointer-events-none transition-opacity duration-300 ${isDimmed ? 'opacity-20' : 'opacity-100'}`}>
           <path
               d={pathData}
               stroke={color}
-              strokeWidth="2.5"
+              strokeWidth="4"
               fill="none"
-              strokeDasharray={type === 'implicit' ? "5, 5" : "none"}
+              strokeDasharray={type === 'implicit' ? "10, 6" : "none"}
               markerEnd={`url(#arrowhead-${color.replace('#', '')})`}
           />
         </g>
@@ -96,6 +133,38 @@ const RubberBand: React.FC<{ rect: Rect }> = ({ rect }) => {
                 height: rect.height,
             }}
         />
+    );
+};
+
+// Container for grouping labels visually
+const BlockContainer: React.FC<{ 
+    id: string; 
+    title: string; 
+    rect: Rect; 
+    isDimmed: boolean; 
+}> = ({ id, title, rect, isDimmed }) => {
+    // Add padding to the visual box
+    const padding = 20;
+    const x = rect.x - padding;
+    const y = rect.y - padding - 30; // Extra top space for title
+    const width = rect.width + padding * 2;
+    const height = rect.height + padding * 2 + 30;
+
+    return (
+        <div 
+            className={`absolute rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 transition-opacity duration-300 pointer-events-none ${isDimmed ? 'opacity-30' : 'opacity-100'}`}
+            style={{
+                left: x,
+                top: y,
+                width: width,
+                height: height,
+                zIndex: 1, // Behind connections (in SVG) and nodes
+            }}
+        >
+            <div className="absolute top-2 left-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider truncate max-w-[90%]">
+                {title}
+            </div>
+        </div>
     );
 };
 
@@ -156,6 +225,30 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
     });
     return colorMap;
   }, [checkedRoutes, identifiedRoutes]);
+
+  // Compute Group Bounding Boxes
+  const blockGroups = useMemo(() => {
+      const groups = new Map<string, { id: string, title: string, rect: Rect }>();
+      
+      labelNodes.forEach(node => {
+          if (!groups.has(node.blockId)) {
+              groups.set(node.blockId, {
+                  id: node.blockId,
+                  title: node.containerName || 'Block',
+                  rect: { x: node.position.x, y: node.position.y, width: node.width, height: node.height }
+              });
+          } else {
+              const group = groups.get(node.blockId)!;
+              const minX = Math.min(group.rect.x, node.position.x);
+              const minY = Math.min(group.rect.y, node.position.y);
+              const maxX = Math.max(group.rect.x + group.rect.width, node.position.x + node.width);
+              const maxY = Math.max(group.rect.y + group.rect.height, node.position.y + node.height);
+              
+              group.rect = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+          }
+      });
+      return Array.from(groups.values());
+  }, [labelNodes]);
 
   const getPointInWorldSpace = useCallback((clientX: number, clientY: number) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
@@ -312,7 +405,8 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
       maxX = Math.max(maxX, node.position.x + node.width);
       maxY = Math.max(maxY, node.position.y + node.height);
     });
-    const PADDING = 200;
+    // Extra padding for block containers
+    const PADDING = 300;
     return {
       left: minX - PADDING, top: minY - PADDING,
       width: (maxX - minX) + PADDING * 2, height: (maxY - minY) + PADDING * 2,
@@ -339,20 +433,32 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
           transformOrigin: '0 0',
         }}
       >
+        {/* Layer 0: Block Group Containers */}
+        {blockGroups.map(group => (
+            <BlockContainer 
+                key={group.id} 
+                id={group.id} 
+                title={group.title} 
+                rect={group.rect} 
+                isDimmed={linkColors !== null} // Dim background containers if a route is selected
+            />
+        ))}
+
         <svg 
           className="absolute pointer-events-none"
-          style={{ left: svgBounds.left, top: svgBounds.top, width: svgBounds.width, height: svgBounds.height }}
+          style={{ left: svgBounds.left, top: svgBounds.top, width: svgBounds.width, height: svgBounds.height, zIndex: 5 }}
         >
           <defs>
-            <marker id="arrowhead-4f46e5" viewBox="-14 0 14 10" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
-              <polygon points="-14 0, 0 3.5, -14 7" fill="#4f46e5" />
+            {/* Markers: viewBox="0 0 10 10", triangle shape M0,0 L10,5 L0,10 z, bigger size 12x12 */}
+            <marker id="arrowhead-4f46e5" viewBox="0 0 10 10" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#4f46e5" />
             </marker>
-             <marker id="arrowhead-94a3b8" viewBox="-14 0 14 10" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
-              <polygon points="-14 0, 0 3.5, -14 7" fill="#94a3b8" />
+             <marker id="arrowhead-94a3b8" viewBox="0 0 10 10" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8" />
             </marker>
             {identifiedRoutes.map(route => (
-                <marker key={route.id} id={`arrowhead-${route.color.replace('#', '')}`} viewBox="-14 0 14 10" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
-                    <polygon points="-14 0, 0 3.5, -14 7" fill={route.color} />
+                <marker key={route.id} id={`arrowhead-${route.color.replace('#', '')}`} viewBox="0 0 10 10" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+                    <path d="M0,0 L10,5 L0,10 z" fill={route.color} />
                 </marker>
             ))}
           </defs>

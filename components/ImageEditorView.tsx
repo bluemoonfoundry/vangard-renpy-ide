@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+
+
+import React, { useState, useEffect, useMemo } from 'react';
 import type { ProjectImage, ImageMetadata } from '../types';
 
 interface ImageEditorViewProps {
   image: ProjectImage;
+  allImages: ProjectImage[];
   metadata?: ImageMetadata;
   onUpdateMetadata: (projectFilePath: string, newMetadata: ImageMetadata) => void;
   onCopyToProject: (sourceFilePath: string, metadata: ImageMetadata) => void;
@@ -24,7 +27,7 @@ const MetadataRow: React.FC<{ label: string; value: React.ReactNode }> = ({ labe
     </div>
 );
 
-const ImageEditorView: React.FC<ImageEditorViewProps> = ({ image, metadata, onUpdateMetadata, onCopyToProject }) => {
+const ImageEditorView: React.FC<ImageEditorViewProps> = ({ image, allImages, metadata, onUpdateMetadata, onCopyToProject }) => {
   const [renpyName, setRenpyName] = useState('');
   const [tags, setTags] = useState('');
   const [subfolder, setSubfolder] = useState('');
@@ -32,6 +35,11 @@ const ImageEditorView: React.FC<ImageEditorViewProps> = ({ image, metadata, onUp
   const [dimensions, setDimensions] = useState<{ w: number, h: number } | null>(null);
   const [fileSize, setFileSize] = useState<number | null>(null);
   const [mimeType, setMimeType] = useState<string | null>(null);
+
+  // Onion Skin State
+  const [onionSkinImageId, setOnionSkinImageId] = useState<string>('');
+  const [onionSkinOpacity, setOnionSkinOpacity] = useState(0.5);
+  const [showOnionSkin, setShowOnionSkin] = useState(true);
 
   useEffect(() => {
     setRenpyName(metadata?.renpyName || image.fileName.split('.').slice(0, -1).join('.'));
@@ -47,14 +55,17 @@ const ImageEditorView: React.FC<ImageEditorViewProps> = ({ image, metadata, onUp
     img.onload = () => {
         setDimensions({ w: img.naturalWidth, h: img.naturalHeight });
     };
-    img.src = image.dataUrl;
+    img.src = image.dataUrl || '';
 
-    if (image.fileHandle) {
+    // Prefer pre-calculated size if available (Electron or Browser scan)
+    if (image.size !== undefined) {
+        setFileSize(image.size);
+    } else if (image.fileHandle) {
         image.fileHandle.getFile().then(file => {
             setFileSize(file.size);
             setMimeType(file.type);
         });
-    } else {
+    } else if (image.dataUrl && image.dataUrl.startsWith('data:')) {
         const match = image.dataUrl.match(/^data:(.+);base64,/);
         if (match) setMimeType(match[1]);
         const base64Data = image.dataUrl.split(',')[1];
@@ -86,14 +97,85 @@ const ImageEditorView: React.FC<ImageEditorViewProps> = ({ image, metadata, onUp
 
   const renpyTag = `image ${renpyName} ${tags.split(',').map(t => t.trim()).filter(Boolean).join(' ')}`.trim().replace(/\s+/g, ' ');
 
+  const onionSkinImage = useMemo(() => {
+      if (!onionSkinImageId) return null;
+      return allImages.find(img => img.filePath === onionSkinImageId);
+  }, [onionSkinImageId, allImages]);
+
+  // Filter out the current image from the onion skin options
+  const onionSkinOptions = useMemo(() => {
+      return allImages
+        .filter(img => img.filePath !== image.filePath)
+        .sort((a, b) => a.fileName.localeCompare(b.fileName));
+  }, [allImages, image.filePath]);
+
   return (
     <div className="w-full h-full flex bg-gray-100 dark:bg-gray-900 overflow-hidden">
-      <div className="flex-grow min-w-0 relative">
+      <div className="flex-grow min-w-0 relative bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScyMCcgaGVpZ2h0PScyMCc+PHJlY3Qgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSIjZjBmMGYwIiAvPjxyZWN0IHg9JzEwJyB5PScxMCcgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSIjZjBmMGYwIiAvPjwvc3ZnPg==')] dark:bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScyMCcgaGVpZ2h0PScyMCc+PHJlY3Qgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSIjMjcyNzJhIiAvPjxyZWN0IHg9JzEwJyB5PScxMCcgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSIjMjcyNzJhIiAvPjwvc3ZnPg==')]">
         <div className="absolute inset-0 overflow-auto overscroll-contain flex items-center justify-center p-4">
-          <img src={image.dataUrl} alt={image.fileName} className="max-w-full max-h-full object-contain" />
+          <div className="relative inline-block">
+            {/* Onion Skin Layer */}
+            {onionSkinImage && showOnionSkin && (
+                <img 
+                    src={onionSkinImage.dataUrl} 
+                    alt="Onion Skin" 
+                    className="absolute top-0 left-0 w-full h-full object-contain pointer-events-none z-10"
+                    style={{ opacity: onionSkinOpacity }}
+                />
+            )}
+            {/* Main Image */}
+            <img src={image.dataUrl} alt={image.fileName} className="max-w-full max-h-[90vh] object-contain relative z-0 shadow-lg" />
+          </div>
         </div>
       </div>
       <aside className="w-80 flex-shrink-0 h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 p-4 flex flex-col space-y-4 overflow-y-auto overscroll-contain">
+        
+        {/* Onion Skin Controls */}
+        <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800">
+            <div className="flex justify-between items-center mb-2">
+                <h3 className="text-sm font-bold text-indigo-800 dark:text-indigo-300 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" /></svg>
+                    Compare / Alignment
+                </h3>
+                <button 
+                    onClick={() => setShowOnionSkin(!showOnionSkin)} 
+                    disabled={!onionSkinImageId}
+                    className={`text-xs px-2 py-0.5 rounded border ${showOnionSkin ? 'bg-indigo-200 text-indigo-800 border-indigo-300' : 'bg-gray-100 text-gray-500 border-gray-200'}`}
+                >
+                    {showOnionSkin ? 'ON' : 'OFF'}
+                </button>
+            </div>
+            
+            <div className="space-y-2">
+                <select 
+                    value={onionSkinImageId} 
+                    onChange={(e) => setOnionSkinImageId(e.target.value)}
+                    className="w-full text-xs p-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+                >
+                    <option value="">-- Select Image to Overlay --</option>
+                    {onionSkinOptions.map(img => (
+                        <option key={img.filePath} value={img.filePath}>{img.fileName}</option>
+                    ))}
+                </select>
+                
+                {onionSkinImageId && (
+                    <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] text-gray-500">
+                            <span>Opacity</span>
+                            <span>{Math.round(onionSkinOpacity * 100)}%</span>
+                        </div>
+                        <input 
+                            type="range" 
+                            min="0" max="1" step="0.05" 
+                            value={onionSkinOpacity}
+                            onChange={(e) => setOnionSkinOpacity(parseFloat(e.target.value))}
+                            className="w-full h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer dark:bg-gray-600 accent-indigo-600"
+                        />
+                    </div>
+                )}
+            </div>
+        </div>
+
         <h2 className="text-lg font-bold border-b pb-2 border-gray-200 dark:border-gray-700">Image Properties</h2>
         
         <div className="space-y-3">

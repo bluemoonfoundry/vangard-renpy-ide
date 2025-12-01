@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type { Block, RenpyAnalysisResult, ToastMessage } from '../types';
@@ -145,6 +144,33 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const handleEditorWillMount: BeforeMount = (monaco) => {
     if (!monaco.languages.getLanguages().some(({ id }) => id === 'renpy')) {
       monaco.languages.register({ id: 'renpy' });
+      
+      // Define language configuration for comments and brackets
+      monaco.languages.setLanguageConfiguration('renpy', {
+        comments: {
+          lineComment: '#',
+        },
+        brackets: [
+          ['(', ')'],
+          ['{', '}'],
+          ['[', ']'],
+        ],
+        autoClosingPairs: [
+          { open: '(', close: ')' },
+          { open: '{', close: '}' },
+          { open: '[', close: ']' },
+          { open: '"', close: '"' },
+          { open: "'", close: "'" },
+        ],
+        surroundingPairs: [
+          { open: '(', close: ')' },
+          { open: '{', close: '}' },
+          { open: '[', close: ']' },
+          { open: '"', close: '"' },
+          { open: "'", close: "'" },
+        ],
+      });
+
       monaco.languages.setMonarchTokensProvider('renpy', {
         keywords: ['label', 'jump', 'call', 'menu', 'scene', 'show', 'hide', 'with', 'define', 'python', 'if', 'elif', 'else', 'return', 'expression'],
         tokenizer: { root: [[/#.*$/, 'comment'], [/"/, 'string', '@string_double'], [/'/, 'string', '@string_single'], [/\b[a-zA-Z_]\w*/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }], [/\b\d+/, 'number'], [/[:=+\-*/!<>]+/, 'operator'], [/[(),.]/, 'punctuation']], string_double: [[/[^\\"]+/, 'string'], [/\\./, 'string.escape'], [/"/, 'string', '@pop']], string_single: [[/[^\\']+/, 'string'], [/\\./, 'string.escape'], [/'/, 'string', '@pop']] },
@@ -261,24 +287,29 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       if (!position) return;
 
       const lineNumber = position.lineNumber;
-      const labels = Object.values(analysisResultRef.current.labels)
-          .filter(l => l.blockId === blockRef.current.id && l.line <= lineNumber)
-          .sort((a, b) => b.line - a.line);
-      
-      const screens = Array.from(analysisResultRef.current.screens.values())
-          .filter(s => s.definedInBlockId === blockRef.current.id && s.line <= lineNumber)
-          .sort((a, b) => b.line - a.line);
+      // We need to look at the current *live* text to find local context, as analysis might be stale for new edits
+      const model = editorRef.current.getModel();
+      if (!model) return;
 
       let bestContext = '';
       let bestLine = -1;
 
-      if (labels.length > 0) {
-          bestContext = `label ${labels[0].label}`;
-          bestLine = labels[0].line;
-      }
+      // Scan backwards from current line to find a label or screen definition
+      for (let i = lineNumber; i >= 1; i--) {
+          const lineContent = model.getLineContent(i);
+          const labelMatch = lineContent.match(/^\s*label\s+([a-zA-Z0-9_]+):/);
+          const screenMatch = lineContent.match(/^\s*screen\s+([a-zA-Z0-9_]+)/);
 
-      if (screens.length > 0 && screens[0].line > bestLine) {
-          bestContext = `screen ${screens[0].name}`;
+          if (labelMatch) {
+              bestContext = `label ${labelMatch[1]}`;
+              bestLine = i;
+              break;
+          }
+          if (screenMatch) {
+              bestContext = `screen ${screenMatch[1]}`;
+              bestLine = i;
+              break;
+          }
       }
 
       setCurrentContext(bestContext);
@@ -365,18 +396,60 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       }
   
       const position = e.target.position;
-      const jumpsInBlock = analysisResultRef.current.jumps[blockRef.current.id] || [];
-      const clickedJump = jumpsInBlock.find(jump =>
-          jump.line === position.lineNumber &&
-          position.column >= jump.columnStart &&
-          position.column <= jump.columnEnd
-      );
-  
-      if (clickedJump) {
-          const targetLabelLocation = analysisResultRef.current.labels[clickedJump.target];
-          if (targetLabelLocation) {
-              e.event.preventDefault();
-              onSwitchFocusBlockRef.current(targetLabelLocation.blockId, targetLabelLocation.line);
+      const model = editor.getModel();
+      if (!model) return;
+
+      const lineContent = model.getLineContent(position.lineNumber);
+      
+      // Check for jump/call under cursor
+      const word = model.getWordAtPosition(position);
+      if (!word) return;
+
+      // Very simple check: see if this word is a jump target
+      const lineJumpRegex = new RegExp(JUMP_REGEX);
+      let match;
+      
+      // We need to match the specific word instance
+      let foundTarget = null;
+      let isJump = false;
+
+      while ((match = lineJumpRegex.exec(lineContent)) !== null) {
+          const target = match[2];
+          const targetStartCol = match.index + match[0].indexOf(target) + 1;
+          const targetEndCol = targetStartCol + target.length;
+
+          if (position.column >= targetStartCol && position.column <= targetEndCol) {
+              foundTarget = target;
+              isJump = true;
+              break;
+          }
+      }
+
+      if (isJump && foundTarget) {
+          e.event.preventDefault(); // Stop default navigation (if any)
+
+          // 1. Try to find local label first (intra-file navigation)
+          const localLines = model.getValue().split('\n');
+          let localLineNumber = -1;
+          for(let i=0; i<localLines.length; i++) {
+              const labelMatch = localLines[i].match(new RegExp(`^\\s*label\\s+${foundTarget}:`));
+              if (labelMatch) {
+                  localLineNumber = i + 1;
+                  break;
+              }
+          }
+
+          if (localLineNumber !== -1) {
+              editor.pushUndoStop();
+              editor.setPosition({ lineNumber: localLineNumber, column: 1 });
+              editor.revealLineInCenter(localLineNumber);
+              editor.focus();
+          } else {
+              // 2. Fallback to global navigation
+              const targetLabelLocation = analysisResultRef.current.labels[foundTarget];
+              if (targetLabelLocation) {
+                  onSwitchFocusBlockRef.current(targetLabelLocation.blockId, targetLabelLocation.line);
+              }
           }
       }
     });
@@ -414,46 +487,62 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   
       const editor = editorRef.current;
       const monaco = monacoRef.current;
+      const model = editor.getModel();
+      if (!model) return;
   
       const newDecorations: monaco.editor.IModelDeltaDecoration[] = [];
-      const jumpsInBlock = analysisResult.jumps[block.id] || [];
-  
-      jumpsInBlock.forEach(jump => {
-          const targetLabelLocation = analysisResult.labels[jump.target];
-          if (targetLabelLocation) {
-              newDecorations.push({
-                  range: new monaco.Range(jump.line, jump.columnStart, jump.line, jump.columnEnd),
-                  options: {
-                      inlineClassName: 'renpy-jump-link',
-                      hoverMessage: { value: `Cmd/Ctrl + click to follow link to '${jump.target}'`, isTrusted: true, supportHtml: true }
-                  }
-              });
-          }
-          else if (!jump.isDynamic) {
-               // We handle errors via markers now, but we can keep a visual style for invalid links if desired
-               // For now, markers provide the "red squiggly", so maybe just leave text normal or style differently
-               // Leaving 'renpy-jump-invalid' for specific styling if needed beyond error marker
-               newDecorations.push({
-                  range: new monaco.Range(jump.line, jump.columnStart, jump.line, jump.columnEnd),
-                  options: {
-                      inlineClassName: 'renpy-jump-invalid',
-                      hoverMessage: { value: `Label '${jump.target}' not found.`, isTrusted: true, supportHtml: true }
-                  }
-              });
-          } else { // is dynamic
-               newDecorations.push({
-                  range: new monaco.Range(jump.line, jump.columnStart, jump.line, jump.columnEnd),
-                  options: {
-                      inlineClassName: 'renpy-jump-dynamic',
-                      hoverMessage: { value: `Dynamic jump to expression '${jump.target}'. Cannot verify.`, isTrusted: true, supportHtml: true }
-                  }
-              });
+      
+      // Get all text to find jumps dynamically, ensuring we catch unsaved changes
+      const lines = model.getValue().split('\n');
+      const localLabels = new Set<string>();
+      lines.forEach(line => {
+          const match = line.match(LABEL_REGEX);
+          if (match) localLabels.add(match[1]);
+      });
+
+      lines.forEach((line, index) => {
+          const lineNumber = index + 1;
+          // Simple sanitization for string literals
+          let sanitizedLine = line.replace(/"[^"\\]*(?:\\.[^"\\]*)*"/g, m => ' '.repeat(m.length)).replace(/'[^'\\]*(?:\\.[^'\\]*)*'/g, m => ' '.repeat(m.length));
+          const commentIndex = sanitizedLine.indexOf('#');
+          if (commentIndex !== -1) sanitizedLine = sanitizedLine.substring(0, commentIndex);
+
+          const lineJumpRegex = new RegExp(JUMP_REGEX);
+          let match;
+          while ((match = lineJumpRegex.exec(sanitizedLine)) !== null) {
+              const target = match[2];
+              if (target === 'expression') continue; // Skip dynamic expression jumps
+
+              const startCol = match.index + match[0].indexOf(target) + 1;
+              const endCol = startCol + target.length;
+
+              const isLocal = localLabels.has(target);
+              const globalLabelDef = analysisResultRef.current.labels[target];
+              const isExternal = globalLabelDef && globalLabelDef.blockId !== block.id;
+
+              if (isLocal || isExternal) {
+                  newDecorations.push({
+                      range: new monaco.Range(lineNumber, startCol, lineNumber, endCol),
+                      options: {
+                          inlineClassName: 'renpy-jump-link',
+                          hoverMessage: { value: `Cmd/Ctrl + click to jump to '${target}'`, isTrusted: true }
+                      }
+                  });
+              } else {
+                   newDecorations.push({
+                      range: new monaco.Range(lineNumber, startCol, lineNumber, endCol),
+                      options: {
+                          inlineClassName: 'renpy-jump-invalid',
+                          hoverMessage: { value: `Label '${target}' not found.`, isTrusted: true }
+                      }
+                  });
+              }
           }
       });
       
       decorationIds.current = editor.deltaDecorations(decorationIds.current, newDecorations);
   
-  }, [analysisResult, block.id, isMounted]);
+  }, [analysisResult, block.id, isMounted, block.content]); // Re-run when content changes to catch local jumps
 
   const getCurrentContext = () => {
       if (!editorRef.current) return '';

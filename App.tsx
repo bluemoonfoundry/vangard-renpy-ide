@@ -1,10 +1,3 @@
-
-
-
-
-
-
-
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -309,10 +302,12 @@ const App: React.FC = () => {
 
   const [directoryHandle, setDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [fileSystemTree, setFileSystemTree] = useState<FileSystemTreeNode | null>(null);
-  const [images, setImages] = useImmer<Map<string, ProjectImage>>(new Map());
-  const [audios, setAudios] = useImmer<Map<string, RenpyAudio>>(new Map());
-  const [imageMetadata, setImageMetadata] = useImmer<Map<string, ImageMetadata>>(new Map());
-  const [audioMetadata, setAudioMetadata] = useImmer<Map<string, AudioMetadata>>(new Map());
+  
+  // Use standard useState for Maps to avoid Immer proxy issues with native Maps
+  const [images, setImages] = useState<Map<string, ProjectImage>>(new Map());
+  const [audios, setAudios] = useState<Map<string, RenpyAudio>>(new Map());
+  const [imageMetadata, setImageMetadata] = useState<Map<string, ImageMetadata>>(new Map());
+  const [audioMetadata, setAudioMetadata] = useState<Map<string, AudioMetadata>>(new Map());
   
   // --- State: File Explorer Selection & Expansion ---
   const [explorerSelectedPaths, setExplorerSelectedPaths] = useState<Set<string>>(new Set());
@@ -377,7 +372,7 @@ const App: React.FC = () => {
     editorFontFamily: "'Consolas', 'Courier New', monospace",
     editorFontSize: 14,
   });
-  const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'sceneCompositions' | 'sceneNames'>>({
+  const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>>({
     enableAiFeatures: false,
     selectedModel: 'gemini-2.5-flash',
   });
@@ -1057,6 +1052,57 @@ const App: React.FC = () => {
                   setSceneNames({});
               }
 
+              // Restore Scan Directories
+              if (projectData.settings.scannedImagePaths) {
+                  const paths = projectData.settings.scannedImagePaths;
+                  const map = new Map<string, FileSystemDirectoryHandle>();
+                  paths.forEach((p: string) => map.set(p, {} as any));
+                  setImageScanDirectories(map);
+                  
+                  // Trigger scan
+                  if (window.electronAPI) {
+                       paths.forEach((dirPath: string) => {
+                           window.electronAPI!.scanDirectory(dirPath).then(({ images: scanned }) => {
+                               setImages(prev => {
+                                   const next = new Map(prev);
+                                   scanned.forEach((img: any) => {
+                                       if (!next.has(img.path)) {
+                                           // Ensure external images also have filePath set correctly
+                                           next.set(img.path, { ...img, filePath: img.path, isInProject: false, fileHandle: null });
+                                       }
+                                   });
+                                   return next;
+                               });
+                           });
+                       });
+                  }
+              }
+              
+              if (projectData.settings.scannedAudioPaths) {
+                  const paths = projectData.settings.scannedAudioPaths;
+                  const map = new Map<string, FileSystemDirectoryHandle>();
+                  paths.forEach((p: string) => map.set(p, {} as any));
+                  setAudioScanDirectories(map);
+
+                  // Trigger scan
+                  if (window.electronAPI) {
+                       paths.forEach((dirPath: string) => {
+                           window.electronAPI!.scanDirectory(dirPath).then(({ audios: scanned }) => {
+                               setAudios(prev => {
+                                   const next = new Map(prev);
+                                   scanned.forEach((aud: any) => {
+                                       if (!next.has(aud.path)) {
+                                           // Ensure external audio also has filePath set correctly
+                                           next.set(aud.path, { ...aud, filePath: aud.path, isInProject: false, fileHandle: null });
+                                       }
+                                   });
+                                   return next;
+                               });
+                           });
+                       });
+                  }
+              }
+
               const savedTabs: EditorTab[] = projectData.settings.openTabs ?? [{ id: 'canvas', type: 'canvas' }];
               const tempAnalysis = performRenpyAnalysis(loadedBlocks);
 
@@ -1217,13 +1263,15 @@ const App: React.FC = () => {
       });
 
       const settingsToSave: ProjectSettings = {
-        ...(projectSettings as Omit<ProjectSettings, 'characterProfiles' | 'sceneCompositions' | 'sceneNames'>),
+        ...(projectSettings as Omit<ProjectSettings, 'characterProfiles' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>),
         openTabs,
         activeTabId,
         stickyNotes: Array.from(stickyNotes),
         characterProfiles,
         sceneCompositions: serializableScenes,
-        sceneNames
+        sceneNames,
+        scannedImagePaths: Array.from(imageScanDirectories.keys()),
+        scannedAudioPaths: Array.from(audioScanDirectories.keys()),
       };
       const settingsPath = await window.electronAPI.path.join(projectRootPath, 'game/project.ide.json');
       await window.electronAPI.writeFile(settingsPath, JSON.stringify(settingsToSave, null, 2));
@@ -1232,7 +1280,7 @@ const App: React.FC = () => {
       console.error("Failed to save IDE settings:", e);
       addToast('Failed to save workspace settings', 'error');
     }
-  }, [projectRootPath, projectSettings, openTabs, activeTabId, stickyNotes, characterProfiles, addToast, sceneCompositions, sceneNames]);
+  }, [projectRootPath, projectSettings, openTabs, activeTabId, stickyNotes, characterProfiles, addToast, sceneCompositions, sceneNames, imageScanDirectories, audioScanDirectories]);
 
 
   const handleSaveAll = useCallback(async () => {
@@ -1727,37 +1775,319 @@ const App: React.FC = () => {
       }, 10);
   }, [blocks, analysisResult]);
 
-  // --- Asset Management (Basic Implementation) ---
+  // --- Asset Management ---
+  const handleAddImageScanDirectory = useCallback(async () => {
+      if (!window.electronAPI) return;
+      
+      const path = await window.electronAPI.openDirectory();
+      if (!path) return;
+
+      setIsRefreshingImages(true);
+      try {
+          const { images } = await window.electronAPI.scanDirectory(path);
+          
+          setImages(prev => {
+              const next = new Map(prev);
+              images.forEach((img: any) => {
+                  const key = img.path;
+                  if (!next.has(key)) {
+                      // Ensure filePath is set correctly for external images
+                      next.set(key, { ...img, filePath: img.path, isInProject: false, fileHandle: null });
+                  }
+              });
+              return next;
+          });
+          
+          setImageScanDirectories(prev => new Map(prev).set(path, {} as any));
+          setImagesLastScanned(Date.now());
+          setHasUnsavedSettings(true);
+          addToast(`Scanned ${images.length} images from ${path}`, 'success');
+      } catch (e) {
+          console.error(e);
+          addToast('Failed to scan image directory', 'error');
+      } finally {
+          setIsRefreshingImages(false);
+      }
+  }, [addToast]);
+
+  const handleAddAudioScanDirectory = useCallback(async () => {
+      if (!window.electronAPI) return;
+      
+      const path = await window.electronAPI.openDirectory();
+      if (!path) return;
+
+      setIsRefreshingAudios(true);
+      try {
+          const { audios } = await window.electronAPI.scanDirectory(path);
+          
+          setAudios(prev => {
+              const next = new Map(prev);
+              audios.forEach((aud: any) => {
+                  const key = aud.path;
+                  if (!next.has(key)) {
+                      // Ensure filePath is set correctly for external audio
+                      next.set(key, { ...aud, filePath: aud.path, isInProject: false, fileHandle: null });
+                  }
+              });
+              return next;
+          });
+          
+          setAudioScanDirectories(prev => new Map(prev).set(path, {} as any));
+          setAudiosLastScanned(Date.now());
+          setHasUnsavedSettings(true);
+          addToast(`Scanned ${audios.length} audio files from ${path}`, 'success');
+      } catch (e) {
+          console.error(e);
+          addToast('Failed to scan audio directory', 'error');
+      } finally {
+          setIsRefreshingAudios(false);
+      }
+  }, [addToast]);
+
+  const handleRefreshImages = useCallback(async () => {
+      if (!window.electronAPI) return;
+      setIsRefreshingImages(true);
+      try {
+          const scanDirs = Array.from(imageScanDirectories.keys());
+          const newScannedImages = new Map<string, ProjectImage>();
+
+          // Re-scan all directories
+          for (const dirPath of scanDirs) {
+              const { images: scanned } = await window.electronAPI.scanDirectory(dirPath);
+              scanned.forEach((img: any) => {
+                  newScannedImages.set(img.path, { ...img, filePath: img.path, isInProject: false, fileHandle: null });
+              });
+          }
+
+          setImages(prev => {
+              const next = new Map<string, ProjectImage>();
+              // Keep all project images
+              prev.forEach((val, key) => {
+                  if (val.isInProject) {
+                      next.set(key, val);
+                  }
+              });
+              // Add freshly scanned images
+              newScannedImages.forEach((val, key) => {
+                  if (!next.has(key)) {
+                      next.set(key, val);
+                  }
+              });
+              return next;
+          });
+
+          setImagesLastScanned(Date.now());
+          addToast('Images refreshed', 'success');
+      } catch (e) {
+          console.error(e);
+          addToast('Failed to refresh images', 'error');
+      } finally {
+          setIsRefreshingImages(false);
+      }
+  }, [imageScanDirectories, addToast]);
+
+  const handleRemoveImageScanDirectory = useCallback((dirPath: string) => {
+      setImageScanDirectories(prev => {
+          const next = new Map(prev);
+          next.delete(dirPath);
+          return next;
+      });
+      
+      setImages(prev => {
+          const next = new Map<string, ProjectImage>();
+          prev.forEach((val, key) => {
+              // If it's a project file, keep it.
+              // If it's an external file, keep it ONLY if it doesn't start with the removed directory path.
+              if (val.isInProject || !val.filePath.startsWith(dirPath)) {
+                  next.set(key, val);
+              }
+          });
+          return next;
+      });
+      setHasUnsavedSettings(true);
+  }, []);
+
+  const handleRefreshAudios = useCallback(async () => {
+      if (!window.electronAPI) return;
+      setIsRefreshingAudios(true);
+      try {
+          const scanDirs = Array.from(audioScanDirectories.keys());
+          const newScannedAudios = new Map<string, RenpyAudio>();
+
+          for (const dirPath of scanDirs) {
+              const { audios: scanned } = await window.electronAPI.scanDirectory(dirPath);
+              scanned.forEach((aud: any) => {
+                  newScannedAudios.set(aud.path, { ...aud, filePath: aud.path, isInProject: false, fileHandle: null });
+              });
+          }
+
+          setAudios(prev => {
+              const next = new Map<string, RenpyAudio>();
+              prev.forEach((val, key) => {
+                  if (val.isInProject) {
+                      next.set(key, val);
+                  }
+              });
+              newScannedAudios.forEach((val, key) => {
+                  if (!next.has(key)) {
+                      next.set(key, val);
+                  }
+              });
+              return next;
+          });
+
+          setAudiosLastScanned(Date.now());
+          addToast('Audio files refreshed', 'success');
+      } catch (e) {
+          console.error(e);
+          addToast('Failed to refresh audio files', 'error');
+      } finally {
+          setIsRefreshingAudios(false);
+      }
+  }, [audioScanDirectories, addToast]);
+
+  const handleRemoveAudioScanDirectory = useCallback((dirPath: string) => {
+      setAudioScanDirectories(prev => {
+          const next = new Map(prev);
+          next.delete(dirPath);
+          return next;
+      });
+      
+      setAudios(prev => {
+          const next = new Map<string, RenpyAudio>();
+          prev.forEach((val, key) => {
+              if (val.isInProject || !val.filePath.startsWith(dirPath)) {
+                  next.set(key, val);
+              }
+          });
+          return next;
+      });
+      setHasUnsavedSettings(true);
+  }, []);
+
   const handleCopyImagesToProject = async (sourcePaths: string[]) => {
       if (!projectRootPath || !window.electronAPI) return;
       
       setIsLoading(true);
       setStatusBarMessage('Copying images to project...');
       try {
+          // Prepare updates first
+          const updates: { src: string, newData: any }[] = [];
+
           for (const src of sourcePaths) {
               const fileName = src.split(/[/\\]/).pop();
               if (!fileName) continue;
+              
+              const relativeDest = `game/images/${fileName}`;
               const destPath = await window.electronAPI.path.join(projectRootPath, 'game', 'images', fileName);
               
               const img = (Array.from(images.values()) as ProjectImage[]).find(i => i.filePath === src);
-              if (img && img.dataUrl) {
-                 const base64Data = img.dataUrl.split(',')[1];
-                 await window.electronAPI.writeFile(destPath, base64Data, 'base64');
+              if (img) {
+                 await window.electronAPI.copyEntry(img.filePath, destPath);
                  
-                 setImages(draft => {
-                     const existing = draft.get(src);
-                     if (existing) existing.isInProject = true;
-                     const relativePath = `game/images/${fileName}`;
-                     draft.set(relativePath, { ...existing!, filePath: relativePath, isInProject: true, projectFilePath: relativePath });
+                 // Robust URL Construction
+                 // destPath is absolute OS path
+                 // We need to normalize it for URL and encode it safely
+                 const normalized = destPath.replace(/\\/g, '/');
+                 // Ensure path starts with / for URL pathname construction if it's absolute
+                 const urlPath = normalized.startsWith('/') ? normalized : `/${normalized}`;
+                 
+                 // Split into segments to encode component-wise to handle #, ?, etc.
+                 const encodedPath = urlPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
+                 const mediaUrl = `media://${encodedPath}`;
+                 
+                 updates.push({
+                     src,
+                     newData: {
+                         filePath: relativeDest,
+                         fileName,
+                         isInProject: true,
+                         projectFilePath: relativeDest,
+                         dataUrl: mediaUrl,
+                         size: img.size,
+                         lastModified: Date.now()
+                     }
                  });
               }
           }
+
+          // Apply state updates synchronously
+          setImages(prev => {
+             const next = new Map(prev);
+             updates.forEach(({ src, newData }) => {
+                 next.set(newData.filePath, { ...newData, fileHandle: null });
+             });
+             return next;
+          });
+
           addToast('Images copied to project', 'success');
           setStatusBarMessage('Images copied successfully.');
       } catch (e) {
           console.error(e);
           addToast('Failed to copy images', 'error');
           setStatusBarMessage('Error copying images.');
+      } finally {
+          setIsLoading(false);
+          setTimeout(() => setStatusBarMessage(''), 3000);
+      }
+  };
+
+  const handleCopyAudiosToProject = async (sourcePaths: string[]) => {
+      if (!projectRootPath || !window.electronAPI) return;
+      
+      setIsLoading(true);
+      setStatusBarMessage('Copying audio to project...');
+      try {
+          const updates: { src: string, newData: any }[] = [];
+
+          for (const src of sourcePaths) {
+              const fileName = src.split(/[/\\]/).pop();
+              if (!fileName) continue;
+              
+              const relativeDest = `game/audio/${fileName}`;
+              const destPath = await window.electronAPI.path.join(projectRootPath, 'game', 'audio', fileName);
+              
+              const aud = (Array.from(audios.values()) as RenpyAudio[]).find(a => a.filePath === src);
+              if (aud) {
+                 await window.electronAPI.copyEntry(aud.filePath, destPath);
+                 
+                 // Robust URL Construction
+                 const normalized = destPath.replace(/\\/g, '/');
+                 const urlPath = normalized.startsWith('/') ? normalized : `/${normalized}`;
+                 
+                 // Split into segments to encode component-wise to handle #, ?, etc.
+                 const encodedPath = urlPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
+                 const mediaUrl = `media://${encodedPath}`;
+                 
+                 updates.push({
+                     src,
+                     newData: {
+                         filePath: relativeDest,
+                         fileName,
+                         isInProject: true,
+                         projectFilePath: relativeDest,
+                         dataUrl: mediaUrl,
+                         size: aud.size,
+                         lastModified: Date.now()
+                     }
+                 });
+              }
+          }
+
+          setAudios(prev => {
+             const next = new Map(prev);
+             updates.forEach(({ src, newData }) => {
+                 next.set(newData.filePath, { ...newData, fileHandle: null });
+             });
+             return next;
+          });
+
+          addToast('Audio files copied to project', 'success');
+          setStatusBarMessage('Audio files copied successfully.');
+      } catch (e) {
+          console.error(e);
+          addToast('Failed to copy audio files', 'error');
+          setStatusBarMessage('Error copying audio files.');
       } finally {
           setIsLoading(false);
           setTimeout(() => setStatusBarMessage(''), 3000);
@@ -2433,30 +2763,44 @@ const App: React.FC = () => {
                 {activeTab?.type === 'image' && activeTab.filePath && (
                     <ImageEditorView 
                         image={images.get(activeTab.filePath) || { filePath: activeTab.filePath, fileName: 'Unknown', isInProject: false, fileHandle: null, dataUrl: '' }}
+                        allImages={Array.from(images.values())}
                         metadata={imageMetadata.get(activeTab.filePath) || (images.get(activeTab.filePath)?.projectFilePath ? imageMetadata.get(images.get(activeTab.filePath)!.projectFilePath!) : undefined)}
                         onUpdateMetadata={(path, meta) => {
-                             setImageMetadata(draft => { draft.set(path, meta); });
+                             setImageMetadata(prev => {
+                                const next = new Map(prev);
+                                next.set(path, meta);
+                                return next;
+                             });
                              addToast('Image metadata saved', 'success');
                         }}
                         onCopyToProject={(src, meta) => {
                             handleCopyImagesToProject([src]);
                             const fileName = src.split(/[/\\]/).pop() || '';
                             const projectPath = `game/images/${fileName}`;
-                            setImageMetadata(draft => { draft.set(projectPath, meta); });
+                            setImageMetadata(prev => {
+                                const next = new Map(prev);
+                                next.set(projectPath, meta);
+                                return next;
+                            });
                         }}
                     />
                 )}
 
                 {activeTab?.type === 'audio' && activeTab.filePath && (
                     <AudioEditorView 
+                        key={activeTab.filePath} // Force re-render on file switch
                         audio={audios.get(activeTab.filePath) || { filePath: activeTab.filePath, fileName: 'Unknown', dataUrl: '', fileHandle: null, isInProject: false }}
                         metadata={audioMetadata.get(activeTab.filePath) || (audios.get(activeTab.filePath)?.projectFilePath ? audioMetadata.get(audios.get(activeTab.filePath)!.projectFilePath!) : undefined)}
                         onUpdateMetadata={(path, meta) => {
-                             setAudioMetadata(draft => { draft.set(path, meta); });
+                             setAudioMetadata(prev => {
+                                const next = new Map(prev);
+                                next.set(path, meta);
+                                return next;
+                             });
                              addToast('Audio metadata saved', 'success');
                         }}
                         onCopyToProject={(src, meta) => {
-                             addToast('Copy not implemented fully', 'warning');
+                             handleCopyAudiosToProject([src]);
                         }}
                     />
                 )}
@@ -2491,22 +2835,34 @@ const App: React.FC = () => {
                         projectImages={images}
                         imageMetadata={imageMetadata}
                         imageScanDirectories={imageScanDirectories}
-                        onAddImageScanDirectory={() => {}}
-                        onRemoveImageScanDirectory={() => {}}
+                        onAddImageScanDirectory={handleAddImageScanDirectory}
+                        onRemoveImageScanDirectory={handleRemoveImageScanDirectory}
                         onCopyImagesToProject={handleCopyImagesToProject}
-                        onUpdateImageMetadata={() => {}}
+                        onUpdateImageMetadata={(path, meta) => {
+                             setImageMetadata(prev => {
+                                const next = new Map(prev);
+                                next.set(path, meta);
+                                return next;
+                             });
+                        }}
                         onOpenImageEditor={handleOpenImageEditorTab}
                         imagesLastScanned={imagesLastScanned}
                         isRefreshingImages={isRefreshingImages}
-                        onRefreshImages={() => {}}
+                        onRefreshImages={handleRefreshImages}
                         
                         projectAudios={audios}
                         audioMetadata={audioMetadata}
                         audioScanDirectories={audioScanDirectories}
-                        onAddAudioScanDirectory={() => {}}
-                        onRemoveAudioScanDirectory={() => {}}
-                        onCopyAudiosToProject={() => {}}
-                        onUpdateAudioMetadata={() => {}}
+                        onAddAudioScanDirectory={handleAddAudioScanDirectory}
+                        onRemoveAudioScanDirectory={handleRemoveAudioScanDirectory}
+                        onCopyAudiosToProject={handleCopyAudiosToProject}
+                        onUpdateAudioMetadata={(path, meta) => {
+                             setAudioMetadata(prev => {
+                                const next = new Map(prev);
+                                next.set(path, meta);
+                                return next;
+                             });
+                        }}
                         onOpenAudioEditor={(path) => {
                             const tabId = `aud-${path}`;
                             setOpenTabs(prev => {
@@ -2519,7 +2875,7 @@ const App: React.FC = () => {
                         }}
                         audiosLastScanned={audiosLastScanned}
                         isRefreshingAudios={isRefreshingAudios}
-                        onRefreshAudios={() => {}}
+                        onRefreshAudios={handleRefreshAudios}
                         isFileSystemApiSupported={!!window.electronAPI}
                         onHoverHighlightStart={(id) => {
                             const defBlock = analysisResult.variables.get(id)?.definedInBlockId;
@@ -2531,6 +2887,14 @@ const App: React.FC = () => {
                         onOpenScene={handleOpenScene}
                         onCreateScene={handleCreateScene}
                         onDeleteScene={handleDeleteScene}
+
+                        snippetCategoriesState={appSettings.snippetCategoriesState || {}}
+                        onToggleSnippetCategory={(name, isOpen) => {
+                            updateAppSettings(draft => {
+                                if (!draft.snippetCategoriesState) draft.snippetCategoriesState = {};
+                                draft.snippetCategoriesState[name] = isOpen;
+                            });
+                        }}
                     />
                 </div>
             </>
