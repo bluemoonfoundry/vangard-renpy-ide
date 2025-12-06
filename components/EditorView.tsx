@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type { Block, RenpyAnalysisResult, ToastMessage } from '../types';
@@ -22,10 +23,17 @@ interface EditorViewProps {
   addToast: (message: string, type: ToastMessage['type']) => void;
   onEditorMount: (blockId: string, editor: monaco.editor.IStandaloneCodeEditor) => void;
   onEditorUnmount: (blockId: string) => void;
+  draftingMode: boolean;
+  existingImageTags: Set<string>;
+  existingAudioPaths: Set<string>;
 }
 
 const LABEL_REGEX = /^\s*label\s+([a-zA-Z0-9_]+):/;
 const JUMP_REGEX = /\b(jump|call)\s+([a-zA-Z0-9_]+)/g;
+// Regex to catch `play <channel> "<file>"` or `queue ...`
+// Supports quoted: play music "file.ogg"
+// Supports unquoted variable: play music file_var
+const AUDIO_USAGE_REGEX = /^\s*(?:play|queue)\s+\w+\s+(.+)/;
 
 const Breadcrumbs: React.FC<{ filePath?: string, context?: string }> = ({ filePath, context }) => {
     if (!filePath) return null;
@@ -71,6 +79,9 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     addToast,
     onEditorMount,
     onEditorUnmount,
+    draftingMode,
+    existingImageTags,
+    existingAudioPaths
   } = props;
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
@@ -78,6 +89,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const decorationIds = useRef<string[]>([]);
+  const draftingDecorationIds = useRef<string[]>([]);
   const [currentContext, setCurrentContext] = useState<string>('');
   
   // Refs to keep track of latest props for closures
@@ -491,6 +503,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       if (!model) return;
   
       const newDecorations: monaco.editor.IModelDeltaDecoration[] = [];
+      const newDraftingDecorations: monaco.editor.IModelDeltaDecoration[] = [];
       
       // Get all text to find jumps dynamically, ensuring we catch unsaved changes
       const lines = model.getValue().split('\n');
@@ -507,6 +520,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
           const commentIndex = sanitizedLine.indexOf('#');
           if (commentIndex !== -1) sanitizedLine = sanitizedLine.substring(0, commentIndex);
 
+          // Jump Links
           const lineJumpRegex = new RegExp(JUMP_REGEX);
           let match;
           while ((match = lineJumpRegex.exec(sanitizedLine)) !== null) {
@@ -538,11 +552,149 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                   });
               }
           }
+
+          // Drafting Mode Missing Asset Detection
+          if (draftingMode) {
+              // Images: Manual parsing to handle clauses
+              const showRegex = /^\s*(show|scene)\s+/;
+              const showMatch = line.match(showRegex);
+              if (showMatch) {
+                  const prefixLen = showMatch[0].length;
+                  const restOfLine = line.slice(prefixLen);
+                  
+                  // Tokenize preserving indices
+                  const tokens = [];
+                  let currentToken = '';
+                  let startIndex = prefixLen;
+                  let inToken = false;
+                  
+                  for (let i = 0; i < restOfLine.length; i++) {
+                      const char = restOfLine[i];
+                      if (/\s/.test(char)) {
+                          if (inToken) {
+                              tokens.push({ text: currentToken, start: startIndex, end: prefixLen + i });
+                              currentToken = '';
+                              inToken = false;
+                          }
+                      } else {
+                          if (!inToken) {
+                              startIndex = prefixLen + i;
+                              inToken = true;
+                          }
+                          currentToken += char;
+                      }
+                  }
+                  if (inToken) {
+                      tokens.push({ text: currentToken, start: startIndex, end: prefixLen + restOfLine.length });
+                  }
+
+                  const tagParts = [];
+                  let lastTokenEnd = -1;
+                  let firstTokenStart = -1;
+
+                  if (tokens.length > 0 && tokens[0].text === 'expression') {
+                      // skip dynamic expressions
+                  } else {
+                      for (const token of tokens) {
+                          if (['with', 'at', 'as', 'behind', 'zorder', 'on', ':', 'fade', 'in', 'out', 'dissolve', 'zoom', 'alpha', 'rotate', 'align', 'pos', 'anchor', 'xpos', 'ypos', 'xanchor', 'yanchor'].includes(token.text)) break;
+                          if (token.text.endsWith(':')) {
+                              // Handle "eileen:"
+                              const realText = token.text.slice(0, -1);
+                              tagParts.push(realText);
+                              if (firstTokenStart === -1) firstTokenStart = token.start;
+                              lastTokenEnd = token.start + realText.length;
+                              break; 
+                          }
+                          
+                          tagParts.push(token.text);
+                          if (firstTokenStart === -1) firstTokenStart = token.start;
+                          lastTokenEnd = token.end;
+                      }
+                  }
+
+                  if (tagParts.length > 0) {
+                      const tag = tagParts.join(' ');
+                      const firstWord = tagParts[0];
+                      // Check exact match or starts with prefix
+                      const isDefined = 
+                          analysisResultRef.current.definedImages.has(firstWord) || 
+                          existingImageTags.has(tag) || 
+                          existingImageTags.has(firstWord);
+
+                      if (!isDefined) {
+                          newDraftingDecorations.push({
+                              range: new monaco.Range(lineNumber, firstTokenStart + 1, lineNumber, lastTokenEnd + 1),
+                              options: {
+                                  inlineClassName: 'renpy-missing-asset-draft',
+                                  hoverMessage: { value: `Asset missing. A placeholder will be used in Drafting Mode.`, isTrusted: true }
+                              }
+                          });
+                      }
+                  }
+              }
+
+              // Audio: Quoted strings OR unquoted variables
+              const audMatch = line.match(AUDIO_USAGE_REGEX);
+              if (audMatch) {
+                  const content = audMatch[1].trim();
+                  // Check for Quoted String
+                  const quotedMatch = content.match(/^["']([^"']+)["']/);
+                  
+                  if (quotedMatch) {
+                      const path = quotedMatch[1];
+                      let found = false;
+                      if (existingAudioPaths.has(path)) found = true;
+                      else {
+                          for (const existing of existingAudioPaths) {
+                              if (existing.endsWith(path)) { found = true; break; }
+                          }
+                      }
+
+                      if (!found) {
+                          const startCol = line.indexOf(path) + 1;
+                          const endCol = startCol + path.length;
+                          newDraftingDecorations.push({
+                              range: new monaco.Range(lineNumber, startCol, lineNumber, endCol),
+                              options: {
+                                  inlineClassName: 'renpy-missing-asset-draft',
+                                  hoverMessage: { value: `Audio file missing. A placeholder will be used.`, isTrusted: true }
+                              }
+                          });
+                      }
+                  } 
+                  // Check for Unquoted Variable
+                  else {
+                      // Get first word (variable name)
+                      const firstToken = content.split(/\s+/)[0];
+                      if (firstToken !== 'expression') {
+                          // Is valid identifier?
+                          if (/^[a-zA-Z0-9_]+$/.test(firstToken)) {
+                              let isDefined = false;
+                              if (analysisResultRef.current.variables.has(firstToken)) isDefined = true;
+                              if (existingAudioPaths.has(firstToken)) isDefined = true;
+
+                              if (!isDefined) {
+                                  const startCol = line.indexOf(firstToken) + 1;
+                                  const endCol = startCol + firstToken.length;
+                                  newDraftingDecorations.push({
+                                      range: new monaco.Range(lineNumber, startCol, lineNumber, endCol),
+                                      options: {
+                                          inlineClassName: 'renpy-missing-asset-draft',
+                                          hoverMessage: { value: `Audio variable missing. A default placeholder will be generated.`, isTrusted: true }
+                                      }
+                                  });
+                              }
+                          }
+                      }
+                  }
+              }
+          }
       });
       
       decorationIds.current = editor.deltaDecorations(decorationIds.current, newDecorations);
+      draftingDecorationIds.current = editor.deltaDecorations(draftingDecorationIds.current, newDraftingDecorations);
   
-  }, [analysisResult, block.id, isMounted, block.content]); // Re-run when content changes to catch local jumps
+  }, [analysisResult, block.id, isMounted, block.content, draftingMode, existingImageTags, existingAudioPaths]); 
 
   const getCurrentContext = () => {
       if (!editorRef.current) return '';
@@ -561,6 +713,14 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
+        <style>{`
+            .renpy-missing-asset-draft {
+                text-decoration: underline;
+                text-decoration-style: dashed;
+                text-decoration-color: #f97316; /* orange-500 */
+                cursor: help;
+            }
+        `}</style>
       <Breadcrumbs filePath={block.filePath} context={currentContext} />
       <Editor
         height="100%"

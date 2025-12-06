@@ -1,6 +1,7 @@
 
 
 
+
 export interface Position {
   x: number;
   y: number;
@@ -219,6 +220,8 @@ export interface RenpyAnalysisResult {
   variableUsages: Map<string, VariableUsage[]>;
   // Screen analysis
   screens: Map<string, RenpyScreen>;
+  // Image definitions found in code (e.g. "image eileen happy = ...")
+  definedImages: Set<string>;
   // Content summary for UI hints
   blockTypes: Map<string, Set<string>>;
   // Route Canvas data
@@ -292,6 +295,7 @@ export interface SceneComposition {
 export interface ProjectSettings {
   enableAiFeatures: boolean;
   selectedModel: string;
+  draftingMode: boolean;
   openTabs: EditorTab[];
   activeTabId: string;
   stickyNotes?: StickyNote[];

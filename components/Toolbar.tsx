@@ -1,3 +1,5 @@
+
+
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import type { Theme } from '../types';
 import logo from '../vangard-renide-512x512.png';
@@ -32,6 +34,8 @@ interface ToolbarProps {
   onStopGame: () => void;
   onToggleSearch: () => void;
   onOpenShortcuts: () => void;
+  draftingMode: boolean;
+  onToggleDraftingMode: (enabled: boolean) => void;
 }
 
 const ToolbarButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { children: React.ReactNode; }> = ({ children, ...props }) => {
@@ -78,6 +82,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onStopGame,
   onToggleSearch,
   onOpenShortcuts,
+  draftingMode,
+  onToggleDraftingMode,
 }) => {
 
   const totalUnsavedCount = useMemo(() => {
@@ -148,6 +154,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
       </div>
 
       <div className="flex items-center space-x-2">
+        {/* Drafting Mode Toggle */}
+        <div className="flex items-center space-x-2 mr-2">
+            <span className={`text-xs font-bold ${draftingMode ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>Drafting Mode</span>
+            <button 
+                onClick={() => onToggleDraftingMode(!draftingMode)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${draftingMode ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+                title={draftingMode ? "Disable Drafting Mode (auto-generated placeholders will be removed)" : "Enable Drafting Mode (missing assets will be auto-generated)"}
+            >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${draftingMode ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+        </div>
+
         {isGameRunning ? (
             <button onClick={onStopGame} title="Stop Game" className="flex items-center justify-center rounded-md text-sm font-medium px-3 py-1.5 space-x-2 bg-red-600 hover:bg-red-700 text-white transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1zm4 0a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>

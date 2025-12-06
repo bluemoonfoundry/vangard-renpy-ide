@@ -46,6 +46,9 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
   return window.btoa(binary);
 };
 
+// Minimal 1-sample silent WAV base64
+const SILENT_WAV_BASE64 = "UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAAAAAA==";
+
 // --- Utility: Word Count ---
 const countWordsInRenpyScript = (script: string): number => {
     if (!script) return 0;
@@ -378,6 +381,7 @@ const App: React.FC = () => {
   const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>>({
     enableAiFeatures: false,
     selectedModel: 'gemini-2.5-flash',
+    draftingMode: false,
   });
 
   // --- State: Clipboard & Highlights ---
@@ -407,6 +411,51 @@ const App: React.FC = () => {
   // --- Refs ---
   const editorInstances = useRef<Map<string, monaco.editor.IStandaloneCodeEditor>>(new Map());
   const initialLayoutNeeded = useRef(false);
+
+  // --- Derived State for Drafting Mode ---
+  const existingImageTags = useMemo(() => {
+      const tags = new Set<string>();
+      // Defined in script (e.g. image eileen = ...)
+      analysisResult.definedImages.forEach(img => tags.add(img));
+      
+      // Defined by files in project or scanned
+      imageMetadata.forEach((meta) => {
+          const fullTag = `${meta.renpyName} ${meta.tags.join(' ')}`.trim();
+          tags.add(fullTag);
+          // Add just base name as well? "eileen happy" -> "eileen" is implicitly valid if "eileen" is defined?
+          // No, RenPy requires exact image tag match or prefix match.
+          // We will store exact full tag here.
+      });
+      images.forEach((img) => {
+          if (!img.projectFilePath && !imageMetadata.has(img.filePath)) {
+              // Basic fallback if no metadata: filename without ext
+              tags.add(img.fileName.split('.')[0]);
+          }
+      });
+      return tags;
+  }, [analysisResult.definedImages, imageMetadata, images]);
+
+  const existingAudioPaths = useMemo(() => {
+      const paths = new Set<string>();
+      audios.forEach((audio) => {
+          // Normalize to forward slashes
+          let p = audio.projectFilePath || audio.filePath;
+          p = p.replace(/\\/g, '/');
+          
+          paths.add(p); // Full path
+          if (p.startsWith('game/audio/')) {
+              paths.add(p.substring('game/audio/'.length)); // Relative to game/audio
+          }
+          paths.add(audio.fileName); // Just filename (Ren'Py search)
+      });
+      
+      // Add explicit variable names for audio defined in scripts
+      analysisResult.variables.forEach(v => {
+          paths.add(v.name);
+      });
+      
+      return paths;
+  }, [audios, analysisResult.variables]);
 
   // --- Scene Composer Management ---
   const handleCreateScene = useCallback((initialName?: string) => {
@@ -730,9 +779,9 @@ const App: React.FC = () => {
                 const projData = await window.electronAPI.loadProject(projectRootPath!);
                 setFileSystemTree(projData.tree);
             } else {
-                throw new Error(res.error || 'Unknown error occurred during file creation');
+                throw new Error((res.error as string) || 'Unknown error occurred during file creation');
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
             const errorMessage = e instanceof Error ? e.message : String(e);
             addToast(`Failed to create file: ${errorMessage}`, 'error');
@@ -774,9 +823,9 @@ const App: React.FC = () => {
                   const projData = await window.electronAPI.loadProject(projectRootPath);
                   setFileSystemTree(projData.tree);
               } else {
-                  throw new Error(res.error || 'Unknown error occurred during file creation');
+                  throw new Error((res.error as string) || 'Unknown error occurred during file creation');
               }
-          } catch(e) {
+          } catch(e: any) {
               console.error(e);
               const errorMessage = e instanceof Error ? e.message : String(e);
               addToast(`Failed to create file: ${errorMessage}`, 'error');
@@ -1013,6 +1062,7 @@ const App: React.FC = () => {
               updateProjectSettings(draft => {
                   draft.enableAiFeatures = projectData.settings.enableAiFeatures ?? false;
                   draft.selectedModel = projectData.settings.selectedModel ?? 'gemini-2.5-flash';
+                  draft.draftingMode = projectData.settings.draftingMode ?? false;
               });
               setStickyNotes(projectData.settings.stickyNotes || []);
               setCharacterProfiles(projectData.settings.characterProfiles || {});
@@ -1061,7 +1111,7 @@ const App: React.FC = () => {
 
               // Restore Scan Directories
               if (projectData.settings.scannedImagePaths) {
-                  const paths = projectData.settings.scannedImagePaths;
+                  const paths = (projectData.settings.scannedImagePaths || []) as string[];
                   const map = new Map<string, FileSystemDirectoryHandle>();
                   paths.forEach((p: string) => map.set(p, {} as any));
                   setImageScanDirectories(map);
@@ -1097,7 +1147,7 @@ const App: React.FC = () => {
               }
               
               if (projectData.settings.scannedAudioPaths) {
-                  const paths = projectData.settings.scannedAudioPaths;
+                  const paths = (projectData.settings.scannedAudioPaths || []) as string[];
                   const map = new Map<string, FileSystemDirectoryHandle>();
                   paths.forEach((p: string) => map.set(p, {} as any));
                   setAudioScanDirectories(map);
@@ -1178,6 +1228,7 @@ const App: React.FC = () => {
               updateProjectSettings(draft => {
                   draft.enableAiFeatures = false;
                   draft.selectedModel = 'gemini-2.5-flash';
+                  draft.draftingMode = false;
               });
               setOpenTabs([{ id: 'canvas', type: 'canvas' }]);
               setActiveTabId('canvas');
@@ -1234,6 +1285,171 @@ const App: React.FC = () => {
       }
   }, [loadProject, addToast]);
 
+  // --- Drafting Mode Logic ---
+  const updateDraftingArtifacts = useCallback(async () => {
+      if (!projectRootPath || !window.electronAPI || !projectSettings.draftingMode) return;
+
+      const missingImages = new Set<string>();
+      const missingAudioFiles = new Set<string>();
+      const missingAudioVariables = new Set<string>();
+
+      // 1. Scan Blocks for missing references
+      blocks.forEach(block => {
+          // Do not parse the placeholder file itself
+          if (block.filePath && (block.filePath.endsWith('debug_placeholders.rpy') || block.filePath === 'game/debug_placeholders.rpy')) return;
+
+          const lines = block.content.split('\n');
+          lines.forEach(line => {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('#')) return;
+
+              // Images: show/scene <tag>
+              const showMatch = trimmed.match(/^\s*(?:show|scene)\s+(.+)/);
+              if (showMatch) {
+                  const rest = showMatch[1];
+                  const parts = rest.split(/\s+/);
+                  
+                  if (parts[0] !== 'expression') {
+                      const tagParts: string[] = [];
+                      for (const part of parts) {
+                          if (['with', 'at', 'as', 'behind', 'zorder', 'on', ':', 'fade', 'in', 'out', 'dissolve', 'zoom', 'alpha', 'rotate', 'align', 'pos', 'anchor', 'xpos', 'ypos', 'xanchor', 'yanchor'].includes(part)) break;
+                          if (part.endsWith(':')) {
+                              tagParts.push(part.slice(0, -1));
+                              break;
+                          }
+                          tagParts.push(part);
+                      }
+                      
+                      if (tagParts.length > 0) {
+                          const tag = tagParts.join(' ');
+                          const firstWord = tagParts[0];
+                          
+                          const isDefined = 
+                              analysisResult.definedImages.has(firstWord) || 
+                              existingImageTags.has(tag) || 
+                              existingImageTags.has(firstWord);
+
+                          if (!isDefined) missingImages.add(tag);
+                      }
+                  }
+              }
+
+              // Audio: play/queue <channel> <file>
+              const audioLineRegex = /^\s*(?:play|queue)\s+\w+\s+(.+)/;
+              const audMatch = trimmed.match(audioLineRegex);
+              
+              if (audMatch) {
+                  const content = audMatch[1].trim();
+                  
+                  // Case A: Quoted string -> explicit file path
+                  const quotedMatch = content.match(/^["']([^"']+)["']/);
+                  if (quotedMatch) {
+                      const path = quotedMatch[1];
+                      let found = false;
+                      if (existingAudioPaths.has(path)) found = true;
+                      else {
+                          // Check fuzzy match against known audio
+                          for (const existing of existingAudioPaths) {
+                              if (existing.endsWith(path)) { found = true; break; }
+                          }
+                      }
+                      if (!found) missingAudioFiles.add(path);
+                  } 
+                  // Case B: Unquoted -> variable or identifier
+                  else {
+                      // Grab the first token, stop before keywords like 'fadein', 'loop', etc.
+                      const firstToken = content.split(/\s+/)[0];
+                      
+                      if (firstToken !== 'expression') {
+                          // It's likely a variable. Check if it's a valid identifier.
+                          if (/^[a-zA-Z0-9_]+$/.test(firstToken)) {
+                              // If it's not defined in the project, mark as missing variable
+                              let isDefined = false;
+                              if (analysisResult.variables.has(firstToken)) isDefined = true;
+                              // Also check if it happens to be an auto-defined audio file (Ren'Py does this for audio/ directory)
+                              if (existingAudioPaths.has(firstToken)) isDefined = true;
+
+                              if (!isDefined) {
+                                  missingAudioVariables.add(firstToken);
+                              }
+                          }
+                      }
+                  }
+              }
+          });
+      });
+
+      // 2. Generate Content
+      let rpyContent = `# Auto-generated by Ren'IDE Drafting Mode\n# This file provides placeholders for missing assets.\n\n`;
+      
+      missingImages.forEach(tag => {
+          rpyContent += `image ${tag} = Placeholder("text", text="${tag}")\n`;
+      });
+
+      // Generate default variable definitions for missing audio variables
+      missingAudioVariables.forEach(varName => {
+          rpyContent += `default ${varName} = "renide_assets/placeholder_audio.wav"\n`;
+      });
+
+      // Ensure dummy audio file exists if we have ANY audio issues
+      if (missingAudioFiles.size > 0 || missingAudioVariables.size > 0) {
+          const audioDir = await window.electronAPI.path.join(projectRootPath, 'game/renide_assets');
+          await window.electronAPI.createDirectory(audioDir);
+          const audioPath = await window.electronAPI.path.join(audioDir, 'placeholder_audio.wav');
+          await window.electronAPI.writeFile(audioPath, SILENT_WAV_BASE64, 'base64');
+
+          // Injecting a callback to handle missing audio files (QUOTED STRINGS)
+          // This callback intercepts file paths that Ren'Py fails to load.
+          rpyContent += `\ninit python:\n`;
+          rpyContent += `    if not hasattr(store, 'renide_audio_callback_installed'):\n`;
+          rpyContent += `        store.renide_audio_callback_installed = True\n`;
+          rpyContent += `        def renide_audio_filter(fn):\n`;
+          rpyContent += `            if fn and renpy.loadable(fn):\n`;
+          rpyContent += `                return fn\n`;
+          rpyContent += `            # If missing, return placeholder\n`;
+          rpyContent += `            return "renide_assets/placeholder_audio.wav"\n`;
+          rpyContent += `        config.audio_filename_callback = renide_audio_filter\n`;
+      }
+
+      // 3. Write File
+      const rpyPath = await window.electronAPI.path.join(projectRootPath, 'game/debug_placeholders.rpy');
+      await window.electronAPI.writeFile(rpyPath, rpyContent);
+
+  }, [blocks, projectRootPath, projectSettings.draftingMode, analysisResult.definedImages, analysisResult.variables, existingImageTags, existingAudioPaths]);
+
+  const cleanupDraftingArtifacts = useCallback(async () => {
+      if (!projectRootPath || !window.electronAPI) return;
+      const rpyPath = await window.electronAPI.path.join(projectRootPath, 'game/debug_placeholders.rpy');
+      // We can remove it or rename to .disabled
+      await window.electronAPI.removeEntry(rpyPath);
+
+      // Also remove the compiled .rpyc file to ensure Ren'Py stops using placeholders
+      const rpycPath = await window.electronAPI.path.join(projectRootPath, 'game/debug_placeholders.rpyc');
+      await window.electronAPI.removeEntry(rpycPath);
+      
+      // We leave the renide_assets folder as it might contain valid cache or be reused
+  }, [projectRootPath]);
+
+  const handleToggleDraftingMode = async (enabled: boolean) => {
+      updateProjectSettings(draft => { draft.draftingMode = enabled; });
+      setHasUnsavedSettings(true); // Persist this choice
+      
+      if (enabled) {
+          addToast('Drafting Mode Enabled: Placeholders will be generated.', 'info');
+      } else {
+          addToast('Drafting Mode Disabled: Placeholders removed.', 'info');
+          await cleanupDraftingArtifacts();
+      }
+  };
+
+  // React to Drafting Mode changes or Block saves to update placeholders
+  useEffect(() => {
+      if (projectSettings.draftingMode) {
+          updateDraftingArtifacts();
+      }
+  }, [projectSettings.draftingMode, blocks, updateDraftingArtifacts]);
+
+
   const handleSaveBlock = useCallback(async (blockId: string) => {
     const editor = editorInstances.current.get(blockId);
     let contentToSave: string | undefined;
@@ -1259,6 +1475,10 @@ const App: React.FC = () => {
                  addToast(`Failed to save: ${res.error}`, 'error');
              }
         }
+        // If in drafting mode, re-scan and update placeholders on save
+        if (projectSettings.draftingMode) {
+            updateDraftingArtifacts();
+        }
     }
 
     setDirtyBlockIds(prev => {
@@ -1272,7 +1492,7 @@ const App: React.FC = () => {
         return next;
     });
 
-  }, [blocks, projectRootPath, updateBlock, addToast]);
+  }, [blocks, projectRootPath, updateBlock, addToast, projectSettings.draftingMode, updateDraftingArtifacts]);
   
   const handleSaveProjectSettings = useCallback(async () => {
     if (!projectRootPath || !window.electronAPI) return;
@@ -1293,7 +1513,7 @@ const App: React.FC = () => {
       });
 
       const settingsToSave: ProjectSettings = {
-        ...(projectSettings as Omit<ProjectSettings, 'characterProfiles' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>),
+        ...(projectSettings as object),
         openTabs,
         activeTabId,
         stickyNotes: Array.from(stickyNotes),
@@ -1302,7 +1522,7 @@ const App: React.FC = () => {
         sceneNames,
         scannedImagePaths: Array.from(imageScanDirectories.keys()),
         scannedAudioPaths: Array.from(audioScanDirectories.keys()),
-      };
+      } as ProjectSettings;
       const settingsPath = await window.electronAPI.path.join(projectRootPath, 'game/project.ide.json');
       await window.electronAPI.writeFile(settingsPath, JSON.stringify(settingsToSave, null, 2));
       setHasUnsavedSettings(false);
@@ -1360,8 +1580,14 @@ const App: React.FC = () => {
                 if (block && block.filePath) {
                     const absPath = await window.electronAPI.path.join(projectRootPath!, block.filePath);
                     const res = await window.electronAPI.writeFile(absPath, block.content);
-                    if (!res.success) throw new Error(res.error || 'Unknown error saving file');
+                    if (!res.success) throw new Error((res.error as string) || 'Unknown error saving file');
                 }
+            }
+            // Update placeholders if needed on save all
+            if (projectSettings.draftingMode) {
+                // We need to wait for the block updates to settle, but we passed currentBlocks to save function.
+                // updateDraftingArtifacts uses 'blocks' from scope, which might be stale inside this callback if not careful.
+                // But the useEffect hook on blocks + draftingMode will catch the state update and run it.
             }
             await handleSaveProjectSettings();
         } 
@@ -1378,7 +1604,7 @@ const App: React.FC = () => {
         addToast('Failed to save changes', 'error');
         setStatusBarMessage('Error saving files.');
     }
-  }, [blocks, dirtyEditors, dirtyBlockIds, projectRootPath, directoryHandle, addToast, setBlocks, handleSaveProjectSettings]);
+  }, [blocks, dirtyEditors, dirtyBlockIds, projectRootPath, directoryHandle, addToast, setBlocks, handleSaveProjectSettings, projectSettings.draftingMode]);
   
   const handleNewProjectRequest = useCallback(() => {
     const hasUnsaved = dirtyBlockIds.size > 0 || dirtyEditors.size > 0 || hasUnsavedSettings;
@@ -1663,7 +1889,7 @@ const App: React.FC = () => {
                         addBlock(charFilePath, newContent);
                         const projData = await window.electronAPI.loadProject(projectRootPath);
                         setFileSystemTree(projData.tree);
-                    } else { throw new Error(res.error || 'Unknown file creation error'); }
+                    } else { throw new Error((res.error as string) || 'Unknown file creation error'); }
                 } catch (e) {
                     addToast(`Failed to create characters.rpy: ${e instanceof Error ? e.message : String(e)}`, 'error');
                     return;
@@ -1699,7 +1925,7 @@ const App: React.FC = () => {
       setSearchResults(results);
       setStatusBarMessage(`Search complete. Found ${results.reduce((acc, r) => acc + r.matches.length, 0)} matches in ${results.length} files.`);
       setTimeout(() => setStatusBarMessage(''), 3000);
-    } catch (e) {
+    } catch (e: any) {
       const errorMessage = e instanceof Error ? e.message : String(e);
       addToast(`Search failed: ${errorMessage}`, 'error');
       setStatusBarMessage('Search failed.');
@@ -1762,7 +1988,7 @@ const App: React.FC = () => {
           setReplaceQuery('');
           setSearchResults([]);
 
-        } catch (e) {
+        } catch (e: any) {
           const errorMessage = e instanceof Error ? e.message : String(e);
           addToast(`Replace failed: ${errorMessage}`, 'error');
         } finally {
@@ -1837,7 +2063,11 @@ const App: React.FC = () => {
               return next;
           });
           
-          setImageScanDirectories(prev => new Map(prev).set(path, {} as any));
+          setImageScanDirectories(prev => {
+              const next = new Map(prev);
+              next.set(path, {} as any);
+              return next;
+          });
           setImagesLastScanned(Date.now());
           setHasUnsavedSettings(true);
           addToast(`Scanned ${images.length} images from ${path}`, 'success');
@@ -1880,7 +2110,11 @@ const App: React.FC = () => {
               return next;
           });
           
-          setAudioScanDirectories(prev => new Map(prev).set(path, {} as any));
+          setAudioScanDirectories(prev => {
+              const next = new Map(prev);
+              next.set(path, {} as any);
+              return next;
+          });
           setAudiosLastScanned(Date.now());
           setHasUnsavedSettings(true);
           addToast(`Scanned ${audios.length} audio files from ${path}`, 'success');
@@ -2206,7 +2440,7 @@ const App: React.FC = () => {
                     for (const path of paths) {
                         const fullPath = await window.electronAPI!.path.join(projectRootPath, path);
                         const res = await window.electronAPI!.removeEntry!(fullPath);
-                        if (!res.success) throw new Error(res.error);
+                        if (!res.success) throw new Error((res.error as string) || 'Failed to delete items');
                     }
                     await loadProject(projectRootPath);
                     addToast(`${paths.length} item(s) deleted`, 'success');
@@ -2309,10 +2543,14 @@ const App: React.FC = () => {
         }
 
         await handleSaveAll();
+        // If in drafting mode, update artifacts right before run to be safe
+        if (projectSettings.draftingMode) {
+            await updateDraftingArtifacts();
+        }
         setStatusBarMessage('Launching game...');
         window.electronAPI!.runGame(appSettings.renpyPath, projectRootPath!);
 
-    }, [appSettings.renpyPath, projectRootPath, handleSaveAll]);
+    }, [appSettings.renpyPath, projectRootPath, handleSaveAll, projectSettings.draftingMode, updateDraftingArtifacts]);
 
     const handleStopGame = useCallback(() => {
         if (window.electronAPI) {
@@ -2424,7 +2662,7 @@ const App: React.FC = () => {
                 setStatusBarMessage('Game stopped.');
                 setTimeout(() => setStatusBarMessage(''), 3000);
             });
-            const removeError = window.electronAPI.onGameError((error) => {
+            const removeError = window.electronAPI.onGameError((error: any) => {
                 addToast(`Failed to launch game: ${error}`, 'error');
                 setStatusBarMessage('Error launching game.');
                 setIsGameRunning(false);
@@ -2454,12 +2692,12 @@ const App: React.FC = () => {
                       break;
                   case 'open-static-tab':
                       if (data.type === 'canvas' || data.type === 'route-canvas') {
-                          handleOpenStaticTab(data.type);
+                          handleOpenStaticTab(data.type as 'canvas' | 'route-canvas');
                       }
                       break;
                   case 'open-recent':
                       if (data.path && typeof data.path === 'string') {
-                          loadProject(String(data.path));
+                          loadProject(data.path as string);
                       }
                       break;
                   case 'open-about':
@@ -2541,10 +2779,9 @@ const App: React.FC = () => {
   const activeBlock = useMemo(() => blocks.find(b => b.id === activeTabId), [blocks, activeTabId]);
   const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId), [openTabs, activeTabId]);
 
-  const settingsForModal: IdeSettings = useMemo(() => ({
-      ...(appSettings as any),
-      ...(projectSettings as any),
-  } as IdeSettings), [appSettings, projectSettings]);
+  const settingsForModal: IdeSettings = useMemo(() => {
+      return { ...(appSettings as object || {}), ...(projectSettings as object || {}) } as IdeSettings;
+  }, [appSettings, projectSettings]);
 
   const handleSettingsChange = useCallback((key: keyof IdeSettings, value: any) => {
       updateAppSettings(draft => {
@@ -2626,6 +2863,8 @@ const App: React.FC = () => {
             onStopGame={handleStopGame}
             onToggleSearch={handleToggleSearch}
             onOpenShortcuts={() => setShortcutsModalOpen(true)}
+            draftingMode={projectSettings.draftingMode}
+            onToggleDraftingMode={handleToggleDraftingMode}
         />
       </div>
       
@@ -2672,7 +2911,6 @@ const App: React.FC = () => {
                                 selectedPaths={explorerSelectedPaths}
                                 setSelectedPaths={setExplorerSelectedPaths}
                                 lastClickedPath={explorerLastClickedPath}
-                                setLastClickedPath={setExplorerLastClickedPath}
                                 expandedPaths={explorerExpandedPaths}
                                 onToggleExpand={handleToggleExpandExplorer}
                             />
@@ -2838,6 +3076,9 @@ const App: React.FC = () => {
                         addToast={addToast}
                         onEditorMount={handleEditorMount}
                         onEditorUnmount={handleEditorUnmount}
+                        draftingMode={projectSettings.draftingMode}
+                        existingImageTags={existingImageTags}
+                        existingAudioPaths={existingAudioPaths}
                     />
                 )}
 
