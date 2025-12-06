@@ -1,5 +1,4 @@
 
-
 import { useMemo } from 'react';
 import type { Block, Link, RenpyAnalysisResult, LabelLocation, JumpLocation, Character, DialogueLine, Variable, VariableUsage, RenpyScreen, LabelNode, RouteLink, IdentifiedRoute } from '../types';
 
@@ -13,6 +12,7 @@ const NARRATION_REGEX = /^\s*"(?!:)/; // Matches "narration" but not "choice": o
 const SCREEN_REGEX = /^\s*screen\s+([a-zA-Z0-9_]+)\s*(\(.*\))?:/;
 // This regex now uses a negative lookahead `(?!Character\s*\()` to specifically exclude lines that are Character definitions.
 const DEFINE_DEFAULT_REGEX = /^\s*(define|default)\s+([a-zA-Z0-9_.]+)\s*=\s*(?!Character\s*\()(.+)/;
+const IMAGE_DEF_REGEX = /^\s*image\s+([a-zA-Z0-9_ ]+?)\s*=/;
 
 
 const PALETTE = [
@@ -99,6 +99,7 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
     variables: new Map(),
     variableUsages: new Map(),
     screens: new Map(),
+    definedImages: new Set(),
     blockTypes: new Map(),
     labelNodes: new Map(),
     routeLinks: [],
@@ -107,6 +108,12 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
 
   // First pass: find all labels, characters, and variable definitions
   blocks.forEach(block => {
+    // Skip the placeholders file from analysis so placeholders don't count as "defined" images
+    // This prevents the drafting mode loop where generated placeholders silence the "missing" warnings
+    if (block.filePath && (block.filePath.endsWith('debug_placeholders.rpy') || block.filePath === 'game/debug_placeholders.rpy')) {
+        return;
+    }
+
     // Find Characters first from the whole content to support multiline definitions
     const CHARACTER_REGEX_G = /^\s*define\s+([a-zA-Z0-9_]+)\s*=\s*Character\s*\(([\s\S]*?)\)/gm;
     for (const match of block.content.matchAll(CHARACTER_REGEX_G)) {
@@ -224,6 +231,12 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
         };
         result.variables.set(variable.name, variable);
       }
+
+      // Find Image Definitions
+      const imageMatch = line.match(IMAGE_DEF_REGEX);
+      if (imageMatch) {
+          result.definedImages.add(imageMatch[1].trim());
+      }
     });
   });
 
@@ -237,6 +250,11 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
   // Second pass: find jumps, dialogue, and variable usages
   const variableNames = Array.from(result.variables.keys());
   blocks.forEach(block => {
+    // Skip placeholders file in second pass too
+    if (block.filePath && (block.filePath.endsWith('debug_placeholders.rpy') || block.filePath === 'game/debug_placeholders.rpy')) {
+        return;
+    }
+
     result.jumps[block.id] = [];
     const blockTypes = new Set<string>();
     if (block.content.includes('python:')) {
@@ -454,6 +472,11 @@ export const performRouteAnalysis = (
 
   // 1. Identify all labels and their line ranges to create nodes.
   blocks.forEach(block => {
+    // Also skip placeholders in route analysis for cleaner graphs
+    if (block.filePath && (block.filePath.endsWith('debug_placeholders.rpy') || block.filePath === 'game/debug_placeholders.rpy')) {
+        return;
+    }
+
     const lines = block.content.split('\n');
     const labelsInBlock: { label: string; startLine: number }[] = [];
     Object.values(labels).forEach(labelLoc => {
@@ -493,6 +516,10 @@ export const performRouteAnalysis = (
   // 2. Create links based on jumps and implicit flow.
   let routeLinkIdCounter = 0;
   blocks.forEach(block => {
+    if (block.filePath && (block.filePath.endsWith('debug_placeholders.rpy') || block.filePath === 'game/debug_placeholders.rpy')) {
+        return;
+    }
+
     const labelsInBlock = blockLabelInfo.get(block.id) || [];
     const jumpsInBlock = jumps[block.id] || [];
 
