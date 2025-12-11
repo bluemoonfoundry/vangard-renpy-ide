@@ -202,7 +202,6 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
   const canvasRef = useRef<HTMLDivElement>(null);
   const interactionState = useRef<InteractionState>({ type: 'idle' });
   const pointerStartPos = useRef<Position>({ x: 0, y: 0 });
-  // FIX: useRef<number>() requires an initial value. Initialize with null.
   const rafRef = useRef<number | null>(null);
   const [flashingBlockId, setFlashingBlockId] = useState<string | null>(null);
   const lastHandledRequestKey = useRef<number | null>(null);
@@ -226,19 +225,40 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
     if (centerOnBlockRequest.key === lastHandledRequestKey.current) return;
 
     const { blockId } = centerOnBlockRequest;
+    // Check blocks first
     const block = getBlockById(blocks, blockId);
+    let targetX = 0;
+    let targetY = 0;
+    let found = false;
+
+    if (block) {
+        targetX = block.position.x + block.width / 2;
+        targetY = block.position.y + block.height / 2;
+        found = true;
+    } else {
+        // Fallback to check notes
+        const note = getStickyNoteById(stickyNotes, blockId);
+        if (note) {
+            targetX = note.position.x + note.width / 2;
+            targetY = note.position.y + note.height / 2;
+            found = true;
+            // Also select the note
+            setSelectedNoteIds([blockId]);
+            setSelectedBlockIds([]);
+            setSelectedGroupIds([]);
+        }
+    }
+
     const canvasEl = canvasRef.current;
 
-    if (block && canvasEl) {
+    if (found && canvasEl) {
         const canvasRect = canvasEl.getBoundingClientRect();
-        const targetX = block.position.x + block.width / 2;
-        const targetY = block.position.y + block.height / 2;
-
         const newX = (canvasRect.width / 2) - (targetX * transform.scale);
         const newY = (canvasRect.height / 2) - (targetY * transform.scale);
         
         onTransformChange(t => ({ ...t, x: newX, y: newY }));
 
+        // Flash for visual feedback
         setFlashingBlockId(blockId);
         const timer = setTimeout(() => setFlashingBlockId(null), 1500);
         
@@ -246,7 +266,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
 
         return () => clearTimeout(timer);
     }
-  }, [centerOnBlockRequest, blocks, transform.scale, onTransformChange]);
+  }, [centerOnBlockRequest, blocks, stickyNotes, transform.scale, onTransformChange, setSelectedNoteIds, setSelectedBlockIds, setSelectedGroupIds]);
 
   // Effect to handle flash requests without camera movement
   useEffect(() => {

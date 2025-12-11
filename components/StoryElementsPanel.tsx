@@ -90,7 +90,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     isFileSystemApiSupported,
     onHoverHighlightStart, onHoverHighlightEnd,
     scenes, onOpenScene, onCreateScene, onDeleteScene,
-    snippetCategoriesState, onToggleSnippetCategory
+    snippetCategoriesState, onToggleSnippetCategory,
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('characters');
 
@@ -191,19 +191,23 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                     </div>
                 )}
                 {activeTab === 'audio' && (
-                    <AudioManager
-                        audios={Array.from(projectAudios.values())}
-                        metadata={audioMetadata}
-                        scanDirectories={Array.from(audioScanDirectories.keys())}
-                        onAddScanDirectory={onAddAudioScanDirectory}
-                        onRemoveScanDirectory={onRemoveAudioScanDirectory}
-                        onCopyAudiosToProject={onCopyAudiosToProject}
-                        onOpenAudioEditor={onOpenAudioEditor}
-                        isFileSystemApiSupported={isFileSystemApiSupported}
-                        lastScanned={audiosLastScanned}
-                        isRefreshing={isRefreshingAudios}
-                        onRefresh={onRefreshAudios}
-                    />
+                    <div className="h-full flex flex-col">
+                        <div className="flex-1 overflow-hidden">
+                            <AudioManager
+                                audios={Array.from(projectAudios.values())}
+                                metadata={audioMetadata}
+                                scanDirectories={Array.from(audioScanDirectories.keys())}
+                                onAddScanDirectory={onAddAudioScanDirectory}
+                                onRemoveScanDirectory={onRemoveAudioScanDirectory}
+                                onCopyAudiosToProject={onCopyAudiosToProject}
+                                onOpenAudioEditor={onOpenAudioEditor}
+                                isFileSystemApiSupported={isFileSystemApiSupported}
+                                lastScanned={audiosLastScanned}
+                                isRefreshing={isRefreshingAudios}
+                                onRefresh={onRefreshAudios}
+                            />
+                        </div>
+                    </div>
                 )}
                 {activeTab === 'screens' && (
                     <div className="flex-grow overflow-y-auto p-4 overscroll-contain">

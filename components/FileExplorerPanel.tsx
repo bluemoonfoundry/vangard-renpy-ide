@@ -9,7 +9,10 @@ import type { ClipboardState } from '../types';
 const FolderIcon: React.FC<{ isOpen: boolean }> = ({ isOpen }) => (
   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
     {isOpen ? (
-      <path d="M4 8V6a2 2 0 012-2h2l2 2h5a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2v-2" />
+      <>
+        <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1H8a3 3 0 00-3 3v1.5a1.5 1.5 0 01-3 0V6z" clipRule="evenodd" />
+        <path d="M6 12a2 2 0 012-2h8a2 2 0 012 2v2a2 2 0 01-2 2H2h2a2 2 0 002-2v-2z" />
+      </>
     ) : (
       <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
     )}
@@ -92,7 +95,9 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   }, [isRenaming]);
 
   const handleDoubleClick = () => {
-    if (!isDirectory) {
+    if (isDirectory) {
+      toggleExpand(node.path);
+    } else {
       onFileOpen(node.path);
     }
   };
@@ -130,10 +135,6 @@ const TreeNode: React.FC<TreeNodeProps> = ({
       } else {
           setSelectedPaths(new Set([node.path]));
           setLastClickedPath(node.path);
-      }
-  
-      if (isDirectory) {
-          toggleExpand(node.path);
       }
   };
 
@@ -269,12 +270,16 @@ const NewNodeInput: React.FC<{
 }> = ({ type, parentPath, level, onCreate }) => {
     const [name, setName] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
+    const submittedRef = useRef(false);
 
     useEffect(() => {
         inputRef.current?.focus();
     }, []);
 
     const handleCreate = () => {
+        if (submittedRef.current) return;
+        submittedRef.current = true;
+
         if (name.trim()) {
             onCreate(parentPath, name.trim(), type);
         } else {

@@ -155,7 +155,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
   const handleEditorWillMount: BeforeMount = (monaco) => {
     if (!monaco.languages.getLanguages().some(({ id }) => id === 'renpy')) {
-      monaco.languages.register({ id: 'renpy' });
+      monaco.languages.register({ id: 'renpy', extensions: ['.rpy'], aliases: ['RenPy', 'renpy'] });
       
       // Define language configuration for comments and brackets
       monaco.languages.setLanguageConfiguration('renpy', {
@@ -330,6 +330,22 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+
+    // Force language to ensure tokenization is applied immediately
+    const model = editor.getModel();
+    if (model) {
+        monaco.editor.setModelLanguage(model, 'renpy');
+    }
+
+    // Force layout refresh after mount to ensure syntax highlighting renders without needing scroll
+    setTimeout(() => {
+        editor.layout();
+        // Re-assert language just in case layout triggered a refresh
+        if (model) {
+            monaco.editor.setModelLanguage(model, 'renpy');
+        }
+    }, 50);
+
     onEditorMount(block.id, editor);
     editor.focus();
     setIsMounted(true);
@@ -668,7 +684,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                       const firstToken = content.split(/\s+/)[0];
                       if (firstToken !== 'expression') {
                           // Is valid identifier?
-                          if (/^[a-zA-Z0-9_]+$/.test(firstToken)) {
+                          if (/^[a-zA-Z_]\w*$/.test(firstToken)) {
                               let isDefined = false;
                               if (analysisResultRef.current.variables.has(firstToken)) isDefined = true;
                               if (existingAudioPaths.has(firstToken)) isDefined = true;
