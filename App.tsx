@@ -1,8 +1,4 @@
 
-
-
-
-
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -1874,9 +1870,25 @@ const App: React.FC = () => {
               setCenterOnBlockRequest({ blockId, key: Date.now() });
           }, 50);
       } else {
-          addToast(`Could not find a block for "${target}"`, 'warning');
+          // Attempt to find sticky note
+          const note = stickyNotes.find(n => n.id === target);
+          if (note) {
+               // Ensure notes are visible
+               if (!canvasFilters.notes) {
+                   setCanvasFilters(prev => ({ ...prev, notes: true }));
+               }
+               setActiveTabId('canvas');
+               // Reuse the block center request for notes (requires StoryCanvas update to handle notes, or a separate mechanism)
+               // Assuming StoryCanvas is updated to check note IDs too
+               setTimeout(() => {
+                   setCenterOnBlockRequest({ blockId: target, key: Date.now() });
+               }, 50);
+               return;
+          }
+
+          addToast(`Could not find a block or note for "${target}"`, 'warning');
       }
-  }, [blocks, analysisResult, addToast]);
+  }, [blocks, analysisResult, addToast, stickyNotes, canvasFilters.notes]);
 
   // DnD Handlers for Tabs
   const handleTabDragStart = (e: React.DragEvent, tabId: string) => {
@@ -2367,14 +2379,24 @@ const App: React.FC = () => {
                     <PunchlistManager
                         blocks={blocks}
                         stickyNotes={stickyNotes}
-                        existingImageTags={existingImageTags}
-                        existingAudioPaths={existingAudioPaths}
-                        metadata={punchlistMetadata}
+                        analysisResult={analysisResult}
+                        projectImages={images}
+                        imageMetadata={imageMetadata}
+                        projectAudios={audios}
+                        audioMetadata={audioMetadata}
+                        punchlistMetadata={punchlistMetadata}
                         onUpdateMetadata={(id, data) => {
-                            setPunchlistMetadata(draft => { draft[id] = data; });
+                            setPunchlistMetadata(draft => {
+                                if (data === undefined) {
+                                    delete draft[id];
+                                } else {
+                                    draft[id] = { ...draft[id], ...data };
+                                }
+                            });
                             setHasUnsavedSettings(true);
                         }}
-                        onJumpToBlock={handleCenterOnBlock}
+                        onOpenBlock={handleOpenEditor}
+                        onHighlightBlock={(id) => handleCenterOnBlock(id)}
                     />
                 )}
                 {openTabs.map(tab => {
@@ -2453,6 +2475,7 @@ const App: React.FC = () => {
                                         // Refresh
                                         const projData = await window.electronAPI.loadProject(projectRootPath);
                                         // Merge logic would be better but simple reload works
+                                        await loadProject(projectRootPath);
                                     }
                                 }}
                             />
@@ -2491,6 +2514,7 @@ const App: React.FC = () => {
                                             return next;
                                         });
                                         setHasUnsavedSettings(true);
+                                        await loadProject(projectRootPath);
                                     }
                                 }}
                             />

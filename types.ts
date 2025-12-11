@@ -10,6 +10,8 @@
 
 
 
+
+
 export interface Position {
   x: number;
   y: number;
@@ -51,6 +53,7 @@ export interface PunchlistMetadata {
   notes?: string;
   tags?: string[];
   assignee?: string;
+  status?: 'open' | 'completed' | 'ignored';
 }
 
 export interface Character {
