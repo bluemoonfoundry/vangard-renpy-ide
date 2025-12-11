@@ -2,6 +2,14 @@
 
 
 
+
+
+
+
+
+
+
+
 export interface Position {
   x: number;
   y: number;
@@ -37,6 +45,12 @@ export interface StickyNote {
   width: number;
   height: number;
   color: NoteColor;
+}
+
+export interface PunchlistMetadata {
+  notes?: string;
+  tags?: string[];
+  assignee?: string;
 }
 
 export interface Character {
@@ -233,7 +247,7 @@ export interface RenpyAnalysisResult {
 // Defines an open tab in the main editor view
 export interface EditorTab {
   id: string; // unique ID for the tab, can be block.id or 'canvas'
-  type: 'canvas' | 'route-canvas' | 'editor' | 'image' | 'audio' | 'character' | 'scene-composer';
+  type: 'canvas' | 'route-canvas' | 'punchlist' | 'editor' | 'image' | 'audio' | 'character' | 'scene-composer';
   blockId?: string;
   filePath?: string; // Used for image and audio tabs
   characterTag?: string; // Used for character tabs
@@ -300,6 +314,7 @@ export interface ProjectSettings {
   activeTabId: string;
   stickyNotes?: StickyNote[];
   characterProfiles?: Record<string, string>;
+  punchlistMetadata?: Record<string, PunchlistMetadata>;
   sceneCompositions?: Record<string, SceneComposition>;
   sceneNames?: Record<string, string>;
   scannedImagePaths?: string[];
@@ -307,7 +322,7 @@ export interface ProjectSettings {
 }
 
 // This type is a mix for components that need both, like SettingsModal
-export interface IdeSettings extends AppSettings, Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'> {}
+export interface IdeSettings extends AppSettings, Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'punchlistMetadata' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'> {}
 
 
 export type ClipboardState = { type: 'copy' | 'cut'; paths: Set<string> } | null;
@@ -337,7 +352,7 @@ declare global {
           moveFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
           copyEntry: (sourcePath: string, destPath: string) => Promise<{ success: boolean; error?: string }>;
           scanDirectory: (path: string) => Promise<{ images: any[], audios: any[] }>;
-          onMenuCommand: (callback: (data: { command: string, type?: 'canvas' | 'route-canvas', path?: string }) => void) => () => void;
+          onMenuCommand: (callback: (data: { command: string, type?: 'canvas' | 'route-canvas' | 'punchlist', path?: string }) => void) => () => void;
           onCheckUnsavedChangesBeforeExit: (callback: () => void) => () => void;
           replyUnsavedChangesBeforeExit: (hasUnsaved: boolean) => void;
           onShowExitModal: (callback: () => void) => () => void;

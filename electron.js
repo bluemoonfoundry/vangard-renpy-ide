@@ -1,4 +1,9 @@
 
+
+
+
+
+
 import { app, BrowserWindow, ipcMain, dialog, Menu, protocol, net } from 'electron';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -296,6 +301,10 @@ async function updateApplicationMenu() {
             { 
               label: 'Route Canvas',
               click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-static-tab', type: 'route-canvas' }); }
+            },
+            {
+                label: 'Punchlist',
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-static-tab', type: 'punchlist' }); }
             },
             { type: 'separator' },
             { role: 'resetZoom' },

@@ -3,6 +3,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* --- Layout Reset --- */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
 /* --- Custom Styles --- */
 .renpy-jump-link {
   color: #4f46e5; /* indigo-600 */

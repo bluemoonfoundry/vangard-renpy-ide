@@ -6,9 +6,11 @@ interface StatusBarProps {
   currentFileWords: number | null;
   readingTime: string;
   statusMessage?: string;
+  version?: string;
+  build?: string;
 }
 
-const StatusBar: React.FC<StatusBarProps> = ({ totalWords, currentFileWords, readingTime, statusMessage }) => {
+const StatusBar: React.FC<StatusBarProps> = ({ totalWords, currentFileWords, readingTime, statusMessage, version, build }) => {
   return (
     <footer className="flex-none h-6 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 text-xs text-gray-600 dark:text-gray-400 z-20 transition-colors duration-200">
       <div className="flex items-center space-x-2 overflow-hidden mr-4">
@@ -32,6 +34,14 @@ const StatusBar: React.FC<StatusBarProps> = ({ totalWords, currentFileWords, rea
         <span title="Estimated based on an average reading speed of 200 WPM">
             {readingTime}
         </span>
+        {(version || build) && (
+            <>
+                <div className="w-px h-3 bg-gray-300 dark:bg-gray-600"></div>
+                <span title={`Version ${version}, Build ${build}`} className="text-gray-400 dark:text-gray-500 font-mono">
+                    v{version || '0.0.0'} ({build || '0'})
+                </span>
+            </>
+        )}
       </div>
     </footer>
   );

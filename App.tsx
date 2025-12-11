@@ -1,4 +1,8 @@
 
+
+
+
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useImmer } from 'use-immer';
@@ -20,6 +24,7 @@ import ImageEditorView from './components/ImageEditorView';
 import AudioEditorView from './components/AudioEditorView';
 import CharacterEditorView from './components/CharacterEditorView';
 import SceneComposer from './components/SceneComposer';
+import PunchlistManager from './components/PunchlistManager';
 import TabContextMenu from './components/TabContextMenu';
 import Sash from './components/Sash';
 import StatusBar from './components/StatusBar';
@@ -31,9 +36,15 @@ import type {
   Block, BlockGroup, Link, Position, FileSystemTreeNode, EditorTab, 
   ToastMessage, IdeSettings, Theme, ProjectImage, RenpyAudio, 
   ClipboardState, ImageMetadata, AudioMetadata, LabelNode, Character,
-  AppSettings, ProjectSettings, StickyNote, SearchResult, SceneComposition, SceneSprite
+  AppSettings, ProjectSettings, StickyNote, SearchResult, SceneComposition, SceneSprite, PunchlistMetadata
 } from './types';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import logo from './vangard-renide-512x512.png';
+import packageJson from './package.json';
+
+// --- Versioning ---
+const APP_VERSION = '0.3.1';
+const BUILD_NUMBER = '3';
 
 // --- Utility: ArrayBuffer to Base64 (Browser Compatible) ---
 const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
@@ -284,6 +295,14 @@ interface UnsavedChangesModalInfo {
     onCancel: () => void;
 }
 
+const AVAILABLE_MODELS = [
+    'gemini-2.5-flash',
+    'gemini-3-pro-preview',
+    'gemini-2.5-flash-image',
+    'gemini-3-pro-image-preview',
+    'veo-3.1-fast-generate-preview'
+];
+
 const App: React.FC = () => {
   // --- State: Welcome Screen ---
   const [showWelcome, setShowWelcome] = useState(true);
@@ -293,6 +312,10 @@ const App: React.FC = () => {
   const [groups, setGroups] = useImmer<BlockGroup[]>([]);
   const [stickyNotes, setStickyNotes] = useImmer<StickyNote[]>([]);
   
+  // Use a ref to track blocks for effects that need current blocks without triggering updates
+  const blocksRef = useRef(blocks);
+  useEffect(() => { blocksRef.current = blocks; }, [blocks]);
+
   // --- State: File System & Environment ---
   const [projectRootPath, setProjectRootPath] = useState<string | null>(null);
   
@@ -332,10 +355,14 @@ const App: React.FC = () => {
   const [activeTabId, setActiveTabId] = useState<string>('canvas');
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
   
   // Scene Composer State
   const [sceneCompositions, setSceneCompositions] = useImmer<Record<string, SceneComposition>>({});
   const [sceneNames, setSceneNames] = useImmer<Record<string, string>>({});
+
+  // Punchlist State
+  const [punchlistMetadata, setPunchlistMetadata] = useImmer<Record<string, PunchlistMetadata>>({});
   
   const [dirtyBlockIds, setDirtyBlockIds] = useState<Set<string>>(new Set());
   const [dirtyEditors, setDirtyEditors] = useState<Set<string>>(new Set()); // Blocks modified in editor but not synced to block state yet
@@ -378,7 +405,7 @@ const App: React.FC = () => {
     editorFontFamily: "'Consolas', 'Courier New', monospace",
     editorFontSize: 14,
   });
-  const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>>({
+  const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'punchlistMetadata' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>>({
     enableAiFeatures: false,
     selectedModel: 'gemini-2.5-flash',
     draftingMode: false,
@@ -391,6 +418,9 @@ const App: React.FC = () => {
   const [flashBlockRequest, setFlashBlockRequest] = useState<{ blockId: string, key: number } | null>(null);
   const [canvasFilters, setCanvasFilters] = useState({ story: true, screens: true, config: false, notes: true });
   const [hoverHighlightIds, setHoverHighlightIds] = useState<Set<string> | null>(null);
+
+  // --- State: Route Canvas ---
+  const [routeNodeLayoutCache, setRouteNodeLayoutCache] = useState<Map<string, Position>>(new Map());
 
   // --- State: Search ---
   const [activeLeftPanel, setActiveLeftPanel] = useState<'explorer' | 'search'>('explorer');
@@ -422,13 +452,9 @@ const App: React.FC = () => {
       imageMetadata.forEach((meta) => {
           const fullTag = `${meta.renpyName} ${meta.tags.join(' ')}`.trim();
           tags.add(fullTag);
-          // Add just base name as well? "eileen happy" -> "eileen" is implicitly valid if "eileen" is defined?
-          // No, RenPy requires exact image tag match or prefix match.
-          // We will store exact full tag here.
       });
       images.forEach((img) => {
           if (!img.projectFilePath && !imageMetadata.has(img.filePath)) {
-              // Basic fallback if no metadata: filename without ext
               tags.add(img.fileName.split('.')[0]);
           }
       });
@@ -456,6 +482,36 @@ const App: React.FC = () => {
       
       return paths;
   }, [audios, analysisResult.variables]);
+
+  // --- Route View Logic ---
+  const handleUpdateRouteNodePositions = useCallback((updates: { id: string, position: Position }[]) => {
+      setRouteNodeLayoutCache(prev => {
+          const next = new Map(prev);
+          updates.forEach(u => next.set(u.id, u.position));
+          return next;
+      });
+  }, []);
+
+  const routeAnalysisResult = useMemo(() => {
+      const raw = performRouteAnalysis(blocks, analysisResult.labels, analysisResult.jumps);
+      
+      // Compute default layout for all nodes to prevent stacking at 0,0
+      // We run this every time the graph structure changes, essentially
+      const edges = raw.routeLinks.map(l => ({ sourceId: l.sourceId, targetId: l.targetId }));
+      const layoutedNodes = computeAutoLayout(raw.labelNodes, edges);
+
+      // Apply User Overrides (Cache)
+      // If the user has manually moved a node, we prioritize that position over the auto-layout
+      const finalNodes = layoutedNodes.map(n => {
+          const cached = routeNodeLayoutCache.get(n.id);
+          return cached ? { ...n, position: cached } : n;
+      });
+
+      return {
+          ...raw,
+          labelNodes: finalNodes
+      };
+  }, [blocks, analysisResult, routeNodeLayoutCache]);
 
   // --- Scene Composer Management ---
   const handleCreateScene = useCallback((initialName?: string) => {
@@ -517,7 +573,7 @@ const App: React.FC = () => {
 
   // --- Sync Explorer with Active Tab ---
   useEffect(() => {
-    if (activeTabId === 'canvas' || activeTabId === 'route-canvas') return;
+    if (activeTabId === 'canvas' || activeTabId === 'route-canvas' || activeTabId === 'punchlist') return;
 
     const activeTab = openTabs.find(t => t.id === activeTabId);
     let filePathToSync: string | undefined;
@@ -621,9 +677,9 @@ const App: React.FC = () => {
           'theme-solarized-dark', 
           'theme-colorful', 
           'theme-colorful-light',
-          'theme-neon-dark',
-          'theme-ocean-dark',
-          'theme-candy-light',
+          'theme-neon-dark', 
+          'theme-ocean-dark', 
+          'theme-candy-light', 
           'theme-forest-light'
       );
       
@@ -770,7 +826,7 @@ const App: React.FC = () => {
         try {
             const cleanFolderPath = folderPath.endsWith('/') ? folderPath.slice(0, -1) : folderPath;
             const relativePath = cleanFolderPath ? `${cleanFolderPath}/${fileName}` : fileName;
-            const fullPath = await window.electronAPI.path.join(projectRootPath!, cleanFolderPath, fileName);
+            const fullPath = await window.electronAPI.path.join(projectRootPath!, cleanFolderPath, fileName) as string;
             
             const res = await window.electronAPI.writeFile(fullPath, content);
             if (res.success) {
@@ -779,7 +835,8 @@ const App: React.FC = () => {
                 const projData = await window.electronAPI.loadProject(projectRootPath!);
                 setFileSystemTree(projData.tree);
             } else {
-                throw new Error((res.error as string) || 'Unknown error occurred during file creation');
+                const errorMsg = typeof res.error === 'string' ? res.error : 'Unknown error occurred during file creation';
+                throw new Error(errorMsg);
             }
         } catch (e: any) {
             console.error(e);
@@ -813,7 +870,7 @@ const App: React.FC = () => {
       if (window.electronAPI && projectRootPath) {
           try {
               const folderPath = 'game';
-              const fullPath = await window.electronAPI.path.join(projectRootPath, folderPath, fileName);
+              const fullPath = await window.electronAPI.path.join(projectRootPath!, folderPath, fileName) as string;
               const relativePath = `game/${fileName}`;
               
               const res = await window.electronAPI.writeFile(fullPath, content);
@@ -823,7 +880,8 @@ const App: React.FC = () => {
                   const projData = await window.electronAPI.loadProject(projectRootPath);
                   setFileSystemTree(projData.tree);
               } else {
-                  throw new Error((res.error as string) || 'Unknown error occurred during file creation');
+                  const errorMsg = typeof res.error === 'string' ? res.error : 'Unknown error occurred during file creation';
+                  throw new Error(errorMsg);
               }
           } catch(e: any) {
               console.error(e);
@@ -972,7 +1030,7 @@ const App: React.FC = () => {
   }, [blocks, analysisResult, handleTidyUp]);
 
   // --- Tab Management Helpers ---
-  const handleOpenStaticTab = useCallback((type: 'canvas' | 'route-canvas') => {
+  const handleOpenStaticTab = useCallback((type: 'canvas' | 'route-canvas' | 'punchlist') => {
         const id = type;
         setOpenTabs(prev => {
             if (!prev.find(t => t.id === id)) {
@@ -992,15 +1050,26 @@ const App: React.FC = () => {
       try {
           const projectData = await window.electronAPI!.loadProject(path);
           
-          const loadedBlocks: Block[] = projectData.files.map((f: any, index: number) => ({
-              id: `block-${index}-${Date.now()}`,
-              content: f.content,
-              filePath: f.path,
-              position: { x: (index % 5) * 350, y: Math.floor(index / 5) * 250 },
-              width: 320,
-              height: 200,
-              title: f.path.split('/').pop()
-          }));
+          // Map existing blocks to preserve IDs and positions
+          const existingBlocksMap = new Map<string, Block>();
+          // Use ref to get current blocks to avoid stale closures and infinite loop dependency
+          blocksRef.current.forEach(b => {
+              if (b.filePath) existingBlocksMap.set(b.filePath, b);
+          });
+
+          const loadedBlocks: Block[] = projectData.files.map((f: any, index: number) => {
+              const existing = existingBlocksMap.get(f.path);
+              return {
+                  id: existing ? existing.id : `block-${index}-${Date.now()}`,
+                  content: f.content,
+                  filePath: f.path,
+                  position: existing ? existing.position : { x: (index % 5) * 350, y: Math.floor(index / 5) * 250 },
+                  width: existing ? existing.width : 320,
+                  height: existing ? existing.height : 200,
+                  title: f.path.split('/').pop(),
+                  color: existing ? existing.color : undefined
+              };
+          });
           const blockFilePathMap = new Map(loadedBlocks.map(b => [b.filePath, b]));
 
           if (loadedBlocks.length === 0) {
@@ -1013,7 +1082,7 @@ const App: React.FC = () => {
              };
              loadedBlocks.push(defaultBlock);
              if (window.electronAPI?.writeFile) {
-                 const scriptPath = await window.electronAPI.path.join(projectData.rootPath, 'script.rpy');
+                 const scriptPath = await window.electronAPI.path.join(projectData.rootPath as string, 'script.rpy') as string;
                  await window.electronAPI.writeFile(scriptPath, defaultBlock.content);
                  if (projectData.tree) {
                      projectData.tree.children = [...(projectData.tree.children || []), { name: 'script.rpy', path: 'script.rpy' }];
@@ -1031,7 +1100,10 @@ const App: React.FC = () => {
           });
 
           setBlocks(loadedBlocks);
-          initialLayoutNeeded.current = true;
+          // Only trigger layout if this is a fresh load (no existing blocks)
+          if (blocksRef.current.length === 0) {
+              initialLayoutNeeded.current = true;
+          }
           setFileSystemTree(projectData.tree);
           
           const imgMap = new Map<string, ProjectImage>();
@@ -1066,6 +1138,7 @@ const App: React.FC = () => {
               });
               setStickyNotes(projectData.settings.stickyNotes || []);
               setCharacterProfiles(projectData.settings.characterProfiles || {});
+              setPunchlistMetadata(projectData.settings.punchlistMetadata || {});
               
               // Load Scene Compositions
               // Helper to link saved paths back to loaded image objects
@@ -1202,7 +1275,7 @@ const App: React.FC = () => {
                       // We allow opening even if not strictly in state yet (might be migrated)
                       return true;
                   }
-                  return tab.type === 'canvas' || tab.type === 'route-canvas';
+                  return tab.type === 'canvas' || tab.type === 'route-canvas' || tab.type === 'punchlist';
               });
 
               const rehydratedTabs = validTabs.map(tab => {
@@ -1234,6 +1307,7 @@ const App: React.FC = () => {
               setActiveTabId('canvas');
               setStickyNotes([]);
               setCharacterProfiles({});
+              setPunchlistMetadata({});
               setSceneCompositions({});
               setSceneNames({});
           }
@@ -1250,7 +1324,7 @@ const App: React.FC = () => {
       } finally {
           setIsLoading(false);
       }
-  }, [setBlocks, setImages, setAudios, updateProjectSettings, addToast, setFileSystemTree, setStickyNotes, setCharacterProfiles, updateAppSettings, setSceneCompositions, setSceneNames]);
+  }, [setBlocks, setImages, setAudios, updateProjectSettings, addToast, setFileSystemTree, setStickyNotes, setCharacterProfiles, updateAppSettings, setSceneCompositions, setSceneNames, setPunchlistMetadata]);
 
 
   const handleOpenProjectFolder = useCallback(async () => {
@@ -1380,7 +1454,7 @@ const App: React.FC = () => {
       });
 
       // 2. Generate Content
-      let rpyContent = `# Auto-generated by Ren'IDE Drafting Mode\n# This file provides placeholders for missing assets.\n\n`;
+      let rpyContent: string = `# Auto-generated by Ren'IDE Drafting Mode\n# This file provides placeholders for missing assets.\n\n`;
       
       missingImages.forEach(tag => {
           rpyContent += `image ${tag} = Placeholder("text", text="${tag}")\n`;
@@ -1412,19 +1486,20 @@ const App: React.FC = () => {
       }
 
       // 3. Write File
-      const rpyPath = await window.electronAPI.path.join(projectRootPath, 'game/debug_placeholders.rpy');
+      const rpyPath = await window.electronAPI.path.join(projectRootPath as string, 'game/debug_placeholders.rpy');
       await window.electronAPI.writeFile(rpyPath, rpyContent);
 
   }, [blocks, projectRootPath, projectSettings.draftingMode, analysisResult.definedImages, analysisResult.variables, existingImageTags, existingAudioPaths]);
 
   const cleanupDraftingArtifacts = useCallback(async () => {
       if (!projectRootPath || !window.electronAPI) return;
-      const rpyPath = await window.electronAPI.path.join(projectRootPath, 'game/debug_placeholders.rpy');
+      // Fixed: Use String(projectRootPath) to guarantee string type for path.join, though projectRootPath check above covers null case.
+      const rpyPath = await window.electronAPI.path.join(String(projectRootPath), 'game/debug_placeholders.rpy') as string;
       // We can remove it or rename to .disabled
       await window.electronAPI.removeEntry(rpyPath);
 
       // Also remove the compiled .rpyc file to ensure Ren'Py stops using placeholders
-      const rpycPath = await window.electronAPI.path.join(projectRootPath, 'game/debug_placeholders.rpyc');
+      const rpycPath = await window.electronAPI.path.join(String(projectRootPath), 'game/debug_placeholders.rpyc') as string;
       await window.electronAPI.removeEntry(rpycPath);
       
       // We leave the renide_assets folder as it might contain valid cache or be reused
@@ -1467,12 +1542,12 @@ const App: React.FC = () => {
     if (window.electronAPI && projectRootPath) {
         const block = blocks.find(b => b.id === blockId);
         if (block && block.filePath) {
-             const absPath = await window.electronAPI.path.join(projectRootPath, block.filePath);
+             const absPath = await window.electronAPI.path.join(projectRootPath, block.filePath) as string;
              const res = await window.electronAPI.writeFile(absPath, contentToSave);
              if (res.success) {
                  addToast(`Saved ${block.title || 'file'}`, 'success');
              } else {
-                 addToast(`Failed to save: ${res.error}`, 'error');
+                 addToast(`Failed to save: ${String(res.error)}`, 'error');
              }
         }
         // If in drafting mode, re-scan and update placeholders on save
@@ -1513,24 +1588,25 @@ const App: React.FC = () => {
       });
 
       const settingsToSave: ProjectSettings = {
-        ...(projectSettings as object),
+        ...(projectSettings as any),
         openTabs,
         activeTabId,
         stickyNotes: Array.from(stickyNotes),
         characterProfiles,
+        punchlistMetadata,
         sceneCompositions: serializableScenes,
         sceneNames,
         scannedImagePaths: Array.from(imageScanDirectories.keys()),
         scannedAudioPaths: Array.from(audioScanDirectories.keys()),
       } as ProjectSettings;
-      const settingsPath = await window.electronAPI.path.join(projectRootPath, 'game/project.ide.json');
+      const settingsPath = await window.electronAPI.path.join(projectRootPath as string, 'game/project.ide.json') as string;
       await window.electronAPI.writeFile(settingsPath, JSON.stringify(settingsToSave, null, 2));
       setHasUnsavedSettings(false);
     } catch (e) {
       console.error("Failed to save IDE settings:", e);
       addToast('Failed to save workspace settings', 'error');
     }
-  }, [projectRootPath, projectSettings, openTabs, activeTabId, stickyNotes, characterProfiles, addToast, sceneCompositions, sceneNames, imageScanDirectories, audioScanDirectories]);
+  }, [projectRootPath, projectSettings, openTabs, activeTabId, stickyNotes, characterProfiles, addToast, sceneCompositions, sceneNames, imageScanDirectories, audioScanDirectories, punchlistMetadata]);
 
 
   const handleSaveAll = useCallback(async () => {
@@ -1578,7 +1654,7 @@ const App: React.FC = () => {
             for (const blockId of blocksToSave) {
                 const block = currentBlocks.find(b => b.id === blockId);
                 if (block && block.filePath) {
-                    const absPath = await window.electronAPI.path.join(projectRootPath!, block.filePath);
+                    const absPath = await window.electronAPI.path.join(projectRootPath!, block.filePath) as string;
                     const res = await window.electronAPI.writeFile(absPath, block.content);
                     if (!res.success) throw new Error((res.error as string) || 'Unknown error saving file');
                 }
@@ -1695,31 +1771,34 @@ const App: React.FC = () => {
       setContextMenuInfo({ x: e.clientX, y: e.clientY, tabId });
   }, []);
 
-  const handleCloseOthersRequest = useCallback((tabId: string) => {
-    const tabsToClose = openTabs.filter(t => t.id !== tabId && t.id !== 'canvas');
+  const processTabCloseRequest = useCallback((tabsToClose: EditorTab[], fallbackTabId: string) => {
+    if (tabsToClose.length === 0) return;
+
     const hasUnsaved = tabsToClose.some(t => t.blockId && (dirtyBlockIds.has(t.blockId) || dirtyEditors.has(t.blockId)));
     
-    const closeAction = () => {
-        const keptTabs = openTabs.filter(t => t.id === tabId || t.id === 'canvas');
-        setOpenTabs(keptTabs);
-        if (!keptTabs.some(t => t.id === activeTabId)) {
-            setActiveTabId(tabId);
+    const performClose = () => {
+        const idsToClose = new Set(tabsToClose.map(t => t.id));
+        setOpenTabs(prev => prev.filter(t => !idsToClose.has(t.id)));
+        
+        // If active tab is being closed, switch to fallback
+        if (idsToClose.has(activeTabId)) {
+            setActiveTabId(fallbackTabId);
         }
     };
 
     if (hasUnsaved) {
         setUnsavedChangesModalInfo({
-            title: 'Close Other Tabs',
-            message: 'You have unsaved changes. Do you want to save them before closing other tabs?',
+            title: 'Close Tabs',
+            message: 'You have unsaved changes in some tabs. Do you want to save them before closing?',
             confirmText: 'Save & Close',
             dontSaveText: "Don't Save & Close",
             onConfirm: async () => {
                 await handleSaveAll();
-                closeAction();
+                performClose();
                 setUnsavedChangesModalInfo(null);
             },
             onDontSave: () => {
-                closeAction();
+                performClose();
                 setUnsavedChangesModalInfo(null);
             },
             onCancel: () => {
@@ -1727,49 +1806,110 @@ const App: React.FC = () => {
             }
         });
     } else {
-        closeAction();
+        performClose();
     }
-  }, [openTabs, activeTabId, dirtyBlockIds, dirtyEditors, handleSaveAll]);
+}, [dirtyBlockIds, dirtyEditors, activeTabId, handleSaveAll]);
+
+  const handleCloseOthersRequest = useCallback((tabId: string) => {
+    const tabsToClose = openTabs.filter(t => t.id !== tabId && t.id !== 'canvas');
+    processTabCloseRequest(tabsToClose, tabId);
+  }, [openTabs, processTabCloseRequest]);
 
   const handleCloseAllRequest = useCallback(() => {
     const tabsToClose = openTabs.filter(t => t.id !== 'canvas');
-    const hasUnsaved = tabsToClose.some(t => t.blockId && (dirtyBlockIds.has(t.blockId) || dirtyEditors.has(t.blockId)));
+    processTabCloseRequest(tabsToClose, 'canvas');
+  }, [openTabs, processTabCloseRequest]);
 
-    const closeAction = () => {
-        setOpenTabs([{ id: 'canvas', type: 'canvas' }]);
-        setActiveTabId('canvas');
-    };
+  const handleCloseLeftRequest = useCallback((tabId: string) => {
+    const index = openTabs.findIndex(t => t.id === tabId);
+    if (index === -1) return;
+    const tabsToClose = openTabs.slice(0, index).filter(t => t.id !== 'canvas');
+    processTabCloseRequest(tabsToClose, tabId);
+  }, [openTabs, processTabCloseRequest]);
 
-    if (hasUnsaved) {
-        setUnsavedChangesModalInfo({
-            title: 'Close All Tabs',
-            message: 'You have unsaved changes. Do you want to save them before closing all tabs?',
-            confirmText: 'Save & Close',
-            dontSaveText: "Don't Save & Close",
-            onConfirm: async () => {
-                await handleSaveAll();
-                closeAction();
-                setUnsavedChangesModalInfo(null);
-            },
-            onDontSave: () => {
-                closeAction();
-                setUnsavedChangesModalInfo(null);
-            },
-            onCancel: () => {
-                setUnsavedChangesModalInfo(null);
-            }
-        });
-    } else {
-        closeAction();
-    }
-  }, [openTabs, dirtyBlockIds, dirtyEditors, handleSaveAll]);
+  const handleCloseRightRequest = useCallback((tabId: string) => {
+    const index = openTabs.findIndex(t => t.id === tabId);
+    if (index === -1) return;
+    const tabsToClose = openTabs.slice(index + 1).filter(t => t.id !== 'canvas');
+    processTabCloseRequest(tabsToClose, tabId);
+  }, [openTabs, processTabCloseRequest]);
 
   const handleSwitchTab = (tabId: string) => setActiveTabId(tabId);
 
-  const handleCenterOnBlock = useCallback((blockId: string) => {
-      setActiveTabId('canvas');
-      setCenterOnBlockRequest({ blockId, key: Date.now() });
-  }, []);
+  const handleCenterOnBlock = useCallback((target: string) => {
+      let blockId = target;
+      let block = blocks.find(b => b.id === target);
+
+      // If no block matches ID, try matching path
+      if (!block) {
+          // Normalize path separators just in case
+          const targetPath = target.replace(/\\/g, '/');
+          block = blocks.find(b => b.filePath === targetPath);
+          if (block) blockId = block.id;
+      }
+
+      if (block) {
+          // Ensure the block type is visible in filters
+          setCanvasFilters(prev => {
+              const next = { ...prev };
+              let changed = false;
+              
+              if (analysisResult.screenOnlyBlockIds.has(blockId) && !prev.screens) {
+                  next.screens = true;
+                  changed = true;
+              } else if (analysisResult.configBlockIds.has(blockId) && !prev.config) {
+                  next.config = true;
+                  changed = true;
+              } else if (analysisResult.storyBlockIds.has(blockId) && !prev.story) {
+                  next.story = true;
+                  changed = true;
+              }
+              
+              return changed ? next : prev;
+          });
+
+          setActiveTabId('canvas');
+          // Small timeout to ensure canvas is rendered if switching tabs
+          setTimeout(() => {
+              setCenterOnBlockRequest({ blockId, key: Date.now() });
+          }, 50);
+      } else {
+          addToast(`Could not find a block for "${target}"`, 'warning');
+      }
+  }, [blocks, analysisResult, addToast]);
+
+  // DnD Handlers for Tabs
+  const handleTabDragStart = (e: React.DragEvent, tabId: string) => {
+    setDraggedTabId(tabId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', tabId); 
+  };
+
+  const handleTabDragOver = (e: React.DragEvent, targetTabId: string) => {
+    e.preventDefault();
+    if (draggedTabId && draggedTabId !== targetTabId) {
+       e.dataTransfer.dropEffect = 'move';
+    }
+  };
+
+  const handleTabDrop = (e: React.DragEvent, targetTabId: string) => {
+    e.preventDefault();
+    if (!draggedTabId || draggedTabId === targetTabId) return;
+    
+    const fromIndex = openTabs.findIndex(t => t.id === draggedTabId);
+    const toIndex = openTabs.findIndex(t => t.id === targetTabId);
+    
+    if (fromIndex !== -1 && toIndex !== -1) {
+        setOpenTabs(prev => {
+            const newTabs = [...prev];
+            const [moved] = newTabs.splice(fromIndex, 1);
+            newTabs.splice(toIndex, 0, moved);
+            return newTabs;
+        });
+        setHasUnsavedSettings(true); 
+    }
+    setDraggedTabId(null);
+  };
 
   const handleFindUsages = (id: string, type: 'character' | 'variable') => {
       const ids = new Set<string>();
@@ -1883,7 +2023,7 @@ const App: React.FC = () => {
             const newContent = `# This file stores character definitions.\n\n${newCharString}\n`;
             if (window.electronAPI && projectRootPath) {
                 try {
-                    const fullPath = await window.electronAPI.path.join(projectRootPath, charFilePath);
+                    const fullPath = await window.electronAPI.path.join(projectRootPath, charFilePath) as string;
                     const res = await window.electronAPI.writeFile(fullPath, newContent);
                     if (res.success) {
                         addBlock(charFilePath, newContent);
@@ -1911,1083 +2051,276 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSearch = useCallback(async () => {
-    if (!projectRootPath || !searchQuery.trim() || !window.electronAPI) return;
-    setIsSearching(true);
-    setSearchResults([]);
-    setStatusBarMessage('Searching...');
-    try {
-      const results = await window.electronAPI.searchInProject({
-        projectPath: projectRootPath,
-        query: searchQuery,
-        ...searchOptions,
-      });
-      setSearchResults(results);
-      setStatusBarMessage(`Search complete. Found ${results.reduce((acc, r) => acc + r.matches.length, 0)} matches in ${results.length} files.`);
-      setTimeout(() => setStatusBarMessage(''), 3000);
-    } catch (e: any) {
-      const errorMessage = e instanceof Error ? e.message : String(e);
-      addToast(`Search failed: ${errorMessage}`, 'error');
-      setStatusBarMessage('Search failed.');
-    } finally {
-      setIsSearching(false);
+  const handleCreateNode = useCallback(async (parentPath: string, name: string, type: 'file' | 'folder') => {
+    if (!window.electronAPI || !projectRootPath) return;
+    const fullPath = await window.electronAPI.path.join(projectRootPath, parentPath, name);
+    if (type === 'folder') {
+        await window.electronAPI.createDirectory(fullPath);
+    } else {
+        await window.electronAPI.writeFile(fullPath, '');
     }
-  }, [projectRootPath, searchQuery, searchOptions, setSearchResults, addToast]);
+    const projData = await window.electronAPI.loadProject(projectRootPath);
+    setFileSystemTree(projData.tree);
+  }, [projectRootPath]);
 
-  const handleSearchResultClick = useCallback((filePath: string, lineNumber: number) => {
-    const block = blocks.find(b => b.filePath === filePath);
-    if (block) {
-      handleOpenEditor(block.id, lineNumber);
-    }
-  }, [blocks, handleOpenEditor]);
+  const handleRenameNode = useCallback(async (oldPath: string, newName: string) => {
+      if (!window.electronAPI || !projectRootPath) return;
+      const fullOldPath = await window.electronAPI.path.join(projectRootPath, oldPath) as string;
+      const parentDir = oldPath.split('/').slice(0, -1).join('/');
+      const fullNewPath = await window.electronAPI.path.join(projectRootPath, parentDir, newName) as string;
+      await window.electronAPI.moveFile(fullOldPath, fullNewPath);
+      const projData = await window.electronAPI.loadProject(projectRootPath);
+      setFileSystemTree(projData.tree);
+  }, [projectRootPath]);
 
-  const handleReplaceAll = useCallback(() => {
-    const totalMatches = searchResults.reduce((sum, file) => sum + file.matches.length, 0);
-    if (totalMatches === 0) return;
-
-    setReplaceAllConfirmInfo({
-      totalMatches,
-      totalFiles: searchResults.length,
-      onConfirm: () => {
-        try {
-          let flags = 'g';
-          if (!searchOptions.isCaseSensitive) flags += 'i';
-
-          let searchPattern = searchOptions.isRegex ? searchQuery : searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          if (searchOptions.isWholeWord) {
-            searchPattern = `\\b${searchPattern}\\b`;
-          }
-          const regex = new RegExp(searchPattern, flags);
-          
-          const updatedBlockIds = new Set<string>();
-
-          const newBlocks = blocks.map(block => {
-            const fileResult = searchResults.find(r => r.filePath === block.filePath);
-            if (fileResult) {
-              const newContent = block.content.replace(regex, replaceQuery);
-              if (newContent !== block.content) {
-                updatedBlockIds.add(block.id);
-                
-                const editorInstance = editorInstances.current.get(block.id);
-                if (editorInstance && editorInstance.getValue() !== newContent) {
-                  editorInstance.setValue(newContent);
-                }
-                return { ...block, content: newContent };
-              }
-            }
-            return block;
-          });
-          
-          setBlocks(newBlocks);
-          setDirtyBlockIds(prev => new Set([...prev, ...updatedBlockIds]));
-
-          addToast(`Replaced ${totalMatches} occurrences across ${updatedBlockIds.size} files.`, 'success');
-
-          // Clear search state
-          setSearchQuery('');
-          setReplaceQuery('');
-          setSearchResults([]);
-
-        } catch (e: any) {
-          const errorMessage = e instanceof Error ? e.message : String(e);
-          addToast(`Replace failed: ${errorMessage}`, 'error');
-        } finally {
-          setReplaceAllConfirmInfo(null);
-        }
+  const handleDeleteNode = useCallback(async (paths: string[]) => {
+      if (!window.electronAPI || !projectRootPath) return;
+      for (const p of paths) {
+          const fullPath = await window.electronAPI.path.join(projectRootPath, p) as string;
+          await window.electronAPI.removeEntry(fullPath);
       }
-    });
-  }, [searchResults, searchQuery, replaceQuery, searchOptions, blocks, addToast, setBlocks, setDirtyBlockIds, setSearchQuery, setReplaceQuery, setSearchResults]);
+      const projData = await window.electronAPI.loadProject(projectRootPath);
+      setFileSystemTree(projData.tree);
+  }, [projectRootPath]);
 
+  const handleMoveNode = useCallback(async (sourcePaths: string[], targetPath: string) => {
+      if (!window.electronAPI || !projectRootPath) return;
+      const fullTargetDir = await window.electronAPI.path.join(projectRootPath, targetPath);
+      for (const p of sourcePaths) {
+          const fullSource = await window.electronAPI.path.join(projectRootPath, p);
+          const fileName = p.split('/').pop() || '';
+          const fullDest = await window.electronAPI.path.join(fullTargetDir, fileName);
+          await window.electronAPI.moveFile(fullSource, fullDest);
+      }
+      const projData = await window.electronAPI.loadProject(projectRootPath);
+      setFileSystemTree(projData.tree);
+  }, [projectRootPath]);
 
-  // --- Highlights ---
-  const clearHighlights = () => {
-      setFindUsagesHighlightIds(null);
-      setHoverHighlightIds(null);
+  const handleCut = useCallback((paths: string[]) => setClipboard({ type: 'cut', paths: new Set(paths) }), []);
+  const handleCopy = useCallback((paths: string[]) => setClipboard({ type: 'copy', paths: new Set(paths) }), []);
+  const handlePaste = useCallback(async (targetPath: string) => {
+      if (!clipboard || !window.electronAPI || !projectRootPath) return;
+      
+      const fullTargetDir = await window.electronAPI.path.join(projectRootPath!, targetPath);
+      
+      for (const p of Array.from(clipboard.paths)) {
+          const fullSource = await window.electronAPI.path.join(projectRootPath!, p);
+          const fileName = (p as string).split('/').pop() || '';
+          const fullDest = await window.electronAPI.path.join(fullTargetDir, fileName);
+          
+          if (clipboard.type === 'cut') {
+              await window.electronAPI.moveFile(fullSource, fullDest);
+          } else {
+              await window.electronAPI.copyEntry(fullSource, fullDest);
+          }
+      }
+      
+      if (clipboard.type === 'cut') setClipboard(null);
+      const projData = await window.electronAPI.loadProject(projectRootPath);
+      setFileSystemTree(projData.tree);
+  }, [clipboard, projectRootPath]);
+
+  const snippetCategoriesState = appSettings.snippetCategoriesState || {};
+  const handleToggleSnippetCategory = (name: string, isOpen: boolean) => {
+      updateAppSettings(draft => {
+          if (!draft.snippetCategoriesState) draft.snippetCategoriesState = {};
+          draft.snippetCategoriesState[name] = isOpen;
+      });
   };
 
-  // --- Route Canvas Support ---
-  const [routeCanvasData, setRouteCanvasData] = useState<{
-      labelNodes: LabelNode[], routeLinks: any[], identifiedRoutes: any[]
-  }>({ labelNodes: [], routeLinks: [], identifiedRoutes: [] });
-
-  const handleAnalyzeRoutes = useCallback(() => {
-      setStatusBarMessage('Analyzing route paths...');
-      // Allow render cycle to update status bar before heavy calculation
-      setTimeout(() => {
-          const { labelNodes, routeLinks, identifiedRoutes } = performRouteAnalysis(blocks, analysisResult.labels, analysisResult.jumps);
-          const layoutedNodes = computeAutoLayout(labelNodes, routeLinks);
-          setRouteCanvasData({ labelNodes: layoutedNodes, routeLinks, identifiedRoutes });
-          
-          const tabId = 'route-canvas';
-          setOpenTabs(prev => {
-              if (!prev.some(t => t.id === tabId)) {
-                  return [...prev, { id: tabId, type: 'route-canvas' }];
-              }
-              return prev;
-          });
-          setActiveTabId(tabId);
-          setStatusBarMessage('Route analysis complete.');
-          setTimeout(() => setStatusBarMessage(''), 3000);
-      }, 10);
-  }, [blocks, analysisResult]);
-
-  // --- Asset Management ---
-  const handleAddImageScanDirectory = useCallback(async () => {
-      if (!window.electronAPI) return;
-      
-      const path = await window.electronAPI.openDirectory();
-      if (!path) return;
-
-      setIsRefreshingImages(true);
-      try {
-          const { images } = await window.electronAPI.scanDirectory(path);
-          
-          setImages(prev => {
-              const next = new Map(prev);
-              images.forEach((img: any) => {
-                  const key = img.path;
-                  if (!next.has(key)) {
-                      const fileName = img.path.split('/').pop();
-                      const potentialProjectPath = `game/images/${fileName}`;
-                      const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
-
-                      next.set(key, { 
-                        ...img, 
-                        filePath: img.path, 
-                        isInProject: false, 
-                        fileHandle: null,
-                        projectFilePath: linkedPath 
-                      });
-                  }
-              });
-              return next;
-          });
-          
-          setImageScanDirectories(prev => {
-              const next = new Map(prev);
-              next.set(path, {} as any);
-              return next;
-          });
-          setImagesLastScanned(Date.now());
-          setHasUnsavedSettings(true);
-          addToast(`Scanned ${images.length} images from ${path}`, 'success');
-      } catch (e) {
-          console.error(e);
-          addToast('Failed to scan image directory', 'error');
-      } finally {
-          setIsRefreshingImages(false);
-      }
-  }, [addToast]);
-
-  const handleAddAudioScanDirectory = useCallback(async () => {
-      if (!window.electronAPI) return;
-      
-      const path = await window.electronAPI.openDirectory();
-      if (!path) return;
-
-      setIsRefreshingAudios(true);
-      try {
-          const { audios } = await window.electronAPI.scanDirectory(path);
-          
-          setAudios(prev => {
-              const next = new Map(prev);
-              audios.forEach((aud: any) => {
-                  const key = aud.path;
-                  if (!next.has(key)) {
-                      const fileName = aud.path.split('/').pop();
-                      const potentialProjectPath = `game/audio/${fileName}`;
-                      const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
-
-                      next.set(key, { 
-                        ...aud, 
-                        filePath: aud.path, 
-                        isInProject: false, 
-                        fileHandle: null, 
-                        projectFilePath: linkedPath 
-                      });
-                  }
-              });
-              return next;
-          });
-          
-          setAudioScanDirectories(prev => {
-              const next = new Map(prev);
-              next.set(path, {} as any);
-              return next;
-          });
-          setAudiosLastScanned(Date.now());
-          setHasUnsavedSettings(true);
-          addToast(`Scanned ${audios.length} audio files from ${path}`, 'success');
-      } catch (e) {
-          console.error(e);
-          addToast('Failed to scan audio directory', 'error');
-      } finally {
-          setIsRefreshingAudios(false);
-      }
-  }, [addToast]);
-
-  const handleRefreshImages = useCallback(async () => {
-      if (!window.electronAPI) return;
-      setIsRefreshingImages(true);
-      try {
-          const scanDirs = Array.from(imageScanDirectories.keys());
-          const newScannedImages = new Map<string, ProjectImage>();
-
-          // Re-scan all directories
-          for (const dirPath of scanDirs) {
-              const { images: scanned } = await window.electronAPI.scanDirectory(dirPath);
-              scanned.forEach((img: any) => {
-                  newScannedImages.set(img.path, { ...img, filePath: img.path, isInProject: false, fileHandle: null });
-              });
-          }
-
-          setImages(prev => {
-              const next = new Map<string, ProjectImage>();
-              // Keep all project images
-              prev.forEach((val, key) => {
-                  if (val.isInProject) {
-                      next.set(key, val);
-                  }
-              });
-              // Add freshly scanned images
-              newScannedImages.forEach((val, key) => {
-                  if (!next.has(key)) {
-                      const fileName = val.filePath.split('/').pop();
-                      const potentialProjectPath = `game/images/${fileName}`;
-                      const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
-
-                      next.set(key, { ...val, projectFilePath: linkedPath });
-                  }
-              });
-              return next;
-          });
-
-          setImagesLastScanned(Date.now());
-          addToast('Images refreshed', 'success');
-      } catch (e) {
-          console.error(e);
-          addToast('Failed to refresh images', 'error');
-      } finally {
-          setIsRefreshingImages(false);
-      }
-  }, [imageScanDirectories, addToast]);
-
-  const handleRemoveImageScanDirectory = useCallback((dirPath: string) => {
-      setImageScanDirectories(prev => {
-          const next = new Map(prev);
-          next.delete(dirPath);
-          return next;
-      });
-      
-      setImages(prev => {
-          const next = new Map<string, ProjectImage>();
-          prev.forEach((val, key) => {
-              // If it's a project file, keep it.
-              // If it's an external file, keep it ONLY if it doesn't start with the removed directory path.
-              if (val.isInProject || !val.filePath.startsWith(dirPath)) {
-                  next.set(key, val);
-              }
-          });
-          return next;
-      });
-      setHasUnsavedSettings(true);
-  }, []);
-
-  const handleRefreshAudios = useCallback(async () => {
-      if (!window.electronAPI) return;
-      setIsRefreshingAudios(true);
-      try {
-          const scanDirs = Array.from(audioScanDirectories.keys());
-          const newScannedAudios = new Map<string, RenpyAudio>();
-
-          for (const dirPath of scanDirs) {
-              const { audios: scanned } = await window.electronAPI.scanDirectory(dirPath);
-              scanned.forEach((aud: any) => {
-                  newScannedAudios.set(aud.path, { ...aud, filePath: aud.path, isInProject: false, fileHandle: null });
-              });
-          }
-
-          setAudios(prev => {
-              const next = new Map<string, RenpyAudio>();
-              prev.forEach((val, key) => {
-                  if (val.isInProject) {
-                      next.set(key, val);
-                  }
-              });
-              newScannedAudios.forEach((val, key) => {
-                  if (!next.has(key)) {
-                      const fileName = val.filePath.split('/').pop();
-                      const potentialProjectPath = `game/audio/${fileName}`;
-                      const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
-
-                      next.set(key, { ...val, projectFilePath: linkedPath });
-                  }
-              });
-              return next;
-          });
-
-          setAudiosLastScanned(Date.now());
-          addToast('Audio files refreshed', 'success');
-      } catch (e) {
-          console.error(e);
-          addToast('Failed to refresh audio files', 'error');
-      } finally {
-          setIsRefreshingAudios(false);
-      }
-  }, [audioScanDirectories, addToast]);
-
-  const handleRemoveAudioScanDirectory = useCallback((dirPath: string) => {
-      setAudioScanDirectories(prev => {
-          const next = new Map(prev);
-          next.delete(dirPath);
-          return next;
-      });
-      
-      setAudios(prev => {
-          const next = new Map<string, RenpyAudio>();
-          prev.forEach((val, key) => {
-              if (val.isInProject || !val.filePath.startsWith(dirPath)) {
-                  next.set(key, val);
-              }
-          });
-          return next;
-      });
-      setHasUnsavedSettings(true);
-  }, []);
-
-  const handleCopyImagesToProject = async (sourcePaths: string[]) => {
-      if (!projectRootPath || !window.electronAPI) return;
-      
-      setIsLoading(true);
-      setStatusBarMessage('Copying images to project...');
-      try {
-          // Prepare updates first
-          const updates: { src: string, newData: any }[] = [];
-
-          for (const src of sourcePaths) {
-              const fileName = src.split(/[/\\]/).pop();
-              if (!fileName) continue;
-              
-              const relativeDest = `game/images/${fileName}`;
-              const destPath = await window.electronAPI.path.join(projectRootPath, 'game', 'images', fileName);
-              
-              const img = images.get(src);
-              if (img) {
-                 await window.electronAPI.copyEntry(img.filePath, destPath);
-                 
-                 // Robust URL Construction
-                 // destPath is absolute OS path
-                 // We need to normalize it for URL and encode it safely
-                 const normalized = destPath.replace(/\\/g, '/');
-                 // Ensure path starts with / for URL pathname construction if it's absolute
-                 const urlPath = normalized.startsWith('/') ? normalized : `/${normalized}`;
-                 
-                 // Split into segments to encode component-wise to handle #, ?, etc.
-                 const encodedPath = urlPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
-                 const mediaUrl = `media://${encodedPath}`;
-                 
-                 updates.push({
-                     src,
-                     newData: {
-                         filePath: relativeDest,
-                         fileName,
-                         isInProject: true,
-                         projectFilePath: relativeDest,
-                         dataUrl: mediaUrl,
-                         size: img.size,
-                         lastModified: Date.now()
-                     }
-                 });
-              }
-          }
-
-          // Apply state updates synchronously
-          setImages(prev => {
-             const next = new Map(prev);
-             updates.forEach(({ src, newData }) => {
-                 // Add the new project-local image
-                 next.set(newData.filePath, { ...newData, fileHandle: null });
-                 
-                 // Update the original scanned image to link to the project file
-                 const sourceImg = next.get(src);
-                 if (sourceImg) {
-                     next.set(src, { ...sourceImg, projectFilePath: newData.filePath });
-                 }
-             });
-             return next;
-          });
-
-          // Refresh file explorer tree without reading file contents
-          const projData = await window.electronAPI.refreshProjectTree(projectRootPath);
-          setFileSystemTree(projData.tree);
-
-          addToast('Images copied to project', 'success');
-          setStatusBarMessage('Images copied successfully.');
-      } catch (e) {
-          console.error(e);
-          addToast('Failed to copy images', 'error');
-          setStatusBarMessage('Error copying images.');
-      } finally {
-          setIsLoading(false);
-          setTimeout(() => setStatusBarMessage(''), 3000);
-      }
-  };
-
-  const handleCopyAudiosToProject = async (sourcePaths: string[]) => {
-      if (!projectRootPath || !window.electronAPI) return;
-      
-      setIsLoading(true);
-      setStatusBarMessage('Copying audio to project...');
-      try {
-          const updates: { src: string, newData: any }[] = [];
-
-          for (const src of sourcePaths) {
-              const fileName = src.split(/[/\\]/).pop();
-              if (!fileName) continue;
-              
-              const relativeDest = `game/audio/${fileName}`;
-              const destPath = await window.electronAPI.path.join(projectRootPath, 'game', 'audio', fileName);
-              
-              const aud = audios.get(src);
-              if (aud) {
-                 await window.electronAPI.copyEntry(aud.filePath, destPath);
-                 
-                 // Robust URL Construction
-                 const normalized = destPath.replace(/\\/g, '/');
-                 const urlPath = normalized.startsWith('/') ? normalized : `/${normalized}`;
-                 
-                 // Split into segments to encode component-wise to handle #, ?, etc.
-                 const encodedPath = urlPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
-                 const mediaUrl = `media://${encodedPath}`;
-                 
-                 updates.push({
-                     src,
-                     newData: {
-                         filePath: relativeDest,
-                         fileName,
-                         isInProject: true,
-                         projectFilePath: relativeDest,
-                         dataUrl: mediaUrl,
-                         size: aud.size,
-                         lastModified: Date.now()
-                     }
-                 });
-              }
-          }
-
-          setAudios(prev => {
-             const next = new Map(prev);
-             updates.forEach(({ src, newData }) => {
-                 // Add the new project-local audio
-                 next.set(newData.filePath, { ...newData, fileHandle: null });
-
-                 // Update the original scanned audio to link to the project file
-                 const sourceAud = next.get(src);
-                 if (sourceAud) {
-                     next.set(src, { ...sourceAud, projectFilePath: newData.filePath });
-                 }
-             });
-             return next;
-          });
-
-          // Refresh file explorer tree without reading file contents
-          const projData = await window.electronAPI.refreshProjectTree(projectRootPath);
-          setFileSystemTree(projData.tree);
-
-          addToast('Audio files copied to project', 'success');
-          setStatusBarMessage('Audio files copied successfully.');
-      } catch (e) {
-          console.error(e);
-          addToast('Failed to copy audio files', 'error');
-          setStatusBarMessage('Error copying audio files.');
-      } finally {
-          setIsLoading(false);
-          setTimeout(() => setStatusBarMessage(''), 3000);
-      }
-  };
-  
-    // --- File System Operations ---
-    const handleCreateNode = useCallback(async (parentPath: string, name: string, type: 'file' | 'folder') => {
-        if (!projectRootPath || !window.electronAPI?.path) return;
-        const newPath = await window.electronAPI.path.join(parentPath, name);
-        const fullPath = await window.electronAPI.path.join(projectRootPath, newPath);
-        
-        try {
-            if (type === 'folder') {
-                await window.electronAPI.createDirectory(fullPath);
-            } else {
-                const content = name.endsWith('.rpy') ? `# New file: ${name}\n\nlabel ${name.replace('.rpy', '')}_start:\n    return\n` : '';
-                await window.electronAPI.writeFile(fullPath, content);
-                if (name.endsWith('.rpy')) {
-                    addBlock(newPath, content);
-                }
-            }
-            await loadProject(projectRootPath);
-            addToast(`${type === 'file' ? 'File' : 'Folder'} created: ${name}`, 'success');
-        } catch(e) {
-            addToast(`Failed to create ${type}`, 'error');
-            console.error(e);
-        }
-    }, [projectRootPath, addToast, addBlock, loadProject]);
-
-    const handleDeleteNode = useCallback((paths: string[]) => {
-        if (!projectRootPath || !window.electronAPI?.removeEntry) return;
-
-        setDeleteConfirmInfo({
-            paths,
-            onConfirm: async () => {
-                try {
-                    for (const path of paths) {
-                        const fullPath = await window.electronAPI!.path.join(projectRootPath, path);
-                        const res = await window.electronAPI!.removeEntry!(fullPath);
-                        if (!res.success) throw new Error((res.error as string) || 'Failed to delete items');
-                    }
-                    await loadProject(projectRootPath);
-                    addToast(`${paths.length} item(s) deleted`, 'success');
-                } catch(e) {
-                    addToast(`Failed to delete items`, 'error');
-                }
-                setDeleteConfirmInfo(null);
-            }
-        });
-    }, [projectRootPath, loadProject, addToast]);
-
-    const handleRenameNode = useCallback(async (oldPath: string, newName: string) => {
-        if (!projectRootPath || !window.electronAPI?.moveFile) return;
-        const oldName = oldPath.split('/').pop();
-        if(newName === oldName) return;
-
-        const newPath = oldPath.substring(0, oldPath.lastIndexOf('/') + 1) + newName;
-        const fullOldPath = await window.electronAPI.path.join(projectRootPath, oldPath);
-        const fullNewPath = await window.electronAPI.path.join(projectRootPath, newPath);
-
-        try {
-            await window.electronAPI.moveFile(fullOldPath, fullNewPath);
-            await loadProject(projectRootPath);
-            addToast(`Renamed to ${newName}`, 'success');
-        } catch (e) {
-            addToast('Rename failed', 'error');
-        }
-    }, [projectRootPath, loadProject, addToast]);
-
-    const handleMoveNode = useCallback(async (sourcePaths: string[], targetFolderPath: string) => {
-        if (!projectRootPath || !window.electronAPI?.moveFile) return;
-        try {
-            for(const sourcePath of sourcePaths) {
-                const sourceName = sourcePath.split('/').pop();
-                if(!sourceName) continue;
-                
-                const newPath = await window.electronAPI.path.join(targetFolderPath, sourceName);
-                if(newPath === sourcePath) continue;
-
-                const fullOldPath = await window.electronAPI.path.join(projectRootPath, sourcePath);
-                const fullNewPath = await window.electronAPI.path.join(projectRootPath, newPath);
-                await window.electronAPI.moveFile(fullOldPath, fullNewPath);
-            }
-            await loadProject(projectRootPath);
-            addToast(`${sourcePaths.length} item(s) moved`, 'success');
-        } catch (e) {
-            addToast('Move failed', 'error');
-        }
-    }, [projectRootPath, loadProject, addToast]);
-
-    const handleCut = useCallback((paths: string[]) => {
-        setClipboard({ type: 'cut', paths: new Set(paths) });
-        addToast(`${paths.length} item(s) cut to clipboard`, 'info');
-    }, []);
-
-    const handleCopy = useCallback((paths: string[]) => {
-        setClipboard({ type: 'copy', paths: new Set(paths) });
-        addToast(`${paths.length} item(s) copied to clipboard`, 'info');
-    }, []);
-
-    const handlePaste = useCallback(async (targetFolderPath: string) => {
-        if (!clipboard || !projectRootPath || !window.electronAPI) return;
-        
-        try {
-            for(const sourcePath of clipboard.paths) {
-                const sourceName = sourcePath.split('/').pop();
-                if(!sourceName) continue;
-                
-                const destPath = await window.electronAPI.path.join(targetFolderPath, sourceName);
-                const fullSourcePath = await window.electronAPI.path.join(projectRootPath, sourcePath);
-                const fullDestPath = await window.electronAPI.path.join(projectRootPath, destPath);
-
-                if (clipboard.type === 'copy') {
-                    await window.electronAPI.copyEntry!(fullSourcePath, fullDestPath);
-                } else {
-                    await window.electronAPI.moveFile!(fullSourcePath, fullDestPath);
-                }
-            }
-
-            if(clipboard.type === 'cut') {
-                setClipboard(null);
-            }
-            
-            await loadProject(projectRootPath);
-            addToast('Paste successful', 'success');
-
-        } catch (e) {
-             addToast('Paste failed', 'error');
-        }
-    }, [clipboard, projectRootPath, loadProject, addToast]);
-
-
-    // --- Game Execution ---
-    const handleRunGame = useCallback(async () => {
-        if (!window.electronAPI || !projectRootPath) return;
-
-        if (!appSettings.renpyPath) {
-            setShowConfigureRenpyModal(true);
-            return;
-        }
-
-        await handleSaveAll();
-        // If in drafting mode, update artifacts right before run to be safe
-        if (projectSettings.draftingMode) {
-            await updateDraftingArtifacts();
-        }
-        setStatusBarMessage('Launching game...');
-        window.electronAPI!.runGame(appSettings.renpyPath, projectRootPath!);
-
-    }, [appSettings.renpyPath, projectRootPath, handleSaveAll, projectSettings.draftingMode, updateDraftingArtifacts]);
-
-    const handleStopGame = useCallback(() => {
-        if (window.electronAPI) {
-            window.electronAPI.stopGame();
-        }
-    }, []);
-
-    const handleDeleteSelected = useCallback(() => {
-        if (activeTabId !== 'canvas') return;
-        
-        let deletedCount = 0;
-
-        if (selectedBlockIds.length > 0) {
-            setGroups(draft => {
-                draft.forEach(g => {
-                    g.blockIds = g.blockIds.filter(bid => !selectedBlockIds.includes(bid));
-                });
-            });
-            setBlocks(prev => prev.filter(b => !selectedBlockIds.includes(b.id)));
-            // Close tabs for deleted blocks
-            setOpenTabs(prev => prev.filter(t => !t.blockId || !selectedBlockIds.includes(t.blockId)));
-            deletedCount += selectedBlockIds.length;
-            setSelectedBlockIds([]);
-        }
-
-        if (selectedGroupIds.length > 0) {
-             setGroups(draft => {
-                 return draft.filter(g => !selectedGroupIds.includes(g.id));
-             });
-             deletedCount += selectedGroupIds.length;
-             setSelectedGroupIds([]);
-        }
-        
-        if (deletedCount > 0) {
-            addToast(`Deleted ${deletedCount} items`, 'info');
-        }
-    }, [activeTabId, selectedBlockIds, selectedGroupIds, setBlocks, setGroups, setOpenTabs, addToast]);
-
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            // Ignore if input/textarea is focused
-            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-                return;
-            }
-
-            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-            const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
-
-            // Shortcuts
-            
-            // F5: Run Game
-            if (e.key === 'F5') {
-                e.preventDefault();
-                handleRunGame();
-            }
-            
-            // Ctrl+Shift+F: Search
-            if (cmdOrCtrl && e.shiftKey && e.key.toLowerCase() === 'f') {
-                e.preventDefault();
-                handleToggleSearch();
-            }
-
-            // Ctrl+S: Save All (if not editor handling it)
-            if (cmdOrCtrl && e.key.toLowerCase() === 's') {
-                e.preventDefault();
-                handleSaveAll();
-            }
-
-            // Undo/Redo (Custom implementation for app-wide history)
-            if (cmdOrCtrl && e.key.toLowerCase() === 'z') {
-                e.preventDefault();
-                if (e.shiftKey) {
-                    if (canRedo) redo();
-                } else {
-                    if (canUndo) undo();
-                }
-            }
-            if (cmdOrCtrl && e.key.toLowerCase() === 'y') {
-                e.preventDefault();
-                if (canRedo) redo();
-            }
-
-            // N: New Block (Context aware, mostly Canvas)
-            if (e.key.toLowerCase() === 'n' && activeTabId === 'canvas') {
-                e.preventDefault();
-                setCreateBlockModalOpen(true);
-            }
-
-            // Delete / Backspace
-            if ((e.key === 'Delete' || e.key === 'Backspace') && activeTabId === 'canvas') {
-                if (selectedBlockIds.length > 0 || selectedGroupIds.length > 0) {
-                    e.preventDefault();
-                    handleDeleteSelected();
-                }
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleRunGame, handleToggleSearch, handleSaveAll, canUndo, canRedo, undo, redo, activeTabId, handleDeleteSelected, selectedBlockIds, selectedGroupIds]);
-
-    useEffect(() => {
-        if (window.electronAPI) {
-            const removeStarted = window.electronAPI.onGameStarted(() => {
-                setIsGameRunning(true);
-                setStatusBarMessage('Game running.');
-            });
-            const removeStopped = window.electronAPI.onGameStopped(() => {
-                setIsGameRunning(false);
-                setStatusBarMessage('Game stopped.');
-                setTimeout(() => setStatusBarMessage(''), 3000);
-            });
-            const removeError = window.electronAPI.onGameError((error: any) => {
-                addToast(`Failed to launch game: ${error}`, 'error');
-                setStatusBarMessage('Error launching game.');
-                setIsGameRunning(false);
-            });
-            return () => {
-                removeStarted();
-                removeStopped();
-                removeError();
-            };
-        }
-    }, [addToast]);
-    
-
-  // --- Menu Command Listener ---
+  // --- Menu Command Handling ---
   useEffect(() => {
-      if (window.electronAPI?.onMenuCommand) {
-          const removeListener = window.electronAPI.onMenuCommand((data: any) => {
-              switch (data.command) {
-                  case 'new-project':
-                      handleNewProjectRequest();
-                      break;
-                  case 'open-project':
-                      handleOpenProjectFolder();
-                      break;
-                  case 'run-project':
-                      handleRunGame();
-                      break;
-                  case 'open-static-tab':
-                      if (data.type === 'canvas' || data.type === 'route-canvas') {
-                          handleOpenStaticTab(data.type as 'canvas' | 'route-canvas');
-                      }
-                      break;
-                  case 'open-recent':
-                      if (data.path && typeof data.path === 'string') {
-                          loadProject(data.path as string);
-                      }
-                      break;
-                  case 'open-about':
-                      setAboutModalOpen(true);
-                      break;
-              }
-          });
-          return () => removeListener();
-      }
-  }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenStaticTab, handleRunGame, loadProject]);
-  
-  // --- Exit confirmation flow ---
+        if (!window.electronAPI) return;
+        const removeListener = window.electronAPI.onMenuCommand((data) => {
+            if (data.command === 'new-project') handleNewProjectRequest();
+            if (data.command === 'open-project') handleOpenProjectFolder();
+            if (data.command === 'open-recent' && data.path) loadProject(data.path);
+            if (data.command === 'run-project' && projectRootPath) window.electronAPI?.runGame(appSettings.renpyPath, projectRootPath);
+            if (data.command === 'open-static-tab' && data.type) handleOpenStaticTab(data.type);
+            if (data.command === 'open-about') setAboutModalOpen(true);
+        });
+        return removeListener;
+  }, [handleNewProjectRequest, handleOpenProjectFolder, loadProject, projectRootPath, appSettings.renpyPath, handleOpenStaticTab]);
+
+  // --- Exit Handling ---
+  const dirtyBlockIdsRef = useRef(dirtyBlockIds);
+  const dirtyEditorsRef = useRef(dirtyEditors);
+  const hasUnsavedSettingsRef = useRef(hasUnsavedSettings);
+  const handleSaveAllRef = useRef(handleSaveAll);
+  const handleSaveProjectSettingsRef = useRef(handleSaveProjectSettings);
+
+  useEffect(() => { dirtyBlockIdsRef.current = dirtyBlockIds; }, [dirtyBlockIds]);
+  useEffect(() => { dirtyEditorsRef.current = dirtyEditors; }, [dirtyEditors]);
+  useEffect(() => { hasUnsavedSettingsRef.current = hasUnsavedSettings; }, [hasUnsavedSettings]);
+  useEffect(() => { handleSaveAllRef.current = handleSaveAll; }, [handleSaveAll]);
+  useEffect(() => { handleSaveProjectSettingsRef.current = handleSaveProjectSettings; }, [handleSaveProjectSettings]);
+
   useEffect(() => {
-    if (window.electronAPI) {
-      const removeCheckListener = window.electronAPI.onCheckUnsavedChangesBeforeExit(() => {
-        const hasUnsaved = dirtyBlockIds.size > 0 || dirtyEditors.size > 0 || hasUnsavedSettings;
-        window.electronAPI!.replyUnsavedChangesBeforeExit(hasUnsaved);
+      if (!window.electronAPI) return;
+
+      const removeCheck = window.electronAPI.onCheckUnsavedChangesBeforeExit(() => {
+          const hasUnsaved = dirtyBlockIdsRef.current.size > 0 || dirtyEditorsRef.current.size > 0 || hasUnsavedSettingsRef.current;
+          window.electronAPI!.replyUnsavedChangesBeforeExit(hasUnsaved);
       });
 
-      const removeShowModalListener = window.electronAPI.onShowExitModal(() => {
-        setUnsavedChangesModalInfo({
-          title: 'Quit Application',
-          message: 'You have unsaved changes. Do you want to save them before quitting?',
-          confirmText: 'Save & Quit',
-          dontSaveText: "Don't Save & Quit",
-          onConfirm: async () => {
-            await handleSaveAll();
-            window.electronAPI!.forceQuit();
-          },
-          onDontSave: () => {
-            window.electronAPI!.forceQuit();
-          },
-          onCancel: () => {
-            setUnsavedChangesModalInfo(null);
-          },
-        });
+      const removeShowModal = window.electronAPI.onShowExitModal(() => {
+          setUnsavedChangesModalInfo({
+              title: 'Unsaved Changes',
+              message: 'You have unsaved changes. Do you want to save them before exiting?',
+              confirmText: 'Save & Exit',
+              dontSaveText: "Don't Save",
+              onConfirm: async () => {
+                  await handleSaveAllRef.current();
+                  window.electronAPI!.ideStateSavedForQuit();
+              },
+              onDontSave: () => {
+                  window.electronAPI!.ideStateSavedForQuit();
+              },
+              onCancel: () => {
+                  setUnsavedChangesModalInfo(null);
+              }
+          });
       });
-      
-      const removeSaveStateListener = window.electronAPI.onSaveIdeStateBeforeQuit(async () => {
-        if (projectRootPath) {
-          await handleSaveProjectSettings();
-        }
-        window.electronAPI!.ideStateSavedForQuit();
+
+      const removeSaveState = window.electronAPI.onSaveIdeStateBeforeQuit(async () => {
+          await handleSaveProjectSettingsRef.current();
+          window.electronAPI!.ideStateSavedForQuit();
       });
 
       return () => {
-        removeCheckListener();
-        removeShowModalListener();
-        removeSaveStateListener();
+          removeCheck();
+          removeShowModal();
+          removeSaveState();
       };
-    }
-  }, [dirtyBlockIds, dirtyEditors, hasUnsavedSettings, handleSaveAll, handleSaveProjectSettings, projectRootPath]);
-
-  const handleEditorMount = useCallback((id: string, editor: monaco.editor.IStandaloneCodeEditor) => {
-      editorInstances.current.set(id, editor);
   }, []);
-
-  const handleEditorUnmount = useCallback((id: string) => {
-      editorInstances.current.delete(id);
-  }, []);
-
-  // --- Sash/Resizing Handlers ---
-  const handleLeftSashDrag = useCallback((delta: number) => {
-    updateAppSettings(draft => {
-        const newWidth = draft.leftSidebarWidth + delta;
-        draft.leftSidebarWidth = Math.max(200, Math.min(newWidth, 600));
-    });
-  }, [updateAppSettings]);
-
-  const handleRightSashDrag = useCallback((delta: number) => {
-    updateAppSettings(draft => {
-        const newWidth = draft.rightSidebarWidth - delta;
-        draft.rightSidebarWidth = Math.max(240, Math.min(newWidth, 600));
-    });
-  }, [updateAppSettings]);
-
-
-  // --- Render Helpers ---
-  const activeBlock = useMemo(() => blocks.find(b => b.id === activeTabId), [blocks, activeTabId]);
-  const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId), [openTabs, activeTabId]);
-
-  const settingsForModal: IdeSettings = useMemo(() => {
-      return { ...(appSettings as object || {}), ...(projectSettings as object || {}) } as IdeSettings;
-  }, [appSettings, projectSettings]);
-
-  const handleSettingsChange = useCallback((key: keyof IdeSettings, value: any) => {
-      updateAppSettings(draft => {
-          if (key in draft) {
-            (draft as any)[key] = value;
-          }
-      });
-      updateProjectSettings(draft => {
-          if (key in draft) {
-            (draft as any)[key] = value;
-          }
-      });
-  }, [updateAppSettings, updateProjectSettings]);
-
-  const projectWordStats = useMemo(() => {
-    if (!projectRootPath) {
-        return { totalWords: 0, currentFileWords: null, readingTime: '≈ 0 min read' };
-    }
-    const totalWords = blocks.reduce((sum, block) => sum + countWordsInRenpyScript(block.content), 0);
-    
-    const activeEditorTab = openTabs.find(t => t.id === activeTabId && t.type === 'editor');
-    const activeBlockForCount = activeEditorTab ? blocks.find(b => b.id === activeEditorTab.blockId) : null;
-    const currentFileWords = activeBlockForCount ? countWordsInRenpyScript(activeBlockForCount.content) : null;
-    
-    const readingTimeMinutes = Math.round(totalWords / 200); // 200 wpm
-    
-    let readingTime = '';
-    if (readingTimeMinutes < 1) {
-        readingTime = '< 1 min read';
-    } else if (readingTimeMinutes < 60) {
-        readingTime = `≈ ${readingTimeMinutes} min read`;
-    } else {
-        const hours = Math.floor(readingTimeMinutes / 60);
-        const minutes = readingTimeMinutes % 60;
-        readingTime = `≈ ${hours}h ${minutes}m read`;
-    }
-
-    return { totalWords, currentFileWords, readingTime };
-  }, [blocks, activeTabId, openTabs, projectRootPath]);
-
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-primary text-primary overflow-hidden">
-      {showWelcome && (
-        <WelcomeScreen 
-            onOpenProject={handleOpenProjectFolder}
-            onCreateProject={handleNewProjectRequest}
-            isElectron={!!window.electronAPI}
-            recentProjects={appSettings.recentProjects}
-            onOpenRecent={loadProject}
-        />
-      )}
-      <div className="flex-none z-40">
-        <Toolbar 
-            directoryHandle={directoryHandle}
-            projectRootPath={projectRootPath}
-            dirtyBlockIds={dirtyBlockIds}
-            dirtyEditors={dirtyEditors}
-            saveStatus={saveStatus}
-            canUndo={canUndo}
-            canRedo={canRedo}
-            undo={undo}
-            redo={redo}
-            addBlock={() => setCreateBlockModalOpen(true)}
-            handleTidyUp={handleTidyUp}
-            onAnalyzeRoutes={handleAnalyzeRoutes}
-            onRequestNewProject={handleNewProjectRequest}
-            requestOpenFolder={handleOpenProjectFolder}
-            handleSave={handleSaveAll}
-            onOpenSettings={() => setSettingsModalOpen(true)}
-            isLeftSidebarOpen={appSettings.isLeftSidebarOpen}
-            setIsLeftSidebarOpen={(open) => updateAppSettings(draft => { draft.isLeftSidebarOpen = open; })}
-            isRightSidebarOpen={appSettings.isRightSidebarOpen}
-            setIsRightSidebarOpen={(open) => updateAppSettings(draft => { draft.isRightSidebarOpen = open; })}
-            onOpenStaticTab={handleOpenStaticTab}
-            onAddStickyNote={() => addStickyNote()}
-            isGameRunning={isGameRunning}
-            onRunGame={handleRunGame}
-            onStopGame={handleStopGame}
-            onToggleSearch={handleToggleSearch}
-            onOpenShortcuts={() => setShortcutsModalOpen(true)}
-            draftingMode={projectSettings.draftingMode}
-            onToggleDraftingMode={handleToggleDraftingMode}
-        />
-      </div>
+    <div className={`fixed inset-0 flex flex-col bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100 ${appSettings.theme}`}>
+      <Toolbar
+        directoryHandle={directoryHandle}
+        projectRootPath={projectRootPath}
+        dirtyBlockIds={dirtyBlockIds}
+        dirtyEditors={dirtyEditors}
+        saveStatus={saveStatus}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        undo={undo}
+        redo={redo}
+        addBlock={() => setCreateBlockModalOpen(true)}
+        handleTidyUp={() => handleTidyUp(true)}
+        onAnalyzeRoutes={() => handleOpenStaticTab('route-canvas')}
+        onRequestNewProject={handleNewProjectRequest}
+        requestOpenFolder={handleOpenProjectFolder}
+        handleSave={handleSaveAll}
+        onOpenSettings={() => setSettingsModalOpen(true)}
+        isLeftSidebarOpen={appSettings.isLeftSidebarOpen}
+        setIsLeftSidebarOpen={(open) => updateAppSettings(draft => { draft.isLeftSidebarOpen = open })}
+        isRightSidebarOpen={appSettings.isRightSidebarOpen}
+        setIsRightSidebarOpen={(open) => updateAppSettings(draft => { draft.isRightSidebarOpen = open })}
+        onOpenStaticTab={handleOpenStaticTab}
+        onAddStickyNote={() => addStickyNote()}
+        isGameRunning={isGameRunning}
+        onRunGame={() => window.electronAPI?.runGame(appSettings.renpyPath, projectRootPath!)}
+        onStopGame={() => window.electronAPI?.stopGame()}
+        onToggleSearch={handleToggleSearch}
+        onOpenShortcuts={() => setShortcutsModalOpen(true)}
+        draftingMode={projectSettings.draftingMode}
+        onToggleDraftingMode={handleToggleDraftingMode}
+      />
       
-      <div className="flex-1 flex overflow-hidden min-h-0">
+      <div className="flex-grow flex overflow-hidden">
+        {/* Left Sidebar */}
         {appSettings.isLeftSidebarOpen && (
-            <>
-                <div 
-                    className="flex-none border-r border-primary bg-secondary flex flex-col overflow-hidden h-full"
-                    style={{ width: appSettings.leftSidebarWidth }}
-                >
-                    <div className="flex-none flex border-b border-primary">
-                        <button
-                        onClick={() => setActiveLeftPanel('explorer')}
-                        className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors ${activeLeftPanel === 'explorer' ? 'bg-secondary text-accent' : 'bg-primary text-secondary hover:bg-tertiary-hover'}`}
-                        >
-                        Explorer
-                        </button>
-                        <button
-                        onClick={() => setActiveLeftPanel('search')}
-                        className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors ${activeLeftPanel === 'search' ? 'bg-secondary text-accent' : 'bg-primary text-secondary hover:bg-tertiary-hover'}`}
-                        >
-                        Search
-                        </button>
-                    </div>
-                    
-                    <div className="flex-1 min-h-0 relative">
-                        <div className={`w-full h-full absolute top-0 left-0 transition-opacity ${activeLeftPanel === 'explorer' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
-                        {activeLeftPanel === 'explorer' && (
-                            <FileExplorerPanel 
-                                tree={fileSystemTree}
-                                onFileOpen={handlePathDoubleClick}
-                                onCreateNode={handleCreateNode}
-                                onRenameNode={handleRenameNode}
-                                onDeleteNode={handleDeleteNode}
-                                onMoveNode={handleMoveNode}
-                                clipboard={clipboard}
-                                onCut={handleCut}
-                                onCopy={handleCopy}
-                                onPaste={handlePaste}
-                                onCenterOnBlock={(filePath) => {
-                                    const block = blocks.find(b => b.filePath === filePath);
-                                    if (block) handleCenterOnBlock(block.id);
-                                }}
-                                selectedPaths={explorerSelectedPaths}
-                                setSelectedPaths={setExplorerSelectedPaths}
-                                lastClickedPath={explorerLastClickedPath}
-                                expandedPaths={explorerExpandedPaths}
-                                onToggleExpand={handleToggleExpandExplorer}
-                            />
-                        )}
-                        </div>
-                        <div className={`w-full h-full absolute top-0 left-0 transition-opacity ${activeLeftPanel === 'search' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
-                        {activeLeftPanel === 'search' && (
-                            <SearchPanel
-                            query={searchQuery}
-                            setQuery={setSearchQuery}
-                            replace={replaceQuery}
-                            setReplace={setReplaceQuery}
-                            options={searchOptions}
-                            setOptions={setSearchOptions}
-                            results={searchResults}
-                            onSearch={handleSearch}
-                            onReplaceAll={handleReplaceAll}
-                            onResultClick={handleSearchResultClick}
-                            isSearching={isSearching}
-                            />
-                        )}
-                        </div>
-                    </div>
-                </div>
-                <Sash onDrag={handleLeftSashDrag} />
-            </>
+          <div style={{ width: appSettings.leftSidebarWidth }} className="flex-none flex flex-col border-r border-gray-200 dark:border-gray-700">
+             {activeLeftPanel === 'explorer' ? (
+                <FileExplorerPanel
+                    tree={fileSystemTree}
+                    onFileOpen={handlePathDoubleClick}
+                    onCreateNode={handleCreateNode}
+                    onRenameNode={handleRenameNode}
+                    onDeleteNode={handleDeleteNode}
+                    onMoveNode={handleMoveNode}
+                    clipboard={clipboard}
+                    onCut={handleCut}
+                    onCopy={handleCopy}
+                    onPaste={handlePaste}
+                    onCenterOnBlock={handleCenterOnBlock}
+                    selectedPaths={explorerSelectedPaths}
+                    setSelectedPaths={setExplorerSelectedPaths}
+                    lastClickedPath={explorerLastClickedPath}
+                    setLastClickedPath={setExplorerLastClickedPath}
+                    expandedPaths={explorerExpandedPaths}
+                    onToggleExpand={handleToggleExpandExplorer}
+                />
+             ) : (
+                <SearchPanel 
+                    query={searchQuery}
+                    setQuery={setSearchQuery}
+                    replace={replaceQuery}
+                    setReplace={setReplaceQuery}
+                    options={searchOptions}
+                    setOptions={setSearchOptions}
+                    results={searchResults}
+                    onSearch={async () => {
+                        if (window.electronAPI && projectRootPath) {
+                            const results = await window.electronAPI.searchInProject({ 
+                                projectPath: projectRootPath, 
+                                query: searchQuery, 
+                                ...searchOptions 
+                            });
+                            setSearchResults(results);
+                        }
+                    }}
+                    onReplaceAll={() => {/* Implementation for replace all */}}
+                    onResultClick={(file, line) => {
+                        const block = blocks.find(b => b.filePath === file);
+                        if (block) handleOpenEditor(block.id, line);
+                    }}
+                    isSearching={isSearching}
+                />
+             )}
+          </div>
+        )}
+        {appSettings.isLeftSidebarOpen && (
+            <Sash onDrag={(delta) => updateAppSettings(d => { d.leftSidebarWidth = Math.max(150, d.leftSidebarWidth + delta) })} />
         )}
 
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-primary relative">
-            <div className="flex-none flex flex-wrap items-center bg-tertiary border-b border-primary">
-                {openTabs.map(tab => {
-                    const block = blocks.find(b => b.id === tab.blockId);
-                    let title = 'Unknown';
-                    if (tab.type === 'canvas') title = 'Story Canvas';
-                    else if (tab.type === 'route-canvas') title = 'Route Canvas';
-                    else if (tab.type === 'scene-composer') {
-                        const name = tab.sceneId ? sceneNames[tab.sceneId] : 'New Scene';
-                        title = `Scene: ${name}`;
-                    }
-                    else if (tab.type === 'editor' && block) title = block.title || block.filePath || 'Untitled';
-                    else if (tab.type === 'image' && tab.filePath) title = tab.filePath.split(/[/\\]/).pop() || 'Image';
-                    else if (tab.type === 'audio' && tab.filePath) title = tab.filePath.split(/[/\\]/).pop() || 'Audio';
-                    else if (tab.type === 'character' && tab.characterTag) {
-                        const char = analysisResultWithProfiles.characters.get(tab.characterTag);
-                        title = char ? `Char: ${char.name}` : (tab.characterTag === 'new_character' ? 'New Character' : 'Unknown Character');
-                    }
-                    
-                    const isDirty = (tab.blockId && (dirtyBlockIds.has(tab.blockId) || dirtyEditors.has(tab.blockId))) || false;
-
-                    const isActive = activeTabId === tab.id;
-                    return (
-                        <div 
-                            key={tab.id}
-                            onClick={() => handleSwitchTab(tab.id)}
-                            onContextMenu={(e) => handleTabContextMenu(e, tab.id)}
-                            className={`group flex items-center px-4 py-2 text-sm cursor-pointer border-r border-primary min-w-[120px] max-w-[200px] flex-shrink-0 ${isActive ? 'bg-secondary font-medium text-accent border-t-2 border-t-accent' : 'bg-tertiary hover:bg-tertiary-hover text-secondary'}`}
-                        >
-                            <span className="truncate flex-grow flex items-center">
-                                {title}
-                                {isDirty && <span className="text-accent ml-1.5">•</span>}
-                            </span>
-                            {tab.id !== 'canvas' && (
-                                <button 
-                                    onClick={(e) => handleCloseTab(tab.id, e)}
-                                    className="ml-2 text-secondary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                    ×
-                                </button>
-                            )}
-                        </div>
-                    )
-                })}
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col min-w-0 bg-gray-50 dark:bg-gray-900 relative">
+            <div className="flex-none flex bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 overflow-x-auto no-scrollbar">
+                {openTabs.map(tab => (
+                    <div 
+                        key={tab.id}
+                        className={`flex items-center px-3 py-2 text-sm border-r border-gray-200 dark:border-gray-700 cursor-pointer min-w-[100px] max-w-[200px] group ${activeTabId === tab.id ? 'bg-white dark:bg-gray-900 font-semibold border-t-2 border-t-indigo-500' : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}`}
+                        onClick={() => handleSwitchTab(tab.id)}
+                        draggable
+                        onDragStart={(e) => handleTabDragStart(e, tab.id)}
+                        onDragOver={(e) => handleTabDragOver(e, tab.id)}
+                        onDrop={(e) => handleTabDrop(e, tab.id)}
+                        onContextMenu={(e) => handleTabContextMenu(e, tab.id)}
+                    >
+                        <span className="truncate flex-grow">
+                            {tab.id === 'canvas' ? 'Story Canvas' : 
+                             tab.id === 'route-canvas' ? 'Route Canvas' :
+                             tab.id === 'punchlist' ? 'Punchlist' :
+                             tab.type === 'scene-composer' ? (sceneNames[tab.sceneId!] || 'Scene') :
+                             tab.type === 'character' ? `Char: ${analysisResult.characters.get(tab.characterTag!)?.name || tab.characterTag}` :
+                             tab.type === 'editor' ? (blocks.find(b => b.id === tab.blockId)?.title || 'Untitled') :
+                             tab.filePath?.split('/').pop()}
+                        </span>
+                        {tab.id !== 'canvas' && (
+                            <button onClick={(e) => handleCloseTab(tab.id, e)} className="ml-2 opacity-0 group-hover:opacity-100 hover:text-red-500 rounded-full p-0.5">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                            </button>
+                        )}
+                        {(tab.blockId && dirtyBlockIds.has(tab.blockId)) && <div className="w-2 h-2 ml-2 bg-blue-500 rounded-full"></div>}
+                    </div>
+                ))}
             </div>
-
-            <div className="flex-1 relative overflow-hidden">
+            
+            <div className="flex-grow relative overflow-hidden">
                 {activeTabId === 'canvas' && (
-                    <StoryCanvas 
+                    <StoryCanvas
                         blocks={blocks}
                         groups={groups}
                         stickyNotes={stickyNotes}
@@ -2998,7 +2331,7 @@ const App: React.FC = () => {
                         updateGroupPositions={updateGroupPositions}
                         updateStickyNote={updateStickyNote}
                         deleteStickyNote={deleteStickyNote}
-                        onInteractionEnd={() => {}}
+                        onInteractionEnd={() => {/* Optional: Autosave logic could go here */}}
                         deleteBlock={deleteBlock}
                         onOpenEditor={handleOpenEditor}
                         selectedBlockIds={selectedBlockIds}
@@ -3006,7 +2339,7 @@ const App: React.FC = () => {
                         selectedGroupIds={selectedGroupIds}
                         setSelectedGroupIds={setSelectedGroupIds}
                         findUsagesHighlightIds={findUsagesHighlightIds}
-                        clearFindUsages={clearHighlights}
+                        clearFindUsages={() => setFindUsagesHighlightIds(null)}
                         dirtyBlockIds={dirtyBlockIds}
                         canvasFilters={canvasFilters}
                         setCanvasFilters={setCanvasFilters}
@@ -3016,356 +2349,501 @@ const App: React.FC = () => {
                         transform={storyCanvasTransform}
                         onTransformChange={setStoryCanvasTransform}
                         onCreateBlock={handleCreateBlockFromCanvas}
-                        onAddStickyNote={addStickyNote}
+                        onAddStickyNote={() => addStickyNote()}
                     />
                 )}
-                
                 {activeTabId === 'route-canvas' && (
                     <RouteCanvas 
-                        labelNodes={routeCanvasData.labelNodes}
-                        routeLinks={routeCanvasData.routeLinks}
-                        identifiedRoutes={routeCanvasData.identifiedRoutes}
-                        updateLabelNodePositions={(updates) => {
-                             setRouteCanvasData(prev => {
-                                 const nextNodes = prev.labelNodes.map(n => {
-                                     const up = updates.find(u => u.id === n.id);
-                                     return up ? { ...n, position: up.position } : n;
-                                 });
-                                 return { ...prev, labelNodes: nextNodes };
-                             });
-                        }}
+                        labelNodes={routeAnalysisResult.labelNodes}
+                        routeLinks={routeAnalysisResult.routeLinks}
+                        identifiedRoutes={routeAnalysisResult.identifiedRoutes}
+                        updateLabelNodePositions={handleUpdateRouteNodePositions}
                         onOpenEditor={handleOpenEditor}
                         transform={routeCanvasTransform}
                         onTransformChange={setRouteCanvasTransform}
                     />
                 )}
-
-                {activeTab?.type === 'scene-composer' && activeTab.sceneId && (
-                    <SceneComposer 
-                        images={Array.from(images.values())}
-                        metadata={imageMetadata}
-                        scene={sceneCompositions[activeTab.sceneId] || { background: null, sprites: [] }}
-                        onSceneChange={(val) => handleSceneUpdate(activeTab.sceneId!, val)}
-                        sceneName={sceneNames[activeTab.sceneId] || 'Unnamed Scene'}
-                        onRenameScene={(name) => handleRenameScene(activeTab.sceneId!, name)}
-                    />
-                )}
-
-                {activeBlock && activeTab?.type === 'editor' && (
-                    <EditorView 
-                        key={activeBlock.id}
-                        block={activeBlock}
+                {activeTabId === 'punchlist' && (
+                    <PunchlistManager
                         blocks={blocks}
-                        analysisResult={analysisResultWithProfiles}
-                        initialScrollRequest={activeTab.scrollRequest}
-                        onSwitchFocusBlock={(blockId, line) => {
-                            handleOpenEditor(blockId, line);
-                        }}
-                        onSave={(id, content) => updateBlock(id, { content })}
-                        onTriggerSave={handleSaveBlock}
-                        onDirtyChange={(id, isDirty) => {
-                            if (isDirty) setDirtyEditors(prev => new Set(prev).add(id));
-                            else setDirtyEditors(prev => { const s = new Set(prev); s.delete(id); return s; });
-                        }}
-                        editorTheme={appSettings.theme.includes('dark') || appSettings.theme === 'colorful' ? 'dark' : 'light'}
-                        editorFontFamily={appSettings.editorFontFamily}
-                        editorFontSize={appSettings.editorFontSize}
-                        enableAiFeatures={projectSettings.enableAiFeatures}
-                        availableModels={['gemini-2.5-flash', 'gemini-3-pro-preview']}
-                        selectedModel={projectSettings.selectedModel}
-                        addToast={addToast}
-                        onEditorMount={handleEditorMount}
-                        onEditorUnmount={handleEditorUnmount}
-                        draftingMode={projectSettings.draftingMode}
+                        stickyNotes={stickyNotes}
                         existingImageTags={existingImageTags}
                         existingAudioPaths={existingAudioPaths}
+                        metadata={punchlistMetadata}
+                        onUpdateMetadata={(id, data) => {
+                            setPunchlistMetadata(draft => { draft[id] = data; });
+                            setHasUnsavedSettings(true);
+                        }}
+                        onJumpToBlock={handleCenterOnBlock}
                     />
                 )}
-
-                {activeTab?.type === 'image' && activeTab.filePath && (
-                    <ImageEditorView 
-                        image={images.get(activeTab.filePath) || { filePath: activeTab.filePath, fileName: 'Unknown', isInProject: false, fileHandle: null, dataUrl: '' }}
-                        allImages={Array.from(images.values())}
-                        metadata={imageMetadata.get(activeTab.filePath) || (images.get(activeTab.filePath)?.projectFilePath ? imageMetadata.get(images.get(activeTab.filePath)!.projectFilePath!) : undefined)}
-                        onUpdateMetadata={(path, meta) => {
-                             setImageMetadata(prev => {
-                                const next = new Map(prev);
-                                next.set(path, meta);
-                                return next;
-                             });
-                             addToast('Image metadata saved', 'success');
-                        }}
-                        onCopyToProject={(src, meta) => {
-                            handleCopyImagesToProject([src]);
-                            const fileName = src.split(/[/\\]/).pop() || '';
-                            const projectPath = `game/images/${fileName}`;
-                            setImageMetadata(prev => {
-                                const next = new Map(prev);
-                                next.set(projectPath, meta);
-                                return next;
-                             });
-                        }}
-                    />
-                )}
-
-                {activeTab?.type === 'audio' && activeTab.filePath && (
-                    <AudioEditorView 
-                        key={activeTab.filePath} // Force re-render on file switch
-                        audio={audios.get(activeTab.filePath) || { filePath: activeTab.filePath, fileName: 'Unknown', dataUrl: '', fileHandle: null, isInProject: false }}
-                        metadata={audioMetadata.get(activeTab.filePath) || (audios.get(activeTab.filePath)?.projectFilePath ? audioMetadata.get(audios.get(activeTab.filePath)!.projectFilePath!) : undefined)}
-                        onUpdateMetadata={(path, meta) => {
-                             setAudioMetadata(prev => {
-                                const next = new Map(prev);
-                                next.set(path, meta);
-                                return next;
-                             });
-                             addToast('Audio metadata saved', 'success');
-                        }}
-                        onCopyToProject={(src, meta) => {
-                             handleCopyAudiosToProject([src]);
-                        }}
-                    />
-                )}
-
-                {activeTab?.type === 'character' && activeTab.characterTag && (
-                    <CharacterEditorView 
-                        character={analysisResultWithProfiles.characters.get(activeTab.characterTag)}
-                        onSave={handleUpdateCharacter}
-                        existingTags={Array.from(analysisResultWithProfiles.characters.keys())}
-                        projectImages={Array.from(images.values())}
-                        imageMetadata={imageMetadata}
-                    />
-                )}
+                {openTabs.map(tab => {
+                    if (tab.id !== activeTabId) return null;
+                    if (tab.type === 'editor' && tab.blockId) {
+                        const block = blocks.find(b => b.id === tab.blockId);
+                        if (!block) return null;
+                        return (
+                            <EditorView
+                                key={tab.id}
+                                block={block}
+                                blocks={blocks}
+                                analysisResult={analysisResult}
+                                initialScrollRequest={tab.scrollRequest}
+                                onSwitchFocusBlock={handleOpenEditor}
+                                onSave={handleSaveBlock}
+                                onTriggerSave={handleSaveBlock}
+                                onDirtyChange={(id, dirty) => {
+                                    setDirtyEditors(prev => {
+                                        const next = new Set(prev);
+                                        dirty ? next.add(id) : next.delete(id);
+                                        return next;
+                                    });
+                                }}
+                                editorTheme={appSettings.theme.includes('dark') ? 'dark' : 'light'}
+                                editorFontFamily={appSettings.editorFontFamily}
+                                editorFontSize={appSettings.editorFontSize}
+                                enableAiFeatures={projectSettings.enableAiFeatures}
+                                availableModels={AVAILABLE_MODELS}
+                                selectedModel={projectSettings.selectedModel}
+                                addToast={addToast}
+                                onEditorMount={(id, editor) => editorInstances.current.set(id, editor)}
+                                onEditorUnmount={(id) => editorInstances.current.delete(id)}
+                                draftingMode={projectSettings.draftingMode}
+                                existingImageTags={existingImageTags}
+                                existingAudioPaths={existingAudioPaths}
+                            />
+                        );
+                    }
+                    if (tab.type === 'image' && tab.filePath) {
+                        const img = images.get(tab.filePath);
+                        if (!img) return <div key={tab.id} className="p-4 text-gray-500">Image not found</div>;
+                        const meta = imageMetadata.get(img.projectFilePath || img.filePath);
+                        return (
+                            <ImageEditorView 
+                                key={tab.id} 
+                                image={img} 
+                                allImages={Array.from(images.values())}
+                                metadata={meta}
+                                onUpdateMetadata={(path, newMeta) => {
+                                    setImageMetadata(prev => { 
+                                        const next = new Map(prev);
+                                        next.set(path, newMeta);
+                                        return next;
+                                    });
+                                    setHasUnsavedSettings(true);
+                                }}
+                                onCopyToProject={async (sourcePath, meta) => {
+                                    if (window.electronAPI && projectRootPath) {
+                                        const fileName = sourcePath.split('/').pop() || 'image.png';
+                                        const subfolder = meta.projectSubfolder || '';
+                                        const destDir = await window.electronAPI.path.join(projectRootPath, 'game', 'images', subfolder);
+                                        const destPath = await window.electronAPI.path.join(destDir, fileName);
+                                        
+                                        await window.electronAPI.copyEntry(sourcePath, destPath);
+                                        
+                                        // Update state to reflect copy
+                                        const relativeDestPath = `game/images/${subfolder ? subfolder + '/' : ''}${fileName}`;
+                                        setImageMetadata(prev => { 
+                                            const next = new Map(prev);
+                                            next.set(relativeDestPath, meta);
+                                            return next;
+                                        });
+                                        setHasUnsavedSettings(true);
+                                        
+                                        // Refresh
+                                        const projData = await window.electronAPI.loadProject(projectRootPath);
+                                        // Merge logic would be better but simple reload works
+                                    }
+                                }}
+                            />
+                        );
+                    }
+                    if (tab.type === 'audio' && tab.filePath) {
+                        const aud = audios.get(tab.filePath);
+                        if (!aud) return <div key={tab.id} className="p-4 text-gray-500">Audio not found</div>;
+                        const meta = audioMetadata.get(aud.projectFilePath || aud.filePath);
+                        return (
+                            <AudioEditorView 
+                                key={tab.id} 
+                                audio={aud} 
+                                metadata={meta}
+                                onUpdateMetadata={(path, newMeta) => {
+                                    setAudioMetadata(prev => {
+                                        const next = new Map(prev);
+                                        next.set(path, newMeta);
+                                        return next;
+                                    });
+                                    setHasUnsavedSettings(true);
+                                }}
+                                onCopyToProject={async (sourcePath, meta) => {
+                                    if (window.electronAPI && projectRootPath) {
+                                        const fileName = sourcePath.split('/').pop() || 'audio.ogg';
+                                        const subfolder = meta.projectSubfolder || '';
+                                        const destDir = await window.electronAPI.path.join(projectRootPath, 'game', 'audio', subfolder);
+                                        const destPath = await window.electronAPI.path.join(destDir, fileName);
+                                        
+                                        await window.electronAPI.copyEntry(sourcePath, destPath);
+                                        
+                                        const relativeDestPath = `game/audio/${subfolder ? subfolder + '/' : ''}${fileName}`;
+                                        setAudioMetadata(prev => {
+                                            const next = new Map(prev);
+                                            next.set(relativeDestPath, meta);
+                                            return next;
+                                        });
+                                        setHasUnsavedSettings(true);
+                                    }
+                                }}
+                            />
+                        );
+                    }
+                    if (tab.type === 'character' && tab.characterTag) {
+                        const char = analysisResultWithProfiles.characters.get(tab.characterTag);
+                        // If character not found (e.g. deleted externally), we can still show the editor for a "new" char or error state, 
+                        // but here we pass undefined if not found, handling creation logic inside the component if needed.
+                        return (
+                            <CharacterEditorView 
+                                key={tab.id} 
+                                character={char} 
+                                onSave={handleUpdateCharacter}
+                                existingTags={Array.from(analysisResult.characters.keys())}
+                                projectImages={Array.from(images.values())}
+                                imageMetadata={imageMetadata}
+                            />
+                        );
+                    }
+                    if (tab.type === 'scene-composer' && tab.sceneId) {
+                        const composition = sceneCompositions[tab.sceneId] || { background: null, sprites: [] };
+                        const name = sceneNames[tab.sceneId] || 'Scene';
+                        return (
+                            <SceneComposer 
+                                key={tab.id}
+                                images={Array.from(images.values())}
+                                metadata={imageMetadata}
+                                scene={composition}
+                                onSceneChange={(val) => handleSceneUpdate(tab.sceneId!, val)}
+                                sceneName={name}
+                                onRenameScene={(newName) => handleRenameScene(tab.sceneId!, newName)}
+                            />
+                        );
+                    }
+                    return null;
+                })}
             </div>
+            
+            <StatusBar
+                totalWords={useMemo(() => {
+                    return blocks.reduce((acc, b) => acc + countWordsInRenpyScript(b.content), 0);
+                }, [blocks])}
+                currentFileWords={useMemo(() => {
+                    if (activeTabId && activeTabId !== 'canvas') {
+                        const activeBlock = blocks.find(b => b.id === activeTabId);
+                        if (activeBlock) return countWordsInRenpyScript(activeBlock.content);
+                    }
+                    return null;
+                }, [blocks, activeTabId])}
+                readingTime={useMemo(() => {
+                    const totalWords = blocks.reduce((acc, b) => acc + countWordsInRenpyScript(b.content), 0);
+                    const minutes = Math.ceil(totalWords / 200);
+                    if (minutes < 60) return `${minutes} min read`;
+                    const hours = Math.floor(minutes / 60);
+                    const mins = minutes % 60;
+                    return `${hours}h ${mins}m read`;
+                }, [blocks])}
+                statusMessage={statusBarMessage}
+                version={APP_VERSION}
+                build={BUILD_NUMBER}
+            />
         </div>
 
+        {/* Right Sidebar */}
         {appSettings.isRightSidebarOpen && (
-            <>
-                <Sash onDrag={handleRightSashDrag} />
-                <div 
-                    className="flex-none border-l border-primary bg-secondary flex flex-col overflow-hidden h-full"
-                    style={{ width: appSettings.rightSidebarWidth }}
-                >
-                    <StoryElementsPanel 
-                        analysisResult={analysisResultWithProfiles}
-                        onOpenCharacterEditor={handleOpenCharacterEditor}
-                        onFindCharacterUsages={(tag) => handleFindUsages(tag, 'character')}
-                        onAddVariable={() => {}}
-                        onFindVariableUsages={(name) => handleFindUsages(name, 'variable')}
-                        onAddScreen={() => {}}
-                        onFindScreenDefinition={() => {}}
-                        projectImages={images}
-                        imageMetadata={imageMetadata}
-                        imageScanDirectories={imageScanDirectories}
-                        onAddImageScanDirectory={handleAddImageScanDirectory}
-                        onRemoveImageScanDirectory={handleRemoveImageScanDirectory}
-                        onCopyImagesToProject={handleCopyImagesToProject}
-                        onUpdateImageMetadata={(path, meta) => {
-                             setImageMetadata(prev => {
+            <Sash onDrag={(delta) => updateAppSettings(d => { d.rightSidebarWidth = Math.max(200, d.rightSidebarWidth - delta) })} />
+        )}
+        {appSettings.isRightSidebarOpen && (
+          <div style={{ width: appSettings.rightSidebarWidth }} className="flex-none border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+            <StoryElementsPanel
+                analysisResult={analysisResultWithProfiles}
+                onOpenCharacterEditor={handleOpenCharacterEditor}
+                onFindCharacterUsages={(tag) => handleFindUsages(tag, 'character')}
+                onAddVariable={(v) => {
+                    const varContent = `default ${v.name} = ${v.initialValue}\n`;
+                    // Ideally add to 'game/variables.rpy' or create it
+                    const targetFile = 'game/variables.rpy';
+                    const existing = blocks.find(b => b.filePath === targetFile);
+                    if (existing) {
+                        updateBlock(existing.id, { content: existing.content + '\n' + varContent });
+                        addToast(`Added variable ${v.name} to variables.rpy`, 'success');
+                    } else {
+                        // Create new file logic (simplified here, ideally reuses create block logic)
+                        handleCreateBlockConfirm('variables.rpy', 'story', 'game');
+                        // We can't immediately append because creation is async and we don't have the ID yet easily here without refactoring.
+                        // For now, user has to add it manually or we implement a queue.
+                        // Better: Just open a modal to confirm creation.
+                        addToast(`Please create 'game/variables.rpy' first.`, 'warning');
+                    }
+                }}
+                onFindVariableUsages={(name) => handleFindUsages(name, 'variable')}
+                onAddScreen={(name) => handleCreateBlockConfirm(name, 'screen', 'game')}
+                onFindScreenDefinition={(name) => {
+                    const def = analysisResult.screens.get(name);
+                    if (def) handleOpenEditor(def.definedInBlockId, def.line);
+                }}
+                // Image Props
+                projectImages={images}
+                imageMetadata={imageMetadata}
+                imageScanDirectories={imageScanDirectories}
+                onAddImageScanDirectory={async () => {
+                    if (window.electronAPI) {
+                        const path = await window.electronAPI.openDirectory();
+                        if (path) {
+                            setImageScanDirectories(prev => new Map(prev).set(path, {} as any));
+                            // Trigger scan
+                            const { images: scanned } = await window.electronAPI.scanDirectory(path);
+                            setImages(prev => {
                                 const next = new Map(prev);
-                                next.set(path, meta);
+                                scanned.forEach((img: any) => {
+                                    if (!next.has(img.path)) next.set(img.path, { ...img, filePath: img.path, isInProject: false, fileHandle: null });
+                                });
                                 return next;
-                             });
-                        }}
-                        onOpenImageEditor={handleOpenImageEditorTab}
-                        imagesLastScanned={imagesLastScanned}
-                        isRefreshingImages={isRefreshingImages}
-                        onRefreshImages={handleRefreshImages}
-                        
-                        projectAudios={audios}
-                        audioMetadata={audioMetadata}
-                        audioScanDirectories={audioScanDirectories}
-                        onAddAudioScanDirectory={handleAddAudioScanDirectory}
-                        onRemoveAudioScanDirectory={handleRemoveAudioScanDirectory}
-                        onCopyAudiosToProject={handleCopyAudiosToProject}
-                        onUpdateAudioMetadata={(path, meta) => {
-                             setAudioMetadata(prev => {
+                            });
+                            setHasUnsavedSettings(true);
+                        }
+                    }
+                }}
+                onRemoveImageScanDirectory={(path) => {
+                    setImageScanDirectories(prev => {
+                        const next = new Map(prev);
+                        next.delete(path);
+                        return next;
+                    });
+                    setHasUnsavedSettings(true);
+                }}
+                onCopyImagesToProject={async (sourcePaths) => {
+                    if (window.electronAPI && projectRootPath) {
+                        for (const src of sourcePaths) {
+                            const fileName = src.split('/').pop() || 'image.png';
+                            const destDir = await window.electronAPI.path.join(projectRootPath, 'game', 'images');
+                            const destPath = await window.electronAPI.path.join(destDir, fileName);
+                            await window.electronAPI.copyEntry(src, destPath);
+                        }
+                        const projData = await window.electronAPI.loadProject(projectRootPath);
+                        // Refresh images from project data... (simplified: just reload project or merge)
+                        // A full reload is safest to sync everything
+                        await loadProject(projectRootPath);
+                    }
+                }}
+                onUpdateImageMetadata={(path, meta) => {
+                    setImageMetadata(prev => { 
+                        const next = new Map(prev);
+                        next.set(path, meta);
+                        return next;
+                    });
+                    setHasUnsavedSettings(true);
+                }}
+                onOpenImageEditor={handleOpenImageEditorTab}
+                imagesLastScanned={imagesLastScanned}
+                isRefreshingImages={isRefreshingImages}
+                onRefreshImages={() => {/* Logic to re-scan all directories */}}
+                
+                // Audio Props
+                projectAudios={audios}
+                audioMetadata={audioMetadata}
+                audioScanDirectories={audioScanDirectories}
+                onAddAudioScanDirectory={async () => {
+                     if (window.electronAPI) {
+                        const path = await window.electronAPI.openDirectory();
+                        if (path) {
+                            setAudioScanDirectories(prev => new Map(prev).set(path, {} as any));
+                            const { audios: scanned } = await window.electronAPI.scanDirectory(path);
+                            setAudios(prev => {
                                 const next = new Map(prev);
-                                next.set(path, meta);
+                                scanned.forEach((aud: any) => {
+                                    if (!next.has(aud.path)) next.set(aud.path, { ...aud, filePath: aud.path, isInProject: false, fileHandle: null });
+                                });
                                 return next;
-                             });
-                        }}
-                        onOpenAudioEditor={(path) => {
-                            const tabId = `aud-${path}`;
-                            setOpenTabs(prev => {
-                                if(!prev.find(t => t.id === tabId)) {
-                                    return [...prev, { id: tabId, type: 'audio', filePath: path }];
-                                }
-                                return prev;
                             });
-                            setActiveTabId(tabId);
-                        }}
-                        audiosLastScanned={audiosLastScanned}
-                        isRefreshingAudios={isRefreshingAudios}
-                        onRefreshAudios={handleRefreshAudios}
-                        isFileSystemApiSupported={!!window.electronAPI}
-                        onHoverHighlightStart={(id) => {
-                            const defBlock = analysisResult.variables.get(id)?.definedInBlockId;
-                            if(defBlock) setHoverHighlightIds(new Set([defBlock]));
-                        }}
-                        onHoverHighlightEnd={() => setHoverHighlightIds(null)}
-                        
-                        scenes={Object.entries(sceneNames).map(([id, name]) => ({ id, name }))}
-                        onOpenScene={handleOpenScene}
-                        onCreateScene={handleCreateScene}
-                        onDeleteScene={handleDeleteScene}
-
-                        snippetCategoriesState={appSettings.snippetCategoriesState || {}}
-                        onToggleSnippetCategory={(name, isOpen) => {
-                            updateAppSettings(draft => {
-                                if (!draft.snippetCategoriesState) draft.snippetCategoriesState = {};
-                                draft.snippetCategoriesState[name] = isOpen;
-                            });
-                        }}
-                    />
-                </div>
-            </>
+                            setHasUnsavedSettings(true);
+                        }
+                    }
+                }}
+                onRemoveAudioScanDirectory={(path) => {
+                    setAudioScanDirectories(prev => {
+                        const next = new Map(prev);
+                        next.delete(path);
+                        return next;
+                    });
+                    setHasUnsavedSettings(true);
+                }}
+                onCopyAudiosToProject={async (sourcePaths) => {
+                     if (window.electronAPI && projectRootPath) {
+                        for (const src of sourcePaths) {
+                            const fileName = src.split('/').pop() || 'audio.ogg';
+                            const destDir = await window.electronAPI.path.join(projectRootPath, 'game', 'audio');
+                            const destPath = await window.electronAPI.path.join(destDir, fileName);
+                            await window.electronAPI.copyEntry(src, destPath);
+                        }
+                        await loadProject(projectRootPath);
+                    }
+                }}
+                onUpdateAudioMetadata={(path, meta) => {
+                    setAudioMetadata(prev => { 
+                        const next = new Map(prev);
+                        next.set(path, meta);
+                        return next;
+                    });
+                    setHasUnsavedSettings(true);
+                }}
+                onOpenAudioEditor={(filePath) => {
+                    const tabId = `aud-${filePath}`;
+                    setOpenTabs(prev => {
+                        if (!prev.find(t => t.id === tabId)) {
+                            return [...prev, { id: tabId, type: 'audio', filePath }];
+                        }
+                        return prev;
+                    });
+                    setActiveTabId(tabId);
+                }}
+                audiosLastScanned={audiosLastScanned}
+                isRefreshingAudios={isRefreshingAudios}
+                onRefreshAudios={() => {}}
+                isFileSystemApiSupported={!!window.electronAPI}
+                onHoverHighlightStart={(key, type) => {
+                    const ids = new Set<string>();
+                    // Highlight logic same as find usages but transient
+                    if (type === 'character') {
+                        analysisResult.dialogueLines.forEach((dialogues, blockId) => {
+                            if (dialogues.some(d => d.tag === key)) ids.add(blockId);
+                        });
+                    } else {
+                        analysisResult.variableUsages.get(key)?.forEach(u => ids.add(u.blockId));
+                    }
+                    setHoverHighlightIds(ids);
+                }}
+                onHoverHighlightEnd={() => setHoverHighlightIds(null)}
+                // Scene Props
+                scenes={Object.keys(sceneCompositions).map(id => ({ id, name: sceneNames[id] || 'Scene' }))}
+                onOpenScene={handleOpenScene}
+                onCreateScene={handleCreateScene}
+                onDeleteScene={handleDeleteScene}
+                // Snippet Props
+                snippetCategoriesState={snippetCategoriesState}
+                onToggleSnippetCategory={handleToggleSnippetCategory}
+            />
+          </div>
         )}
       </div>
 
-      {!showWelcome && (
-        <StatusBar
-          totalWords={projectWordStats.totalWords}
-          currentFileWords={projectWordStats.currentFileWords}
-          readingTime={projectWordStats.readingTime}
-          statusMessage={statusBarMessage}
-        />
-      )}
-
-      {settingsModalOpen && (
-        <SettingsModal 
-            isOpen={settingsModalOpen}
-            onClose={() => setSettingsModalOpen(false)}
-            settings={settingsForModal}
-            onSettingsChange={handleSettingsChange}
-            availableModels={['gemini-2.5-flash', 'gemini-3-pro-preview']}
+      {/* Modals and Overlays */}
+      {showWelcome && (
+        <WelcomeScreen 
+            onOpenProject={handleOpenProjectFolder}
+            onCreateProject={handleCreateProject}
+            isElectron={!!window.electronAPI}
+            recentProjects={appSettings.recentProjects}
+            onOpenRecent={loadProject}
         />
       )}
       
-      {shortcutsModalOpen && (
-        <KeyboardShortcutsModal 
-            isOpen={shortcutsModalOpen}
-            onClose={() => setShortcutsModalOpen(false)}
-        />
-      )}
-
-      {aboutModalOpen && (
-        <AboutModal 
-            isOpen={aboutModalOpen}
-            onClose={() => setAboutModalOpen(false)}
-        />
-      )}
-      
-      {showConfigureRenpyModal && (
-        <ConfigureRenpyModal
-          isOpen={showConfigureRenpyModal}
-          onClose={() => setShowConfigureRenpyModal(false)}
-          onSave={(path) => {
-            updateAppSettings(draft => { draft.renpyPath = path; });
-            setShowConfigureRenpyModal(false);
-            if (projectRootPath) {
-                setTimeout(() => {
-                    if (window.electronAPI) {
-                        handleSaveAll().then(() => {
-                            window.electronAPI!.runGame(path, projectRootPath!);
-                        });
-                    }
-                }, 100);
-            }
-          }}
-        />
-      )}
-
-      {createBlockModalOpen && (
-          <CreateBlockModal 
-            isOpen={createBlockModalOpen}
-            onClose={() => setCreateBlockModalOpen(false)}
-            onConfirm={(name, type) => handleCreateBlockConfirm(name, type, getSelectedFolderForNewBlock())}
-            defaultPath={getSelectedFolderForNewBlock()}
-          />
-      )}
-
-      {deleteConfirmInfo && (
-        <ConfirmModal 
-            title={`Delete ${deleteConfirmInfo.paths.length} item(s)?`}
-            onConfirm={deleteConfirmInfo.onConfirm}
-            onClose={() => setDeleteConfirmInfo(null)}
-        >
-            Are you sure you want to permanently delete these items? This action cannot be undone.
-            <ul className="text-xs list-disc list-inside mt-2 max-h-24 overflow-y-auto bg-tertiary rounded p-2 text-secondary">
-                {deleteConfirmInfo.paths.map(p => <li key={p} className="truncate">{p.split('/').pop()}</li>)}
-            </ul>
-        </ConfirmModal>
-      )}
-
-      {replaceAllConfirmInfo && (
-        <ConfirmModal
-          title="Confirm Global Replace"
-          confirmText="Replace All"
-          confirmClassName="bg-accent hover:bg-accent-hover"
-          onConfirm={() => {
-            replaceAllConfirmInfo.onConfirm();
-            setReplaceAllConfirmInfo(null);
-          }}
-          onClose={() => setReplaceAllConfirmInfo(null)}
-        >
-          {`Are you sure you want to replace ${replaceAllConfirmInfo.totalMatches} occurrence(s) across ${replaceAllConfirmInfo.totalFiles} file(s)? This action will modify your open files but will NOT save them automatically.`}
-        </ConfirmModal>
-      )}
-      
-      {unsavedChangesModalInfo && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-secondary rounded-lg shadow-2xl w-full max-w-md m-4 flex flex-col p-6 border border-primary">
-            <h2 className="text-xl font-bold mb-4 text-primary">{unsavedChangesModalInfo.title}</h2>
-            <p className="text-secondary mb-6">
-              {unsavedChangesModalInfo.message}
-            </p>
-            <div className="flex justify-end space-x-3">
-               <button
-                onClick={unsavedChangesModalInfo.onCancel}
-                className="px-4 py-2 rounded text-secondary hover:bg-tertiary font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={unsavedChangesModalInfo.onDontSave}
-                className="px-4 py-2 rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 font-medium"
-              >
-                {unsavedChangesModalInfo.dontSaveText}
-              </button>
-              <button
-                onClick={unsavedChangesModalInfo.onConfirm}
-                className="px-4 py-2 rounded bg-accent hover:bg-accent-hover text-white font-bold"
-              >
-                {unsavedChangesModalInfo.confirmText}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {isLoading && <LoadingOverlay progress={loadingProgress} message={loadingMessage} />}
-
-      <div className="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none">
-        {toasts.map(t => (
-             <div key={t.id} className="pointer-events-auto">
-                <Toast toast={t} onDismiss={removeToast} />
-             </div>
+      
+      <div className="fixed bottom-4 right-4 z-[9999] flex flex-col space-y-2 pointer-events-none">
+        {toasts.map(toast => (
+          <div key={toast.id} className="pointer-events-auto">
+            <Toast toast={toast} onDismiss={removeToast} />
+          </div>
         ))}
       </div>
 
-      {contextMenuInfo && createPortal(
-        <TabContextMenu
-            x={contextMenuInfo.x}
-            y={contextMenuInfo.y}
-            tabId={contextMenuInfo.tabId}
-            onClose={() => setContextMenuInfo(null)}
-            onCloseTab={(tabId) => handleCloseTab(tabId)}
-            onCloseOthers={handleCloseOthersRequest}
-            onCloseAll={handleCloseAllRequest}
-        />,
-        document.body
+      <CreateBlockModal
+        isOpen={createBlockModalOpen}
+        onClose={() => setCreateBlockModalOpen(false)}
+        onConfirm={(name, type) => handleCreateBlockConfirm(name, type, getSelectedFolderForNewBlock())}
+        defaultPath={getSelectedFolderForNewBlock()}
+      />
+
+      <ConfigureRenpyModal
+        isOpen={showConfigureRenpyModal}
+        onClose={() => setShowConfigureRenpyModal(false)}
+        onSave={(path) => {
+            updateAppSettings(draft => { draft.renpyPath = path; });
+            setShowConfigureRenpyModal(false);
+            if (projectRootPath && window.electronAPI) {
+                window.electronAPI.runGame(path, projectRootPath);
+            }
+        }}
+      />
+
+      {unsavedChangesModalInfo && (
+        <ConfirmModal
+          title={unsavedChangesModalInfo.title}
+          onConfirm={unsavedChangesModalInfo.onConfirm}
+          onClose={unsavedChangesModalInfo.onCancel}
+          confirmText={unsavedChangesModalInfo.confirmText}
+        >
+            <div className="space-y-4">
+                <p>{unsavedChangesModalInfo.message}</p>
+                <div className="flex justify-end space-x-2">
+                    <button onClick={unsavedChangesModalInfo.onDontSave} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-bold">
+                        {unsavedChangesModalInfo.dontSaveText}
+                    </button>
+                </div>
+            </div>
+        </ConfirmModal>
       )}
+
+      {deleteConfirmInfo && (
+          <ConfirmModal
+            title="Confirm Deletion"
+            onConfirm={() => {
+                deleteConfirmInfo.onConfirm();
+                setDeleteConfirmInfo(null);
+            }}
+            onClose={() => setDeleteConfirmInfo(null)}
+            confirmText="Delete"
+            confirmClassName="bg-red-600 hover:bg-red-700"
+          >
+              Are you sure you want to delete {deleteConfirmInfo.paths.length} item(s)? This cannot be undone.
+          </ConfirmModal>
+      )}
+
+      {contextMenuInfo && createPortal(
+          <TabContextMenu
+              x={contextMenuInfo.x}
+              y={contextMenuInfo.y}
+              tabId={contextMenuInfo.tabId}
+              onClose={() => setContextMenuInfo(null)}
+              onCloseTab={handleCloseTab}
+              onCloseOthers={handleCloseOthersRequest}
+              onCloseLeft={handleCloseLeftRequest}
+              onCloseRight={handleCloseRightRequest}
+              onCloseAll={handleCloseAllRequest}
+          />,
+          document.body
+      )}
+
+      <SettingsModal 
+        isOpen={settingsModalOpen} 
+        onClose={() => setSettingsModalOpen(false)}
+        settings={{ ...appSettings, ...projectSettings }}
+        onSettingsChange={(key, value) => {
+            if (key in appSettings) updateAppSettings(draft => { (draft as any)[key as string] = value });
+            else {
+                updateProjectSettings(draft => { (draft as any)[key as string] = value });
+                setHasUnsavedSettings(true);
+            }
+        }}
+        availableModels={AVAILABLE_MODELS}
+      />
+
+      <KeyboardShortcutsModal
+        isOpen={shortcutsModalOpen}
+        onClose={() => setShortcutsModalOpen(false)}
+      />
+
+      <AboutModal
+        isOpen={aboutModalOpen}
+        onClose={() => setAboutModalOpen(false)}
+      />
     </div>
   );
 };
