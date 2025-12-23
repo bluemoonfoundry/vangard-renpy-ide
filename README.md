@@ -1,225 +1,166 @@
-# Ren'IDE - the Ren'Py Visual Development Environment
+# Ren'Py Visual Novel Accelerator
 
-Ren'Py Visual Novel Accelerator (Ren'IDE) is a visual IDE designed to streamline the development of Ren'Py visual novels. It features a node-based Story Canvas to visualize game flow, an integrated Monaco code editor, asset management panels, and tools for organizing and managing complex branching stories. This tool is aimed at writers, designers, and programmers who want a more intuitive and organized way to manage narrative projects.
+The Ren'Py Visual Novel Accelerator is a powerful, web-based visual editor designed to streamline and enhance the development process for Ren'Py projects. It provides a dynamic canvas where your Ren'Py script files (`.rpy`) are represented as draggable blocks. The editor automatically analyzes your code to draw connections for `jump` and `call` statements, helping you visualize your story's flow and structure at a glance.
 
-**Demo video:** [Short video of initial beta](https://youtu.be/87wSuV8RESg)
+This tool is perfect for writers, designers, and programmers who want a more intuitive and organized way to manage complex branching narratives.
 
-> [!IMPORTANT]  
-> Full disclosure: this application was developed with the help of Google's Gemini AI Code Builder.
-
----
+ <!-- It's a good idea to add a screenshot here! -->
 
 ## Key Features
 
-- Visual Story Canvas: Drag, resize, and arrange blocks representing your `.rpy` files.
-- Automatic Flow Visualization: Arrows between blocks for `jump` and `call` relationships.
-- On-Demand Route Canvas: Generate a detailed label-by-label graph of your story's control flow (opt-in for large projects).
-- Route Path Analysis & Highlighting: Analyze and highlight unique narrative paths.
-- Integrated Code Editor: Monaco editor built-in for full editing capabilities.
-- Project Management: File explorer for create/rename/move/delete operations.
-- Story Element Management: Manage Characters, Variables, Images, Audio, Screens, and Snippets.
-- Asset Pipeline: Scan and import images/audio from external directories.
-- File System Integration: Works with local project folders for read/write.
-- Theme Support & UI Persistence: Multiple themes and remembered UI state between sessions.
-- Ren'Py Integration: Run the Ren'Py project from the app for quick testing.
-- Scene Composer: Visual scene builder that generates Ren'Py transform and show/scene code.
-- Snippets Library & Sticky Notes for project annotations.
-
-(For component-level details, see the components directory: https://github.com/bluemoonfoundry/vangard-renpy-ide/tree/main/components)
-
----
-
-## Download & Installation
-
-Besides building from source, you can download ready-to-run release artifacts for your operating system:
-
-- Latest release page (all OS downloads): https://github.com/bluemoonfoundry/vangard-renpy-ide/releases/tag/v0.3.0-alpha
-- Windows: https://github.com/bluemoonfoundry/vangard-renpy-ide/releases/download/v0.3.0-alpha/renide-windows-v0.3.0-alpha.zip
-- macOS: https://github.com/bluemoonfoundry/vangard-renpy-ide/releases/download/v0.3.0-alpha/renide-macos-v0.3.0-alpha.zip
-- Linux (Ubuntu): https://github.com/bluemoonfoundry/vangard-renpy-ide/releases/download/v0.3.0-alpha/renide-ubuntu-v0.3.0-alpha.zip
-
-How to install:
-1. Download the appropriate `.zip` for your platform.
-2. Unzip to a suitable folder.
-3. Run the enclosed installer or executable and follow platform-specific instructions.
-4. Go to the folder where you installed the application (or let the installer start the application as the last step) and double-click to get started
-5. For instructions on using the application, see the [Usage Guide](#usage-guide) section below
-
-Note: These downloads are from an ALPHA release intended for early testing and demonstration. Check the Releases page for the latest stable artifacts.
+- **Visual Story Canvas**: Drag, resize, and arrange blocks representing your `.rpy` files.
+- **Automatic Flow Visualization**: Arrows are automatically drawn between blocks to show `jump` and `call` relationships.
+- **On-Demand Route Canvas**: Generate a detailed, label-by-label graph of your story's control flow to understand complex branching. This is an opt-in feature to maintain performance on large projects.
+- **Route Path Analysis & Highlighting**: The Route Canvas automatically identifies all unique paths from start to finish. A floating panel allows you to highlight specific routes with distinct colors.
+- **Integrated Code Editor**: A full-featured Monaco editor (the engine behind VS Code) is built-in for editing your script files directly within the app.
+- **Comprehensive Project Management**: A built-in file explorer allows you to create, rename, move, and delete files and folders in your project.
+- **Story Element Management**: A dedicated panel to view, create, and manage Characters, Variables, Images, Audio, and Screens.
+- **Asset Pipeline**: Scan external directories for images and audio, and easily copy them into your project.
+- **File System Integration**: Works directly with your local project folders for a seamless development experience (recommended).
+- **Browser-Only Mode**: Start creating and prototyping without needing a local project folder, then download your work as a `.zip` file.
+- **Expanded Theme Support**: Personalize your workspace with multiple themes, including Light, Dark, Solarized, and Colorful variants.
+- **UI State Persistence**: The editor remembers your theme, sidebar layout, and open tabs between sessions for a consistent workflow.
+- **Customizable Layout**: Sidebars are resizable, allowing you to tailor the interface to your needs.
 
 ---
 
 ## Local Development Setup
 
-This repository uses Vite, React, TypeScript, and TailwindCSS.
+This project uses a standard Node.js-based toolchain with Vite for a fast and modern development experience.
 
 ### Prerequisites
 
-- Node.js (18.x or newer recommended)
-- npm (bundled with Node.js)
+- [Node.js](https://nodejs.org/) (version 18.x or newer recommended)
+- npm (which comes bundled with Node.js)
 
 ### Running Locally
 
-1. Clone the repository:
+1.  **Clone the Repository** (if you haven't already):
     ```bash
-    git clone https://github.com/bluemoonfoundry/vangard-renpy-ide.git
-    cd vangard-renpy-ide
+    git clone https://github.com/your-username/renpy-visual-editor.git
+    cd renpy-visual-editor
     ```
-2. Install dependencies:
+
+2.  **Install Dependencies**:
+    Navigate to the project's root directory in your terminal and run `npm install` to download all the necessary packages defined in `package.json`.
     ```bash
     npm install
     ```
-3. Run the development server:
+
+3.  **Run the Development Server**:
+    Once the dependencies are installed, you can start the Vite development server:
     ```bash
     npm run dev
     ```
-4. Open the local URL printed by Vite (typically http://localhost:5173).
+
+4.  **Open in Browser**:
+    The server will start and print a local URL to the terminal, typically `http://localhost:5173`. Open this URL in your web browser to start the application. The server features Hot Module Replacement (HMR), meaning most changes you make to the code will appear instantly in the browser without a full page reload.
 
 ---
 
 ## Usage Guide
 
-This section expands usage guidance for major interactive features. It covers the Scene Composer and Editor Tabs in detail and includes practical tips and keyboard shortcuts.
+### Getting Started
 
-### Starting Up
+On first launch, you'll see a welcome screen with three options:
 
-When you double-click the app, it will present you with the main window an welcome screen. You have the option of creating a blank project or opening an existing Ren'Py project folder. We find it's more straightfoward to use an existing, even if blank, Ren'Py project rather than creating a blank project in this application because you would need to create all the other Ren'Py folders yourself. 
+1.  **Open Project Folder**: **(Recommended)** This uses the File System Access API to open your Ren'Py project folder directly. The app can read your files and, with your permission, save changes directly back to them. This provides the most integrated experience.
+2.  **Upload .zip Project**: If you have a Ren'Py project in a `.zip` archive, you can upload it to load it into the editor. Note that saving is not direct; you'll need to download your work as a new `.zip` file.
+3.  **Continue in Browser**: This starts a blank project stored in your browser's local storage. It's great for quick prototyping. You can download your files as a `.zip` when you're done.
 
+### The Main Interface
 
-### Main Interface Overview
+The application is divided into three main sections: the Project Explorer on the left, the main view (Canvas/Editor) in the center, and the Story Elements panel on the right. The left and right sidebars can be resized by dragging the handles on their inner edges.
 
-The app is divided into three main areas:
-- Project Explorer (left): file tree, file creation/rename/delete, and file operations.
-- Main view (center): canvases and editors (Story Canvas, Route Canvas, Editor Tabs, Scene Composer).
-- Story Elements (right): Characters, Variables, Images, Audio, Screens, Snippets.
+#### Toolbar
 
-Toolbar actions include Undo/Redo, Add Block, Tidy Layout, Analyze Routes, New/Open/Save, Toggle Sidebars, and Theme selection.
+The top toolbar provides access to global actions and tools.
 
-Shortcuts (examples — see in-app Keyboard Shortcuts modal for full list):
-- New Block: N
-- Save All: Ctrl/Cmd+S
-- Undo/Redo: Ctrl/Cmd+Z / Ctrl/Cmd+Y
-- Group: G / Ungroup: Shift+G
-- Toggle Sidebars: (configurable)
+| Button/Icon         | Function                                                                                                 | Shortcut           |
+| ------------------- | -------------------------------------------------------------------------------------------------------- | ------------------ |
+| **Undo/Redo**       | Reverts or re-applies changes like moving blocks, creating blocks, etc.                                  | `Ctrl+Z` / `Ctrl+Y` |
+| **Add Block**       | Creates a new, blank `.rpy` file and adds it to the canvas.                                              | `N`                |
+| **Tidy Up Layout**  | Automatically arranges the blocks on the canvas based on the story flow to reduce clutter.               |                    |
+| **Analyze Routes**  | Generates and opens the Route Canvas tab, showing label-to-label connections.                            |                    |
+| **Open Folder**     | Opens a new project folder, replacing the current workspace.                                             |                    |
+| **Save All**        | Saves all unsaved changes to your local files. Only enabled when a project folder is open.               | `Ctrl+S`           |
+| **Download .zip**   | Downloads all the script files in the current workspace as a `.zip` archive.                             |                    |
+| **Upload .zip**     | Opens a file picker to upload and load a `.zip` project archive.                                         |                    |
+| **Clear Canvas**    | Deletes all blocks and groups from the canvas.                                                           |                    |
+| **Toggle Sidebars** | Shows or hides the left and right sidebars.                                                              |                    |
+| **Toggle Theme**    | Cycles between System, Light, Dark, Solarized Light, Solarized Dark, Colorful, and Colorful Light themes.|                    |
 
----
+#### The Canvases
 
-### Story Canvas
+The central area is your main workspace for visualizing the story. It can contain multiple tabs, including two special canvas types.
 
-- Visual representation where each block corresponds to an `.rpy` file.
-- Blocks show labels, character summaries, and quick actions.
-- Arrows show `jump`/`call` relationships; dotted lines show fall-through connections.
-- Interactions: pan (Shift + drag), zoom (scroll), select (click / shift/ctrl for multi-select), move, resize.
-- Double-click a block to open it in the Editor Tabs.
+##### Story Canvas
 
----
+This is the default high-level view of your project.
 
-### Route Canvas
+- **Blocks**: Each block represents a single `.rpy` file. The title displays the file's name or the first label found within it. Blocks show summary information like labels, characters, and content types (dialogue, menus, Python code).
+- **Arrows**: These lines connect blocks, representing `jump` and `call` statements, giving you an immediate sense of your story's structure.
+- **Interactions**:
+  - **Pan**: Hold `Shift` and drag the canvas background.
+  - **Zoom**: Use your mouse scroll wheel.
+  - **Select Blocks**: Click a block. Hold `Shift` or `Ctrl`/`Cmd` to select multiple. Drag a selection box (rubber-band) to select multiple blocks.
+  - **Move Blocks**: Click and drag a block's header.
+  - **Resize Blocks**: Drag the handle in the bottom-right corner.
+  - **Group/Ungroup**: Select multiple blocks and press `G` to group them. Select a group and press `Shift+G` to ungroup.
+  - **Open Editor**: Double-click a block to open its file in a new editor tab.
 
-- On-demand, label-level graph generated by "Analyze Routes".
-- Displays label-to-label connections, shows explicit jumps/calls and implicit fall-through edges.
-- View Routes panel lists distinct paths; highlight routes using checkboxes; each route gets a unique color.
+##### Route Canvas
 
----
+The Route Canvas provides a much more granular view of your story's control flow. It is generated on-demand by clicking the "Analyze Routes" button in the toolbar.
 
-### Scene Composer
+- **Label Blocks**: Each `label` in your project is represented as a small, distinct block.
+- **Connections**: Arrows show not only explicit `jump` and `call` statements (solid lines) but also implicit "fall-through" flow where one label follows another in a file (dotted lines).
+- **Route Highlighting**: A floating 'View Routes' panel lists all unique paths the analysis could find. Check a box next to a route to highlight its specific path on the canvas with a unique color.
 
-Purpose: visually compose a Ren'Py scene by layering backgrounds, sprites, overlays, and transforms — then generate the Ren'Py code required to reproduce that scene.
+#### Project Explorer (Left Sidebar)
 
-Key features:
-- Layer-based UI: Background layer, Sprite layers (one per character/actor), UI/overlay layers, and an Effects layer.
-- Drag & Drop assets: Drag images from the Images panel or Project Explorer onto a layer to add them to the scene.
-- Positioning & Anchors: Move sprites using click-and-drag. Numeric position controls and preset anchors (center, left, right, top, bottom) are available for precise placement.
-- Scale & Rotation: Adjust scale and rotation with handles or numeric inputs; supports snapping and constrained aspect ratio toggles.
-- Z-order: Reorder layers to control draw order (bring forward/send backward).
-- Transform Builder: Create named transforms (position/zoom/rotate/alpha) and preview them in the composer.
-- Easing & Timing: Define time, transition/easing (linear, ease-in, ease-out), and chain multiple transforms for entrance/exit animations.
-- Preview: Play a simple preview timeline inside the composer to see transforms and transitions.
-- Export / Generate Code:
-  - "Copy Transform" generates a Ren'Py transform block for the selected sprite(s).
-  - "Generate Scene" generates a full scene snippet: scene statement, show statements with transforms, and optional Ren'Py screen or layer calls — copy-to-clipboard or insert into the open editor tab.
-- Presets & Templates: Save commonly used transform presets and alignment templates for reuse across scenes.
-- Asset Linking: Choose whether added assets are copied into the project or referenced from their source path (useful when scanning external folders).
-- Accessibility: Snap-to-grid, numeric nudge, and precise property editing for pixel-perfect layouts.
+This panel shows a tree view of your project's file system.
 
-Typical workflow:
-1. Open Scene Composer from the Toolbar or Story Elements -> Images context menu.
-2. Drag a background into the Background layer.
-3. Drag character sprites into Sprite layers and position them.
-4. Create transforms for entrance/idle/exit as needed, preview timeline.
-5. Export the generated Ren'Py code into an editor tab or copy to clipboard.
+- **File Operations**: Right-click on a file or folder to open the context menu, which allows you to:
+  - **Create** new files (`.rpy`) or folders.
+  - **Rename** existing files or folders.
+  - **Delete** items (this will delete them from your disk if you have a project folder open!).
+  - **Cut, Copy, and Paste** files and folders to reorganize your project.
+- **Navigation**:
+  - Double-click an `.rpy` file to open it in the editor.
+  - Right-click an `.rpy` file and select "Center on Canvas" to locate its block in the visual editor.
 
----
+#### Story Elements (Right Sidebar)
 
-### Editor Tabs
+This powerful panel analyzes your entire project to give you an overview of all its core components.
 
-Ren'IDE embeds the Monaco editor to provide a full-featured editing experience integrated with the visual tools.
+- **Characters Tab**:
+  - Lists all characters defined with `define e = Character(...)`.
+  - Shows their display name, code tag, color, and how many lines of dialogue they have.
+  - You can **Add** a new character, **Find Usages** to highlight all blocks where a character speaks, or **Edit** an existing character's properties in a dedicated view.
 
-Core capabilities:
-- Multiple Tabs: Open multiple `.rpy` files in tabs; each tab shows unsaved indicators and a path tooltip on hover.
-- Tab Management: Right-click tab context menu for Close, Close Others, and Close All.
-- Syntax Highlighting: Syntax coloring for Ren'Py/Python and support for common file types.
-- Go-to Definition & Find Usages: Jump to label definitions and locate usages across the project (project-wide search integration).
-- Find & Replace: Global and per-file find/replace with regex support and replace all.
-- Snippets & Templates: Insert common Ren'Py code blocks (dialogue patterns, menus, screen templates) from the Snippets tab or inline completion.
-- Live Preview Integration: When the project is configured with a local Ren'Py install, use the "Run" integration to start Ren'Py and reload changes where supported.
-- Undo/Redo and History: Editor-level and workspace-level undo stacks; unsaved changes are preserved between sessions (when workspace supports saving).
+- **Variables Tab**:
+  - Lists all global variables defined with `define` or `default`.
+  - You can **Add** new variables and **Find Usages** to see where they are used in your code.
 
-Editor + Scene Composer integration:
-- Insert generated code from Scene Composer directly into the active editor tab at the caret position.
-- Click "Center on Canvas" from an open file's tab to locate the corresponding block on the Story Canvas.
-- Quick actions in the editor (e.g., "Find Label Usages") highlight blocks on the Story Canvas for easier navigation.
-- Jump from label to label, even across files, by ctrl-clicking on a label to trace routes across the project
+- **Images Tab**:
+  - Manages all your project's visual assets.
+  - It automatically finds images in `game/images/`.
+  - You can **Add Directory to Scan** to include images from other folders on your computer without copying them first.
+  - Images not yet in your project are marked with a red border. Select them and click **Copy to Project**.
+  - Right-click an image to copy a `scene` or `show` statement to your clipboard.
+  - Double-click an image to open the Image Editor to manage its Ren'Py tags and subfolder location.
 
-Tips:
-- Save frequently when the app is linked to a local project folder; the Save All toolbar button helps persist changes across tabs.
+- **Audio Tab**:
+  - Works just like the Images tab, but for your audio files (`.ogg`, `.mp3`, etc.).
+  - Manages files in `game/audio/` and other scanned directories.
+  - Right-click an audio file to copy a `play audio` or `queue audio` statement.
 
----
+- **Screens Tab**:
+  - Lists all screens defined with the `screen` statement.
+  - You can **Add** a new screen, which will create a new `.rpy` file with boilerplate code.
+  - You can also quickly **Find Definition** to jump to the code where a screen is defined.
 
-### Story Elements Panel (recap & quick reference)
-
-- Characters: Add, edit, and find usages of Characters defined with `define`.
-- Variables: Inspect and add global variables (`define`, `default`), find usages.
-- Images: Scan `game/images/` and external directories, copy assets into the project, generate `scene`/`show` statements.
-- Audio: Manage audio files, copy and generate `play`/`queue` statements.
-- Screens: Jump to screen definitions, create new screen boilerplate.
-- Snippets: Library of reusable Ren'Py code patterns; copy or insert into the editor.
-- Menus: A choice menu builder to visually construct choice code, with option to copy the generated code and paste into the editor
----
-
-### File Explorer & Context Menus
-
-- Create, rename, move, delete files and folders. (Deleting will remove files from disk when project folder open)
-- Cut/Copy/Paste support for reorganizing project structure.
-- Right-click file -> Center on Canvas to locate the corresponding block.
-- Upload .zip project support: import and extract as a new workspace (download changes when finished).
-
----
-
-## Architecture & Technical Stack
-
-- Frontend: React + TypeScript + Tailwind CSS, built with Vite.
-- Editor: Monaco Editor for code editing features.
-- Desktop: Electron entry points provided (`electron.js`, `preload.js`) for packaging into platform-specific installers.
-- File access: Browser File System Access API for in-browser work and native filesystem for Electron builds.
-- Components: Modular UI components for canvas, editors, managers, modals, and context menus placed in the `components/` directory.
-
----
-
-## Contributing
-
-Contributions are welcome. Please read the repository's CONTRIBUTING guidelines and CODE_OF_CONDUCT before opening issues or pull requests. For feature requests, bugs, or help, open an issue and include steps to reproduce, screenshots if applicable, and platform details.
-
----
-
-## License
-
-This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See [LICENSE](https://github.com/bluemoonfoundry/vangard-renpy-ide/blob/main/LICENSE) for details.
-
----
-
-## Notes
-
-- This is an actively developing project; many features are in alpha or experimental state. Expect updates and breaking changes during early releases.
-- If you rely on Ren'Py run integration, ensure you have a compatible Ren'Py installation and configure it via the Settings modal.
-- For the most up-to-date downloads, visit the Releases page: https://github.com/bluemoonfoundry/vangard-renpy-ide/releases
+- **Snippets Tab**:
+  - A handy library of common Ren'Py code patterns for dialogue, logic, visual effects, and more.
+  - Find the snippet you need and click **Copy** to paste it into your code.

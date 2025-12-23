@@ -375,21 +375,31 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
     window.addEventListener('pointerup', handlePointerUp);
   };
   
-  const handleWheel = (e: React.WheelEvent) => {
-    if (!canvasRef.current || (e.target as HTMLElement).closest('.view-routes-panel')) return;
-    e.preventDefault();
-    const rect = canvasRef.current.getBoundingClientRect();
-    const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    onTransformChange(t => {
-      const zoom = 1 - e.deltaY * 0.002;
-      const newScale = Math.max(0.2, Math.min(3, t.scale * zoom));
-      const worldX = (pointer.x - t.x) / t.scale;
-      const worldY = (pointer.y - t.y) / t.scale;
-      const newX = pointer.x - worldX * newScale;
-      const newY = pointer.y - worldY * newScale;
-      return { x: newX, y: newY, scale: newScale };
-    });
-  };
+  // Setup manual wheel listener for non-passive behavior
+  useEffect(() => {
+      const el = canvasRef.current;
+      if (!el) return;
+
+      const onWheel = (e: WheelEvent) => {
+          if ((e.target as HTMLElement).closest('.view-routes-panel')) return;
+          e.preventDefault(); // Stop browser native zoom/scroll
+          const rect = el.getBoundingClientRect();
+          const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+          
+          onTransformChange(t => {
+              const zoom = 1 - e.deltaY * 0.002;
+              const newScale = Math.max(0.2, Math.min(3, t.scale * zoom));
+              const worldX = (pointer.x - t.x) / t.scale;
+              const worldY = (pointer.y - t.y) / t.scale;
+              const newX = pointer.x - worldX * newScale;
+              const newY = pointer.y - worldY * newScale;
+              return { x: newX, y: newY, scale: newScale };
+          });
+      };
+
+      el.addEventListener('wheel', onWheel, { passive: false });
+      return () => el.removeEventListener('wheel', onWheel);
+  }, [onTransformChange]);
 
   const backgroundStyle = {
     backgroundSize: `${32 * transform.scale}px ${32 * transform.scale}px`,
@@ -423,7 +433,6 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
       className="absolute inset-0 overflow-hidden cursor-grab active:cursor-grabbing bg-gray-100 dark:bg-gray-900 bg-[radial-gradient(#d4d4d8_1px,transparent_1px)] dark:bg-[radial-gradient(#4b5563_1px,transparent_1px)]"
       style={backgroundStyle}
       onPointerDown={handlePointerDown}
-      onWheel={handleWheel}
     >
       <ViewRoutesPanel routes={identifiedRoutes} checkedRoutes={checkedRoutes} onToggleRoute={handleToggleRoute} />
       <div

@@ -25,7 +25,7 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
     const [what_color, setWhatColor] = useState(character?.what_color || '');
     const [slow, setSlow] = useState(character?.slow ?? false);
     const [ctc, setCtc] = useState(character?.ctc || '');
-    const [ctc_position, setCtcPosition] = useState(character?.ctc_position || 'nestled');
+    const [ctc_position, setCtcPosition] = useState<'nestled' | 'fixed'>(character?.ctc_position || 'nestled');
 
     const [tagError, setTagError] = useState('');
 
@@ -93,7 +93,7 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
             what_color: what_color.trim() || undefined,
             slow,
             ctc: ctc.trim() || undefined,
-            ctc_position: ctc_position as 'nestled' | 'fixed',
+            ctc_position: ctc_position,
         };
 
         onSave(finalChar, character?.tag);
@@ -179,7 +179,6 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
              {renderTextInput("Click-to-Continue (ctc)", ctc, setCtc, "e.g., ctc_arrow")}
             <div>
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">CTC Position</label>
-{/* Fix: Cast select value to the expected type to resolve TypeScript error. */}
                  <select value={ctc_position} onChange={e => setCtcPosition(e.target.value as 'nestled' | 'fixed')} className="w-full mt-1 p-2 rounded bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500">
                     <option value="nestled">nestled</option>
                     <option value="fixed">fixed</option>

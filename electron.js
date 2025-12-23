@@ -1,9 +1,3 @@
-
-
-
-
-
-
 import { app, BrowserWindow, ipcMain, dialog, Menu, protocol, net } from 'electron';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';

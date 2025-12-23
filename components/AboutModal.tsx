@@ -1,7 +1,7 @@
 
 import React from 'react';
-import logo from '../vangard-renide-512x512.png';
 import packageJson from '../package.json';
+import logo from '../vangard-renide-512x512.png';
 
 interface AboutModalProps {
   isOpen: boolean;
@@ -18,7 +18,7 @@ const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
         onClick={e => e.stopPropagation()}
       >
         <div className="p-8 flex flex-col items-center text-center">
-            <img src={logo} alt="Vangard Ren'IDE Logo" className="w-24 h-24 mb-4 object-contain drop-shadow-md" />
+            <img src={logo} alt="Vangard Ren'IDE Logo" className="w-32 h-32 mb-4 object-contain drop-shadow-md" />
             <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Ren'IDE: The Ren'Py Visual Editor</h2>
             <p className="text-indigo-600 dark:text-indigo-400 font-mono text-sm mb-6">v{packageJson.version}</p>
             

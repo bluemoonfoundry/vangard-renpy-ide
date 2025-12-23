@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect } from 'react';
 // FIX: Removed FileSystemDirectoryHandle as it is globally available.
 import type { ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata } from '../types';

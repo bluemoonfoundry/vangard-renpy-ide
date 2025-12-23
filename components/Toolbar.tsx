@@ -1,5 +1,3 @@
-
-
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import type { Theme } from '../types';
 import logo from '../vangard-renide-512x512.png';
@@ -11,6 +9,7 @@ interface ToolbarProps {
   projectRootPath: string | null;
   dirtyBlockIds: Set<string>;
   dirtyEditors: Set<string>;
+  hasUnsavedSettings: boolean;
   saveStatus: SaveStatus;
   canUndo: boolean;
   canRedo: boolean;
@@ -47,7 +46,7 @@ const ToolbarButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { 
   return (
     <button
       {...props}
-      className={`flex items-center justify-center rounded-md text-sm font-medium bg-tertiary hover:bg-tertiary-hover text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${layoutClass}`}
+      className={`flex items-center justify-center rounded-md text-sm font-medium bg-tertiary hover:bg-tertiary-hover text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${layoutClass} ${props.className || ''}`}
     >
       {children}
     </button>
@@ -59,6 +58,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   projectRootPath,
   dirtyBlockIds,
   dirtyEditors,
+  hasUnsavedSettings,
   saveStatus,
   canUndo,
   canRedo,
@@ -90,6 +90,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
     return new Set([...dirtyBlockIds, ...dirtyEditors]).size;
   }, [dirtyBlockIds, dirtyEditors]);
 
+  const hasUnsavedChanges = totalUnsavedCount > 0 || hasUnsavedSettings;
+  const unsavedItemsCount = totalUnsavedCount + (hasUnsavedSettings ? 1 : 0);
+
   const SaveStatusIndicator: React.FC = () => {
     switch (saveStatus) {
       case 'saving':
@@ -103,12 +106,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
           </div>
         );
       case 'saved':
-        return (
-          <div className="flex items-center space-x-2 text-sm text-green-600 dark:text-green-400">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-            <span>Saved</span>
-          </div>
-        );
+        return null;
       case 'error':
         return (
            <div className="flex items-center space-x-2 text-sm text-red-600 dark:text-red-400">
@@ -181,11 +179,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
         <ToolbarButton
             onClick={handleSave}
-            disabled={totalUnsavedCount === 0}
+            disabled={!hasUnsavedChanges}
+            className={hasUnsavedChanges ? 'bg-red-600 hover:bg-red-700 !text-white' : ''}
             title={
-                totalUnsavedCount === 0
+                !hasUnsavedChanges
                 ? 'No changes to save'
-                : `Save All (${totalUnsavedCount} unsaved) (Ctrl+S)`
+                : `Save All (${unsavedItemsCount} unsaved change${unsavedItemsCount === 1 ? '' : 's'}) (Ctrl+S)`
             }
         >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 16 16" fill="currentColor">

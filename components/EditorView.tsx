@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type { Block, RenpyAnalysisResult, ToastMessage } from '../types';
@@ -30,9 +29,6 @@ interface EditorViewProps {
 
 const LABEL_REGEX = /^\s*label\s+([a-zA-Z0-9_]+):/;
 const JUMP_REGEX = /\b(jump|call)\s+([a-zA-Z0-9_]+)/g;
-// Regex to catch `play <channel> "<file>"` or `queue ...`
-// Supports quoted: play music "file.ogg"
-// Supports unquoted variable: play music file_var
 const AUDIO_USAGE_REGEX = /^\s*(?:play|queue)\s+\w+\s+(.+)/;
 
 const Breadcrumbs: React.FC<{ filePath?: string, context?: string }> = ({ filePath, context }) => {
@@ -92,38 +88,47 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const draftingDecorationIds = useRef<string[]>([]);
   const [currentContext, setCurrentContext] = useState<string>('');
   
+  // Track dirty state internally to prevent redundant updates
+  const isDirtyRef = useRef(false);
+
   // Refs to keep track of latest props for closures
   const onDirtyChangeRef = useRef(onDirtyChange);
   const onTriggerSaveRef = useRef(onTriggerSave);
-  const onSaveRef = useRef(onSave);
   const blockRef = useRef(block);
   const onSwitchFocusBlockRef = useRef(onSwitchFocusBlock);
   const analysisResultRef = useRef(analysisResult);
+  const onEditorUnmountRef = useRef(onEditorUnmount);
   
   useEffect(() => {
     onDirtyChangeRef.current = onDirtyChange;
     onTriggerSaveRef.current = onTriggerSave;
-    onSaveRef.current = onSave;
     blockRef.current = block;
     onSwitchFocusBlockRef.current = onSwitchFocusBlock;
     analysisResultRef.current = analysisResult;
-  }, [onDirtyChange, onTriggerSave, onSave, block, onSwitchFocusBlock, analysisResult]);
+    onEditorUnmountRef.current = onEditorUnmount;
+  }, [onDirtyChange, onTriggerSave, block, onSwitchFocusBlock, analysisResult, onEditorUnmount]);
+
+  // This effect resets the internal dirty flag when the block content is updated
+  // from an external source (like a save operation). This ensures the component can
+  // correctly detect the next user edit and report it.
+  useEffect(() => {
+    if (editorRef.current) {
+        const isNowDirty = editorRef.current.getValue() !== block.content;
+        if (isDirtyRef.current && !isNowDirty) {
+            isDirtyRef.current = false;
+        }
+    }
+  }, [block.content]);
+
 
   useEffect(() => {
     return () => {
-        if (editorRef.current) {
-             try {
-                const currentContent = editorRef.current.getValue();
-                if (currentContent !== blockRef.current.content) {
-                    onSaveRef.current(blockRef.current.id, currentContent);
-                }
-             } catch (e) {
-             }
-        }
-        onDirtyChangeRef.current(blockRef.current.id, false);
-        onEditorUnmount(blockRef.current.id);
+        // On unmount, just signal to the parent.
+        // The parent's `onEditorUnmount` handler is responsible for syncing state
+        // and managing the dirty state transition. This avoids race conditions.
+        onEditorUnmountRef.current(blockRef.current.id);
     };
-  }, [onEditorUnmount]);
+  }, []); // <-- Empty array ensures this runs ONLY on unmount
   
   useEffect(() => {
     if (editorRef.current && initialScrollRequest) {
@@ -153,42 +158,71 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     }
   };
 
-  const handleEditorWillMount: BeforeMount = (monaco) => {
-    if (!monaco.languages.getLanguages().some(({ id }) => id === 'renpy')) {
-      monaco.languages.register({ id: 'renpy', extensions: ['.rpy'], aliases: ['RenPy', 'renpy'] });
+  const handleEditorWillMount: BeforeMount = (monacoInstance) => {
+    // Only register if not already registered
+    if (!monacoInstance.languages.getLanguages().some(({ id }) => id === 'renpy')) {
+      monacoInstance.languages.register({ id: 'renpy', extensions: ['.rpy'], aliases: ['RenPy', 'renpy'] });
       
-      // Define language configuration for comments and brackets
-      monaco.languages.setLanguageConfiguration('renpy', {
-        comments: {
-          lineComment: '#',
-        },
-        brackets: [
-          ['(', ')'],
-          ['{', '}'],
-          ['[', ']'],
-        ],
+      monacoInstance.languages.setLanguageConfiguration('renpy', {
+        comments: { lineComment: '#' },
+        brackets: [['(', ')'], ['{', '}'], ['[', ']']],
         autoClosingPairs: [
-          { open: '(', close: ')' },
-          { open: '{', close: '}' },
-          { open: '[', close: ']' },
-          { open: '"', close: '"' },
-          { open: "'", close: "'" },
+          { open: '(', close: ')' }, { open: '{', close: '}' }, { open: '[', close: ']' },
+          { open: '"', close: '"' }, { open: "'", close: "'" },
         ],
         surroundingPairs: [
-          { open: '(', close: ')' },
-          { open: '{', close: '}' },
-          { open: '[', close: ']' },
-          { open: '"', close: '"' },
-          { open: "'", close: "'" },
+          { open: '(', close: ')' }, { open: '{', close: '}' }, { open: '[', close: ']' },
+          { open: '"', close: '"' }, { open: "'", close: "'" },
         ],
       });
 
-      monaco.languages.setMonarchTokensProvider('renpy', {
-        keywords: ['label', 'jump', 'call', 'menu', 'scene', 'show', 'hide', 'with', 'define', 'python', 'if', 'elif', 'else', 'return', 'expression'],
-        tokenizer: { root: [[/#.*$/, 'comment'], [/"/, 'string', '@string_double'], [/'/, 'string', '@string_single'], [/\b[a-zA-Z_]\w*/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }], [/\b\d+/, 'number'], [/[:=+\-*/!<>]+/, 'operator'], [/[(),.]/, 'punctuation']], string_double: [[/[^\\"]+/, 'string'], [/\\./, 'string.escape'], [/"/, 'string', '@pop']], string_single: [[/[^\\']+/, 'string'], [/\\./, 'string.escape'], [/'/, 'string', '@pop']] },
+      monacoInstance.languages.setMonarchTokensProvider('renpy', {
+        keywords: ['label', 'jump', 'call', 'menu', 'scene', 'show', 'hide', 'with', 'define', 'default', 'python', 'init', 'if', 'elif', 'else', 'return', 'expression', 'pass', 'while', 'for', 'in', 'image', 'transform', 'screen', 'text', 'vbox', 'hbox', 'frame', 'button', 'bar', 'vpgrid', 'viewport'],
+        tokenizer: { 
+            root: [
+                [/#.*$/, 'comment'], 
+                [/"/, 'string', '@string_double'], 
+                [/'/, 'string', '@string_single'], 
+                [/\b(label|jump|call|menu|scene|show|hide|with|define|default|python|init|if|elif|else|return|expression|pass|while|for|in|image|transform|screen)\b/, 'keyword'],
+                [/\b[a-zA-Z_]\w*/, 'identifier'],
+                [/\b\d+/, 'number'], 
+                [/[:=+\-*/!<>]+/, 'operator'], 
+                [/[(),.]/, 'punctuation']
+            ], 
+            string_double: [[/[^\\"]+/, 'string'], [/\\./, 'string.escape'], [/"/, 'string', '@pop']], 
+            string_single: [[/[^\\']+/, 'string'], [/\\./, 'string.escape'], [/'/, 'string', '@pop']] 
+        },
       });
-      monaco.editor.defineTheme('renpy-dark', { base: 'vs-dark', inherit: true, rules: [{ token: 'keyword', foreground: '859900' }, { token: 'string', foreground: '2aa198' }, { token: 'comment', foreground: '586e75', fontStyle: 'italic' }, { token: 'number', foreground: '268bd2' }, { token: 'identifier', foreground: 'd4d4d4' }, { token: 'operator', foreground: '93a1a1' }, { token: 'punctuation', foreground: '93a1a1' }], colors: { 'editor.background': '#252a33' } });
-      monaco.editor.defineTheme('renpy-light', { base: 'vs', inherit: true, rules: [{ token: 'keyword', foreground: '859900' }, { token: 'string', foreground: '2aa198' }, { token: 'comment', foreground: '93a1a1', fontStyle: 'italic' }, { token: 'number', foreground: '268bd2' }, { token: 'identifier', foreground: '333333' }, { token: 'operator', foreground: '657b83' }, { token: 'punctuation', foreground: '657b83' }], colors: { 'editor.background': '#ffffff' } });
+      
+      monacoInstance.editor.defineTheme('renpy-dark', { 
+          base: 'vs-dark', 
+          inherit: true, 
+          rules: [
+              { token: 'keyword', foreground: 'C678DD' }, // Purple
+              { token: 'string', foreground: '98C379' }, // Green
+              { token: 'comment', foreground: '5C6370', fontStyle: 'italic' }, // Grey
+              { token: 'number', foreground: 'D19A66' }, // Orange
+              { token: 'identifier', foreground: 'ABB2BF' }, // White/Grey
+              { token: 'operator', foreground: '56B6C2' }, // Cyan
+              { token: 'punctuation', foreground: 'ABB2BF' }
+          ], 
+          colors: { 'editor.background': '#282C34' } 
+      });
+      
+      monacoInstance.editor.defineTheme('renpy-light', { 
+          base: 'vs', 
+          inherit: true, 
+          rules: [
+              { token: 'keyword', foreground: 'A626A4' }, 
+              { token: 'string', foreground: '50A14F' }, 
+              { token: 'comment', foreground: 'A0A1A7', fontStyle: 'italic' }, 
+              { token: 'number', foreground: '986801' }, 
+              { token: 'identifier', foreground: '383A42' }, 
+              { token: 'operator', foreground: '0184BC' }, 
+              { token: 'punctuation', foreground: '383A42' }
+          ], 
+          colors: { 'editor.background': '#FAFAFA' } 
+      });
     }
   };
 
@@ -197,7 +231,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     const lines = code.split('\n');
     const localLabels = new Set<string>();
 
-    // Pass 1: Find local labels currently defined in editor content
     lines.forEach(line => {
         const match = line.match(LABEL_REGEX);
         if (match) localLabels.add(match[1]);
@@ -210,9 +243,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       const lineNumber = index + 1;
       const trimmedLine = line.trim();
       
-      if (trimmedLine === '' || trimmedLine.startsWith('#')) {
-        return; 
-      }
+      if (trimmedLine === '' || trimmedLine.startsWith('#')) return;
 
       const currentIndent = line.length - line.trimStart().length;
 
@@ -241,7 +272,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         });
       }
 
-      const colonKeywords = ['label', 'if', 'elif', 'menu', 'python', 'while', 'for', 'else'];
+      const colonKeywords = ['label', 'if', 'elif', 'menu', 'python', 'while', 'for', 'else', 'init'];
       const firstWord = trimmedLine.split(/[\s:]/)[0];
       if (colonKeywords.includes(firstWord) && !trimmedLine.endsWith(':')) {
         markers.push({
@@ -259,8 +290,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         previousIndent = currentIndent;
       }
 
-      // Real-time Jump Validation
-      // Replace strings with spaces to preserve indices
       let sanitizedLine = line.replace(/"[^"\\]*(?:\\.[^"\\]*)*"/g, m => ' '.repeat(m.length)).replace(/'[^'\\]*(?:\\.[^'\\]*)*'/g, m => ' '.repeat(m.length));
       const commentIndex = sanitizedLine.indexOf('#');
       if (commentIndex !== -1) sanitizedLine = sanitizedLine.substring(0, commentIndex);
@@ -273,7 +302,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
           const isLocal = localLabels.has(target);
           const globalLabelDef = analysisResultRef.current.labels[target];
-          // Valid if found locally OR (found globally AND NOT associated with this block's old state)
           const isExternal = globalLabelDef && globalLabelDef.blockId !== blockRef.current.id;
 
           if (!isLocal && !isExternal) {
@@ -299,14 +327,10 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       if (!position) return;
 
       const lineNumber = position.lineNumber;
-      // We need to look at the current *live* text to find local context, as analysis might be stale for new edits
       const model = editorRef.current.getModel();
       if (!model) return;
 
       let bestContext = '';
-      let bestLine = -1;
-
-      // Scan backwards from current line to find a label or screen definition
       for (let i = lineNumber; i >= 1; i--) {
           const lineContent = model.getLineContent(i);
           const labelMatch = lineContent.match(/^\s*label\s+([a-zA-Z0-9_]+):/);
@@ -314,58 +338,43 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
           if (labelMatch) {
               bestContext = `label ${labelMatch[1]}`;
-              bestLine = i;
               break;
           }
           if (screenMatch) {
               bestContext = `screen ${screenMatch[1]}`;
-              bestLine = i;
               break;
           }
       }
-
       setCurrentContext(bestContext);
   };
 
-  const handleEditorDidMount: OnMount = (editor, monaco) => {
+  const handleEditorDidMount: OnMount = (editor, monacoInstance) => {
     editorRef.current = editor;
-    monacoRef.current = monaco;
+    monacoRef.current = monacoInstance as any; // Type casting to satisfy TS if needed
 
-    // Force language to ensure tokenization is applied immediately
+    // Ensure language is set correctly
     const model = editor.getModel();
     if (model) {
-        monaco.editor.setModelLanguage(model, 'renpy');
+        monacoInstance.editor.setModelLanguage(model, 'renpy');
     }
-
-    // Force layout refresh after mount to ensure syntax highlighting renders without needing scroll
-    setTimeout(() => {
-        editor.layout();
-        // Re-assert language just in case layout triggered a refresh
-        if (model) {
-            monaco.editor.setModelLanguage(model, 'renpy');
-        }
-    }, 50);
 
     onEditorMount(block.id, editor);
     editor.focus();
     setIsMounted(true);
-    updateContext(); // Initial context
+    updateContext();
 
     aiFeaturesEnabledContextKey.current = editor.createContextKey('aiFeaturesEnabled', enableAiFeatures);
 
-    // Setup Drop Handler
     const editorNode = editor.getDomNode();
     if (editorNode) {
       editorNode.addEventListener('dragover', (e) => {
         e.preventDefault();
-        if (e.dataTransfer) {
-            e.dataTransfer.dropEffect = 'copy';
-        }
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
       });
 
       editorNode.addEventListener('drop', (e) => {
         e.preventDefault();
-        e.stopPropagation(); // Stop native handling which might insert text as a snippet ($0)
+        e.stopPropagation();
         const data = e.dataTransfer?.getData('application/renpy-dnd');
         if (data) {
           try {
@@ -374,7 +383,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
             if (target && target.position) {
               const position = target.position;
               editor.executeEdits('dnd', [{
-                range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+                range: new monacoInstance.Range(position.lineNumber, position.column, position.lineNumber, position.column),
                 text: payload.text,
                 forceMoveMarkers: true
               }]);
@@ -392,21 +401,24 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         const currentContent = editor.getValue();
         const savedContent = blockRef.current.content;
         const isDirty = currentContent !== savedContent;
-        onDirtyChangeRef.current(blockRef.current.id, isDirty);
         
-        const markers = performValidation(currentContent, monaco);
-        monaco.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
+        if (isDirty !== isDirtyRef.current) {
+            isDirtyRef.current = isDirty;
+            onDirtyChangeRef.current(blockRef.current.id, isDirty);
+        }
+        
+        const markers = performValidation(currentContent, monacoInstance as any);
+        monacoInstance.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
     });
     
     editor.onDidChangeCursorPosition(() => {
         updateContext();
     });
 
-    // Use addAction instead of addCommand for cleaner action registration
     editor.addAction({
         id: 'save-block',
         label: 'Save',
-        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
+        keybindings: [monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS],
         run: () => {
             if (onTriggerSaveRef.current) {
                 onTriggerSaveRef.current(blockRef.current.id);
@@ -415,13 +427,8 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     });
 
     editor.onMouseDown((e) => {
-      if (e.target.type !== monaco.editor.MouseTargetType.CONTENT_TEXT || !e.target.position) {
-          return;
-      }
-      // Only trigger on Ctrl/Cmd click
-      if (!e.event.ctrlKey && !e.event.metaKey) {
-          return;
-      }
+      if (e.target.type !== monacoInstance.editor.MouseTargetType.CONTENT_TEXT || !e.target.position) return;
+      if (!e.event.ctrlKey && !e.event.metaKey) return;
   
       const position = e.target.position;
       const model = editor.getModel();
@@ -429,15 +436,8 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
       const lineContent = model.getLineContent(position.lineNumber);
       
-      // Check for jump/call under cursor
-      const word = model.getWordAtPosition(position);
-      if (!word) return;
-
-      // Very simple check: see if this word is a jump target
       const lineJumpRegex = new RegExp(JUMP_REGEX);
       let match;
-      
-      // We need to match the specific word instance
       let foundTarget = null;
       let isJump = false;
 
@@ -454,14 +454,11 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       }
 
       if (isJump && foundTarget) {
-          e.event.preventDefault(); // Stop default navigation (if any)
-
-          // 1. Try to find local label first (intra-file navigation)
+          e.event.preventDefault();
           const localLines = model.getValue().split('\n');
           let localLineNumber = -1;
           for(let i=0; i<localLines.length; i++) {
-              const labelMatch = localLines[i].match(new RegExp(`^\\s*label\\s+${foundTarget}:`));
-              if (labelMatch) {
+              if (localLines[i].match(new RegExp(`^\\s*label\\s+${foundTarget}:`))) {
                   localLineNumber = i + 1;
                   break;
               }
@@ -473,7 +470,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
               editor.revealLineInCenter(localLineNumber);
               editor.focus();
           } else {
-              // 2. Fallback to global navigation
               const targetLabelLocation = analysisResultRef.current.labels[foundTarget];
               if (targetLabelLocation) {
                   onSwitchFocusBlockRef.current(targetLabelLocation.blockId, targetLabelLocation.line);
@@ -485,9 +481,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     editor.addAction({
       id: 'generate-ai-content',
       label: 'Generate AI Content...',
-      keybindings: [
-        monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyI,
-      ],
+      keybindings: [monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyMod.Shift | monacoInstance.KeyCode.KeyI],
       precondition: 'aiFeaturesEnabled',
       contextMenuGroupId: '1_modification',
       contextMenuOrder: 1.5,
@@ -496,32 +490,30 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       },
     });
     
-    // Initial validation on mount
-    const markers = performValidation(editor.getValue(), monaco);
-    monaco.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
+    const markers = performValidation(editor.getValue(), monacoInstance as any);
+    monacoInstance.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
   };
   
-  // Update markers when analysis changes (e.g. newly defined global labels)
   useEffect(() => {
       if (isMounted && editorRef.current && monacoRef.current) {
-          const markers = performValidation(editorRef.current.getValue(), monacoRef.current);
+          const markers = performValidation(editorRef.current.getValue(), monacoRef.current as any);
           monacoRef.current.editor.setModelMarkers(editorRef.current.getModel()!, 'renpy', markers);
       }
   }, [analysisResult, isMounted]);
   
-  // Effect to update decorations when analysis or theme changes
   useEffect(() => {
       if (!isMounted || !editorRef.current || !monacoRef.current) return;
   
       const editor = editorRef.current;
-      const monaco = monacoRef.current;
       const model = editor.getModel();
       if (!model) return;
+      
+      // Use monaco instance from ref
+      const monacoInstance = monacoRef.current;
   
       const newDecorations: monaco.editor.IModelDeltaDecoration[] = [];
       const newDraftingDecorations: monaco.editor.IModelDeltaDecoration[] = [];
       
-      // Get all text to find jumps dynamically, ensuring we catch unsaved changes
       const lines = model.getValue().split('\n');
       const localLabels = new Set<string>();
       lines.forEach(line => {
@@ -531,17 +523,15 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
       lines.forEach((line, index) => {
           const lineNumber = index + 1;
-          // Simple sanitization for string literals
           let sanitizedLine = line.replace(/"[^"\\]*(?:\\.[^"\\]*)*"/g, m => ' '.repeat(m.length)).replace(/'[^'\\]*(?:\\.[^'\\]*)*'/g, m => ' '.repeat(m.length));
           const commentIndex = sanitizedLine.indexOf('#');
           if (commentIndex !== -1) sanitizedLine = sanitizedLine.substring(0, commentIndex);
 
-          // Jump Links
           const lineJumpRegex = new RegExp(JUMP_REGEX);
           let match;
           while ((match = lineJumpRegex.exec(sanitizedLine)) !== null) {
               const target = match[2];
-              if (target === 'expression') continue; // Skip dynamic expression jumps
+              if (target === 'expression') continue;
 
               const startCol = match.index + match[0].indexOf(target) + 1;
               const endCol = startCol + target.length;
@@ -552,7 +542,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
               if (isLocal || isExternal) {
                   newDecorations.push({
-                      range: new monaco.Range(lineNumber, startCol, lineNumber, endCol),
+                      range: new monacoInstance.Range(lineNumber, startCol, lineNumber, endCol),
                       options: {
                           inlineClassName: 'renpy-jump-link',
                           hoverMessage: { value: `Cmd/Ctrl + click to jump to '${target}'`, isTrusted: true }
@@ -560,7 +550,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                   });
               } else {
                    newDecorations.push({
-                      range: new monaco.Range(lineNumber, startCol, lineNumber, endCol),
+                      range: new monacoInstance.Range(lineNumber, startCol, lineNumber, endCol),
                       options: {
                           inlineClassName: 'renpy-jump-invalid',
                           hoverMessage: { value: `Label '${target}' not found.`, isTrusted: true }
@@ -569,16 +559,15 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
               }
           }
 
-          // Drafting Mode Missing Asset Detection
           if (draftingMode) {
-              // Images: Manual parsing to handle clauses
+              // ... drafting mode checks logic ...
+              // (Abbreviated to keep XML concise as logic remains same, just ensuring correct range usage if any)
               const showRegex = /^\s*(show|scene)\s+/;
               const showMatch = line.match(showRegex);
               if (showMatch) {
                   const prefixLen = showMatch[0].length;
                   const restOfLine = line.slice(prefixLen);
                   
-                  // Tokenize preserving indices
                   const tokens = [];
                   let currentToken = '';
                   let startIndex = prefixLen;
@@ -609,19 +598,17 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                   let firstTokenStart = -1;
 
                   if (tokens.length > 0 && tokens[0].text === 'expression') {
-                      // skip dynamic expressions
+                      // skip
                   } else {
                       for (const token of tokens) {
                           if (['with', 'at', 'as', 'behind', 'zorder', 'on', ':', 'fade', 'in', 'out', 'dissolve', 'zoom', 'alpha', 'rotate', 'align', 'pos', 'anchor', 'xpos', 'ypos', 'xanchor', 'yanchor'].includes(token.text)) break;
                           if (token.text.endsWith(':')) {
-                              // Handle "eileen:"
                               const realText = token.text.slice(0, -1);
                               tagParts.push(realText);
                               if (firstTokenStart === -1) firstTokenStart = token.start;
                               lastTokenEnd = token.start + realText.length;
                               break; 
                           }
-                          
                           tagParts.push(token.text);
                           if (firstTokenStart === -1) firstTokenStart = token.start;
                           lastTokenEnd = token.end;
@@ -631,7 +618,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                   if (tagParts.length > 0) {
                       const tag = tagParts.join(' ');
                       const firstWord = tagParts[0];
-                      // Check exact match or starts with prefix
                       const isDefined = 
                           analysisResultRef.current.definedImages.has(firstWord) || 
                           existingImageTags.has(tag) || 
@@ -639,7 +625,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
                       if (!isDefined) {
                           newDraftingDecorations.push({
-                              range: new monaco.Range(lineNumber, firstTokenStart + 1, lineNumber, lastTokenEnd + 1),
+                              range: new monacoInstance.Range(lineNumber, firstTokenStart + 1, lineNumber, lastTokenEnd + 1),
                               options: {
                                   inlineClassName: 'renpy-missing-asset-draft',
                                   hoverMessage: { value: `Asset missing. A placeholder will be used in Drafting Mode.`, isTrusted: true }
@@ -649,11 +635,9 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                   }
               }
 
-              // Audio: Quoted strings OR unquoted variables
               const audMatch = line.match(AUDIO_USAGE_REGEX);
               if (audMatch) {
                   const content = audMatch[1].trim();
-                  // Check for Quoted String
                   const quotedMatch = content.match(/^["']([^"']+)["']/);
                   
                   if (quotedMatch) {
@@ -670,7 +654,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                           const startCol = line.indexOf(path) + 1;
                           const endCol = startCol + path.length;
                           newDraftingDecorations.push({
-                              range: new monaco.Range(lineNumber, startCol, lineNumber, endCol),
+                              range: new monacoInstance.Range(lineNumber, startCol, lineNumber, endCol),
                               options: {
                                   inlineClassName: 'renpy-missing-asset-draft',
                                   hoverMessage: { value: `Audio file missing. A placeholder will be used.`, isTrusted: true }
@@ -678,12 +662,9 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                           });
                       }
                   } 
-                  // Check for Unquoted Variable
                   else {
-                      // Get first word (variable name)
                       const firstToken = content.split(/\s+/)[0];
                       if (firstToken !== 'expression') {
-                          // Is valid identifier?
                           if (/^[a-zA-Z_]\w*$/.test(firstToken)) {
                               let isDefined = false;
                               if (analysisResultRef.current.variables.has(firstToken)) isDefined = true;
@@ -693,7 +674,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                                   const startCol = line.indexOf(firstToken) + 1;
                                   const endCol = startCol + firstToken.length;
                                   newDraftingDecorations.push({
-                                      range: new monaco.Range(lineNumber, startCol, lineNumber, endCol),
+                                      range: new monacoInstance.Range(lineNumber, startCol, lineNumber, endCol),
                                       options: {
                                           inlineClassName: 'renpy-missing-asset-draft',
                                           hoverMessage: { value: `Audio variable missing. A default placeholder will be generated.`, isTrusted: true }
@@ -733,7 +714,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
             .renpy-missing-asset-draft {
                 text-decoration: underline;
                 text-decoration-style: dashed;
-                text-decoration-color: #f97316; /* orange-500 */
+                text-decoration-color: #f97316;
                 cursor: help;
             }
         `}</style>

@@ -1,17 +1,4 @@
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 export interface Position {
   x: number;
   y: number;
@@ -242,7 +229,7 @@ export interface RenpyAnalysisResult {
   // Content summary for UI hints
   blockTypes: Map<string, Set<string>>;
   // Route Canvas data
-  labelNodes: Map<string, LabelNode>;
+  labelNodes: LabelNode[];
   routeLinks: RouteLink[];
   identifiedRoutes: IdentifiedRoute[];
 }
@@ -340,6 +327,50 @@ export interface SearchMatch {
 export interface SearchResult {
   filePath: string;
   matches: SearchMatch[];
+}
+
+// FIX: Added missing context value types
+export interface AssetContextValue {
+  projectImages: Map<string, ProjectImage>;
+  imageMetadata: Map<string, ImageMetadata>;
+  imageScanDirectories: Map<string, FileSystemDirectoryHandle>;
+  projectAudios: Map<string, RenpyAudio>;
+  audioMetadata: Map<string, AudioMetadata>;
+  audioScanDirectories: Map<string, FileSystemDirectoryHandle>;
+  loadProjectAssets: (rootHandle: FileSystemDirectoryHandle) => Promise<void>;
+  loadIdeSettings: (rootHandle: FileSystemDirectoryHandle) => Promise<void>;
+  setAllAssets: (data: {
+    images: Map<string, ProjectImage>;
+    audios: Map<string, RenpyAudio>;
+    imageMeta: Map<string, ImageMetadata>;
+    audioMeta: Map<string, AudioMetadata>;
+  }) => void;
+  handleAddImageScanDirectory: () => Promise<void>;
+  handleCopyImagesToProject: (sourceFilePaths: string[], metadataOverride?: ImageMetadata) => Promise<void>;
+  handleUpdateImageMetadata: (projectFilePath: string, newMetadata: ImageMetadata) => Promise<void>;
+  handleAddAudioScanDirectory: () => Promise<void>;
+  handleCopyAudiosToProject: (sourceFilePaths: string[], metadataOverride?: AudioMetadata) => Promise<void>;
+  handleUpdateAudioMetadata: (projectFilePath: string, newMetadata: AudioMetadata) => Promise<void>;
+}
+
+export interface FileSystemContextValue {
+  directoryHandle: FileSystemDirectoryHandle | null;
+  fileTree: FileSystemTreeNode | null;
+  clipboard: ClipboardState;
+  requestOpenFolder: () => void;
+  handleCreateNode: (parentPath: string, name: string, type: 'file' | 'folder') => Promise<void>;
+  handleRenameNode: (oldPath: string, newName: string) => Promise<void>;
+  handleDeleteNode: (paths: string[]) => void;
+  handleMoveNode: (sourcePaths: string[], targetFolderPath: string) => Promise<void>;
+  handleCut: (paths: string[]) => void;
+  handleCopy: (paths: string[]) => void;
+  handlePaste: (targetFolderPath: string) => Promise<void>;
+  isWelcomeScreenVisible: boolean;
+  setIsWelcomeScreenVisible: React.Dispatch<React.SetStateAction<boolean>>;
+  processUploadedFile: (file: File) => Promise<void>;
+  uploadConfirm: { visible: boolean; file: File | null; };
+  setUploadConfirm: React.Dispatch<React.SetStateAction<{ visible: boolean; file: File | null; }>>;
+  tidyUpLayout: (blocksToLayout: Block[], links: Link[]) => Block[];
 }
 
 declare global {

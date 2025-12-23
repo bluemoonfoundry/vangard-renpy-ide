@@ -1,5 +1,6 @@
+
 import { useState, useCallback, useRef } from 'react';
-// FIX: Removed FileSystemDirectoryHandle and FileSystemFileHandle as they are globally declared in App.tsx
+// FIX: Removed FileSystemDirectoryHandle and FileSystemFileHandle as they are globally declared
 import type { FileSystemTreeNode, Block, BlockGroup, ProjectImage, RenpyAudio, ImageMetadata, AudioMetadata, ClipboardState, Link } from '../types';
 import { produce } from 'https://aistudiocdn.com/immer@^10.1.1';
 import { useToasts } from '../contexts/ToastContext';
@@ -181,7 +182,25 @@ export const useFileSystemManager = ({ blocks, onProjectLoaded, onPathsUpdated, 
     }, [addToast, onProjectLoaded, tidyUpLayout]);
 
     const getHandleFromPath = useCallback(async (path: string): Promise<FileSystemFileHandle | FileSystemDirectoryHandle | null> => {
-        // ... (getHandleFromPath logic)
+        // FIX: Implemented function to resolve "must return a value" error.
+        if (!directoryHandle) return null;
+        try {
+            const parts = path.split('/').filter(Boolean);
+            if (parts.length === 0) return directoryHandle;
+
+            let currentHandle: FileSystemDirectoryHandle = directoryHandle;
+            for (let i = 0; i < parts.length - 1; i++) {
+                currentHandle = await currentHandle.getDirectoryHandle(parts[i]);
+            }
+            const lastName = parts[parts.length - 1];
+            try {
+                return await currentHandle.getFileHandle(lastName);
+            } catch {
+                return await currentHandle.getDirectoryHandle(lastName);
+            }
+        } catch {
+            return null;
+        }
     }, [directoryHandle]);
     
     const handleCreateNode = useCallback(async (parentPath: string, name: string, type: 'file' | 'folder') => {

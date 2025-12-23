@@ -2,10 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/png" href="./vangard-renide-512x512.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ren'Py Visual Novel Story Editor</title>
-<link rel="stylesheet" href="/index.css">
+<link rel="stylesheet" href="./index.css">
 <script type="importmap">
 {
   "imports": {
@@ -23,13 +23,18 @@
     "electron": "https://aistudiocdn.com/electron@^39.2.3",
     "path": "https://aistudiocdn.com/path@^0.12.7",
     "url": "https://aistudiocdn.com/url@^0.11.4",
-    "fs/": "https://aistudiocdn.com/fs@^0.0.1-security/"
+    "fs/": "https://aistudiocdn.com/fs@^0.0.1-security/",
+    "child_process": "https://aistudiocdn.com/child_process@^1.0.2",
+    "stream": "https://aistudiocdn.com/stream@^0.0.3",
+    "fs": "https://aistudiocdn.com/fs@^0.0.1-security"
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
-  </body>
+    <script type="module" src="./index.tsx"></script>
+  <script type="module" src="/index.tsx"></script>
+</body>
 </html>
