@@ -13,7 +13,9 @@ export const useHistory = <T>(initialState: T) => {
     future: [],
   });
 
-  const canUndo = history.past.length > 0;
+  // Prevent undoing to the initial state (position 0) - only allow undo to position 1
+  // This prevents the application from entering a blank state when all changes are undone
+  const canUndo = history.past.length > 1;
   const canRedo = history.future.length > 0;
 
   const undo = useCallback(() => {
