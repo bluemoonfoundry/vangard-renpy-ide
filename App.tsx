@@ -2091,10 +2091,18 @@ const App: React.FC = () => {
         await window.electronAPI.createDirectory(fullPath);
     } else {
         await window.electronAPI.writeFile(fullPath, '');
+        
+        // If it's an .rpy file, create a corresponding block
+        if (name.toLowerCase().endsWith('.rpy')) {
+            const relativePath = parentPath ? `${parentPath}/${name}` : name;
+            const content = ''; // Empty content for newly created files
+            addBlock(relativePath, content);
+            addToast(`Created block for ${name}`, 'success');
+        }
     }
     const projData = await window.electronAPI.loadProject(projectRootPath);
     setFileSystemTree(projData.tree);
-  }, [projectRootPath]);
+  }, [projectRootPath, addBlock, addToast]);
 
   const handleRenameNode = useCallback(async (oldPath: string, newName: string) => {
       if (!window.electronAPI || !projectRootPath) return;
@@ -2108,13 +2116,42 @@ const App: React.FC = () => {
 
   const handleDeleteNode = useCallback(async (paths: string[]) => {
       if (!window.electronAPI || !projectRootPath) return;
-      for (const p of paths) {
-          const fullPath = await window.electronAPI.path.join(projectRootPath, p) as string;
-          await window.electronAPI.removeEntry(fullPath);
-      }
-      const projData = await window.electronAPI.loadProject(projectRootPath);
-      setFileSystemTree(projData.tree);
-  }, [projectRootPath]);
+      
+      // Check if any of the paths are .rpy files that have corresponding blocks
+      const rpyFilesToDelete = paths.filter(path => path.toLowerCase().endsWith('.rpy'));
+      const blocksToDelete = rpyFilesToDelete.map(rpyPath => 
+          blocks.find(block => block.filePath === rpyPath)
+      ).filter(Boolean) as Block[];
+      
+      // Show confirmation modal
+      setDeleteConfirmInfo({
+          paths,
+          onConfirm: async () => {
+              // Delete the files
+              for (const p of paths) {
+                  const fullPath = await window.electronAPI.path.join(projectRootPath, p) as string;
+                  await window.electronAPI.removeEntry(fullPath);
+              }
+              
+              // Remove corresponding blocks for .rpy files
+              blocksToDelete.forEach(block => {
+                  if (block) {
+                      deleteBlock(block.id);
+                      addToast(`Removed block for ${block.filePath}`, 'info');
+                  }
+              });
+              
+              const projData = await window.electronAPI.loadProject(projectRootPath);
+              setFileSystemTree(projData.tree);
+              
+              if (blocksToDelete.length > 0) {
+                  addToast(`Deleted ${paths.length} file(s) and removed ${blocksToDelete.length} block(s)`, 'success');
+              } else {
+                  addToast(`Deleted ${paths.length} file(s)`, 'success');
+              }
+          }
+      });
+  }, [projectRootPath, blocks, deleteBlock, addToast]);
 
   const handleMoveNode = useCallback(async (sourcePaths: string[], targetPath: string) => {
       if (!window.electronAPI || !projectRootPath) return;
