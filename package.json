@@ -1,6 +1,6 @@
 {
   "name": "vangard-renpy-renide",
-  "version": "0.4.0",
+  "version": "0.4.4",
   "type": "module",
   "main": "electron.js",
   "scripts": {
@@ -9,7 +9,14 @@
     "build:debug": "vite build --mode development",
     "preview": "vite preview",
     "electron:start": "npm run build && electron .",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder",
+    "version:patch": "node version.js patch",
+    "version:minor": "node version.js minor",
+    "version:major": "node version.js major",
+    "version:set": "node version.js set",
+    "release:patch": "npm run version:patch && npm run build",
+    "release:minor": "npm run version:minor && npm run build",
+    "release:major": "npm run version:major && npm run build"
   },
   "dependencies": {
     "@google/genai": "^0.12.0",

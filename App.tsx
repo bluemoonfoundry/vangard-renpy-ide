@@ -37,8 +37,8 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import packageJson from './package.json';
 
 // --- Versioning ---
-const APP_VERSION = '0.4.0';
-const BUILD_NUMBER = '4';
+const APP_VERSION = process.env.APP_VERSION || '0.4.0';
+const BUILD_NUMBER = process.env.BUILD_NUMBER || 'dev';
 
 // --- Utility: ArrayBuffer to Base64 (Browser Compatible) ---
 const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
