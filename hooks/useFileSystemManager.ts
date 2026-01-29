@@ -1,6 +1,12 @@
+/**
+ * @file useFileSystemManager.ts
+ * @description Manages file system operations using the File System Access API.
+ * Handles reading/writing project files, creating folders, managing clipboard operations,
+ * and maintaining the file tree structure. Provides utilities for immutable tree updates.
+ * Supports both Electron and browser modes with different API compatibility.
+ */
 
 import { useState, useCallback, useRef } from 'react';
-// FIX: Removed FileSystemDirectoryHandle and FileSystemFileHandle as they are globally declared
 import type { FileSystemTreeNode, Block, BlockGroup, ProjectImage, RenpyAudio, ImageMetadata, AudioMetadata, ClipboardState, Link } from '../types';
 import { produce } from 'https://aistudiocdn.com/immer@^10.1.1';
 import { useToasts } from '../contexts/ToastContext';

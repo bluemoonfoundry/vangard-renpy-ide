@@ -1,3 +1,11 @@
+/**
+ * @file FileExplorerPanel.tsx
+ * @description Left sidebar panel showing the project file tree structure (452 lines).
+ * Displays files and folders hierarchically with expand/collapse navigation.
+ * Supports drag-and-drop, context menus (create/rename/delete/cut/copy/paste),
+ * file type icons, and visual highlighting of .rpy files.
+ * Integrates with file system context for all operations.
+ */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';

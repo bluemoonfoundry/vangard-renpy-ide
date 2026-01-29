@@ -1,3 +1,11 @@
+/**
+ * @file EditorView.tsx
+ * @description Monaco-based code editor for Ren'Py files (761 lines).
+ * Integrates VS Code editor with syntax highlighting, error markers, and AI content generation.
+ * Handles editing, error display, definition navigation, and code completion for Ren'Py syntax.
+ * Supports undo/redo, minimap, and integration with story canvas for navigation.
+ */
+
 import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type { Block, RenpyAnalysisResult, ToastMessage } from '../types';

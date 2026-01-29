@@ -1,3 +1,11 @@
+/**
+ * @file SearchPanel.tsx
+ * @description Full-text search interface (179 lines).
+ * Search dialog with options for case sensitivity, whole word, and regex patterns.
+ * Displays results grouped by file with line numbers and context.
+ * Integrates with Electron API for project-wide file searching.
+ * Supports replacing all occurrences of search term.
+ */
 
 
 import React, { useState, useMemo } from 'react';

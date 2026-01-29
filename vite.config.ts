@@ -1,38 +1,66 @@
+/**
+ * @file vite.config.ts
+ * @description Vite build configuration for the Vangard Ren'Py IDE.
+ * Configures React plugin, environment variables, build optimization,
+ * and sourcemap generation for development and production builds.
+ */
+
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 
-// https://vitejs.dev/config/
+/**
+ * Vite configuration exported as a function.
+ * Supports different configurations for development and production modes.
+ * @param {Object} config - Vite config object
+ * @param {string} config.mode - Build mode ('development' or 'production')
+ * @returns {Object} Vite configuration object
+ */
 export default defineConfig(({ mode }) => {
   const isDevelopment = mode === 'development';
   
-  // Load env file based on `mode` in the current working directory.
-  // Set the third parameter to '' to load all env regardless of the `VITE_` prefix.
+  // Load environment variables from .env files
+  // Third parameter '' loads all variables regardless of VITE_ prefix
   const env = loadEnv(mode, (process as any).cwd(), '');
 
-  // Read package.json for version
+  // Read package.json to inject application version
   const packageJson = JSON.parse(readFileSync(resolve('package.json'), 'utf-8'));
   
   return {
+    // React plugin for JSX transformation
     plugins: [react()],
+    // Use relative paths for assets (supports Electron/standalone builds)
     base: './',
+    // Global variable definitions for client-side code
     define: {
-      // Expose API_KEY to the client-side code
+      /**
+       * API key for external services (Gemini/Google GenAI)
+       * Loaded from environment variables: GEMINI_API_KEY or API_KEY
+       */
       'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.API_KEY),
-      // Inject version and build info
+      /**
+       * Application version from package.json
+       */
       'process.env.APP_VERSION': JSON.stringify(packageJson.version),
+      /**
+       * Build number for tracking builds
+       * Defaults to 'dev' if not specified
+       */
       'process.env.BUILD_NUMBER': JSON.stringify(env.BUILD_NUMBER || 'dev'),
     },
+    // Build optimization settings
     build: {
-      // Always generate sourcemaps for debugging
+      // Always generate sourcemaps for debugging (even in production)
       sourcemap: true,
-      // Disable minification for debug builds to ensure line numbers match
+      // Disable minification in development to preserve line numbers for debugging
       minify: isDevelopment ? false : 'esbuild',
+      // Support for CommonJS modules in ES modules build
       commonjsOptions: {
         transformMixedEsModules: true,
       },
     },
+    // Pre-bundle optimization for frequently used dependencies
     optimizeDeps: {
       include: ['use-immer', 'immer'],
     }

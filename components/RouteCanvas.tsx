@@ -1,3 +1,11 @@
+/**
+ * @file RouteCanvas.tsx
+ * @description Label-by-label narrative flow visualization (521 lines).
+ * Shows each label as a node and traces execution paths through the story.
+ * Displays different routes in different colors for visual analysis of story paths.
+ * Supports pan, zoom, drag labels, and navigation to editor.
+ * Uses graph layout algorithm to arrange nodes without overlap.
+ */
 
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import LabelBlock from './LabelBlock';

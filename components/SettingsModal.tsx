@@ -1,3 +1,11 @@
+/**
+ * @file SettingsModal.tsx
+ * @description Application and project settings dialog (188 lines).
+ * Configures UI preferences (theme, sidebar widths, font), Ren'Py path,
+ * AI model selection, and project-specific options (draftingMode, AI features).
+ * Persists settings to localStorage and project settings file.
+ */
+
 import React from 'react';
 import type { Theme, IdeSettings } from '../types';
 

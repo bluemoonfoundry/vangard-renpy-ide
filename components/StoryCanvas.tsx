@@ -1,3 +1,11 @@
+/**
+ * @file StoryCanvas.tsx
+ * @description Main visual canvas for editing Ren'Py projects.
+ * Displays story blocks as draggable cards with connections between them (jumps/calls).
+ * Supports pan, zoom, multi-select, grouping, sticky notes, minimap, and context menus.
+ * Handles keyboard shortcuts (N=new, G=group, Delete=remove, etc.) and canvas interactions.
+ */
+
 import React, { useState, useRef, useCallback, useMemo, useEffect, forwardRef } from 'react';
 import { createPortal } from 'react-dom';
 import CodeBlock from './CodeBlock';

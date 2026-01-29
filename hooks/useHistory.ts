@@ -1,5 +1,20 @@
+/**
+ * @file useHistory.ts
+ * @description Implements undo/redo history management for application state.
+ * Maintains a stack of past and future states with ability to navigate between them.
+ * Prevents undoing to the initial blank state to ensure application always has valid state.
+ */
+
 import { useState, useCallback } from 'react';
 
+/**
+ * Represents the undo/redo history state.
+ * @template T - Type of state being tracked
+ * @interface History
+ * @property {T[]} past - Array of previous states (oldest to most recent)
+ * @property {T} present - Current state
+ * @property {T[]} future - Array of states that can be redone (can redo to these)
+ */
 interface History<T> {
   past: T[];
   present: T;

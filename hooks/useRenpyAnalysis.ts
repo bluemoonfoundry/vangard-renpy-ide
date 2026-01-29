@@ -1,3 +1,10 @@
+/**
+ * @file useRenpyAnalysis.ts
+ * @description Ren'Py code analysis engine that parses .rpy files to extract story structure.
+ * Analyzes labels, jumps, characters, variables, screens, and generates route graph data.
+ * Exports performRenpyAnalysis() for synchronous analysis and useRenpyAnalysis() hook for memoized results.
+ * Uses regex patterns to parse Ren'Py syntax and build connection maps between story blocks.
+ */
 
 import { useMemo } from 'react';
 import type { Block, Link, RenpyAnalysisResult, LabelLocation, JumpLocation, Character, DialogueLine, Variable, VariableUsage, RenpyScreen, LabelNode, RouteLink, IdentifiedRoute } from '../types';

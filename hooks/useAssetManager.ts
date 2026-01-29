@@ -1,6 +1,12 @@
+/**
+ * @file useAssetManager.ts
+ * @description Manages image and audio assets for Ren'Py projects.
+ * Handles scanning directories for assets, copying to project, managing metadata,
+ * and persisting IDE settings. Coordinates with file system to organize asset files.
+ * Supports external scan directories and internal project asset storage.
+ */
 
 import { useState, useCallback, useEffect } from 'react';
-// FIX: Removed FileSystemDirectoryHandle as it is globally available.
 import type { ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata } from '../types';
 // FIX: Removed unused 'useFileSystem' import from incorrect module.
 import { addNodeToFileTree, removeNodeFromFileTree } from './useFileSystemManager';
