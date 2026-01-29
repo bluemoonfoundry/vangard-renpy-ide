@@ -1,6 +1,7 @@
 
 import React from 'react';
 import packageJson from '../package.json';
+const BUILD_NUMBER = process.env.BUILD_NUMBER || 'dev';
 import logo from '../vangard-renide-512x512.png';
 
 interface AboutModalProps {
@@ -20,7 +21,7 @@ const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
         <div className="p-8 flex flex-col items-center text-center">
             <img src={logo} alt="Vangard Ren'IDE Logo" className="w-32 h-32 mb-4 object-contain drop-shadow-md" />
             <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Ren'IDE: The Ren'Py Visual Editor</h2>
-            <p className="text-indigo-600 dark:text-indigo-400 font-mono text-sm mb-6">v{packageJson.version}</p>
+            <p className="text-indigo-600 dark:text-indigo-400 font-mono text-sm mb-6">v{packageJson.version} (build {BUILD_NUMBER})</p>
             
             <p className="text-gray-600 dark:text-gray-300 text-sm mb-4 leading-relaxed">
                 A powerful visual environment for creating Ren'Py visual novels. 
@@ -29,7 +30,7 @@ const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
             
             <div className="text-xs text-gray-400 dark:text-gray-500 mt-4">
                 <p>&copy; {new Date().getFullYear()} Blue Moon Foundry. All rights reserved.</p>
-                <p className="mt-1">Built with Electron, React, and Gemini</p>
+                <p className="mt-1">Built with Electron, React, and Gemini — build {BUILD_NUMBER}</p>
             </div>
         </div>
         <footer className="bg-gray-50 dark:bg-gray-700/50 p-4 flex justify-center border-t border-gray-200 dark:border-gray-700">
