@@ -2303,7 +2303,26 @@ const App: React.FC = () => {
         {/* Left Sidebar */}
         {appSettings.isLeftSidebarOpen && (
           <div style={{ width: appSettings.leftSidebarWidth }} className="flex-none flex flex-col border-r border-gray-200 dark:border-gray-700">
-             {activeLeftPanel === 'explorer' ? (
+            <div className="flex-none flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setActiveLeftPanel('explorer')}
+                  className={`px-3 py-1 rounded-md text-sm font-medium ${activeLeftPanel === 'explorer' ? 'bg-white dark:bg-gray-900 shadow' : 'text-gray-600 dark:text-gray-300'}`}
+                >
+                  Explorer
+                </button>
+                <button
+                  onClick={() => setActiveLeftPanel('search')}
+                  className={`px-3 py-1 rounded-md text-sm font-medium ${activeLeftPanel === 'search' ? 'bg-white dark:bg-gray-900 shadow' : 'text-gray-600 dark:text-gray-300'}`}
+                >
+                  Search
+                </button>
+              </div>
+              <div className="text-xs text-gray-400">{appSettings.isLeftSidebarOpen ? '' : ''}</div>
+            </div>
+
+            <div className="flex-1 overflow-auto">
+              {activeLeftPanel === 'explorer' ? (
                 <FileExplorerPanel
                     tree={fileSystemTree}
                     onFileOpen={handlePathDoubleClick}
@@ -2350,6 +2369,7 @@ const App: React.FC = () => {
                     isSearching={isSearching}
                 />
              )}
+            </div>
           </div>
         )}
         {appSettings.isLeftSidebarOpen && (
