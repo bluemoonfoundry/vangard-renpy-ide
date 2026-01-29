@@ -7,6 +7,15 @@ interface ConfirmModalProps {
   onClose: () => void;
   confirmText?: string;
   confirmClassName?: string;
+  /**
+   * Optional secondary action to render between Cancel and Confirm.
+   * Useful for dialogs that need an extra choice (e.g. "Don't Save").
+   */
+  secondaryAction?: {
+    onClick: () => void;
+    label: string;
+    className?: string;
+  };
 }
 
 const ConfirmModal: React.FC<ConfirmModalProps> = ({ 
@@ -15,7 +24,8 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   onConfirm, 
   onClose, 
   confirmText = 'Confirm',
-  confirmClassName = 'bg-red-600 hover:bg-red-700'
+  confirmClassName = 'bg-red-600 hover:bg-red-700',
+  secondaryAction
 }) => {
   return (
     <div
@@ -43,6 +53,14 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
           >
             Cancel
           </button>
+          {secondaryAction && (
+            <button
+              onClick={secondaryAction.onClick}
+              className={`${secondaryAction.className || 'bg-gray-300 hover:bg-gray-400'} text-white font-bold py-2 px-4 rounded transition duration-200`}
+            >
+              {secondaryAction.label}
+            </button>
+          )}
           <button
             onClick={onConfirm}
             className={`${confirmClassName} text-white font-bold py-2 px-4 rounded transition duration-200`}

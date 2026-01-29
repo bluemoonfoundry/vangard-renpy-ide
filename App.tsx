@@ -2820,23 +2820,23 @@ const App: React.FC = () => {
         }}
       />
 
-      {unsavedChangesModalInfo && (
-        <ConfirmModal
-          title={unsavedChangesModalInfo.title}
-          onConfirm={unsavedChangesModalInfo.onConfirm}
-          onClose={unsavedChangesModalInfo.onCancel}
-          confirmText={unsavedChangesModalInfo.confirmText}
-        >
-            <div className="space-y-4">
-                <p>{unsavedChangesModalInfo.message}</p>
-                <div className="flex justify-end space-x-2">
-                    <button onClick={unsavedChangesModalInfo.onDontSave} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-bold">
-                        {unsavedChangesModalInfo.dontSaveText}
-                    </button>
-                </div>
-            </div>
-        </ConfirmModal>
-      )}
+            {unsavedChangesModalInfo && (
+                <ConfirmModal
+                    title={unsavedChangesModalInfo.title}
+                    onConfirm={unsavedChangesModalInfo.onConfirm}
+                    onClose={unsavedChangesModalInfo.onCancel}
+                    confirmText={unsavedChangesModalInfo.confirmText}
+                    secondaryAction={{
+                        onClick: unsavedChangesModalInfo.onDontSave,
+                        label: unsavedChangesModalInfo.dontSaveText,
+                        className: 'bg-red-600 hover:bg-red-700'
+                    }}
+                >
+                        <div className="space-y-4">
+                                <p>{unsavedChangesModalInfo.message}</p>
+                        </div>
+                </ConfirmModal>
+            )}
 
       {deleteConfirmInfo && (
           <ConfirmModal
