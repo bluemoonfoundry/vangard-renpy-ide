@@ -1,3 +1,5 @@
+[![Build/Release](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/main.yml/badge.svg)](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/main.yml)
+
 # Ren'Py Visual Novel Accelerator
 
 The Ren'Py Visual Novel Accelerator is a powerful, web-based visual editor designed to streamline and enhance the development process for Ren'Py projects. It provides a dynamic canvas where your Ren'Py script files (`.rpy`) are represented as draggable blocks. The editor automatically analyzes your code to draw connections for `jump` and `call` statements, helping you visualize your story's flow and structure at a glance.
