@@ -59,6 +59,10 @@ export default defineConfig(({ mode }) => {
       commonjsOptions: {
         transformMixedEsModules: true,
       },
+      // Externalize dynamic imports for optional dependencies
+      rollupOptions: {
+        external: ['openai', '@anthropic-ai/sdk'],
+      },
     },
     // Pre-bundle optimization for frequently used dependencies
     optimizeDeps: {

@@ -1,6 +1,4 @@
-
-
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import type { Block, RenpyAnalysisResult } from '../types';
 
@@ -12,9 +10,17 @@ interface GenerateContentModalProps {
   blocks: Block[];
   analysisResult: RenpyAnalysisResult;
   getCurrentContext: () => string;
-  availableModels: string[];
+  availableModels: string[]; // kept simple: list of model ids
   selectedModel: string;
 }
+
+const modelProviderFor = (modelId: string): 'google' | 'openai' | 'anthropic' | 'google-unknown' => {
+  const id = (modelId || '').toLowerCase();
+  if (id.includes('gpt') || id.includes('openai')) return 'openai';
+  if (id.includes('claude') || id.includes('anthropic')) return 'anthropic';
+  if (id.includes('gemini') || id.includes('veo')) return 'google';
+  return 'google-unknown';
+};
 
 const GenerateContentModal: React.FC<GenerateContentModalProps> = ({ 
   isOpen, 
@@ -35,6 +41,124 @@ const GenerateContentModal: React.FC<GenerateContentModalProps> = ({
   const [renpyOnly, setRenpyOnly] = useState(true);
   const [model, setModel] = useState(selectedModel);
 
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [savedApiKey, setSavedApiKey] = useState<string | null>(null);
+  const [apiKeyLoading, setApiKeyLoading] = useState(false);
+
+  useEffect(() => {
+    setModel(selectedModel);
+  }, [selectedModel]);
+
+  useEffect(() => {
+    // load saved key for current model's provider
+    const provider = modelProviderFor(model);
+    const load = async () => {
+      setApiKeyLoading(true);
+      try {
+        if (window.electronAPI?.getApiKey) {
+          const key = await window.electronAPI.getApiKey(provider);
+          setSavedApiKey(key || null);
+          setApiKeyInput('');
+        } else {
+          setSavedApiKey(null);
+        }
+      } catch (e) {
+        console.error('Failed to load API key:', e);
+      } finally {
+        setApiKeyLoading(false);
+      }
+    };
+    load();
+  }, [model]);
+
+  const handleSaveKey = async () => {
+    const provider = modelProviderFor(model);
+    if (!window.electronAPI?.saveApiKey) {
+      setError('Platform does not support saving API keys.');
+      return;
+    }
+    try {
+      await window.electronAPI.saveApiKey(provider, apiKeyInput);
+      setSavedApiKey(apiKeyInput);
+      setApiKeyInput('');
+    } catch (e) {
+      console.error('Failed to save API key', e);
+      setError((e as Error).message || 'Failed to save API key');
+    }
+  };
+
+
+
+  const buildPrompt = () => {
+    let finalPrompt = '';
+
+    if (renpyOnly) {
+        finalPrompt += "INSTRUCTION: You are an expert Ren'Py script writer. Based on the provided context and the user's request, generate ONLY valid Ren'Py code that can be directly inserted into a script. Do not include any explanatory text or markdown formatting.\n\n";
+    }
+
+    if (includeContext) {
+        const currentBlockPartialContent = getCurrentContext();
+
+        const reverseAdj = new Map<string, Set<string>>();
+        analysisResult.links.forEach(link => {
+            if (!reverseAdj.has(link.targetId)) {
+                reverseAdj.set(link.targetId, new Set());
+            }
+            reverseAdj.get(link.targetId)!.add(link.sourceId);
+        });
+
+        const ancestors = new Set<string>();
+        const queue: string[] = [currentBlockId];
+        const visited = new Set<string>();
+
+        while (queue.length > 0) {
+            const nodeId = queue.shift()!;
+            if (visited.has(nodeId)) continue;
+            visited.add(nodeId);
+            
+            if (nodeId !== currentBlockId) {
+                ancestors.add(nodeId);
+            }
+
+            const predecessors = reverseAdj.get(nodeId) || [];
+            predecessors.forEach(p => {
+                if (!visited.has(p)) {
+                    queue.push(p);
+                }
+            });
+        }
+        
+        const blockMap = new Map<string, Block>(blocks.map(b => [b.id, b]));
+        const ancestorContent = Array.from(ancestors)
+            .map(id => {
+                const block = blockMap.get(id);
+                return block ? `### START FILE: ${block.filePath || block.id}.rpy ###\n${block.content}\n### END FILE: ${block.filePath || block.id}.rpy ###` : '';
+            })
+            .filter(Boolean)
+            .join('\n\n');
+
+        if (ancestorContent) {
+            finalPrompt += `### PREVIOUS SCRIPT CONTEXT ###\n${ancestorContent}\n### END PREVIOUS SCRIPT CONTEXT ###\n\n`;
+        }
+        if (currentBlockPartialContent) {
+            finalPrompt += `### CURRENT SCRIPT CONTEXT (up to cursor) ###\n${currentBlockPartialContent}\n### END CURRENT SCRIPT CONTEXT ###\n\n`;
+        }
+    }
+
+    finalPrompt += `### USER REQUEST ###\n${prompt}\n### END USER REQUEST ###`;
+    return finalPrompt;
+  };
+
+  const normalizeText = (text: string) => {
+    let t = text.trim();
+    if (t.startsWith('```')) {
+      const idx = t.indexOf('\n');
+      if (idx > -1) t = t.substring(idx + 1);
+      t = t.replace(/```/g, '');
+    }
+    return t.trim();
+  };
+
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim() || isLoading) return;
 
@@ -42,93 +166,103 @@ const GenerateContentModal: React.FC<GenerateContentModalProps> = ({
     setError(null);
     setResponse('');
 
+    const provider = modelProviderFor(model);
+    const finalPrompt = buildPrompt();
+
     try {
-      const apiKey = process.env.API_KEY;
-      if (!apiKey) {
-        throw new Error("Gemini API key is not configured. Please set the API_KEY environment variable.");
+      let apiKey = savedApiKey || '';
+
+      if (!apiKey && window.electronAPI?.getApiKey) {
+        apiKey = (await window.electronAPI.getApiKey(provider)) || '';
       }
 
-      let finalPrompt = '';
+      if (provider === 'google' || provider === 'google-unknown') {
+        const key = apiKey || (process.env.API_KEY as string | undefined);
+        if (!key) throw new Error('Google API key not configured for Gemini.');
 
-      if (renpyOnly) {
-          finalPrompt += "INSTRUCTION: You are an expert Ren'Py script writer. Based on the provided context and the user's request, generate ONLY valid Ren'Py code that can be directly inserted into a script. Do not include any explanatory text, markdown formatting like ```renpy, or anything other than the raw Ren'Py code itself.\n\n";
+        const ai = new GoogleGenAI({ apiKey: key });
+        const genResponse = await ai.models.generateContent({ model, contents: finalPrompt });
+        const text = normalizeText(genResponse.text || '');
+        setResponse(text);
+        return;
       }
 
-      if (includeContext) {
-          const currentBlockPartialContent = getCurrentContext();
-
-          const reverseAdj = new Map<string, Set<string>>();
-          analysisResult.links.forEach(link => {
-              if (!reverseAdj.has(link.targetId)) {
-                  reverseAdj.set(link.targetId, new Set());
-              }
-              reverseAdj.get(link.targetId)!.add(link.sourceId);
-          });
-
-          const ancestors = new Set<string>();
-          const queue: string[] = [currentBlockId];
-          const visited = new Set<string>();
-
-          while (queue.length > 0) {
-              const nodeId = queue.shift()!;
-              if (visited.has(nodeId)) continue;
-              visited.add(nodeId);
-              
-              if (nodeId !== currentBlockId) {
-                  ancestors.add(nodeId);
-              }
-
-              const predecessors = reverseAdj.get(nodeId) || [];
-              predecessors.forEach(p => {
-                  if (!visited.has(p)) {
-                      queue.push(p);
-                  }
-              });
+      if (provider === 'openai') {
+        if (!apiKey) throw new Error('OpenAI API key not configured for this machine. Please add it.');
+        try {
+          // dynamic import to avoid bundling the SDK unnecessarily
+          // @ts-ignore
+          const OpenAI = (await import('openai')).default || (await import('openai'));
+          const client = new OpenAI({ apiKey });
+          // try common method names
+          let text = '';
+          if (client.chat && client.chat.completions && client.chat.completions.create) {
+            const resp = await client.chat.completions.create({ model, messages: [{ role: 'user', content: finalPrompt }], max_tokens: 1500 });
+            text = resp.choices?.[0]?.message?.content || resp.choices?.[0]?.text || '';
+          } else if (client.createChatCompletion) {
+            const resp = await client.createChatCompletion({ model, messages: [{ role: 'user', content: finalPrompt }], max_tokens: 1500 });
+            text = resp.choices?.[0]?.message?.content || resp.choices?.[0]?.text || '';
+          } else if (client.chatCompletions && client.chatCompletions.create) {
+            const resp = await client.chatCompletions.create({ model, messages: [{ role: 'user', content: finalPrompt }], max_tokens: 1500 });
+            text = resp.choices?.[0]?.message?.content || resp.choices?.[0]?.text || '';
+          } else {
+            throw new Error('Unsupported OpenAI SDK shape.');
           }
-          
-          const blockMap = new Map<string, Block>(blocks.map(b => [b.id, b]));
-          const ancestorContent = Array.from(ancestors)
-              .map(id => {
-                  const block = blockMap.get(id);
-                  return block ? `### START FILE: ${block.filePath || block.id}.rpy ###\n${block.content}\n### END FILE: ${block.filePath || block.id}.rpy ###` : '';
-              })
-              .filter(Boolean)
-              .join('\n\n');
+          setResponse(normalizeText(text));
+          return;
+        } catch (e) {
+          console.error('OpenAI request failed:', e);
+          throw e;
+        }
+      }
 
-          if (ancestorContent) {
-              finalPrompt += `### PREVIOUS SCRIPT CONTEXT ###\n${ancestorContent}\n### END PREVIOUS SCRIPT CONTEXT ###\n\n`;
+      if (provider === 'anthropic') {
+        if (!apiKey) throw new Error('Anthropic API key not configured for this machine. Please add it.');
+        try {
+          const { Anthropic, OpenAI: MaybeOpenAI } = await import('@anthropic-ai/sdk').catch(() => ({ Anthropic: null, OpenAI: null }));
+          if (Anthropic) {
+            const client = new Anthropic({ apiKey });
+            // Try different method names depending on SDK
+            if (client.createCompletion) {
+              const resp: any = await client.createCompletion({ model, prompt: finalPrompt, max_tokens: 1500 });
+              const text = resp?.completion || resp?.choices?.[0]?.text || '';
+              setResponse(normalizeText(text));
+              return;
+            } else if (client.completions && client.completions.create) {
+              const resp: any = await client.completions.create({ model, prompt: finalPrompt, max_tokens: 1500 });
+              const text = resp?.choices?.[0]?.text || '';
+              setResponse(normalizeText(text));
+              return;
+            }
           }
-          if (currentBlockPartialContent) {
-              finalPrompt += `### CURRENT SCRIPT CONTEXT (up to cursor) ###\n${currentBlockPartialContent}\n### END CURRENT SCRIPT CONTEXT ###\n\n`;
+
+          // fallback: try the generic responses endpoint if provided
+          const maybe = await import('@anthropic-ai/sdk').catch(() => null);
+          if (maybe && maybe.Anthropic) {
+            const client = new maybe.Anthropic({ apiKey });
+            if (client.responses && client.responses.create) {
+              const resp: any = await client.responses.create({ model, input: finalPrompt });
+              const text = resp?.output?.[0]?.content?.[0]?.text || resp?.completion || '';
+              setResponse(normalizeText(text));
+              return;
+            }
           }
+
+          throw new Error('Unsupported Anthropic SDK shape.');
+        } catch (e) {
+          console.error('Anthropic request failed:', e);
+          throw e;
+        }
       }
 
-      finalPrompt += `### USER REQUEST ###\n${prompt}\n### END USER REQUEST ###`;
-
-      const ai = new GoogleGenAI({ apiKey });
-      const genResponse = await ai.models.generateContent({
-        model: model,
-        contents: finalPrompt,
-      });
-
-      let resultText = genResponse.text.trim();
-      if (resultText.startsWith('```renpy')) {
-        resultText = resultText.substring(7);
-      } else if (resultText.startsWith('```')) {
-        resultText = resultText.substring(3);
-      }
-      if (resultText.endsWith('```')) {
-        resultText = resultText.substring(0, resultText.length - 3);
-      }
-
-      setResponse(resultText.trim());
+      throw new Error('Unsupported model provider.');
     } catch (e) {
-      console.error("Gemini API request failed:", e);
-      setError(e instanceof Error ? e.message : "An unknown error occurred.");
+      console.error('AI generation failed:', e);
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setIsLoading(false);
     }
-  }, [prompt, isLoading, includeContext, renpyOnly, getCurrentContext, analysisResult, blocks, currentBlockId, model]);
+  }, [prompt, isLoading, includeContext, renpyOnly, getCurrentContext, analysisResult, blocks, currentBlockId, model, savedApiKey]);
 
   const handleCopyAndInsert = () => {
     onInsertContent(response);
@@ -221,6 +355,30 @@ const GenerateContentModal: React.FC<GenerateContentModalProps> = ({
                 </select>
             </div>
           </div>
+
+          <div className="space-y-2">
+            <div className="text-sm text-gray-600 dark:text-gray-400">Provider: <strong>{modelProviderFor(model)}</strong></div>
+            {apiKeyLoading ? (
+              <div className="text-sm text-gray-500">Checking API key...</div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  type="password"
+                  placeholder={savedApiKey ? 'Key saved' : 'Enter API key'}
+                  value={apiKeyInput}
+                  onChange={e => setApiKeyInput(e.target.value)}
+                  className="p-1 rounded bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-sm"
+                />
+                <button
+                  onClick={handleSaveKey}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded text-sm"
+                >
+                  {savedApiKey ? 'Update Key' : 'Add Key'}
+                </button>
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Generated Response

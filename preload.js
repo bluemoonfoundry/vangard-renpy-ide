@@ -74,4 +74,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   searchInProject: (options) => ipcRenderer.invoke('project:search', options),
   // --- Dialogs ---
   showSaveDialog: (options) => ipcRenderer.invoke('dialog:showSaveDialog', options),
+  // --- Secure API key access ---
+  loadApiKeys: () => ipcRenderer.invoke('app:load-api-keys'),
+  saveApiKey: (provider, key) => ipcRenderer.invoke('app:save-api-key', provider, key),
+  getApiKey: (provider) => ipcRenderer.invoke('app:get-api-key', provider),
 });

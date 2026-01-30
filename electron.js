@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, protocol, net } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, protocol, net, safeStorage } from 'electron';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import fs from 'fs/promises';
@@ -73,6 +73,51 @@ async function saveAppSettings(settings) {
     } catch (error) {
         console.error('Failed to save app settings:', error);
         return { success: false, error: error.message };
+    }
+}
+
+// --- API Key Management ---
+const apiKeysPath = path.join(app.getPath('userData'), 'api-keys.enc');
+
+async function loadApiKeys() {
+    try {
+        if (!safeStorage.isEncryptionAvailable()) {
+            console.warn('Safe storage encryption not available');
+            return {};
+        }
+        const encryptedData = await fs.readFile(apiKeysPath);
+        const decryptedData = safeStorage.decryptString(encryptedData);
+        return JSON.parse(decryptedData);
+    } catch (error) {
+        console.log('No saved API keys found or failed to decrypt, using empty object.');
+        return {};
+    }
+}
+
+async function saveApiKey(provider, key) {
+    try {
+        if (!safeStorage.isEncryptionAvailable()) {
+            throw new Error('Safe storage encryption not available');
+        }
+        const keys = await loadApiKeys();
+        keys[provider] = key;
+        const jsonData = JSON.stringify(keys);
+        const encryptedData = safeStorage.encryptString(jsonData);
+        await fs.writeFile(apiKeysPath, encryptedData);
+        return { success: true };
+    } catch (error) {
+        console.error('Failed to save API key:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+async function getApiKey(provider) {
+    try {
+        const keys = await loadApiKeys();
+        return keys[provider] || null;
+    } catch (error) {
+        console.error('Failed to get API key:', error);
+        return null;
     }
 }
 
@@ -642,6 +687,18 @@ app.whenReady().then(() => {
           await updateApplicationMenu();
       }
       return result;
+  });
+
+  ipcMain.handle('app:load-api-keys', async () => {
+    return await loadApiKeys();
+  });
+
+  ipcMain.handle('app:save-api-key', async (event, provider, key) => {
+    return await saveApiKey(provider, key);
+  });
+
+  ipcMain.handle('app:get-api-key', async (event, provider) => {
+    return await getApiKey(provider);
   });
 
   ipcMain.handle('project:search', async (event, { projectPath, query, ...options }) => {

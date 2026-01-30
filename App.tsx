@@ -294,7 +294,15 @@ const AVAILABLE_MODELS = [
     'gemini-3-pro-preview',
     'gemini-2.5-flash-image',
     'gemini-3-pro-image-preview',
-    'veo-3.1-fast-generate-preview'
+    'veo-3.1-fast-generate-preview',
+    'gpt-4o',
+    'gpt-4-turbo',
+    'gpt-4',
+    'gpt-3.5-turbo',
+    'claude-3-5-sonnet-20241022',
+    'claude-3-opus-20250219',
+    'claude-3-sonnet-20240229',
+    'claude-3-haiku-20240307'
 ];
 
 const App: React.FC = () => {

@@ -88,6 +88,23 @@ export interface StickyNote {
   color: NoteColor;
 }
 
+// LLM support types
+export type LLMProvider = 'google' | 'openai' | 'anthropic' | 'other';
+
+export interface LLMModel {
+  id: string;
+  name: string;
+  provider: LLMProvider;
+  apiKeyEnvVar?: string;
+  apiKeyName?: string;
+  description?: string;
+  isDefault?: boolean;
+}
+
+export interface ApiKeyStore {
+  [provider: string]: string;
+}
+
 /**
  * Metadata associated with punchlist items for task tracking.
  * @interface PunchlistMetadata
