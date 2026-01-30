@@ -25,6 +25,7 @@ import Sash from './components/Sash';
 import StatusBar from './components/StatusBar';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import AboutModal from './components/AboutModal';
+import AIGeneratorView from './components/AIGeneratorView';
 import { useRenpyAnalysis, performRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import type { 
@@ -443,6 +444,34 @@ const App: React.FC = () => {
   // --- Refs ---
   const editorInstances = useRef<Map<string, monaco.editor.IStandaloneCodeEditor>>(new Map());
   const initialLayoutNeeded = useRef(false);
+
+  // --- Utility Functions ---
+  const getCurrentContext = useCallback(() => {
+    // Find the currently active editor tab
+    const activeEditorTab = openTabs.find(t => t.id === activeTabId && t.type === 'editor');
+    if (activeEditorTab && activeEditorTab.blockId) {
+      const editor = editorInstances.current.get(activeEditorTab.blockId);
+      if (editor) {
+        const model = editor.getModel();
+        const position = editor.getPosition();
+        if (model && position) {
+          return model.getValueInRange({
+            startLineNumber: 1,
+            startColumn: 1,
+            endLineNumber: position.lineNumber,
+            endColumn: position.column
+          });
+        }
+      }
+    }
+    return '';
+  }, [activeTabId, openTabs]);
+
+  const getCurrentBlockId = useCallback(() => {
+    // Find the currently active editor tab
+    const activeEditorTab = openTabs.find(t => t.id === activeTabId && t.type === 'editor');
+    return activeEditorTab?.blockId || '';
+  }, [activeTabId, openTabs]);
 
   // --- Derived State for Drafting Mode ---
   const existingImageTags = useMemo(() => {
@@ -1032,7 +1061,7 @@ const App: React.FC = () => {
   }, [blocks, analysisResult, handleTidyUp]);
 
   // --- Tab Management Helpers ---
-  const handleOpenStaticTab = useCallback((type: 'canvas' | 'route-canvas' | 'punchlist') => {
+  const handleOpenStaticTab = useCallback((type: 'canvas' | 'route-canvas' | 'punchlist' | 'ai-generator') => {
         const id = type;
         setOpenTabs(prev => {
             if (!prev.find(t => t.id === id)) {
@@ -1277,7 +1306,7 @@ const App: React.FC = () => {
                       // We allow opening even if not strictly in state yet (might be migrated)
                       return true;
                   }
-                  return tab.type === 'canvas' || tab.type === 'route-canvas' || tab.type === 'punchlist';
+                  return tab.type === 'canvas' || tab.type === 'route-canvas' || tab.type === 'punchlist' || tab.type === 'ai-generator';
               });
 
               const rehydratedTabs = validTabs.map(tab => {
@@ -1836,26 +1865,26 @@ const App: React.FC = () => {
 }, [dirtyBlockIds, dirtyEditors, activeTabId, handleSaveAll]);
 
   const handleCloseOthersRequest = useCallback((tabId: string) => {
-    const tabsToClose = openTabs.filter(t => t.id !== tabId && t.id !== 'canvas');
+    const tabsToClose = openTabs.filter(t => t.id !== tabId && t.id !== 'canvas' && t.id !== 'ai-generator');
     processTabCloseRequest(tabsToClose, tabId);
   }, [openTabs, processTabCloseRequest]);
 
   const handleCloseAllRequest = useCallback(() => {
-    const tabsToClose = openTabs.filter(t => t.id !== 'canvas');
+    const tabsToClose = openTabs.filter(t => t.id !== 'canvas' && t.id !== 'ai-generator');
     processTabCloseRequest(tabsToClose, 'canvas');
   }, [openTabs, processTabCloseRequest]);
 
   const handleCloseLeftRequest = useCallback((tabId: string) => {
     const index = openTabs.findIndex(t => t.id === tabId);
     if (index === -1) return;
-    const tabsToClose = openTabs.slice(0, index).filter(t => t.id !== 'canvas');
+    const tabsToClose = openTabs.slice(0, index).filter(t => t.id !== 'canvas' && t.id !== 'ai-generator');
     processTabCloseRequest(tabsToClose, tabId);
   }, [openTabs, processTabCloseRequest]);
 
   const handleCloseRightRequest = useCallback((tabId: string) => {
     const index = openTabs.findIndex(t => t.id === tabId);
     if (index === -1) return;
-    const tabsToClose = openTabs.slice(index + 1).filter(t => t.id !== 'canvas');
+    const tabsToClose = openTabs.slice(index + 1).filter(t => t.id !== 'canvas' && t.id !== 'ai-generator');
     processTabCloseRequest(tabsToClose, tabId);
   }, [openTabs, processTabCloseRequest]);
 
@@ -2209,12 +2238,12 @@ const App: React.FC = () => {
   // --- Menu Command Handling ---
   useEffect(() => {
         if (!window.electronAPI) return;
-        const removeListener = window.electronAPI.onMenuCommand((data: { command: string, type?: 'canvas' | 'route-canvas' | 'punchlist', path?: string }) => {
+        const removeListener = window.electronAPI.onMenuCommand((data: { command: string, type?: 'canvas' | 'route-canvas' | 'punchlist' | 'ai-generator', path?: string }) => {
             if (data.command === 'new-project') handleNewProjectRequest();
             if (data.command === 'open-project') handleOpenProjectFolder();
             if (data.command === 'open-recent' && data.path) loadProject(data.path);
             if (data.command === 'run-project' && projectRootPath) window.electronAPI?.runGame(appSettings.renpyPath, projectRootPath);
-            if (data.command === 'open-static-tab' && data.type) handleOpenStaticTab(data.type as 'canvas' | 'route-canvas');
+            if (data.command === 'open-static-tab' && data.type) handleOpenStaticTab(data.type as 'canvas' | 'route-canvas' | 'punchlist' | 'ai-generator');
             if (data.command === 'open-about') setAboutModalOpen(true);
         });
         return removeListener;
@@ -2405,6 +2434,7 @@ const App: React.FC = () => {
                              tab.type === 'scene-composer' ? (sceneNames[tab.sceneId!] || 'Scene') :
                              tab.type === 'character' ? `Char: ${analysisResult.characters.get(tab.characterTag!)?.name || tab.characterTag}` :
                              tab.type === 'editor' ? (blocks.find(b => b.id === tab.blockId)?.title || 'Untitled') :
+                             tab.type === 'ai-generator' ? 'AI Generator' :
                              tab.filePath?.split('/').pop()}
                         </span>
                         {tab.id !== 'canvas' && (
@@ -2486,6 +2516,15 @@ const App: React.FC = () => {
                             }}
                             onOpenBlock={handleOpenEditor}
                             onHighlightBlock={(id) => handleCenterOnBlock(id)}
+                        />;
+                    } else if (tab.type === 'ai-generator') {
+                        content = <AIGeneratorView
+                            currentBlockId={getCurrentBlockId()}
+                            blocks={blocks}
+                            analysisResult={analysisResult}
+                            getCurrentContext={getCurrentContext}
+                            availableModels={AVAILABLE_MODELS}
+                            selectedModel={projectSettings.selectedModel}
                         />;
                     } else if (tab.type === 'editor' && tab.blockId) {
                         const block = blocks.find(b => b.id === tab.blockId);

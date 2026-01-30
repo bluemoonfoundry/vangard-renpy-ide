@@ -345,6 +345,10 @@ async function updateApplicationMenu() {
                 label: 'Punchlist',
                 click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-static-tab', type: 'punchlist' }); }
             },
+            {
+                label: 'AI Generator',
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-static-tab', type: 'ai-generator' }); }
+            },
             { type: 'separator' },
             { role: 'resetZoom' },
             { role: 'zoomIn' },

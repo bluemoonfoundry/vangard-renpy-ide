@@ -25,7 +25,6 @@ const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ isOpen,
     ]},
     { category: 'Editor', items: [
         { keys: ['Ctrl', 'S'], description: 'Save File' },
-        { keys: ['Ctrl', 'Shift', 'I'], description: 'Generate AI Content' },
         { keys: ['Ctrl', 'Click'], description: 'Go to Definition' },
     ]},
     { category: 'Explorer', items: [

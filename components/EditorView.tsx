@@ -10,7 +10,6 @@ import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type { Block, RenpyAnalysisResult, ToastMessage } from '../types';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
-import GenerateContentModal from './GenerateContentModal';
 
 interface EditorViewProps {
   block: Block;
@@ -90,7 +89,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
   const aiFeaturesEnabledContextKey = useRef<monaco.editor.IContextKey<boolean> | null>(null);
-  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const decorationIds = useRef<string[]>([]);
   const draftingDecorationIds = useRef<string[]>([]);
@@ -153,18 +151,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       aiFeaturesEnabledContextKey.current.set(enableAiFeatures);
     }
   }, [enableAiFeatures]);
-
-  const handleInsertContent = (content: string) => {
-    if (!editorRef.current) return;
-    const editor = editorRef.current;
-    const selection = editor.getSelection();
-    if (selection) {
-      const id = { major: 1, minor: 1 };
-      const op = { identifier: id, range: selection, text: content, forceMoveMarkers: true };
-      editor.executeEdits('gemini-insert', [op]);
-      editor.focus();
-    }
-  };
 
   const handleEditorWillMount: BeforeMount = (monacoInstance) => {
     // Only register if not already registered
@@ -486,18 +472,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       }
     });
 
-    editor.addAction({
-      id: 'generate-ai-content',
-      label: 'Generate AI Content...',
-      keybindings: [monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyMod.Shift | monacoInstance.KeyCode.KeyI],
-      precondition: 'aiFeaturesEnabled',
-      contextMenuGroupId: '1_modification',
-      contextMenuOrder: 1.5,
-      run: () => {
-        setIsGenerateModalOpen(true);
-      },
-    });
-    
     const markers = performValidation(editor.getValue(), monacoInstance as any);
     monacoInstance.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
   };
@@ -749,17 +723,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
               delay: 300,
           }
         }}
-      />
-      <GenerateContentModal
-        isOpen={isGenerateModalOpen}
-        onClose={() => setIsGenerateModalOpen(false)}
-        onInsertContent={handleInsertContent}
-        currentBlockId={block.id}
-        blocks={blocks}
-        analysisResult={analysisResult}
-        getCurrentContext={getCurrentContext}
-        availableModels={availableModels}
-        selectedModel={selectedModel}
       />
     </div>
   );

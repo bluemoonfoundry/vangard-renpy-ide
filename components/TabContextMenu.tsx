@@ -34,7 +34,7 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({
     onClose();
   };
 
-  const isCanvasTab = tabId === 'canvas';
+  const isProtectedTab = tabId === 'canvas' || tabId === 'ai-generator';
 
   return (
     <div
@@ -46,7 +46,7 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({
       <div className="p-1 space-y-1">
         <button
           onClick={() => handleAction(() => onCloseTab(tabId))}
-          disabled={isCanvasTab}
+          disabled={isProtectedTab}
           className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Close
