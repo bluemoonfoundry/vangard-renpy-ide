@@ -1,5 +1,5 @@
 {
-  "name": "vangard-renpy-renide",
+  "name": "Vangard-RenPy-IDE",
   "version": "0.4.6",
   "type": "module",
   "main": "electron.js",
@@ -43,6 +43,7 @@
   "build": {
     "appId": "com.vangard.renpy.renide",
     "productName": "Vangard Ren'Py Ren'IDE",
+    "executableName": "Vangard-RenPy-renide",
     "files": [
       "dist/**/*",
       "electron.js",
@@ -55,7 +56,7 @@
     "win": {
       "target": "nsis",
       "icon": "vangard-renide-512x512.png",
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "${name}-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -67,12 +68,12 @@
     "mac": {
       "target": "dmg",
       "icon": "vangard-renide-512x512.png",
-      "artifactName": "${productName}-${version}.${ext}"
+      "artifactName": "${name}-${version}.${ext}"
     },
     "linux": {
       "target": "AppImage",
       "icon": "vangard-renide-512x512.png",
-      "artifactName": "${productName}-${version}.${ext}"
+      "artifactName": "${name}-${version}.${ext}"
     }
   }
 }
