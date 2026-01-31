@@ -528,6 +528,16 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('renpy:check-path', async (event, renpyPath) => {
+    if (!renpyPath) return false;
+    try {
+      await fs.access(renpyPath, fs.constants.F_OK | fs.constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
   ipcMain.handle('dialog:createProject', async () => {
     const { canceled, filePath } = await dialog.showSaveDialog({
         title: 'Create New Ren\'Py Project',

@@ -31,6 +31,8 @@ interface ToolbarProps {
   isGameRunning: boolean;
   onRunGame: () => void;
   onStopGame: () => void;
+  renpyPath: string;
+  isRenpyPathValid: boolean;
   onToggleSearch: () => void;
   onOpenShortcuts: () => void;
   draftingMode: boolean;
@@ -80,6 +82,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
   isGameRunning,
   onRunGame,
   onStopGame,
+  renpyPath,
+  isRenpyPathValid,
   onToggleSearch,
   onOpenShortcuts,
   draftingMode,
@@ -170,7 +174,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 <span>Stop</span>
             </button>
         ) : (
-            <button onClick={onRunGame} disabled={!projectRootPath} title="Run Project (F5)" className="flex items-center justify-center rounded-md text-sm font-medium px-3 py-1.5 space-x-2 bg-green-600 hover:bg-green-700 text-white disabled:bg-green-400 dark:disabled:bg-green-800 disabled:cursor-not-allowed transition-colors">
+            <button onClick={onRunGame} disabled={!projectRootPath || !isRenpyPathValid} title="Run Project (F5)" className="flex items-center justify-center rounded-md text-sm font-medium px-3 py-1.5 space-x-2 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
                 <span>Run</span>
             </button>

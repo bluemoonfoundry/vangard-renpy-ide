@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectRenpy: () => ipcRenderer.invoke('dialog:selectRenpy'),
   runGame: (renpyPath, projectPath) => ipcRenderer.send('game:run', renpyPath, projectPath),
   stopGame: () => ipcRenderer.send('game:stop'),
+  checkRenpyPath: (path) => ipcRenderer.invoke('renpy:check-path', path),
   onGameStarted: (callback) => {
     const subscription = () => callback();
     ipcRenderer.on('game-started', subscription);

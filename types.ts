@@ -798,6 +798,7 @@ export interface FileSystemContextValue {
           selectRenpy: () => Promise<string | null>;
           runGame: (renpyPath: string, projectPath: string) => void;
           stopGame: () => void;
+          checkRenpyPath: (path: string) => Promise<boolean>;
           onGameStarted: (callback: () => void) => () => void;
           onGameStopped: (callback: () => void) => () => void;
           onGameError: (callback: (error: string) => void) => () => void;

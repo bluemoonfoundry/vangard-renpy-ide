@@ -408,6 +408,7 @@ const App: React.FC = () => {
     editorFontFamily: "'Consolas', 'Courier New', monospace",
     editorFontSize: 14,
   });
+  const [isRenpyPathValid, setIsRenpyPathValid] = useState(false);
   const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'punchlistMetadata' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>>({
     enableAiFeatures: false,
     selectedModel: 'gemini-2.5-flash',
@@ -735,6 +736,14 @@ const App: React.FC = () => {
     }
   }, [appSettings, appSettingsLoaded]);
 
+  // --- Check Ren'Py Path Validity ---
+  useEffect(() => {
+    if (window.electronAPI?.checkRenpyPath && appSettings.renpyPath) {
+      window.electronAPI.checkRenpyPath(appSettings.renpyPath).then(setIsRenpyPathValid);
+    } else {
+      setIsRenpyPathValid(false);
+    }
+  }, [appSettings.renpyPath]);
 
   // --- Toast Helper ---
   const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
@@ -2330,6 +2339,8 @@ const App: React.FC = () => {
         isGameRunning={isGameRunning}
         onRunGame={() => window.electronAPI?.runGame(appSettings.renpyPath, projectRootPath!)}
         onStopGame={() => window.electronAPI?.stopGame()}
+        renpyPath={appSettings.renpyPath}
+        isRenpyPathValid={isRenpyPathValid}
         onToggleSearch={handleToggleSearch}
         onOpenShortcuts={() => setShortcutsModalOpen(true)}
         draftingMode={projectSettings.draftingMode}
