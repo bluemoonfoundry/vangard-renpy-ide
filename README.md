@@ -32,7 +32,7 @@ This tool is perfect for writers, designers, and programmers who want a more int
 
 If you just want to install the application on your desktop and run it, you can simply do this:
 
-1. Go to the releases page and find the realease zip for your operating system (Windows, Mac, Linux)
+1. Go to the [releases page](https://github.com/bluemoonfoundry/vangard-renpy-ide/releases/tag/v0.4.6-beta) and find the realease zip for your operating system (Windows, Mac, Linux)
 2. Download the zip file to a loction on your machine and unzip it
 3. For Windows, double-click the installer file found in the zip and follow the installtion instructions
 4. For Mac, open the DMG file found in the zip and copy the application to a location on your machine
