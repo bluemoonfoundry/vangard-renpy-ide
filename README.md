@@ -3,7 +3,7 @@
 
 # Ren'Py Visual Novel Accelerator
 
-The Ren'Py Visual Novel Accelerator is a powerful, web-based visual editor designed to streamline and enhance the development process for Ren'Py projects. It provides a dynamic canvas where your Ren'Py script files (`.rpy`) are represented as draggable blocks. The editor automatically analyzes your code to draw connections for `jump` and `call` statements, helping you visualize your story's flow and structure at a glance.
+The VANGARD Ren'Py Visual Novel Accelerator is a desktop application designed to streamline and enhance the development process for Ren'Py projects. It provides a dynamic canvas where your Ren'Py script files (`.rpy`) are represented as draggable blocks. The editor automatically analyzes your code to draw connections for `jump` and `call` statements, helping you visualize your story's flow and structure at a glance. It is intended to be a one-stop shop for editing Ren'Py projects, but still allow flexibility to use whatever tools are necessary outside the application. In other words, using this application won't prevent you from editing your project outside of it. You're not locked in. 
 
 This tool is perfect for writers, designers, and programmers who want a more intuitive and organized way to manage complex branching narratives.
 
@@ -11,7 +11,7 @@ This tool is perfect for writers, designers, and programmers who want a more int
 
 ## Key Features
 
-- **Visual Story Canvas**: Drag, resize, and arrange blocks representing your `.rpy` files.
+- **Visual Story Canvas**: Drag, resize, and arrange blocks representing your `.rpy` files. 
 - **Automatic Flow Visualization**: Arrows are automatically drawn between blocks to show `jump` and `call` relationships.
 - **On-Demand Route Canvas**: Generate a detailed, label-by-label graph of your story's control flow to understand complex branching. This is an opt-in feature to maintain performance on large projects.
 - **Route Path Analysis & Highlighting**: The Route Canvas automatically identifies all unique paths from start to finish. A floating panel allows you to highlight specific routes with distinct colors.
@@ -19,13 +19,28 @@ This tool is perfect for writers, designers, and programmers who want a more int
 - **Comprehensive Project Management**: A built-in file explorer allows you to create, rename, move, and delete files and folders in your project.
 - **Story Element Management**: A dedicated panel to view, create, and manage Characters, Variables, Images, Audio, and Screens.
 - **Asset Pipeline**: Scan external directories for images and audio, and easily copy them into your project.
-- **File System Integration**: Works directly with your local project folders for a seamless development experience (recommended).
-- **Browser-Only Mode**: Start creating and prototyping without needing a local project folder, then download your work as a `.zip` file.
-- **Expanded Theme Support**: Personalize your workspace with multiple themes, including Light, Dark, Solarized, and Colorful variants.
+- **Scene Builder**: Visually build scenes by layering backgrounds and sprites. Scale, zoom, orient them as you like. The application generates the Ren'Py code that can be copy/pasted. 
+- **File System Integration**: Works directly with your local project folders for a seamless development experience.
+- **Theme Support**: Personalize your workspace with multiple themes, including Light, Dark, Solarized, and Colorful variants.
 - **UI State Persistence**: The editor remembers your theme, sidebar layout, and open tabs between sessions for a consistent workflow.
 - **Customizable Layout**: Sidebars are resizable, allowing you to tailor the interface to your needs.
+- **AI Integration**: Optional feature to generate AI content using Google, OpenAI, and Anthropic models. Generated content can be copy/pasted wherever you want.**
 
 ---
+
+# How to get it 
+
+If you just want to install the application on your desktop and run it, you can simply do this:
+
+1. Go to the releases page and find the realease zip for your operating system (Windows, Mac, Linux)
+2. Download the zip file to a loction on your machine and unzip it
+3. For Windows, double-click the installer file found in the zip and follow the installtion instructions
+4. For Mac, open the DMG file found in the zip and copy the application to a location on your machine
+5. Double-click the installed application and you're all set to go!
+
+---
+
+# Details for Developers
 
 ## Local Development Setup
 
@@ -50,26 +65,22 @@ This project uses a standard Node.js-based toolchain with Vite for a fast and mo
     npm install
     ```
 
-3.  **Run the Development Server**:
-    Once the dependencies are installed, you can start the Vite development server:
+3.  **Build the distribution**:
     ```bash
-    npm run dev
+    npm run dist
     ```
 
-4.  **Open in Browser**:
-    The server will start and print a local URL to the terminal, typically `http://localhost:5173`. Open this URL in your web browser to start the application. The server features Hot Module Replacement (HMR), meaning most changes you make to the code will appear instantly in the browser without a full page reload.
+4.  **Run the built app**:
+    In the ``release``` directory, find the OS specific folder (e.g. win-unpack) and the executable application underneath it. Double click the application run it.
 
+    Mac users: To run your built application on Mac, use the open -x /path/to/xyz.app command instead. 
 ---
 
 ## Usage Guide
 
 ### Getting Started
 
-On first launch, you'll see a welcome screen with three options:
-
-1.  **Open Project Folder**: **(Recommended)** This uses the File System Access API to open your Ren'Py project folder directly. The app can read your files and, with your permission, save changes directly back to them. This provides the most integrated experience.
-2.  **Upload .zip Project**: If you have a Ren'Py project in a `.zip` archive, you can upload it to load it into the editor. Note that saving is not direct; you'll need to download your work as a new `.zip` file.
-3.  **Continue in Browser**: This starts a blank project stored in your browser's local storage. It's great for quick prototyping. You can download your files as a `.zip` when you're done.
+On first launch, you'll see a welcome screen with an option to create a new project or a open an existing Ren'Py project folder. The latter option is recommended. The application maintains a list of recently opened projects, which you can open by clicking on them.
 
 ### The Main Interface
 
