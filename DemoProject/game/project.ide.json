@@ -1,6 +1,7 @@
 {
   "enableAiFeatures": false,
   "selectedModel": "gemini-2.5-flash",
+  "draftingMode": false,
   "openTabs": [
     {
       "id": "canvas",
@@ -17,31 +18,50 @@
       "sceneId": "scene-1764262795876"
     },
     {
-      "id": "block-6-1764355352264",
+      "id": "block-6-1770177586244",
       "type": "editor",
-      "blockId": "block-6-1764355352264",
+      "blockId": "block-6-1770177586244",
       "filePath": "game/scenes/scene_03_book_club.rpy"
     },
     {
-      "id": "block-12-1764355352264",
+      "id": "block-12-1770177586244",
       "type": "editor",
-      "blockId": "block-12-1764355352264",
+      "blockId": "block-12-1770177586244",
       "filePath": "game/scenes/scene_09_reflection.rpy"
     },
     {
-      "id": "block-11-1764355352264",
+      "id": "block-11-1770177586244",
       "type": "editor",
-      "blockId": "block-11-1764355352264",
+      "blockId": "block-11-1770177586244",
       "filePath": "game/scenes/scene_08_gaming_club.rpy"
     },
     {
-      "id": "block-9-1764355352264",
+      "id": "block-9-1770177586244",
       "type": "editor",
-      "blockId": "block-9-1764355352264",
+      "blockId": "block-9-1770177586244",
       "filePath": "game/scenes/scene_06_second_choice.rpy"
+    },
+    {
+      "id": "img-game/images/bg/garden.png",
+      "type": "image",
+      "filePath": "game/images/bg/garden.png"
+    },
+    {
+      "id": "img-game/images/bg/gym.png",
+      "type": "image",
+      "filePath": "game/images/bg/gym.png"
+    },
+    {
+      "id": "img-game/images/bg/library.png",
+      "type": "image",
+      "filePath": "game/images/bg/library.png"
+    },
+    {
+      "id": "ai-generator",
+      "type": "ai-generator"
     }
   ],
-  "activeTabId": "block-11-1764355352264",
+  "activeTabId": "ai-generator",
   "stickyNotes": [
     {
       "id": "note-1764176814595",
@@ -56,6 +76,7 @@
     }
   ],
   "characterProfiles": {},
+  "punchlistMetadata": {},
   "sceneCompositions": {
     "scene-1764262740876": {
       "background": {
@@ -174,5 +195,7 @@
   "sceneNames": {
     "scene-1764262740876": "Garden",
     "scene-1764262795876": "Nascent"
-  }
+  },
+  "scannedImagePaths": [],
+  "scannedAudioPaths": []
 }
