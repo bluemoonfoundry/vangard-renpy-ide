@@ -7,28 +7,11 @@ The VANGARD Ren'Py Visual Novel Accelerator is a desktop application designed to
 
 This tool is perfect for writers, designers, and programmers who want a more intuitive and organized way to manage complex branching narratives.
 
- <!-- It's a good idea to add a screenshot here! -->
 
-## Key Features
+<img width="1973" height="1118" alt="Main View" src="https://github.com/user-attachments/assets/cf387ed7-2d2c-444b-9c40-3c1bea90c799" />
 
-- **Visual Story Canvas**: Drag, resize, and arrange blocks representing your `.rpy` files. 
-- **Automatic Flow Visualization**: Arrows are automatically drawn between blocks to show `jump` and `call` relationships.
-- **On-Demand Route Canvas**: Generate a detailed, label-by-label graph of your story's control flow to understand complex branching. This is an opt-in feature to maintain performance on large projects.
-- **Route Path Analysis & Highlighting**: The Route Canvas automatically identifies all unique paths from start to finish. A floating panel allows you to highlight specific routes with distinct colors.
-- **Integrated Code Editor**: A full-featured Monaco editor (the engine behind VS Code) is built-in for editing your script files directly within the app.
-- **Comprehensive Project Management**: A built-in file explorer allows you to create, rename, move, and delete files and folders in your project.
-- **Story Element Management**: A dedicated panel to view, create, and manage Characters, Variables, Images, Audio, and Screens.
-- **Asset Pipeline**: Scan external directories for images and audio, and easily copy them into your project.
-- **Scene Builder**: Visually build scenes by layering backgrounds and sprites. Scale, zoom, orient them as you like. The application generates the Ren'Py code that can be copy/pasted. 
-- **File System Integration**: Works directly with your local project folders for a seamless development experience.
-- **Theme Support**: Personalize your workspace with multiple themes, including Light, Dark, Solarized, and Colorful variants.
-- **UI State Persistence**: The editor remembers your theme, sidebar layout, and open tabs between sessions for a consistent workflow.
-- **Customizable Layout**: Sidebars are resizable, allowing you to tailor the interface to your needs.
-- **AI Integration**: Optional feature to generate AI content using Google, OpenAI, and Anthropic models. Generated content can be copy/pasted wherever you want.**
 
----
-
-# How to get it 
+# Quick Startup
 
 If you just want to install the application on your desktop and run it, you can simply do this:
 
@@ -40,40 +23,50 @@ If you just want to install the application on your desktop and run it, you can 
 
 ---
 
-# Details for Developers
+## Key Features
 
-## Local Development Setup
+- **Visual Story Canvas**: Drag, resize, and arrange blocks representing your `.rpy` files. Arrows are automatically drawn between blocks to show `jump` and `call` relationships.
 
-This project uses a standard Node.js-based toolchain with Vite for a fast and modern development experience.
+<img width="1103" height="389" alt="Story Canvas" src="https://github.com/user-attachments/assets/b594803d-7909-4ff1-9d90-227d7e906596" />
 
-### Prerequisites
 
-- [Node.js](https://nodejs.org/) (version 18.x or newer recommended)
-- npm (which comes bundled with Node.js)
+- **On-Demand Route Canvas**: Generate a detailed, label-by-label graph of your story's control flow to understand complex branching. This is an opt-in feature to maintain performance on large projects. The Route Canvas automatically identifies all unique paths from start to finish. A floating panel allows you to highlight specific routes with distinct colors.
 
-### Running Locally
+<img width="1964" height="1114" alt="Route Canvas" src="https://github.com/user-attachments/assets/62da186a-7505-406d-b66c-b4d7f9ed8d7e" />
 
-1.  **Clone the Repository** (if you haven't already):
-    ```bash
-    git clone https://github.com/your-username/renpy-visual-editor.git
-    cd renpy-visual-editor
-    ```
 
-2.  **Install Dependencies**:
-    Navigate to the project's root directory in your terminal and run `npm install` to download all the necessary packages defined in `package.json`.
-    ```bash
-    npm install
-    ```
+- **Integrated Code Editor**: A full-featured Monaco editor (the engine behind VS Code) is built-in for editing your script files directly within the app.
 
-3.  **Build the distribution**:
-    ```bash
-    npm run dist
-    ```
+<img width="1233" height="1007" alt="Code Editor" src="https://github.com/user-attachments/assets/1aa05b75-7a9a-4356-b6a4-5a4589491a4e" />
 
-4.  **Run the built app**:
-    In the ``release``` directory, find the OS specific folder (e.g. win-unpack) and the executable application underneath it. Double click the application run it.
+- **Comprehensive Project Management**: A built-in file explorer allows you to create, rename, move, and delete files and folders in your project.
 
-    Mac users: To run your built application on Mac, use the open -x /path/to/xyz.app command instead. 
+<img width="261" height="1019" alt="Project Explorer" src="https://github.com/user-attachments/assets/c3abdbb8-9606-4353-9e93-3239608b1249" />
+
+- **Story Element Management**: A dedicated panel to view and manage Characters, Variables, Images, Audio, Screens, and Scenes. Scan external directories for images and audio, and easily copy them into your project.
+
+  <img width="299" height="998" alt="Story Elements - Characters" src="https://github.com/user-attachments/assets/3c87ba26-3da0-478f-a251-954d226ee703" />
+  <img width="309" height="1006" alt="Story Elements - Variables" src="https://github.com/user-attachments/assets/fa470bb0-b783-46de-a608-b7298483db57" />
+  <img width="308" height="1011" alt="Story Elements - Images" src="https://github.com/user-attachments/assets/ab645f13-d21a-4a26-aeb2-b91367fb9a13" />
+  <img width="311" height="1011" alt="Story Elements - Audio" src="https://github.com/user-attachments/assets/90623b20-6a20-4386-85e7-a49db27c2947" />
+  <img width="306" height="1011" alt="Story Elements - Screens" src="https://github.com/user-attachments/assets/40e83b54-44b0-4207-888b-c9ebd11286da" />
+  <img width="310" height="1008" alt="Story Elements - Scenes" src="https://github.com/user-attachments/assets/5a45c071-9ca0-4fe7-94c1-8e92a1dfeec0" />
+
+  Scene Composer: Visually build scenes by layering backgrounds and sprites. Scale, zoom, orient them as you like. The application generates the Ren'Py code that can be copy/pasted. 
+  <img width="1718" height="1001" alt="Story Elements - Scene Editor Tab" src="https://github.com/user-attachments/assets/3dd84ee3-7eb6-4664-b93d-ada3690d039a" />
+
+  Image Viewer:
+  <img width="1229" height="1001" alt="Image Viewer" src="https://github.com/user-attachments/assets/7c3360fb-484f-4be2-9d61-12c382ca6ef8" />
+
+  Audio Viewer/Player:
+  <img width="1537" height="1007" alt="Story Elements - Audio Viewer" src="https://github.com/user-attachments/assets/893ff1a3-72c7-48c7-ad5d-db547a6885b6" />
+
+- **File System Integration**: Works directly with your local project folders for a seamless development experience.
+- **Theme Support**: Personalize your workspace with multiple themes, including Light, Dark, Solarized, and Colorful variants.
+- **UI State Persistence**: The editor remembers your theme, sidebar layout, and open tabs between sessions for a consistent workflow.
+- **Customizable Layout**: Sidebars are resizable, allowing you to tailor the interface to your needs.
+- **AI Integration**: Optional feature to generate AI content using Google, OpenAI, and Anthropic models. Generated content can be copy/pasted wherever you want.**
+
 ---
 
 ## Usage Guide
@@ -90,19 +83,22 @@ The application is divided into three main sections: the Project Explorer on the
 
 The top toolbar provides access to global actions and tools.
 
+<img width="1574" height="88" alt="Toolbar" src="https://github.com/user-attachments/assets/ab97e8ce-9030-4068-9698-942316db6b86" />
+
 | Button/Icon         | Function                                                                                                 | Shortcut           |
 | ------------------- | -------------------------------------------------------------------------------------------------------- | ------------------ |
-| **Undo/Redo**       | Reverts or re-applies changes like moving blocks, creating blocks, etc.                                  | `Ctrl+Z` / `Ctrl+Y` |
+| **Undo/Redo**       | Reverts or re-applies changes like moving blocks, creating blocks, etc.                                  | `Ctrl+Z` / `Ctrl+Y`|
 | **Add Block**       | Creates a new, blank `.rpy` file and adds it to the canvas.                                              | `N`                |
-| **Tidy Up Layout**  | Automatically arranges the blocks on the canvas based on the story flow to reduce clutter.               |                    |
+| **Add Note**        | Add a sticky note to the canvas board. Notes are not included as Ren'Py code.                            |                    |
+| **Tidy Up**         | Automatically arranges the blocks on the canvas based on the story flow to reduce clutter.               |                    |
 | **Analyze Routes**  | Generates and opens the Route Canvas tab, showing label-to-label connections.                            |                    |
-| **Open Folder**     | Opens a new project folder, replacing the current workspace.                                             |                    |
+| **Drafting Mode**   | Toggle drafting mode, which adds placeholders for all images and sound files that are not yet created.   |                    |    
+| **Run**             | Launch Ren'Py and run your game as a child of the application (requires Ren'Py Launcher Path to be set in Settings|                                           |                    |
 | **Save All**        | Saves all unsaved changes to your local files. Only enabled when a project folder is open.               | `Ctrl+S`           |
-| **Download .zip**   | Downloads all the script files in the current workspace as a `.zip` archive.                             |                    |
-| **Upload .zip**     | Opens a file picker to upload and load a `.zip` project archive.                                         |                    |
-| **Clear Canvas**    | Deletes all blocks and groups from the canvas.                                                           |                    |
-| **Toggle Sidebars** | Shows or hides the left and right sidebars.                                                              |                    |
-| **Toggle Theme**    | Cycles between System, Light, Dark, Solarized Light, Solarized Dark, Colorful, and Colorful Light themes.|                    |
+| **Toggle Left**     | Hide/unhide the left sidebar with the Project Explorer and Search Tabs                                   |                    |
+| **Search**          | Open search tab on the left sidebar                                                                      |                    |
+| **Toggle Right**    | Hide/unhide the right sidebar with the Story Elements tabs                                               |                    |
+| **Settings**        | Set specific user settings, including Color Theme, Editor Appearance, Ren'Py Launcher Path, and Enabling AI||
 
 #### The Canvases
 
@@ -144,6 +140,11 @@ This panel shows a tree view of your project's file system.
   - Double-click an `.rpy` file to open it in the editor.
   - Right-click an `.rpy` file and select "Center on Canvas" to locate its block in the visual editor.
 
+
+#### Search Panel (Left Sidebar)
+
+- **Search Operations**: Search all files in the project for specified keyword or regular expression. 
+
 #### Story Elements (Right Sidebar)
 
 This powerful panel analyzes your entire project to give you an overview of all its core components.
@@ -174,7 +175,57 @@ This powerful panel analyzes your entire project to give you an overview of all 
   - Lists all screens defined with the `screen` statement.
   - You can **Add** a new screen, which will create a new `.rpy` file with boilerplate code.
   - You can also quickly **Find Definition** to jump to the code where a screen is defined.
+ 
+- **Scene Tab**:
+  - Create a scene image by layering images and sprites and arranging them to suit
+  - Copy/paste generated code directly into Ren'Py code file
 
 - **Snippets Tab**:
   - A handy library of common Ren'Py code patterns for dialogue, logic, visual effects, and more.
   - Find the snippet you need and click **Copy** to paste it into your code.
+
+ #### PunchList (View Menu -> Punchlist)
+ - A list of generated tasks is added to a list that is maintained with the project
+ - Includes images and audio files that are referenced in the code but don't exist in the project yet
+ - Project notes are included in the punchlist automatically
+
+ #### AI Generator (View Menu -> AI Generator)
+ - Opens a tab in which the user can generate AI content using Google Gemini, OpenAI, or Anthropic
+ - Requires an API key to be entered for each provider (Google, OpenAI, Anthropic) the first time it is used in the project
+ - Generated content can be copied and then pasted wherever the user wants
+
+# Details for Developers
+
+## Local Development Setup
+
+This project uses a standard Node.js-based toolchain with Vite for a fast and modern development experience.
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) (version 18.x or newer recommended)
+- npm (which comes bundled with Node.js)
+
+### Running Locally
+
+1.  **Clone the Repository** (if you haven't already):
+    ```bash
+    git clone https://github.com/your-username/renpy-visual-editor.git
+    cd renpy-visual-editor
+    ```
+
+2.  **Install Dependencies**:
+    Navigate to the project's root directory in your terminal and run `npm install` to download all the necessary packages defined in `package.json`.
+    ```bash
+    npm install
+    ```
+
+3.  **Build the distribution**:
+    ```bash
+    npm run dist
+    ```
+
+4.  **Run the built app**:
+    In the ``release``` directory, find the OS specific folder (e.g. win-unpack) and the executable application underneath it. Double click the application run it.
+
+    Mac users: To run your built application on Mac, use the open -x /path/to/xyz.app command instead. 
+---
