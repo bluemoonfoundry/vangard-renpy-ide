@@ -2,9 +2,10 @@
  * @file vite.config.ts
  * @description Vite build configuration for the Vangard Ren'Py IDE.
  * Configures React plugin, environment variables, build optimization,
- * and sourcemap generation for development and production builds.
+ * sourcemap generation, and Vitest test runner.
  */
 
+/// <reference types="vitest" />
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { readFileSync } from 'fs'
@@ -67,6 +68,26 @@ export default defineConfig(({ mode }) => {
     // Pre-bundle optimization for frequently used dependencies
     optimizeDeps: {
       include: ['use-immer', 'immer'],
-    }
+    },
+    // Resolve aliases for test environment
+    resolve: {
+      alias: {
+        // useFileSystemManager.ts imports immer from a CDN URL; remap to the local package
+        'https://aistudiocdn.com/immer@^10.1.1': 'immer',
+      },
+    },
+    // Vitest test runner configuration
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      setupFiles: ['./test/setup.ts'],
+      include: ['**/*.test.{ts,tsx}'],
+      exclude: ['node_modules', 'dist', 'release'],
+      coverage: {
+        provider: 'v8',
+        include: ['components/**', 'hooks/**', 'contexts/**', 'App.tsx'],
+        exclude: ['**/*.test.{ts,tsx}', 'test/**'],
+      },
+    },
   }
 })

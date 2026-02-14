@@ -286,12 +286,12 @@ async function updateApplicationMenu() {
     {
         label: 'File',
         submenu: [
-            { 
+            {
                 label: 'New Project...',
                 accelerator: 'CmdOrCtrl+N',
                 click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'new-project' }); }
             },
-            { 
+            {
                 label: 'Open Project...',
                 accelerator: 'CmdOrCtrl+O',
                 click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-project' }); }
@@ -302,14 +302,29 @@ async function updateApplicationMenu() {
             },
             { type: 'separator' },
             {
+                label: 'Save All',
+                accelerator: 'CmdOrCtrl+S',
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'save-all' }); }
+            },
+            { type: 'separator' },
+            ...(process.platform !== 'darwin' ? [{
+                label: 'Settings',
+                accelerator: 'CmdOrCtrl+,',
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-settings' }); }
+            },
+            { type: 'separator' }] : []),
+            {
+                id: 'run-project',
                 label: 'Run Project',
                 accelerator: 'F5',
                 click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'run-project' }); }
             },
-            { type: 'separator' },
             {
-                label: 'About',
-                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-about' }); }
+                id: 'stop-project',
+                label: 'Stop Project',
+                accelerator: 'Shift+F5',
+                enabled: false,
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'stop-project' }); }
             },
             { type: 'separator' },
             process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' }
@@ -324,20 +339,22 @@ async function updateApplicationMenu() {
             { role: 'cut' },
             { role: 'copy' },
             { role: 'paste' },
+            { type: 'separator' },
+            {
+                label: 'Find in Files',
+                accelerator: 'CmdOrCtrl+Shift+F',
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'toggle-search' }); }
+            },
         ]
     },
     {
         label: 'View',
         submenu: [
-            { role: 'reload' },
-            { role: 'forceReload' },
-            { role: 'toggleDevTools' },
-            { type: 'separator' },
-            { 
+            {
               label: 'Story Canvas',
               click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-static-tab', type: 'canvas' }); }
             },
-            { 
+            {
               label: 'Route Canvas',
               click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-static-tab', type: 'route-canvas' }); }
             },
@@ -350,6 +367,21 @@ async function updateApplicationMenu() {
                 click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-static-tab', type: 'ai-generator' }); }
             },
             { type: 'separator' },
+            {
+                label: 'Toggle Left Sidebar',
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'toggle-left-sidebar' }); }
+            },
+            {
+                label: 'Toggle Right Sidebar',
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'toggle-right-sidebar' }); }
+            },
+            { type: 'separator' },
+            ...(!app.isPackaged ? [
+                { role: 'reload' },
+                { role: 'forceReload' },
+                { role: 'toggleDevTools' },
+                { type: 'separator' },
+            ] : []),
             { role: 'resetZoom' },
             { role: 'zoomIn' },
             { role: 'zoomOut' },
@@ -362,6 +394,21 @@ async function updateApplicationMenu() {
         submenu: [
             { role: 'minimize' },
             { role: 'zoom' },
+        ]
+    },
+    {
+        label: 'Help',
+        submenu: [
+            {
+                label: 'Keyboard Shortcuts',
+                accelerator: 'CmdOrCtrl+/',
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-shortcuts' }); }
+            },
+            { type: 'separator' },
+            ...(process.platform !== 'darwin' ? [{
+                label: 'About',
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-about' }); }
+            }] : []),
         ]
     },
   ];
@@ -655,6 +702,15 @@ app.whenReady().then(() => {
     app.quit();
   });
 
+  function setGameRunningMenuState(running) {
+    const menu = Menu.getApplicationMenu();
+    if (!menu) return;
+    const runItem = menu.getMenuItemById('run-project');
+    const stopItem = menu.getMenuItemById('stop-project');
+    if (runItem) runItem.enabled = !running;
+    if (stopItem) stopItem.enabled = running;
+  }
+
   ipcMain.on('game:run', (event, renpyPath, projectPath) => {
     if (gameProcess) {
       console.log('Game is already running.');
@@ -664,30 +720,36 @@ app.whenReady().then(() => {
     try {
       gameProcess = spawn(renpyPath, [projectPath]);
       event.sender.send('game-started');
+      setGameRunningMenuState(true);
 
       gameProcess.on('close', (code) => {
         console.log(`Game process exited with code ${code}`);
         gameProcess = null;
         event.sender.send('game-stopped');
+        setGameRunningMenuState(false);
       });
 
       gameProcess.on('error', (err) => {
         console.error('Failed to start game process:', err);
         event.sender.send('game-error', err.message);
         gameProcess = null;
+        setGameRunningMenuState(false);
       });
 
     } catch (err) {
       console.error('Spawn error:', err);
       event.sender.send('game-error', err.message);
       gameProcess = null;
+      setGameRunningMenuState(false);
     }
   });
 
-  ipcMain.on('game:stop', () => {
+  ipcMain.on('game:stop', (event) => {
     if (gameProcess) {
       gameProcess.kill();
       gameProcess = null;
+      event.sender.send('game-stopped');
+      setGameRunningMenuState(false);
     }
   });
 
