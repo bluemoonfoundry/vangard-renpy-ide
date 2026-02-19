@@ -1,9 +1,9 @@
 [![Build/Release](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/build.yml/badge.svg)](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/build.yml)
 [![CodeQL](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/github-code-scanning/codeql)
 
-# Ren'Py Visual Novel Accelerator
+# Ren'IDE: The Ren'Py Visual Novel Accelerator
 
-The VANGARD Ren'Py Visual Novel Accelerator is a desktop application designed to streamline and enhance the development process for Ren'Py projects. It provides a dynamic canvas where your Ren'Py script files (`.rpy`) are represented as draggable blocks. The editor automatically analyzes your code to draw connections for `jump` and `call` statements, helping you visualize your story's flow and structure at a glance. It is intended to be a one-stop shop for editing Ren'Py projects, but still allow flexibility to use whatever tools are necessary outside the application. In other words, using this application won't prevent you from editing your project outside of it. You're not locked in. 
+Ren'IDE is a desktop application designed to streamline and enhance the development process for Ren'Py projects. It provides a dynamic canvas where your Ren'Py script files (`.rpy`) are represented as draggable blocks. The editor automatically analyzes your code to draw connections for `jump` and `call` statements, helping you visualize your story's flow and structure at a glance. It is intended to be a one-stop shop for editing Ren'Py projects, but still allow flexibility to use whatever tools are necessary outside the application. In other words, using this application won't prevent you from editing your project outside of it. You're not locked in. 
 
 This tool is perfect for writers, designers, and programmers who want a more intuitive and organized way to manage complex branching narratives.
 
