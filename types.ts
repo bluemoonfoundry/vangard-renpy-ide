@@ -564,6 +564,16 @@ export interface AppSettings {
   editorFontFamily: string;
   editorFontSize: number;
   snippetCategoriesState?: Record<string, boolean>;
+  mouseGestures?: MouseGestureSettings;
+}
+
+export type CanvasPanGesture = 'shift-drag' | 'drag' | 'middle-drag';
+
+export interface MouseGestureSettings {
+  canvasPanGesture: CanvasPanGesture;
+  middleMouseAlwaysPans: boolean;
+  zoomScrollDirection: 'normal' | 'inverted';
+  zoomScrollSensitivity: number;
 }
 
 /**

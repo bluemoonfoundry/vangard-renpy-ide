@@ -32,7 +32,7 @@ import type {
   Block, BlockGroup, Link, Position, FileSystemTreeNode, EditorTab, 
   ToastMessage, IdeSettings, Theme, ProjectImage, RenpyAudio, 
   ClipboardState, ImageMetadata, AudioMetadata, LabelNode, Character,
-  AppSettings, ProjectSettings, StickyNote, SearchResult, SceneComposition, SceneSprite, PunchlistMetadata
+  AppSettings, ProjectSettings, StickyNote, SearchResult, SceneComposition, SceneSprite, PunchlistMetadata, MouseGestureSettings
 } from './types';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import packageJson from './package.json';
@@ -407,6 +407,7 @@ const App: React.FC = () => {
     recentProjects: [],
     editorFontFamily: "'Consolas', 'Courier New', monospace",
     editorFontSize: 14,
+    mouseGestures: { canvasPanGesture: 'shift-drag', middleMouseAlwaysPans: false, zoomScrollDirection: 'normal', zoomScrollSensitivity: 1.0 },
   });
   const [isRenpyPathValid, setIsRenpyPathValid] = useState(false);
   const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'punchlistMetadata' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>>({
@@ -2519,6 +2520,7 @@ const App: React.FC = () => {
                             onTransformChange={setStoryCanvasTransform}
                             onCreateBlock={handleCreateBlockFromCanvas}
                             onAddStickyNote={addStickyNote}
+                            mouseGestures={appSettings.mouseGestures}
                         />;
                     } else if (tab.type === 'route-canvas') {
                         content = <RouteCanvas 
@@ -2529,6 +2531,7 @@ const App: React.FC = () => {
                             onOpenEditor={handleOpenEditor}
                             transform={routeCanvasTransform}
                             onTransformChange={setRouteCanvasTransform}
+                            mouseGestures={appSettings.mouseGestures}
                         />;
                     } else if (tab.type === 'punchlist') {
                         content = <PunchlistManager
