@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, protocol, safeStorage } from 'electron';
-import { autoUpdater } from 'electron-updater';
+import { app, BrowserWindow, ipcMain, dialog, Menu, protocol, shell, safeStorage } from 'electron';
+import electronUpdaterPkg from 'electron-updater';
+const { autoUpdater } = electronUpdaterPkg;
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import fs from 'fs/promises';
@@ -407,6 +408,10 @@ async function updateApplicationMenu() {
                 label: 'Keyboard Shortcuts',
                 accelerator: 'CmdOrCtrl+/',
                 click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-shortcuts' }); }
+            },
+            {
+                label: 'Documentation',
+                click: () => shell.openExternal('https://github.com/bluemoonfoundry/vangard-renpy-ide/wiki'),
             },
             { type: 'separator' },
             {
@@ -823,6 +828,10 @@ app.whenReady().then(() => {
 
   ipcMain.on('install-update', () => {
     autoUpdater.quitAndInstall();
+  });
+
+  ipcMain.handle('shell:openExternal', (_event, url) => {
+    shell.openExternal(url);
   });
 
   app.on('activate', () => {
