@@ -3045,6 +3045,8 @@ const App: React.FC = () => {
       <KeyboardShortcutsModal
         isOpen={shortcutsModalOpen}
         onClose={() => setShortcutsModalOpen(false)}
+        mouseGestures={appSettings.mouseGestures}
+        onOpenSettings={() => { setShortcutsModalOpen(false); setSettingsModalOpen(true); }}
       />
 
       <AboutModal

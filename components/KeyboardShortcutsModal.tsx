@@ -1,12 +1,51 @@
 import React from 'react';
+import type { MouseGestureSettings, CanvasPanGesture } from '../types';
 
 interface KeyboardShortcutsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  mouseGestures?: MouseGestureSettings;
+  onOpenSettings?: () => void;
 }
 
-const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ isOpen, onClose }) => {
+const DEFAULT_GESTURES: MouseGestureSettings = {
+  canvasPanGesture: 'shift-drag',
+  middleMouseAlwaysPans: false,
+  zoomScrollDirection: 'normal',
+  zoomScrollSensitivity: 1.0,
+};
+
+function getPanKeys(gesture: CanvasPanGesture): string[] {
+  if (gesture === 'drag') return ['Drag'];
+  if (gesture === 'middle-drag') return ['Middle Mouse', 'Drag'];
+  return ['Shift', 'Drag'];
+}
+
+const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
+  isOpen,
+  onClose,
+  mouseGestures,
+  onOpenSettings,
+}) => {
   if (!isOpen) return null;
+
+  const gestures = mouseGestures ?? DEFAULT_GESTURES;
+
+  const canvasItems = [
+    { keys: ['N'], description: 'Add New Block' },
+    { keys: ['Delete'], description: 'Delete Selected Blocks/Groups' },
+    { keys: getPanKeys(gestures.canvasPanGesture), description: 'Pan Canvas' },
+    ...(gestures.middleMouseAlwaysPans && gestures.canvasPanGesture !== 'middle-drag'
+      ? [{ keys: ['Middle Mouse', 'Drag'], description: 'Pan Canvas (also)' }]
+      : []),
+    {
+      keys: ['Scroll'],
+      description: gestures.zoomScrollDirection === 'inverted'
+        ? 'Zoom In/Out (scroll inverted)'
+        : 'Zoom In/Out',
+    },
+    { keys: ['Double Click'], description: 'Open Block in Editor' },
+  ];
 
   const shortcuts = [
     { category: 'General', items: [
@@ -19,13 +58,7 @@ const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ isOpen,
         { keys: ['Ctrl', 'Z'], description: 'Undo' },
         { keys: ['Ctrl', 'Y'], description: 'Redo' },
     ]},
-    { category: 'Canvas', items: [
-        { keys: ['N'], description: 'Add New Block' },
-        { keys: ['Delete'], description: 'Delete Selected Blocks/Groups' },
-        { keys: ['Shift', 'Drag'], description: 'Pan Canvas' },
-        { keys: ['Scroll'], description: 'Zoom In/Out' },
-        { keys: ['Double Click'], description: 'Open Block in Editor' },
-    ]},
+    { category: 'Canvas', items: canvasItems, configurable: true },
     { category: 'Editor', items: [
         { keys: ['Ctrl', 'S'], description: 'Save File' },
         { keys: ['Ctrl', 'Click'], description: 'Go to Definition' },
@@ -33,7 +66,7 @@ const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ isOpen,
     { category: 'Explorer', items: [
         { keys: ['Double Click'], description: 'Open File' },
         { keys: ['Right Click'], description: 'Context Menu' },
-    ]}
+    ]},
   ];
 
   return (
@@ -49,7 +82,17 @@ const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ isOpen,
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {shortcuts.map(section => (
                         <div key={section.category}>
-                            <h3 className="text-lg font-semibold text-indigo-600 dark:text-indigo-400 mb-3">{section.category}</h3>
+                            <div className="flex items-baseline justify-between mb-3">
+                                <h3 className="text-lg font-semibold text-indigo-600 dark:text-indigo-400">{section.category}</h3>
+                                {section.configurable && onOpenSettings && (
+                                    <button
+                                        onClick={() => { onClose(); onOpenSettings(); }}
+                                        className="text-xs text-indigo-500 dark:text-indigo-400 hover:underline"
+                                    >
+                                        Configure →
+                                    </button>
+                                )}
+                            </div>
                             <ul className="space-y-2">
                                 {section.items.map((item, idx) => (
                                     <li key={idx} className="flex justify-between items-center">
