@@ -12,7 +12,7 @@ import LabelBlock from './LabelBlock';
 import ViewRoutesPanel from './ViewRoutesPanel';
 import Minimap from './Minimap';
 import type { MinimapItem } from './Minimap';
-import type { LabelNode, RouteLink, Position, IdentifiedRoute } from '../types';
+import type { LabelNode, RouteLink, Position, IdentifiedRoute, MouseGestureSettings } from '../types';
 
 interface RouteCanvasProps {
   labelNodes: LabelNode[];
@@ -22,6 +22,7 @@ interface RouteCanvasProps {
   onOpenEditor: (blockId: string, line: number) => void;
   transform: { x: number, y: number, scale: number };
   onTransformChange: React.Dispatch<React.SetStateAction<{ x: number, y: number, scale: number }>>;
+  mouseGestures?: MouseGestureSettings;
 }
 
 interface Rect { x: number; y: number; width: number; height: number; }
@@ -182,7 +183,7 @@ type InteractionState =
   | { type: 'rubber-band'; start: Position; }
   | { type: 'dragging-nodes'; dragStartPositions: Map<string, Position>; };
 
-const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, identifiedRoutes, updateLabelNodePositions, onOpenEditor, transform, onTransformChange }) => {
+const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, identifiedRoutes, updateLabelNodePositions, onOpenEditor, transform, onTransformChange, mouseGestures }) => {
   const [rubberBandRect, setRubberBandRect] = useState<Rect | null>(null);
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
@@ -268,7 +269,9 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
   }, [transform.x, transform.y, transform.scale]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return;
+    const gestures = mouseGestures ?? { canvasPanGesture: 'shift-drag' as const, middleMouseAlwaysPans: false, zoomScrollDirection: 'normal' as const, zoomScrollSensitivity: 1.0 };
+    const isMiddlePan = (gestures.canvasPanGesture === 'middle-drag' || gestures.middleMouseAlwaysPans) && e.button === 1;
+    if (e.button !== 0 && !isMiddlePan) return;
     const targetEl = e.target as HTMLElement;
 
     // Prevent canvas interactions when interacting with the panel
@@ -298,7 +301,12 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
             setSelectedNodeIds([nodeId]);
         }
     } else {
-        if (e.shiftKey) {
+        const isPan =
+            (gestures.canvasPanGesture === 'shift-drag' && e.shiftKey && e.button === 0) ||
+            (gestures.canvasPanGesture === 'drag' && !e.shiftKey && e.button === 0) ||
+            (gestures.canvasPanGesture === 'middle-drag' && e.button === 1) ||
+            (gestures.middleMouseAlwaysPans && e.button === 1);
+        if (isPan) {
             interactionState.current = { type: 'panning' };
         } else {
             interactionState.current = { type: 'rubber-band', start: pointerStartPos.current };
@@ -393,9 +401,12 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
           e.preventDefault(); // Stop browser native zoom/scroll
           const rect = el.getBoundingClientRect();
           const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-          
+          const gestures = mouseGestures ?? { canvasPanGesture: 'shift-drag' as const, middleMouseAlwaysPans: false, zoomScrollDirection: 'normal' as const, zoomScrollSensitivity: 1.0 };
+          const sensitivity = gestures.zoomScrollSensitivity ?? 1.0;
+          const direction = gestures.zoomScrollDirection === 'inverted' ? -1 : 1;
+
           onTransformChange(t => {
-              const zoom = 1 - e.deltaY * 0.002;
+              const zoom = 1 - e.deltaY * 0.002 * sensitivity * direction;
               const newScale = Math.max(0.2, Math.min(3, t.scale * zoom));
               const worldX = (pointer.x - t.x) / t.scale;
               const worldY = (pointer.y - t.y) / t.scale;
@@ -407,7 +418,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
 
       el.addEventListener('wheel', onWheel, { passive: false });
       return () => el.removeEventListener('wheel', onWheel);
-  }, [onTransformChange]);
+  }, [onTransformChange, mouseGestures]);
 
   const backgroundStyle = {
     backgroundSize: `${32 * transform.scale}px ${32 * transform.scale}px`,

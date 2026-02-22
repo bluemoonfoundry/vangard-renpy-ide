@@ -14,7 +14,7 @@ import StickyNote from './StickyNote';
 import Minimap from './Minimap';
 import CanvasContextMenu from './CanvasContextMenu';
 import type { MinimapItem } from './Minimap';
-import type { Block, Position, RenpyAnalysisResult, LabelLocation, BlockGroup, Link, StickyNote as StickyNoteType } from '../types';
+import type { Block, Position, RenpyAnalysisResult, LabelLocation, BlockGroup, Link, StickyNote as StickyNoteType, MouseGestureSettings } from '../types';
 import type { BlockType } from './CreateBlockModal';
 
 interface StoryCanvasProps {
@@ -47,6 +47,7 @@ interface StoryCanvasProps {
   onTransformChange: React.Dispatch<React.SetStateAction<{ x: number, y: number, scale: number }>>;
   onCreateBlock?: (type: BlockType, position: Position) => void;
   onAddStickyNote?: (position: Position) => void;
+  mouseGestures?: MouseGestureSettings;
 }
 
 const getBlockById = (blocks: Block[], id: string) => blocks.find(b => b.id === id);
@@ -192,7 +193,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
     selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, 
     findUsagesHighlightIds, clearFindUsages, dirtyBlockIds, 
     canvasFilters, setCanvasFilters, centerOnBlockRequest, flashBlockRequest, hoverHighlightIds, 
-    transform, onTransformChange, onCreateBlock, onAddStickyNote
+    transform, onTransformChange, onCreateBlock, onAddStickyNote, mouseGestures
 }) => {
   const [rubberBandRect, setRubberBandRect] = useState<Rect | null>(null);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
@@ -340,8 +341,10 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
   }, [transform.x, transform.y, transform.scale]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    // Only handle left click for interactions (drag/pan)
-    if (e.button !== 0) return;
+    // Only handle left click for interactions (drag/pan), or middle button when configured
+    const gestures = mouseGestures ?? { canvasPanGesture: 'shift-drag' as const, middleMouseAlwaysPans: false, zoomScrollDirection: 'normal' as const, zoomScrollSensitivity: 1.0 };
+    const isMiddlePan = (gestures.canvasPanGesture === 'middle-drag' || gestures.middleMouseAlwaysPans) && e.button === 1;
+    if (e.button !== 0 && !isMiddlePan) return;
     
     // Close context menu if open
     if (canvasContextMenu) setCanvasContextMenu(null);
@@ -485,7 +488,12 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
             setSelectedNoteIds([]);
         }
     } else {
-        if (e.shiftKey) {
+        const isPan =
+            (gestures.canvasPanGesture === 'shift-drag' && e.shiftKey && e.button === 0) ||
+            (gestures.canvasPanGesture === 'drag' && !e.shiftKey && e.button === 0) ||
+            (gestures.canvasPanGesture === 'middle-drag' && e.button === 1) ||
+            (gestures.middleMouseAlwaysPans && e.button === 1);
+        if (isPan) {
             interactionState.current = { type: 'panning' };
         } else {
             interactionState.current = { type: 'rubber-band', start: pointerStartPos.current };
@@ -702,8 +710,11 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
     e.preventDefault();
     const rect = canvasRef.current.getBoundingClientRect();
     const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const gestures = mouseGestures ?? { canvasPanGesture: 'shift-drag' as const, middleMouseAlwaysPans: false, zoomScrollDirection: 'normal' as const, zoomScrollSensitivity: 1.0 };
+    const sensitivity = gestures.zoomScrollSensitivity ?? 1.0;
+    const direction = gestures.zoomScrollDirection === 'inverted' ? -1 : 1;
     onTransformChange(t => {
-      const zoom = 1 - e.deltaY * 0.002;
+      const zoom = 1 - e.deltaY * 0.002 * sensitivity * direction;
       const newScale = Math.max(0.2, Math.min(3, t.scale * zoom));
       const worldX = (pointer.x - t.x) / t.scale;
       const worldY = (pointer.y - t.y) / t.scale;

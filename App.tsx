@@ -32,7 +32,7 @@ import type {
   Block, BlockGroup, Link, Position, FileSystemTreeNode, EditorTab, 
   ToastMessage, IdeSettings, Theme, ProjectImage, RenpyAudio, 
   ClipboardState, ImageMetadata, AudioMetadata, LabelNode, Character,
-  AppSettings, ProjectSettings, StickyNote, SearchResult, SceneComposition, SceneSprite, PunchlistMetadata
+  AppSettings, ProjectSettings, StickyNote, SearchResult, SceneComposition, SceneSprite, PunchlistMetadata, MouseGestureSettings
 } from './types';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import packageJson from './package.json';
@@ -407,6 +407,7 @@ const App: React.FC = () => {
     recentProjects: [],
     editorFontFamily: "'Consolas', 'Courier New', monospace",
     editorFontSize: 14,
+    mouseGestures: { canvasPanGesture: 'shift-drag', middleMouseAlwaysPans: false, zoomScrollDirection: 'normal', zoomScrollSensitivity: 1.0 },
   });
   const [isRenpyPathValid, setIsRenpyPathValid] = useState(false);
   const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'punchlistMetadata' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>>({
@@ -2251,12 +2252,27 @@ const App: React.FC = () => {
             if (data.command === 'new-project') handleNewProjectRequest();
             if (data.command === 'open-project') handleOpenProjectFolder();
             if (data.command === 'open-recent' && data.path) loadProject(data.path);
+            if (data.command === 'save-all') handleSaveAll();
             if (data.command === 'run-project' && projectRootPath) window.electronAPI?.runGame(appSettings.renpyPath, projectRootPath);
+            if (data.command === 'stop-project') window.electronAPI?.stopGame();
             if (data.command === 'open-static-tab' && data.type) handleOpenStaticTab(data.type as 'canvas' | 'route-canvas' | 'punchlist' | 'ai-generator');
+            if (data.command === 'toggle-search') handleToggleSearch();
+            if (data.command === 'open-settings') setSettingsModalOpen(true);
+            if (data.command === 'open-shortcuts') setShortcutsModalOpen(true);
             if (data.command === 'open-about') setAboutModalOpen(true);
+            if (data.command === 'toggle-left-sidebar') updateAppSettings(draft => { draft.isLeftSidebarOpen = !draft.isLeftSidebarOpen; });
+            if (data.command === 'toggle-right-sidebar') updateAppSettings(draft => { draft.isRightSidebarOpen = !draft.isRightSidebarOpen; });
         });
         return removeListener;
-  }, [handleNewProjectRequest, handleOpenProjectFolder, loadProject, projectRootPath, appSettings.renpyPath, handleOpenStaticTab]);
+  }, [handleNewProjectRequest, handleOpenProjectFolder, loadProject, handleSaveAll, projectRootPath, appSettings.renpyPath, handleOpenStaticTab, handleToggleSearch, updateAppSettings]);
+
+  // --- Game Running State ---
+  useEffect(() => {
+      if (!window.electronAPI) return;
+      const removeStarted = window.electronAPI.onGameStarted(() => setIsGameRunning(true));
+      const removeStopped = window.electronAPI.onGameStopped(() => setIsGameRunning(false));
+      return () => { removeStarted(); removeStopped(); };
+  }, []);
 
   // --- Exit Handling ---
   const dirtyBlockIdsRef = useRef(dirtyBlockIds);
@@ -2325,15 +2341,10 @@ const App: React.FC = () => {
         redo={redo}
         addBlock={() => setCreateBlockModalOpen(true)}
         handleTidyUp={() => handleTidyUp(true)}
-        onAnalyzeRoutes={() => handleOpenStaticTab('route-canvas')}
         onRequestNewProject={handleNewProjectRequest}
         requestOpenFolder={handleOpenProjectFolder}
         handleSave={handleSaveAll}
         onOpenSettings={() => setSettingsModalOpen(true)}
-        isLeftSidebarOpen={appSettings.isLeftSidebarOpen}
-        setIsLeftSidebarOpen={(open) => updateAppSettings(draft => { draft.isLeftSidebarOpen = open })}
-        isRightSidebarOpen={appSettings.isRightSidebarOpen}
-        setIsRightSidebarOpen={(open) => updateAppSettings(draft => { draft.isRightSidebarOpen = open })}
         onOpenStaticTab={handleOpenStaticTab as (type: 'canvas' | 'route-canvas') => void}
         onAddStickyNote={() => addStickyNote()}
         isGameRunning={isGameRunning}
@@ -2341,14 +2352,23 @@ const App: React.FC = () => {
         onStopGame={() => window.electronAPI?.stopGame()}
         renpyPath={appSettings.renpyPath}
         isRenpyPathValid={isRenpyPathValid}
-        onToggleSearch={handleToggleSearch}
-        onOpenShortcuts={() => setShortcutsModalOpen(true)}
         draftingMode={projectSettings.draftingMode}
         onToggleDraftingMode={handleToggleDraftingMode}
       />
       
       <div className="flex-grow flex overflow-hidden">
         {/* Left Sidebar */}
+        {!appSettings.isLeftSidebarOpen && (
+          <div className="flex-none w-6 flex flex-col border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+            <button
+              onClick={() => updateAppSettings(draft => { draft.isLeftSidebarOpen = true })}
+              className="w-6 h-8 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+              title="Expand Left Sidebar"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3.293 14.707a1 1 0 010-1.414L6.586 10 3.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0zm8 0a1 1 0 010-1.414L14.586 10l-3.293-3.293a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
+            </button>
+          </div>
+        )}
         {appSettings.isLeftSidebarOpen && (
           <div style={{ width: appSettings.leftSidebarWidth }} className="flex-none flex flex-col border-r border-gray-200 dark:border-gray-700">
             <div className="flex-none flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
@@ -2366,7 +2386,13 @@ const App: React.FC = () => {
                   Search
                 </button>
               </div>
-              <div className="text-xs text-gray-400">{appSettings.isLeftSidebarOpen ? '' : ''}</div>
+              <button
+                onClick={() => updateAppSettings(draft => { draft.isLeftSidebarOpen = false })}
+                className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                title="Collapse Left Sidebar"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 14.707a1 1 0 010-1.414L13.414 10l3.293-3.293a1 1 0 00-1.414-1.414l-4 4a1 1 0 000 1.414l4 4a1 1 0 001.414 0zm-8 0a1 1 0 010-1.414L5.414 10l3.293-3.293a1 1 0 00-1.414-1.414l-4 4a1 1 0 000 1.414l4 4a1 1 0 001.414 0z" clipRule="evenodd" /></svg>
+              </button>
             </div>
 
             <div className="flex-1 overflow-auto">
@@ -2494,6 +2520,7 @@ const App: React.FC = () => {
                             onTransformChange={setStoryCanvasTransform}
                             onCreateBlock={handleCreateBlockFromCanvas}
                             onAddStickyNote={addStickyNote}
+                            mouseGestures={appSettings.mouseGestures}
                         />;
                     } else if (tab.type === 'route-canvas') {
                         content = <RouteCanvas 
@@ -2504,6 +2531,7 @@ const App: React.FC = () => {
                             onOpenEditor={handleOpenEditor}
                             transform={routeCanvasTransform}
                             onTransformChange={setRouteCanvasTransform}
+                            mouseGestures={appSettings.mouseGestures}
                         />;
                     } else if (tab.type === 'punchlist') {
                         content = <PunchlistManager
@@ -2695,7 +2723,14 @@ const App: React.FC = () => {
             <Sash onDrag={(delta) => updateAppSettings(d => { d.rightSidebarWidth = Math.max(200, d.rightSidebarWidth - delta) })} />
         )}
         {appSettings.isRightSidebarOpen && (
-          <div style={{ width: appSettings.rightSidebarWidth }} className="flex-none border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div style={{ width: appSettings.rightSidebarWidth }} className="flex-none relative border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+            <button
+              onClick={() => updateAppSettings(draft => { draft.isRightSidebarOpen = false })}
+              className="absolute top-3 right-3 z-10 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              title="Collapse Right Sidebar"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3.293 14.707a1 1 0 010-1.414L6.586 10 3.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0zm8 0a1 1 0 010-1.414L14.586 10l-3.293-3.293a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
+            </button>
             <StoryElementsPanel
                 analysisResult={analysisResultWithProfiles}
                 onOpenCharacterEditor={handleOpenCharacterEditor}
@@ -2854,6 +2889,17 @@ const App: React.FC = () => {
                 snippetCategoriesState={snippetCategoriesState}
                 onToggleSnippetCategory={handleToggleSnippetCategory}
             />
+          </div>
+        )}
+        {!appSettings.isRightSidebarOpen && (
+          <div className="flex-none w-6 flex flex-col border-l border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+            <button
+              onClick={() => updateAppSettings(draft => { draft.isRightSidebarOpen = true })}
+              className="w-6 h-8 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+              title="Expand Right Sidebar"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 14.707a1 1 0 010-1.414L13.414 10l3.293-3.293a1 1 0 00-1.414-1.414l-4 4a1 1 0 000 1.414l4 4a1 1 0 001.414 0zm-8 0a1 1 0 010-1.414L5.414 10l3.293-3.293a1 1 0 00-1.414-1.414l-4 4a1 1 0 000 1.414l4 4a1 1 0 001.414 0z" clipRule="evenodd" /></svg>
+            </button>
           </div>
         )}
       </div>

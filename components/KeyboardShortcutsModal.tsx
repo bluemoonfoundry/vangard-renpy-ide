@@ -11,8 +11,11 @@ const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ isOpen,
   const shortcuts = [
     { category: 'General', items: [
         { keys: ['F5'], description: 'Run Project' },
+        { keys: ['Shift', 'F5'], description: 'Stop Project' },
         { keys: ['Ctrl', 'Shift', 'F'], description: 'Search in Files' },
         { keys: ['Ctrl', 'S'], description: 'Save All' },
+        { keys: ['Ctrl', ','], description: 'Settings' },
+        { keys: ['Ctrl', '/'], description: 'Keyboard Shortcuts' },
         { keys: ['Ctrl', 'Z'], description: 'Undo' },
         { keys: ['Ctrl', 'Y'], description: 'Redo' },
     ]},

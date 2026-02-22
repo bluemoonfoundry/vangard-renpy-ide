@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import type { Theme, IdeSettings } from '../types';
+import type { Theme, IdeSettings, MouseGestureSettings, CanvasPanGesture } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -31,11 +31,24 @@ const THEME_OPTIONS: { value: Theme; label: string }[] = [
     { value: 'forest-light', label: 'Forest Light' },
 ];
 
+const DEFAULT_MOUSE_GESTURES: MouseGestureSettings = {
+  canvasPanGesture: 'shift-drag',
+  middleMouseAlwaysPans: false,
+  zoomScrollDirection: 'normal',
+  zoomScrollSensitivity: 1.0,
+};
+
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSettingsChange, availableModels }) => {
   if (!isOpen) {
     return null;
   }
-  
+
+  const mouseGestures: MouseGestureSettings = settings.mouseGestures ?? DEFAULT_MOUSE_GESTURES;
+
+  const handleMouseGestureChange = (key: keyof MouseGestureSettings, value: any) => {
+    onSettingsChange('mouseGestures', { ...mouseGestures, [key]: value });
+  };
+
   const handleSelectRenpyPath = async () => {
     if (window.electronAPI) {
         const path = await window.electronAPI.selectRenpy();
@@ -110,6 +123,77 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                 </div>
             </div>
             
+            <div className="border-t border-primary"></div>
+            <div>
+                <h3 className="text-sm font-medium text-primary mb-3">Canvas & Mouse</h3>
+                <div className="space-y-4">
+                    <div>
+                        <label htmlFor="pan-gesture-select" className="block text-xs font-medium text-secondary mb-1">
+                            Canvas Pan Gesture
+                        </label>
+                        <select
+                            id="pan-gesture-select"
+                            value={mouseGestures.canvasPanGesture}
+                            onChange={(e) => handleMouseGestureChange('canvasPanGesture', e.target.value as CanvasPanGesture)}
+                            className="w-full p-2 rounded bg-tertiary border border-primary focus:ring-accent focus:border-accent text-primary text-sm"
+                        >
+                            <option value="shift-drag">Shift + Drag (default)</option>
+                            <option value="drag">Drag on empty canvas</option>
+                            <option value="middle-drag">Middle Mouse Button</option>
+                        </select>
+                    </div>
+
+                    {mouseGestures.canvasPanGesture !== 'middle-drag' && (
+                        <label className="flex items-center space-x-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={mouseGestures.middleMouseAlwaysPans}
+                                onChange={(e) => handleMouseGestureChange('middleMouseAlwaysPans', e.target.checked)}
+                                className="h-4 w-4 rounded focus:ring-accent"
+                                style={{ accentColor: 'var(--accent-primary)' }}
+                            />
+                            <span className="text-sm text-primary select-none">Middle mouse button also pans</span>
+                        </label>
+                    )}
+
+                    <div>
+                        <label htmlFor="zoom-direction-select" className="block text-xs font-medium text-secondary mb-1">
+                            Zoom Scroll Direction
+                        </label>
+                        <select
+                            id="zoom-direction-select"
+                            value={mouseGestures.zoomScrollDirection}
+                            onChange={(e) => handleMouseGestureChange('zoomScrollDirection', e.target.value as 'normal' | 'inverted')}
+                            className="w-full p-2 rounded bg-tertiary border border-primary focus:ring-accent focus:border-accent text-primary text-sm"
+                        >
+                            <option value="normal">Scroll up = Zoom In (Normal)</option>
+                            <option value="inverted">Scroll up = Zoom Out (Inverted)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label htmlFor="zoom-sensitivity" className="block text-xs font-medium text-secondary mb-1">
+                            Zoom Scroll Sensitivity: <span className="font-mono">{mouseGestures.zoomScrollSensitivity.toFixed(1)}×</span>
+                        </label>
+                        <input
+                            id="zoom-sensitivity"
+                            type="range"
+                            min={0.5}
+                            max={2.0}
+                            step={0.1}
+                            value={mouseGestures.zoomScrollSensitivity}
+                            onChange={(e) => handleMouseGestureChange('zoomScrollSensitivity', parseFloat(e.target.value))}
+                            className="w-full accent-accent"
+                            style={{ accentColor: 'var(--accent-primary)' }}
+                        />
+                        <div className="flex justify-between text-xs text-secondary mt-1">
+                            <span>0.5×</span>
+                            <span>2.0×</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {window.electronAPI && (
               <>
                 <div className="border-t border-primary"></div>
@@ -177,7 +261,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                 )}
             </div>
              <p className="text-xs text-secondary pt-4 border-t border-primary">
-                    Application settings (like theme and font) are saved globally. Project settings (like AI model) are saved in `project.ide.json`.
+                    Application settings (like theme, font, and mouse gestures) are saved globally. Project settings (like AI model) are saved in `project.ide.json`.
                 </p>
         </main>
         <footer className="bg-header p-4 rounded-b-lg flex justify-end items-center space-x-4 border-t border-primary">
