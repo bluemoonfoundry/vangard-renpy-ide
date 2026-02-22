@@ -24,6 +24,7 @@
   "dependencies": {
     "@google/genai": "^0.12.0",
     "@monaco-editor/react": "^4.6.0",
+    "electron-updater": "^6.8.3",
     "immer": "^10.1.1",
     "jszip": "^3.10.1",
     "monaco-editor": "^0.45.0",
@@ -52,8 +53,13 @@
   },
   "build": {
     "appId": "com.vangard.renpy.renide",
-    "productName": "Vangard Ren'Py Ren'IDE",
+    "productName": "Ren'IDE",
     "executableName": "Vangard-RenPy-renide",
+    "publish": {
+      "provider": "github",
+      "owner": "bluemoonfoundry",
+      "repo": "vangard-renpy-ide"
+    },
     "files": [
       "dist/**/*",
       "electron.js",
@@ -73,7 +79,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Ren'Py Visual Editor"
+      "shortcutName": "Ren'IDE"
     },
     "mac": {
       "target": "dmg",

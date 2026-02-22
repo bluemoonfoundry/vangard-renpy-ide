@@ -112,7 +112,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   return (
     <header className="flex-shrink-0 h-16 bg-header border-b border-primary flex items-center justify-between px-4 z-30">
       <div className="flex items-center space-x-4">
-        <img src={logo} alt="Ren'Py Visual Novel Accelerator Logo" className="h-12 w-auto" />
+        <img src={logo} alt="Ren'IDE Logo" className="h-12 w-auto" />
       </div>
 
       <div className="flex items-center space-x-2">

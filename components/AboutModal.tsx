@@ -20,7 +20,7 @@ const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
       >
         <div className="p-8 flex flex-col items-center text-center">
             <img src={logo} alt="Vangard Ren'IDE Logo" className="w-32 h-32 mb-4 object-contain drop-shadow-md" />
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Ren'IDE: The Ren'Py Visual Editor</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Ren'IDE</h2>
             <p className="text-indigo-600 dark:text-indigo-400 font-mono text-sm mb-6">v{packageJson.version} (build {BUILD_NUMBER})</p>
             
             <p className="text-gray-600 dark:text-gray-300 text-sm mb-4 leading-relaxed">

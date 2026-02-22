@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu, protocol, net, safeStorage } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import fs from 'fs/promises';
@@ -26,6 +27,9 @@ protocol.registerSchemesAsPrivileged([
 
 // --- Game Process Management ---
 let gameProcess = null;
+
+// --- Main Window Reference (for auto-updater callbacks) ---
+let mainWindowRef = null;
 
 // --- Window State Management ---
 const windowStatePath = path.join(app.getPath('userData'), 'window-state.json');
@@ -405,6 +409,15 @@ async function updateApplicationMenu() {
                 click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-shortcuts' }); }
             },
             { type: 'separator' },
+            {
+                label: 'Check for Updates',
+                click: () => {
+                    if (app.isPackaged) {
+                        autoUpdater.checkForUpdates().catch(() => {});
+                    }
+                }
+            },
+            { type: 'separator' },
             ...(process.platform !== 'darwin' ? [{
                 label: 'About',
                 click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-about' }); }
@@ -432,6 +445,8 @@ async function createWindow() {
     },
     icon: path.join(__dirname, 'vangard-renide-512x512.png')
   });
+
+  mainWindowRef = mainWindow;
 
   mainWindow.on('close', (e) => {
     if (forceQuit) {
@@ -789,6 +804,26 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+
+  // --- Auto-updater ---
+  // Only run in packaged builds; skip in dev to avoid noise.
+  if (app.isPackaged) {
+    autoUpdater.on('update-available', (info) => {
+      if (mainWindowRef) mainWindowRef.webContents.send('update-available', info.version);
+    });
+    autoUpdater.on('update-downloaded', (info) => {
+      if (mainWindowRef) mainWindowRef.webContents.send('update-downloaded', info.version);
+    });
+    autoUpdater.on('error', (err) => {
+      console.error('Auto-updater error:', err);
+    });
+    // Delay the initial check so it doesn't compete with app startup.
+    setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000);
+  }
+
+  ipcMain.on('install-update', () => {
+    autoUpdater.quitAndInstall();
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -830,6 +830,12 @@ export interface FileSystemContextValue {
               buttonLabel?: string;
               filters?: { name: string; extensions: string[] }[];
           }) => Promise<string | null>;
+          loadApiKeys: () => Promise<Record<string, string>>;
+          saveApiKey: (provider: string, key: string) => Promise<{ success: boolean; error?: string }>;
+          getApiKey: (provider: string) => Promise<string | null>;
+          onUpdateAvailable?: (callback: (version: string) => void) => () => void;
+          onUpdateDownloaded?: (callback: (version: string) => void) => () => void;
+          installUpdate?: () => void;
       }
   }
 }

@@ -79,4 +79,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadApiKeys: () => ipcRenderer.invoke('app:load-api-keys'),
   saveApiKey: (provider, key) => ipcRenderer.invoke('app:save-api-key', provider, key),
   getApiKey: (provider) => ipcRenderer.invoke('app:get-api-key', provider),
+  // --- Auto-updater ---
+  onUpdateAvailable: (callback) => {
+    const subscription = (_event, version) => callback(version);
+    ipcRenderer.on('update-available', subscription);
+    return () => ipcRenderer.removeListener('update-available', subscription);
+  },
+  onUpdateDownloaded: (callback) => {
+    const subscription = (_event, version) => callback(version);
+    ipcRenderer.on('update-downloaded', subscription);
+    return () => ipcRenderer.removeListener('update-downloaded', subscription);
+  },
+  installUpdate: () => ipcRenderer.send('install-update'),
 });

@@ -2275,6 +2275,18 @@ const App: React.FC = () => {
       return () => { removeStarted(); removeStopped(); };
   }, []);
 
+  // --- Auto-update notifications ---
+  useEffect(() => {
+      if (!window.electronAPI?.onUpdateAvailable) return;
+      const removeAvailable = window.electronAPI.onUpdateAvailable((version: string) => {
+          addToast(`Update v${version} is downloading in the background.`, 'info');
+      });
+      const removeDownloaded = window.electronAPI.onUpdateDownloaded((version: string) => {
+          addToast(`Update v${version} ready — restart Ren'IDE to install.`, 'success');
+      });
+      return () => { removeAvailable(); removeDownloaded(); };
+  }, [addToast]);
+
   // --- Exit Handling ---
   const dirtyBlockIdsRef = useRef(dirtyBlockIds);
   const dirtyEditorsRef = useRef(dirtyEditors);
