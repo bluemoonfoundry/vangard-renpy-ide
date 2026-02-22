@@ -26,6 +26,7 @@ import StatusBar from './components/StatusBar';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import AboutModal from './components/AboutModal';
 import AIGeneratorView from './components/AIGeneratorView';
+import StatsView from './components/StatsView';
 import { useRenpyAnalysis, performRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import type { 
@@ -1071,7 +1072,7 @@ const App: React.FC = () => {
   }, [blocks, analysisResult, handleTidyUp]);
 
   // --- Tab Management Helpers ---
-  const handleOpenStaticTab = useCallback((type: 'canvas' | 'route-canvas' | 'punchlist' | 'ai-generator') => {
+  const handleOpenStaticTab = useCallback((type: 'canvas' | 'route-canvas' | 'punchlist' | 'ai-generator' | 'stats') => {
         const id = type;
         setOpenTabs(prev => {
             if (!prev.find(t => t.id === id)) {
@@ -1316,7 +1317,7 @@ const App: React.FC = () => {
                       // We allow opening even if not strictly in state yet (might be migrated)
                       return true;
                   }
-                  return tab.type === 'canvas' || tab.type === 'route-canvas' || tab.type === 'punchlist' || tab.type === 'ai-generator';
+                  return tab.type === 'canvas' || tab.type === 'route-canvas' || tab.type === 'punchlist' || tab.type === 'ai-generator' || tab.type === 'stats';
               });
 
               const rehydratedTabs = validTabs.map(tab => {
@@ -2345,7 +2346,7 @@ const App: React.FC = () => {
         requestOpenFolder={handleOpenProjectFolder}
         handleSave={handleSaveAll}
         onOpenSettings={() => setSettingsModalOpen(true)}
-        onOpenStaticTab={handleOpenStaticTab as (type: 'canvas' | 'route-canvas') => void}
+        onOpenStaticTab={handleOpenStaticTab as (type: 'canvas' | 'route-canvas' | 'stats') => void}
         onAddStickyNote={() => addStickyNote()}
         isGameRunning={isGameRunning}
         onRunGame={() => window.electronAPI?.runGame(appSettings.renpyPath, projectRootPath!)}
@@ -2472,6 +2473,7 @@ const App: React.FC = () => {
                              tab.type === 'character' ? `Char: ${analysisResult.characters.get(tab.characterTag!)?.name || tab.characterTag}` :
                              tab.type === 'editor' ? (blocks.find(b => b.id === tab.blockId)?.title || 'Untitled') :
                              tab.type === 'ai-generator' ? 'AI Generator' :
+                             tab.id === 'stats' ? 'Stats' :
                              tab.filePath?.split('/').pop()}
                         </span>
                         {tab.id !== 'canvas' && (
@@ -2564,6 +2566,12 @@ const App: React.FC = () => {
                             getCurrentContext={getCurrentContext}
                             availableModels={AVAILABLE_MODELS}
                             selectedModel={projectSettings.selectedModel}
+                        />;
+                    } else if (tab.type === 'stats') {
+                        content = <StatsView
+                            blocks={blocks}
+                            analysisResult={analysisResult}
+                            routeAnalysisResult={routeAnalysisResult}
                         />;
                     } else if (tab.type === 'editor' && tab.blockId) {
                         const block = blocks.find(b => b.id === tab.blockId);
