@@ -263,7 +263,7 @@ const computeAutoLayout = <T extends LayoutNode>(nodes: T[], edges: LayoutEdge[]
     } else {
          // Fallback for completely disconnected single nodes if algorithm somehow failed
          let x = 50;
-         let y = 100;
+         const y = 100;
          nodes.forEach(n => {
              if (!finalPositions.has(n.id)) {
                  finalPositions.set(n.id, { x, y });
@@ -1667,7 +1667,7 @@ const App: React.FC = () => {
     setSaveStatus('saving');
     setStatusBarMessage('Saving files...');
     try {
-        let currentBlocks = [...blocks];
+        const currentBlocks = [...blocks];
         const editorUpdates = new Map<string, string>();
 
         for (const blockId of dirtyEditors) {
@@ -2275,6 +2275,29 @@ const App: React.FC = () => {
       return () => { removeStarted(); removeStopped(); };
   }, []);
 
+  // --- Auto-update notifications ---
+  useEffect(() => {
+      if (!window.electronAPI?.onUpdateAvailable) return;
+      const removeAvailable = window.electronAPI.onUpdateAvailable((version: string) => {
+          addToast(`Update v${version} is downloading in the background.`, 'info');
+      });
+      const removeNotAvailable = window.electronAPI.onUpdateNotAvailable?.(() => {
+          addToast("Ren'IDE is up to date.", 'info');
+      });
+      const removeError = window.electronAPI.onUpdateError?.(() => {
+          addToast('Could not check for updates. Check your connection and try again.', 'error');
+      });
+      const removeDownloaded = window.electronAPI.onUpdateDownloaded((version: string) => {
+          addToast(`Update v${version} ready — restart Ren'IDE to install.`, 'success');
+      });
+      return () => {
+          removeAvailable();
+          removeNotAvailable?.();
+          removeError?.();
+          removeDownloaded();
+      };
+  }, [addToast]);
+
   // --- Exit Handling ---
   const dirtyBlockIdsRef = useRef(dirtyBlockIds);
   const dirtyEditorsRef = useRef(dirtyEditors);
@@ -2587,7 +2610,7 @@ const App: React.FC = () => {
                                 onDirtyChange={(id, dirty) => {
                                     setDirtyEditors(prev => {
                                         const next = new Set(prev);
-                                        dirty ? next.add(id) : next.delete(id);
+                                        if (dirty) { next.add(id); } else { next.delete(id); }
                                         return next;
                                     });
                                 }}
@@ -3022,6 +3045,8 @@ const App: React.FC = () => {
       <KeyboardShortcutsModal
         isOpen={shortcutsModalOpen}
         onClose={() => setShortcutsModalOpen(false)}
+        mouseGestures={appSettings.mouseGestures}
+        onOpenSettings={() => { setShortcutsModalOpen(false); setSettingsModalOpen(true); }}
       />
 
       <AboutModal

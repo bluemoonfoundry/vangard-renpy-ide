@@ -152,7 +152,7 @@ const CodeBlock = forwardRef<HTMLDivElement, CodeBlockProps>(({
   const customColor = block.color && BLOCK_COLORS[block.color] ? BLOCK_COLORS[block.color] : null;
   const defaultColor = BLOCK_COLORS.default;
 
-  let borderClass = '';
+  let borderClass: string;
   if (isSelected) {
       if (isConfigBlock) borderClass = 'border-red-500 dark:border-red-400';
       else if (isScreenBlock) borderClass = 'border-teal-500 dark:border-teal-400';
@@ -179,7 +179,7 @@ const CodeBlock = forwardRef<HTMLDivElement, CodeBlockProps>(({
     ? 'shadow-sky-500/50'
     : '';
 
-  let headerClass = '';
+  let headerClass: string;
   if (customColor) {
       headerClass = customColor.header;
   } else if (isConfigBlock) {

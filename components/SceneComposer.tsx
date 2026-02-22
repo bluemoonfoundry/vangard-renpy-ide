@@ -452,7 +452,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             if (bg.alpha !== 1.0) transforms.push(`alpha ${bg.alpha}`);
             if (bg.blur > 0) transforms.push(`blur ${bg.blur}`);
             
-            let bgCode = '';
+            let bgCode: string;
             if (transforms.length > 0) {
                 bgCode = `scene ${tag}:\n    ${transforms.join('\n    ')}\n`;
             } else {

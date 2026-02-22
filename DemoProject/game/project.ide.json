@@ -6,62 +6,9 @@
     {
       "id": "canvas",
       "type": "canvas"
-    },
-    {
-      "id": "scene-1764262740876",
-      "type": "scene-composer",
-      "sceneId": "scene-1764262740876"
-    },
-    {
-      "id": "scene-1764262795876",
-      "type": "scene-composer",
-      "sceneId": "scene-1764262795876"
-    },
-    {
-      "id": "block-6-1770177586244",
-      "type": "editor",
-      "blockId": "block-6-1770177586244",
-      "filePath": "game/scenes/scene_03_book_club.rpy"
-    },
-    {
-      "id": "block-12-1770177586244",
-      "type": "editor",
-      "blockId": "block-12-1770177586244",
-      "filePath": "game/scenes/scene_09_reflection.rpy"
-    },
-    {
-      "id": "block-11-1770177586244",
-      "type": "editor",
-      "blockId": "block-11-1770177586244",
-      "filePath": "game/scenes/scene_08_gaming_club.rpy"
-    },
-    {
-      "id": "block-9-1770177586244",
-      "type": "editor",
-      "blockId": "block-9-1770177586244",
-      "filePath": "game/scenes/scene_06_second_choice.rpy"
-    },
-    {
-      "id": "img-game/images/bg/garden.png",
-      "type": "image",
-      "filePath": "game/images/bg/garden.png"
-    },
-    {
-      "id": "img-game/images/bg/gym.png",
-      "type": "image",
-      "filePath": "game/images/bg/gym.png"
-    },
-    {
-      "id": "img-game/images/bg/library.png",
-      "type": "image",
-      "filePath": "game/images/bg/library.png"
-    },
-    {
-      "id": "ai-generator",
-      "type": "ai-generator"
     }
   ],
-  "activeTabId": "ai-generator",
+  "activeTabId": "canvas",
   "stickyNotes": [
     {
       "id": "note-1764176814595",

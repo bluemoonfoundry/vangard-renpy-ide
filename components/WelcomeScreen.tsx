@@ -24,11 +24,11 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
       <div className="hidden md:flex w-1/2 bg-indigo-600 flex-col items-center justify-center p-12 text-white relative overflow-hidden">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent pointer-events-none"></div>
         <img src={logo} alt="Vangard Ren'IDE" className="w-80 h-80 mb-8 drop-shadow-2xl object-contain" />
-        <h1 className="text-4xl font-bold mb-4 text-center tracking-tight">Ren'Py Visual Editor</h1>
+        <h1 className="text-4xl font-bold mb-4 text-center tracking-tight">Ren'IDE</h1>
         <p className="text-indigo-100 text-lg text-center max-w-md leading-relaxed">
           Design, visualize, and write your visual novels with a powerful, flow-based interface.
         </p>
-        <div className="mt-12 text-indigo-300 text-sm font-mono">v{packageJson.version} • Local Development Build</div>
+        <div className="mt-12 text-indigo-300 text-sm font-mono">v{packageJson.version}</div>
       </div>
 
       {/* Right Side - Actions */}

@@ -788,6 +788,9 @@ export interface FileSystemContextValue {
  * Provides access to OS-level features in Electron app mode.
  * Methods for file operations, Ren'Py execution, game control, and IPC.
  */
+declare global {
+  interface Window {
+    electronAPI?: {
           openDirectory: () => Promise<string | null>;
           createProject?: () => Promise<string | null>;
           loadProject: (path: string) => Promise<any>;
@@ -830,6 +833,15 @@ export interface FileSystemContextValue {
               buttonLabel?: string;
               filters?: { name: string; extensions: string[] }[];
           }) => Promise<string | null>;
+          loadApiKeys: () => Promise<Record<string, string>>;
+          saveApiKey: (provider: string, key: string) => Promise<{ success: boolean; error?: string }>;
+          getApiKey: (provider: string) => Promise<string | null>;
+          onUpdateAvailable?: (callback: (version: string) => void) => () => void;
+          onUpdateNotAvailable?: (callback: () => void) => () => void;
+          onUpdateError?: (callback: () => void) => () => void;
+          onUpdateDownloaded?: (callback: (version: string) => void) => () => void;
+          installUpdate?: () => void;
+          openExternal?: (url: string) => Promise<void>;
       }
   }
 }

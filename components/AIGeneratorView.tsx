@@ -85,7 +85,7 @@ const AIGeneratorView: React.FC<AIGeneratorViewProps> = ({
 
     try {
       const provider = modelProviderFor(model);
-      let apiKey = savedApiKey;
+      const apiKey = savedApiKey;
 
       if (!apiKey) {
         setError('No API key found. Please save an API key first.');

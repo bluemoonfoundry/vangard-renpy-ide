@@ -1,4 +1,6 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, protocol, net, safeStorage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, protocol, shell, safeStorage } from 'electron';
+import electronUpdaterPkg from 'electron-updater';
+const { autoUpdater } = electronUpdaterPkg;
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import fs from 'fs/promises';
@@ -27,6 +29,9 @@ protocol.registerSchemesAsPrivileged([
 // --- Game Process Management ---
 let gameProcess = null;
 
+// --- Main Window Reference (for auto-updater callbacks) ---
+let mainWindowRef = null;
+
 // --- Window State Management ---
 const windowStatePath = path.join(app.getPath('userData'), 'window-state.json');
 
@@ -37,7 +42,7 @@ async function loadWindowState() {
         if (typeof state.width === 'number' && typeof state.height === 'number') {
             return state;
         }
-    } catch (error) {
+    } catch {
         console.log('No saved window state found, using defaults.');
     }
     return null;
@@ -60,7 +65,7 @@ async function loadAppSettings() {
     try {
         const data = await fs.readFile(appSettingsPath, 'utf-8');
         return JSON.parse(data);
-    } catch (error) {
+    } catch {
         console.log('No saved app settings found, using defaults.');
         return null;
     }
@@ -88,7 +93,7 @@ async function loadApiKeys() {
         const encryptedData = await fs.readFile(apiKeysPath);
         const decryptedData = safeStorage.decryptString(encryptedData);
         return JSON.parse(decryptedData);
-    } catch (error) {
+    } catch {
         console.log('No saved API keys found or failed to decrypt, using empty object.');
         return {};
     }
@@ -184,7 +189,7 @@ async function readProjectFiles(rootPath, { readContent = true } = {}) {
     try {
         const settingsContent = await fs.readFile(path.join(rootPath, 'game', 'project.ide.json'), 'utf-8');
         results.settings = JSON.parse(settingsContent);
-    } catch (e) {
+    } catch {
         results.settings = {};
     }
 
@@ -404,6 +409,19 @@ async function updateApplicationMenu() {
                 accelerator: 'CmdOrCtrl+/',
                 click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-shortcuts' }); }
             },
+            {
+                label: 'Documentation',
+                click: () => shell.openExternal('https://github.com/bluemoonfoundry/vangard-renpy-ide/wiki'),
+            },
+            { type: 'separator' },
+            {
+                label: 'Check for Updates',
+                click: () => {
+                    if (app.isPackaged) {
+                        autoUpdater.checkForUpdates().catch(() => {});
+                    }
+                }
+            },
             { type: 'separator' },
             ...(process.platform !== 'darwin' ? [{
                 label: 'About',
@@ -432,6 +450,8 @@ async function createWindow() {
     },
     icon: path.join(__dirname, 'vangard-renide-512x512.png')
   });
+
+  mainWindowRef = mainWindow;
 
   mainWindow.on('close', (e) => {
     if (forceQuit) {
@@ -789,6 +809,39 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+
+  // --- Auto-updater ---
+  // Only run in packaged builds; skip in dev to avoid noise.
+  if (app.isPackaged) {
+    autoUpdater.on('update-available', (info) => {
+      if (mainWindowRef) mainWindowRef.webContents.send('update-available', info.version);
+    });
+    autoUpdater.on('update-not-available', () => {
+      if (mainWindowRef) mainWindowRef.webContents.send('update-not-available');
+    });
+    autoUpdater.on('update-downloaded', (info) => {
+      if (mainWindowRef) mainWindowRef.webContents.send('update-downloaded', info.version);
+    });
+    autoUpdater.on('error', (err) => {
+      console.error('Auto-updater error:', err);
+      // If the release channel has no latest.yml yet (e.g. a pre-builder release),
+      // treat it the same as "no update available" rather than showing a raw error.
+      const isNoRelease = err && err.message && err.message.includes('latest.yml');
+      if (mainWindowRef) {
+        mainWindowRef.webContents.send(isNoRelease ? 'update-not-available' : 'update-error');
+      }
+    });
+    // Delay the initial check so it doesn't compete with app startup.
+    setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000);
+  }
+
+  ipcMain.on('install-update', () => {
+    autoUpdater.quitAndInstall();
+  });
+
+  ipcMain.handle('shell:openExternal', (_event, url) => {
+    shell.openExternal(url);
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

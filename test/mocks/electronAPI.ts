@@ -35,13 +35,13 @@ export interface MockElectronAPI {
   scanDirectory: ReturnType<typeof vi.fn<[string], Promise<{ images: any[]; audios: any[] }>>>;
 
   // Menu commands
-  onMenuCommand: ReturnType<typeof vi.fn<[Function], () => void>>;
+  onMenuCommand: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
 
   // Exit flow
-  onCheckUnsavedChangesBeforeExit: ReturnType<typeof vi.fn<[Function], () => void>>;
+  onCheckUnsavedChangesBeforeExit: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
   replyUnsavedChangesBeforeExit: ReturnType<typeof vi.fn<[boolean], void>>;
-  onShowExitModal: ReturnType<typeof vi.fn<[Function], () => void>>;
-  onSaveIdeStateBeforeQuit: ReturnType<typeof vi.fn<[Function], () => void>>;
+  onShowExitModal: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
+  onSaveIdeStateBeforeQuit: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
   ideStateSavedForQuit: ReturnType<typeof vi.fn<[], void>>;
   forceQuit: ReturnType<typeof vi.fn<[], void>>;
 
@@ -50,9 +50,9 @@ export interface MockElectronAPI {
   runGame: ReturnType<typeof vi.fn<[string, string], void>>;
   stopGame: ReturnType<typeof vi.fn<[], void>>;
   checkRenpyPath: ReturnType<typeof vi.fn<[string], Promise<boolean>>>;
-  onGameStarted: ReturnType<typeof vi.fn<[Function], () => void>>;
-  onGameStopped: ReturnType<typeof vi.fn<[Function], () => void>>;
-  onGameError: ReturnType<typeof vi.fn<[Function], () => void>>;
+  onGameStarted: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
+  onGameStopped: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
+  onGameError: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
 
   // Settings & API keys
   getAppSettings: ReturnType<typeof vi.fn<[], Promise<Partial<AppSettings> | null>>>;
@@ -60,6 +60,16 @@ export interface MockElectronAPI {
   loadApiKeys: ReturnType<typeof vi.fn<[], Promise<Record<string, string>>>>;
   saveApiKey: ReturnType<typeof vi.fn<[string, string], Promise<{ success: boolean; error?: string }>>>;
   getApiKey: ReturnType<typeof vi.fn<[string], Promise<string | null>>>;
+
+  // Auto-updater
+  onUpdateAvailable: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
+  onUpdateNotAvailable: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
+  onUpdateError: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
+  onUpdateDownloaded: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
+  installUpdate: ReturnType<typeof vi.fn<[], void>>;
+
+  // Shell
+  openExternal: ReturnType<typeof vi.fn<[string], Promise<void>>>;
 
   // Search & dialogs
   searchInProject: ReturnType<typeof vi.fn<[any], Promise<SearchResult[]>>>;
@@ -117,6 +127,16 @@ export function createMockElectronAPI(): MockElectronAPI {
     loadApiKeys: vi.fn().mockResolvedValue({}),
     saveApiKey: vi.fn().mockResolvedValue({ success: true }),
     getApiKey: vi.fn().mockResolvedValue(null),
+
+    // Auto-updater
+    onUpdateAvailable: vi.fn().mockReturnValue(noopUnsubscribe),
+    onUpdateNotAvailable: vi.fn().mockReturnValue(noopUnsubscribe),
+    onUpdateError: vi.fn().mockReturnValue(noopUnsubscribe),
+    onUpdateDownloaded: vi.fn().mockReturnValue(noopUnsubscribe),
+    installUpdate: vi.fn(),
+
+    // Shell
+    openExternal: vi.fn().mockResolvedValue(undefined),
 
     // Search & dialogs
     searchInProject: vi.fn().mockResolvedValue([]),
