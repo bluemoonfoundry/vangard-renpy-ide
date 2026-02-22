@@ -496,7 +496,7 @@ export interface RenpyAnalysisResult {
  */
 export interface EditorTab {
   id: string;
-  type: 'canvas' | 'route-canvas' | 'punchlist' | 'editor' | 'image' | 'audio' | 'character' | 'scene-composer' | 'ai-generator';
+  type: 'canvas' | 'route-canvas' | 'punchlist' | 'editor' | 'image' | 'audio' | 'character' | 'scene-composer' | 'ai-generator' | 'stats';
   blockId?: string;
   filePath?: string;
   characterTag?: string;
