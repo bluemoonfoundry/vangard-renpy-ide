@@ -85,6 +85,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('update-available', subscription);
     return () => ipcRenderer.removeListener('update-available', subscription);
   },
+  onUpdateNotAvailable: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('update-not-available', subscription);
+    return () => ipcRenderer.removeListener('update-not-available', subscription);
+  },
+  onUpdateError: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('update-error', subscription);
+    return () => ipcRenderer.removeListener('update-error', subscription);
+  },
   onUpdateDownloaded: (callback) => {
     const subscription = (_event, version) => callback(version);
     ipcRenderer.on('update-downloaded', subscription);

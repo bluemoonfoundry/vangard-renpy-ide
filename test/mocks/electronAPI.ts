@@ -61,6 +61,13 @@ export interface MockElectronAPI {
   saveApiKey: ReturnType<typeof vi.fn<[string, string], Promise<{ success: boolean; error?: string }>>>;
   getApiKey: ReturnType<typeof vi.fn<[string], Promise<string | null>>>;
 
+  // Auto-updater
+  onUpdateAvailable: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
+  onUpdateNotAvailable: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
+  onUpdateError: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
+  onUpdateDownloaded: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
+  installUpdate: ReturnType<typeof vi.fn<[], void>>;
+
   // Shell
   openExternal: ReturnType<typeof vi.fn<[string], Promise<void>>>;
 
@@ -120,6 +127,13 @@ export function createMockElectronAPI(): MockElectronAPI {
     loadApiKeys: vi.fn().mockResolvedValue({}),
     saveApiKey: vi.fn().mockResolvedValue({ success: true }),
     getApiKey: vi.fn().mockResolvedValue(null),
+
+    // Auto-updater
+    onUpdateAvailable: vi.fn().mockReturnValue(noopUnsubscribe),
+    onUpdateNotAvailable: vi.fn().mockReturnValue(noopUnsubscribe),
+    onUpdateError: vi.fn().mockReturnValue(noopUnsubscribe),
+    onUpdateDownloaded: vi.fn().mockReturnValue(noopUnsubscribe),
+    installUpdate: vi.fn(),
 
     // Shell
     openExternal: vi.fn().mockResolvedValue(undefined),

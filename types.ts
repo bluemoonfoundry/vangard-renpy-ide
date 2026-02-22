@@ -837,6 +837,8 @@ declare global {
           saveApiKey: (provider: string, key: string) => Promise<{ success: boolean; error?: string }>;
           getApiKey: (provider: string) => Promise<string | null>;
           onUpdateAvailable?: (callback: (version: string) => void) => () => void;
+          onUpdateNotAvailable?: (callback: () => void) => () => void;
+          onUpdateError?: (callback: () => void) => () => void;
           onUpdateDownloaded?: (callback: (version: string) => void) => () => void;
           installUpdate?: () => void;
           openExternal?: (url: string) => Promise<void>;

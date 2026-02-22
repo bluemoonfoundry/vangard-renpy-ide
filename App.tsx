@@ -2281,10 +2281,21 @@ const App: React.FC = () => {
       const removeAvailable = window.electronAPI.onUpdateAvailable((version: string) => {
           addToast(`Update v${version} is downloading in the background.`, 'info');
       });
+      const removeNotAvailable = window.electronAPI.onUpdateNotAvailable?.(() => {
+          addToast("Ren'IDE is up to date.", 'info');
+      });
+      const removeError = window.electronAPI.onUpdateError?.(() => {
+          addToast('Could not check for updates. Check your connection and try again.', 'error');
+      });
       const removeDownloaded = window.electronAPI.onUpdateDownloaded((version: string) => {
           addToast(`Update v${version} ready — restart Ren'IDE to install.`, 'success');
       });
-      return () => { removeAvailable(); removeDownloaded(); };
+      return () => {
+          removeAvailable();
+          removeNotAvailable?.();
+          removeError?.();
+          removeDownloaded();
+      };
   }, [addToast]);
 
   // --- Exit Handling ---

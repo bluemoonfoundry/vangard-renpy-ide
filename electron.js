@@ -816,11 +816,20 @@ app.whenReady().then(() => {
     autoUpdater.on('update-available', (info) => {
       if (mainWindowRef) mainWindowRef.webContents.send('update-available', info.version);
     });
+    autoUpdater.on('update-not-available', () => {
+      if (mainWindowRef) mainWindowRef.webContents.send('update-not-available');
+    });
     autoUpdater.on('update-downloaded', (info) => {
       if (mainWindowRef) mainWindowRef.webContents.send('update-downloaded', info.version);
     });
     autoUpdater.on('error', (err) => {
       console.error('Auto-updater error:', err);
+      // If the release channel has no latest.yml yet (e.g. a pre-builder release),
+      // treat it the same as "no update available" rather than showing a raw error.
+      const isNoRelease = err && err.message && err.message.includes('latest.yml');
+      if (mainWindowRef) {
+        mainWindowRef.webContents.send(isNoRelease ? 'update-not-available' : 'update-error');
+      }
     });
     // Delay the initial check so it doesn't compete with app startup.
     setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000);
