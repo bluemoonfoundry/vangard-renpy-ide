@@ -263,7 +263,7 @@ const computeAutoLayout = <T extends LayoutNode>(nodes: T[], edges: LayoutEdge[]
     } else {
          // Fallback for completely disconnected single nodes if algorithm somehow failed
          let x = 50;
-         let y = 100;
+         const y = 100;
          nodes.forEach(n => {
              if (!finalPositions.has(n.id)) {
                  finalPositions.set(n.id, { x, y });
@@ -1667,7 +1667,7 @@ const App: React.FC = () => {
     setSaveStatus('saving');
     setStatusBarMessage('Saving files...');
     try {
-        let currentBlocks = [...blocks];
+        const currentBlocks = [...blocks];
         const editorUpdates = new Map<string, string>();
 
         for (const blockId of dirtyEditors) {
@@ -2599,7 +2599,7 @@ const App: React.FC = () => {
                                 onDirtyChange={(id, dirty) => {
                                     setDirtyEditors(prev => {
                                         const next = new Set(prev);
-                                        dirty ? next.add(id) : next.delete(id);
+                                        if (dirty) { next.add(id); } else { next.delete(id); }
                                         return next;
                                     });
                                 }}

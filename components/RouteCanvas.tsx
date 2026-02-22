@@ -102,7 +102,7 @@ const Arrow: React.FC<{
 }> = ({ sourcePos, targetPos, type, color, isDimmed }) => {
     const isVertical = Math.abs(targetPos.y - sourcePos.y) > Math.abs(targetPos.x - sourcePos.x);
     
-    let pathData = '';
+    let pathData: string;
     
     if (isVertical) {
         const dy = targetPos.y - sourcePos.y;

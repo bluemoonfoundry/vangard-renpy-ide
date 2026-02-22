@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, protocol, net, safeStorage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, protocol, safeStorage } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -41,7 +41,7 @@ async function loadWindowState() {
         if (typeof state.width === 'number' && typeof state.height === 'number') {
             return state;
         }
-    } catch (error) {
+    } catch {
         console.log('No saved window state found, using defaults.');
     }
     return null;
@@ -64,7 +64,7 @@ async function loadAppSettings() {
     try {
         const data = await fs.readFile(appSettingsPath, 'utf-8');
         return JSON.parse(data);
-    } catch (error) {
+    } catch {
         console.log('No saved app settings found, using defaults.');
         return null;
     }
@@ -92,7 +92,7 @@ async function loadApiKeys() {
         const encryptedData = await fs.readFile(apiKeysPath);
         const decryptedData = safeStorage.decryptString(encryptedData);
         return JSON.parse(decryptedData);
-    } catch (error) {
+    } catch {
         console.log('No saved API keys found or failed to decrypt, using empty object.');
         return {};
     }
@@ -188,7 +188,7 @@ async function readProjectFiles(rootPath, { readContent = true } = {}) {
     try {
         const settingsContent = await fs.readFile(path.join(rootPath, 'game', 'project.ide.json'), 'utf-8');
         results.settings = JSON.parse(settingsContent);
-    } catch (e) {
+    } catch {
         results.settings = {};
     }
 
