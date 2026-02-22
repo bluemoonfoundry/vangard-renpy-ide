@@ -30,7 +30,7 @@ const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
             
             <div className="text-xs text-gray-400 dark:text-gray-500 mt-4">
                 <p>&copy; {new Date().getFullYear()} Blue Moon Foundry. All rights reserved.</p>
-                <p className="mt-1">Built with Electron, React, and Gemini — build {BUILD_NUMBER}</p>
+                <p className="mt-1">Built with Electron, React, and AI assistance — build {BUILD_NUMBER}</p>
             </div>
         </div>
         <footer className="bg-gray-50 dark:bg-gray-700/50 p-4 flex justify-center border-t border-gray-200 dark:border-gray-700">

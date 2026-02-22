@@ -28,7 +28,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         <p className="text-indigo-100 text-lg text-center max-w-md leading-relaxed">
           Design, visualize, and write your visual novels with a powerful, flow-based interface.
         </p>
-        <div className="mt-12 text-indigo-300 text-sm font-mono">v{packageJson.version} • Local Development Build</div>
+        <div className="mt-12 text-indigo-300 text-sm font-mono">v{packageJson.version}</div>
       </div>
 
       {/* Right Side - Actions */}
