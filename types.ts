@@ -839,6 +839,7 @@ declare global {
           onUpdateAvailable?: (callback: (version: string) => void) => () => void;
           onUpdateDownloaded?: (callback: (version: string) => void) => () => void;
           installUpdate?: () => void;
+          openExternal?: (url: string) => Promise<void>;
       }
   }
 }

@@ -822,7 +822,22 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
       onWheel={handleWheel}
       onContextMenu={handleContextMenu}
     >
-        <div className="filter-panel absolute top-4 right-4 z-20 bg-secondary p-2 rounded-lg shadow-lg border border-primary flex flex-col space-y-2">
+        {blocks.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+          <div className="bg-secondary border border-primary rounded-xl shadow-xl p-8 max-w-sm text-center pointer-events-auto">
+            <div className="text-4xl mb-3">📄</div>
+            <h3 className="text-lg font-bold text-primary mb-1">Canvas is empty</h3>
+            <p className="text-sm text-secondary mb-4">Create your first script block to get started.</p>
+            <div className="text-xs text-secondary space-y-1 text-left bg-primary/5 rounded-lg p-3 mb-2">
+              <div><kbd className="font-mono bg-primary/10 px-1 rounded">N</kbd> — New block</div>
+              <div><kbd className="font-mono bg-primary/10 px-1 rounded">Shift</kbd> + drag — Pan canvas</div>
+              <div><kbd className="font-mono bg-primary/10 px-1 rounded">Scroll</kbd> — Zoom in / out</div>
+              <div><kbd className="font-mono bg-primary/10 px-1 rounded">G</kbd> — Group selected blocks</div>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="filter-panel absolute top-4 right-4 z-20 bg-secondary p-2 rounded-lg shadow-lg border border-primary flex flex-col space-y-2">
             <h4 className="text-sm font-semibold text-center px-2 text-primary">View Filters</h4>
             <label className="flex items-center space-x-2 cursor-pointer text-sm text-secondary">
                 <input type="checkbox" checked={canvasFilters.story} onChange={e => setCanvasFilters(f => ({ ...f, story: e.target.checked }))} className="h-4 w-4 rounded focus:ring-indigo-500" style={{ accentColor: 'rgb(79 70 229)' }} />

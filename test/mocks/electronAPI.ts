@@ -61,6 +61,9 @@ export interface MockElectronAPI {
   saveApiKey: ReturnType<typeof vi.fn<[string, string], Promise<{ success: boolean; error?: string }>>>;
   getApiKey: ReturnType<typeof vi.fn<[string], Promise<string | null>>>;
 
+  // Shell
+  openExternal: ReturnType<typeof vi.fn<[string], Promise<void>>>;
+
   // Search & dialogs
   searchInProject: ReturnType<typeof vi.fn<[any], Promise<SearchResult[]>>>;
   showSaveDialog: ReturnType<typeof vi.fn<[any], Promise<string | null>>>;
@@ -117,6 +120,9 @@ export function createMockElectronAPI(): MockElectronAPI {
     loadApiKeys: vi.fn().mockResolvedValue({}),
     saveApiKey: vi.fn().mockResolvedValue({ success: true }),
     getApiKey: vi.fn().mockResolvedValue(null),
+
+    // Shell
+    openExternal: vi.fn().mockResolvedValue(undefined),
 
     // Search & dialogs
     searchInProject: vi.fn().mockResolvedValue([]),

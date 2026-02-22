@@ -33,9 +33,15 @@ const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                 <p className="mt-1">Built with Electron, React, and AI assistance — build {BUILD_NUMBER}</p>
             </div>
         </div>
-        <footer className="bg-gray-50 dark:bg-gray-700/50 p-4 flex justify-center border-t border-gray-200 dark:border-gray-700">
-            <button 
-                onClick={onClose} 
+        <footer className="bg-gray-50 dark:bg-gray-700/50 p-4 flex justify-center gap-3 border-t border-gray-200 dark:border-gray-700">
+            <button
+                onClick={() => window.electronAPI?.openExternal?.('https://github.com/bluemoonfoundry/vangard-renpy-ide/wiki')}
+                className="px-6 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-100 text-sm font-bold rounded transition-colors shadow-sm"
+            >
+                Documentation
+            </button>
+            <button
+                onClick={onClose}
                 className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded transition-colors shadow-sm"
             >
                 Close

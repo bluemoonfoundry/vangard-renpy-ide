@@ -91,4 +91,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('update-downloaded', subscription);
   },
   installUpdate: () => ipcRenderer.send('install-update'),
+  // --- Shell ---
+  openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
 });
