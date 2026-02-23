@@ -2130,26 +2130,78 @@ const App: React.FC = () => {
     }
   };
 
-  const handleTabDrop = (e: React.DragEvent<HTMLDivElement>, targetTabId: string, targetPaneId: 'primary' | 'secondary' = 'primary') => {
+  const handleTabDrop = (e: React.DragEvent<HTMLDivElement>, targetTabId: string | null, targetPaneId: 'primary' | 'secondary') => {
     e.preventDefault();
-    if (!draggedTabId || draggedTabId === targetTabId) return;
-    // Only reorder within the same pane
-    if (dragSourcePaneId !== targetPaneId) { setDraggedTabId(null); return; }
+    if (!draggedTabId) { setDraggedTabId(null); return; }
+    const sourcePaneId = dragSourcePaneId;
 
-    const setTabs = targetPaneId === 'primary' ? setOpenTabs : setSecondaryOpenTabs;
-    const tabs = targetPaneId === 'primary' ? openTabs : secondaryOpenTabs;
-    const fromIndex = tabs.findIndex(t => t.id === draggedTabId);
-    const toIndex = tabs.findIndex(t => t.id === targetTabId);
-
-    if (fromIndex !== -1 && toIndex !== -1) {
+    // ── Same-pane reorder ──────────────────────────────────────────────────
+    if (sourcePaneId === targetPaneId) {
+      if (!targetTabId || draggedTabId === targetTabId) { setDraggedTabId(null); return; }
+      const setTabs = targetPaneId === 'primary' ? setOpenTabs : setSecondaryOpenTabs;
+      const tabs    = targetPaneId === 'primary' ? openTabs   : secondaryOpenTabs;
+      const fromIndex = tabs.findIndex(t => t.id === draggedTabId);
+      const toIndex   = tabs.findIndex(t => t.id === targetTabId);
+      if (fromIndex !== -1 && toIndex !== -1) {
         setTabs(prev => {
-            const newTabs = [...prev];
-            const [moved] = newTabs.splice(fromIndex, 1);
-            newTabs.splice(toIndex, 0, moved);
-            return newTabs;
+          const next = [...prev];
+          const [moved] = next.splice(fromIndex, 1);
+          next.splice(toIndex, 0, moved);
+          return next;
         });
         setHasUnsavedSettings(true);
+      }
+      setDraggedTabId(null);
+      return;
     }
+
+    // ── Cross-pane move ────────────────────────────────────────────────────
+    const sourceTabs = sourcePaneId === 'primary' ? openTabs : secondaryOpenTabs;
+    const targetTabs = targetPaneId === 'primary' ? openTabs : secondaryOpenTabs;
+    const tab = sourceTabs.find(t => t.id === draggedTabId);
+    if (!tab) { setDraggedTabId(null); return; }
+
+    // Remove from source pane
+    const newSourceTabs = sourceTabs.filter(t => t.id !== draggedTabId);
+    if (sourcePaneId === 'primary') {
+      setOpenTabs(newSourceTabs);
+      if (activeTabId === draggedTabId) {
+        const fallback = newSourceTabs.find(t => t.type === 'canvas') ?? newSourceTabs[0];
+        if (fallback) setActiveTabId(fallback.id);
+      }
+    } else {
+      if (newSourceTabs.length === 0) {
+        // Secondary is now empty — collapse the split
+        setSecondaryOpenTabs([]);
+        setSecondaryActiveTabId('');
+        setSplitLayout('none');
+        setActivePaneId('primary');
+      } else {
+        setSecondaryOpenTabs(newSourceTabs);
+        if (secondaryActiveTabId === draggedTabId) setSecondaryActiveTabId(newSourceTabs[0].id);
+      }
+    }
+
+    // Insert into target pane (at the hovered tab position, or append)
+    const insertAt = targetTabId !== null ? targetTabs.findIndex(t => t.id === targetTabId) : -1;
+    if (targetPaneId === 'primary') {
+      setOpenTabs(prev => {
+        const next = [...prev];
+        next.splice(insertAt >= 0 ? insertAt : next.length, 0, tab);
+        return next;
+      });
+      setActiveTabId(tab.id);
+    } else {
+      setSecondaryOpenTabs(prev => {
+        const next = [...prev];
+        next.splice(insertAt >= 0 ? insertAt : next.length, 0, tab);
+        return next;
+      });
+      setSecondaryActiveTabId(tab.id);
+    }
+
+    setActivePaneId(targetPaneId);
+    setHasUnsavedSettings(true);
     setDraggedTabId(null);
   };
 
@@ -2622,8 +2674,13 @@ const App: React.FC = () => {
 
   const renderTabBar = (tabs: EditorTab[], activeId: string, paneId: 'primary' | 'secondary', scrollRef: React.RefObject<HTMLDivElement>) => (
     <div className={`flex-none flex items-center bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 ${splitLayout !== 'none' && activePaneId === paneId ? 'border-t-2 border-t-indigo-500' : ''}`}>
-      {/* Scrollable tab strip */}
-      <div ref={scrollRef} className="flex flex-1 overflow-x-auto no-scrollbar min-w-0">
+      {/* Scrollable tab strip — also a drop target for appending to this pane */}
+      <div
+        ref={scrollRef}
+        className="flex flex-1 overflow-x-auto no-scrollbar min-w-0"
+        onDragOver={(e) => { e.preventDefault(); if (draggedTabId) e.dataTransfer.dropEffect = 'move'; }}
+        onDrop={(e) => handleTabDrop(e, null, paneId)}
+      >
         {tabs.map(tab => (
           <div
             key={tab.id}
@@ -2632,7 +2689,7 @@ const App: React.FC = () => {
             draggable
             onDragStart={(e) => handleTabDragStart(e, tab.id, paneId)}
             onDragOver={(e) => handleTabDragOver(e, tab.id)}
-            onDrop={(e) => handleTabDrop(e, tab.id, paneId)}
+            onDrop={(e) => { e.stopPropagation(); handleTabDrop(e, tab.id, paneId); }}
             onContextMenu={(e) => handleTabContextMenu(e, tab.id, paneId)}
           >
             <span className="truncate flex-grow">{getTabLabel(tab)}</span>
