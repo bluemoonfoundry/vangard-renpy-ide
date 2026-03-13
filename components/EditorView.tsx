@@ -297,7 +297,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       let match;
       while ((match = lineJumpRegex.exec(sanitizedLine)) !== null) {
           const target = match[2];
-          if (target === 'expression') continue;
+          if (target === 'expression' || target === 'screen') continue;
 
           const isLocal = localLabels.has(target);
           const globalLabelDef = analysisResultRef.current.labels[target];
@@ -444,6 +444,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
       while ((match = lineJumpRegex.exec(lineContent)) !== null) {
           const target = match[2];
+          if (target === 'expression' || target === 'screen') continue;
           const targetStartCol = match.index + match[0].indexOf(target) + 1;
           const targetEndCol = targetStartCol + target.length;
 
@@ -520,7 +521,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
           let match;
           while ((match = lineJumpRegex.exec(sanitizedLine)) !== null) {
               const target = match[2];
-              if (target === 'expression') continue;
+              if (target === 'expression' || target === 'screen') continue;
 
               const startCol = match.index + match[0].indexOf(target) + 1;
               const endCol = startCol + target.length;

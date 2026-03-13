@@ -35,7 +35,7 @@ If you just want to install the application on your desktop and run it, you can 
 <img width="1964" height="1114" alt="Route Canvas" src="https://github.com/user-attachments/assets/62da186a-7505-406d-b66c-b4d7f9ed8d7e" />
 
 
-- **Integrated Code Editor**: A full-featured Monaco editor (the engine behind VS Code) is built-in for editing your script files directly within the app.
+- **Integrated Code Editor**: A full-featured Monaco editor (the engine behind VS Code) is built-in for editing your script files directly within the app. The editor supports a **split-pane layout** (side-by-side or top/bottom) so you can view two files at once. Tabs can be dragged between panes.
 
 <img width="1233" height="1007" alt="Code Editor" src="https://github.com/user-attachments/assets/1aa05b75-7a9a-4356-b6a4-5a4589491a4e" />
 
@@ -65,7 +65,8 @@ If you just want to install the application on your desktop and run it, you can 
 - **Theme Support**: Personalize your workspace with multiple themes, including Light, Dark, Solarized, and Colorful variants.
 - **UI State Persistence**: The editor remembers your theme, sidebar layout, and open tabs between sessions for a consistent workflow.
 - **Customizable Layout**: Sidebars are resizable, allowing you to tailor the interface to your needs.
-- **AI Integration**: Optional feature to generate AI content using Google, OpenAI, and Anthropic models. Generated content can be copy/pasted wherever you want.**
+- **AI Integration**: Optional feature to generate AI content using Google Gemini, OpenAI, and Anthropic models. Generated content can be copy/pasted wherever you want.
+- **Project Statistics**: A Stats dashboard provides word count, estimated play time, per-character dialogue breakdowns, and branching complexity scores.
 
 ---
 
@@ -143,7 +144,7 @@ This panel shows a tree view of your project's file system.
 
 #### Search Panel (Left Sidebar)
 
-- **Search Operations**: Search all files in the project for specified keyword or regular expression. 
+- **Search & Replace**: Search all files in the project for a keyword or regular expression. Results show file and line context. You can replace matches individually or all at once, with a confirmation step before bulk replacements are applied.
 
 #### Story Elements (Right Sidebar)
 
@@ -194,6 +195,10 @@ This powerful panel analyzes your entire project to give you an overview of all 
  - Requires an API key to be entered for each provider (Google, OpenAI, Anthropic) the first time it is used in the project
  - Generated content can be copied and then pasted wherever the user wants
 
+ #### Stats (View Menu -> Stats)
+ - Displays project-wide statistics: total word count, estimated play time, lines of dialogue, and per-character breakdowns
+ - Shows branching complexity score and a bar chart of character dialogue distribution
+
 # Details for Developers
 
 ## Local Development Setup
@@ -209,8 +214,8 @@ This project uses a standard Node.js-based toolchain with Vite for a fast and mo
 
 1.  **Clone the Repository** (if you haven't already):
     ```bash
-    git clone https://github.com/your-username/renpy-visual-editor.git
-    cd renpy-visual-editor
+    git clone https://github.com/bluemoonfoundry/vangard-renpy-ide.git
+    cd vangard-renpy-ide
     ```
 
 2.  **Install Dependencies**:
@@ -219,13 +224,26 @@ This project uses a standard Node.js-based toolchain with Vite for a fast and mo
     npm install
     ```
 
-3.  **Build the distribution**:
+3.  **Start the development environment** (recommended for active development):
+    ```bash
+    npm run electron:start   # Build and launch Electron app
+    ```
+    Or to use the Vite dev server only (no Electron):
+    ```bash
+    npm run dev              # http://localhost:5173
+    ```
+
+4.  **Run tests**:
+    ```bash
+    npx vitest run           # Run all tests once
+    npx vitest               # Watch mode
+    ```
+
+5.  **Build a distributable installer**:
     ```bash
     npm run dist
     ```
+    The output is in the `release/` directory. On Windows, run the `.exe` installer. On Mac, open the `.dmg`. On Linux, run the `.AppImage`.
 
-4.  **Run the built app**:
-    In the ``release``` directory, find the OS specific folder (e.g. win-unpack) and the executable application underneath it. Double click the application run it.
-
-    Mac users: To run your built application on Mac, use the open -x /path/to/xyz.app command instead. 
+    Mac users: To run your built application without installing, use `open -a /path/to/xyz.app`.
 ---

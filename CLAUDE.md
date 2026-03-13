@@ -22,7 +22,13 @@ npm run version:patch    # Increment patch version
 npm run release:patch    # Increment version + build
 ```
 
-No test framework or linter is currently configured.
+**Testing** (Vitest):
+```bash
+npx vitest run          # Run all tests once
+npx vitest              # Run in watch mode
+npx vitest run --coverage  # With coverage report
+```
+Coverage is configured for `components/`, `hooks/`, `contexts/`, and `App.tsx` using jsdom environment.
 
 ## Architecture
 
@@ -38,9 +44,14 @@ No test framework or linter is currently configured.
 
 ### Key Data Model (types.ts)
 
+`types.ts` (~850 lines) is the single source of truth for TypeScript types. Key types:
+
 - **Block**: Represents a `.rpy` file with position, size, content, and filePath
 - **BlockGroup**: Groups blocks visually on the canvas
 - **Link**: Connection between blocks (from `jump`/`call` statements)
+- **EditorTab**: Open tab in the editor pane (id, title, filePath, content, isDirty)
+- **ProjectSettings**: Persisted per-project IDE state including split pane layout, open tabs, canvas transforms
+- **AppSettings**: Global app preferences (theme, Ren'Py path, etc.)
 - **Character, Variable, ImageAsset, AudioAsset, Screen, Scene**: Story element types
 
 ### Ren'Py Analysis Engine (hooks/useRenpyAnalysis.ts)
@@ -53,6 +64,16 @@ The largest source file (~25K lines). Regex-based parser that extracts labels, j
 - **RouteCanvas**: On-demand label-by-label control flow graph with route highlighting
 - Canvas coordinates use a transform system (pan via Shift+drag, zoom via scroll)
 
+### Split Pane / Tab System
+
+The editor supports side-by-side or top/bottom split panes (`splitLayout: 'none' | 'right' | 'bottom'`). State is managed in `App.tsx`:
+- `primaryOpenTabs` / `secondaryOpenTabs`: tabs per pane
+- `activePaneId`: which pane is focused
+- `splitPrimarySize`: pixel size of the primary pane
+- Tabs can be dragged between panes; removing the last tab from secondary collapses the split
+- `Sash.tsx` handles the resizable divider; `TabContextMenu.tsx` handles tab right-click menus
+- Split state persists in `ProjectSettings` (written to `project.ide.json`)
+
 ### File System Integration
 
 Two modes:
@@ -63,9 +84,25 @@ Managed by `hooks/useFileSystemManager.ts` and `contexts/FileSystemContext.ts`.
 
 ### Context Providers
 
-- **AssetContext**: Image/audio scanning, metadata, and asset pipeline
-- **FileSystemContext**: Directory/file handle state
+- **AssetContext** (`hooks/useAssetManager.ts`): Image/audio scanning, copy-to-project pipeline, metadata; persists scan directory paths in IDE settings
+- **FileSystemContext** (`hooks/useFileSystemManager.ts`, ~13K lines): Directory/file handle state, clipboard (cut/copy/paste), tree node CRUD and drag-drop
 - **ToastContext**: User notification system
+
+### IPC Channel Conventions
+
+All `preload.js` channels follow a `namespace:action` naming pattern:
+
+| Prefix | Domain |
+|--------|--------|
+| `fs:` | File I/O (`writeFile`, `createDirectory`, `removeEntry`, `moveFile`, `copyEntry`, `scanDirectory`) |
+| `project:` | Project operations (`load`, `refresh-tree`, `search`) |
+| `dialog:` | OS dialogs (`openDirectory`, `createProject`, `selectRenpy`, `showSaveDialog`) |
+| `game:` / `renpy:` | Game process (`run`, `stop`, `check-path`) |
+| `app:` | Settings & encrypted API keys |
+
+Exit flow uses a multi-step handshake: `check-unsaved-changes-before-exit` → `show-exit-modal` → `save-ide-state-before-quit` → `ide-state-saved-for-quit` → `force-quit`.
+
+API keys are stored encrypted via Electron's `safeStorage` at `userData/api-keys.enc`. App settings live at `userData/app-settings.json`.
 
 ## Key Conventions
 
@@ -75,6 +112,13 @@ Managed by `hooks/useFileSystemManager.ts` and `contexts/FileSystemContext.ts`.
 - **Styling**: Tailwind CSS utility classes; dark mode via `class` strategy
 - **Path alias**: `@/*` maps to project root in imports (tsconfig)
 - **Block = file**: Each `.rpy` file maps 1:1 to a Block on the canvas; the first label becomes the block title
+
+## Key Hooks
+
+- **useHistory<T>**: Generic undo/redo — maintains `past[]`, `present`, `future[]`; exposes `undo()`, `redo()`, `setState()`, `canUndo`, `canRedo`. Guards against undoing past the initial loaded state.
+- **useRenpyAnalysis**: Returns `RenpyAnalysisResult` with links, characters, variables, screens, dialogue, and route graphs. Call `performRenpyAnalysis()` after any file change.
+- **useFileSystemManager**: File system abstraction with clipboard state (`Set<string>` of paths for cut/copy).
+- **useAssetManager**: Manages `ProjectImage` and `RenpyAudio` Maps with metadata; handles scanning external directories and copying assets into the project.
 
 ## Keyboard Shortcuts
 

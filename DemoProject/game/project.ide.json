@@ -6,9 +6,21 @@
     {
       "id": "canvas",
       "type": "canvas"
+    },
+    {
+      "id": "route-canvas",
+      "type": "route-canvas"
+    },
+    {
+      "id": "stats",
+      "type": "stats"
     }
   ],
-  "activeTabId": "canvas",
+  "activeTabId": "stats",
+  "splitLayout": "none",
+  "splitPrimarySize": 600,
+  "secondaryOpenTabs": [],
+  "secondaryActiveTabId": "",
   "stickyNotes": [
     {
       "id": "note-1764176814595",
