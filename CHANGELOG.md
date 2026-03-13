@@ -4,12 +4,12 @@ All notable changes to Vangard Ren'Py IDE are documented here.
 
 ---
 
-## [Unreleased] — since v0.5.0
+## [v0.6.0] — Public Beta 3
 
 ### New Features
 
 #### Editor & Workspace
-- **Two-pane split editor** — split the center area right or bottom to view two tabs simultaneously. Tabs can be moved between panes via the right-click context menu.
+- **Two-pane split editor** — split the center area right or bottom to view two tabs simultaneously. Tabs can be dragged between panes or moved via the right-click context menu. Closing a pane automatically merges its tabs back into the other pane.
 - **Tab bar scroll buttons** — `‹` and `›` chevrons appear when there are more tabs than fit on screen, keeping the close-pane and filter buttons always visible.
 - **Cursor position in status bar** — the status bar now shows `Ln N, Col N` for the active editor tab.
 - **Minimap toggle** — a Minimap checkbox has been added to the canvas View Filters panel, letting you hide the minimap to reclaim space.
@@ -58,6 +58,7 @@ All notable changes to Vangard Ren'Py IDE are documented here.
 
 ### Bug Fixes
 
+- **`call screen` parser false positive** — `call screen foo()` no longer produces an "Invalid jump: Label 'screen' not found" error. `screen` is a Ren'Py keyword in this context, not a label name; the parser now skips it the same way it already skipped `call expression`. ([#69](https://github.com/bluemoonfoundry/vangard-renpy-ide/issues/69))
 - **Image viewer left-edge scroll** — zooming into an image no longer prevents scrolling to the left edge. The previous flex-centering approach clipped left-side overflow; replaced with computed padding so all four edges are equally reachable.
 - **Character editor reset** — switching to "New Character" now correctly resets all 13 fields (previously only 5 core fields were reset, leaving stale values from the last edited character).
 - **Keyboard Shortcuts modal** — the modal now reflects the user's current gesture settings rather than showing hardcoded defaults.
