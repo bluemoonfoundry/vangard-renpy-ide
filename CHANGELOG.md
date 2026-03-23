@@ -4,6 +4,46 @@ All notable changes to Vangard Ren'Py IDE are documented here.
 
 ---
 
+## [v0.7.0] — Public Beta 4
+
+### New Features
+
+#### IntelliSense & Autocomplete
+- **Context-aware autocomplete** — the Monaco editor now provides intelligent completions as you type. The system detects your cursor context (after `jump`, `call`, `show`, `scene`, etc.) and offers relevant suggestions: labels, screen names, image tags, character tags, or variables.
+- **28 built-in keyword snippets** — common Ren'Py patterns (menu, if/else, screen layouts, transitions, transforms, etc.) are available as expandable snippets with tab-stop placeholders.
+
+#### User Code Snippets
+- **Custom snippet library** — create, edit, and delete your own reusable code snippets from the Snippets tab in Story Elements. Each snippet has a title, trigger prefix, description, and code body.
+- **Monaco placeholder support** — opt into VS Code-style tab-stop placeholders (`$1`, `${1:default}`, `$0`) for interactive snippet expansion.
+- **IntelliSense integration** — user snippets appear in the autocomplete dropdown when you type their prefix, alongside built-in snippets.
+
+#### Markdown Preview
+- **Dual-mode `.md` viewer** — double-click any `.md` file (README, CHANGELOG, etc.) in the Project Explorer to open it in a new tab. A toolbar toggle switches between rendered preview and Monaco edit mode.
+- **GitHub-style rendering** — the preview uses GitHub-Flavored Markdown with styled headings, code blocks, tables, blockquotes, lists, and links, with full dark mode support.
+- **Edit and save** — edit markdown in the Monaco editor and save with Ctrl+S. A "Modified" indicator shows unsaved changes.
+
+### Improvements
+
+#### Accessibility
+- **Modal accessibility overhaul** — all 7 application modals now use a shared `useModalAccessibility` hook providing focus trapping (Tab/Shift+Tab cycling), Escape key dismissal, auto-focus on open, and focus restoration on close.
+- **ARIA attributes** — modals include `role="dialog"`, `aria-modal`, and `aria-labelledby`. Icon-only buttons have `aria-label` attributes.
+
+#### Architecture
+- **SearchContext extraction** — project-wide search/replace state and logic have been extracted from App.tsx into a dedicated `SearchContext` React context, reducing coupling and prop drilling.
+- **Type safety improvements** — replaced `any` types with specific interfaces (`ProjectLoadResult`, `ScanDirectoryResult`, `SerializedSprite`, `SerializedSceneComposition`) across IPC boundaries.
+- **Screen editor types** — added `ScreenModel` and `ScreenComponent` interfaces to `types.ts` for the upcoming visual screen editor.
+
+#### Developer
+- **Expanded test suite** — 260 tests across 14 test files (up from 161 tests across 5 files), covering modals, toolbar, search, snippets, toast, and the completion provider.
+- **`fs:readFile` IPC channel** — new channel for reading arbitrary file content from the renderer process.
+
+### Bug Fixes
+
+- **Conditional hook call in SettingsModal** — `useModalAccessibility` was called after an early return, violating React's rules of hooks. Moved the hook call before the guard so it executes unconditionally on every render. ([lint error])
+- **False-positive editor diagnostics** — fixed incorrect diagnostic highlighting in the editor where valid code was marked as having errors. Added a Ren'Py project structure check before applying diagnostics. ([#73](https://github.com/bluemoonfoundry/vangard-renpy-ide/issues/73))
+
+---
+
 ## [v0.6.0] — Public Beta 3
 
 ### New Features

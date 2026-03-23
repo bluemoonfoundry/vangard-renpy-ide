@@ -35,7 +35,7 @@ If you just want to install the application on your desktop and run it, you can 
 <img width="1964" height="1114" alt="Route Canvas" src="https://github.com/user-attachments/assets/62da186a-7505-406d-b66c-b4d7f9ed8d7e" />
 
 
-- **Integrated Code Editor**: A full-featured Monaco editor (the engine behind VS Code) is built-in for editing your script files directly within the app. The editor supports a **split-pane layout** (side-by-side or top/bottom) so you can view two files at once. Tabs can be dragged between panes.
+- **Integrated Code Editor**: A full-featured Monaco editor (the engine behind VS Code) is built-in for editing your script files directly within the app. The editor supports a **split-pane layout** (side-by-side or top/bottom) so you can view two files at once. Tabs can be dragged between panes. **Context-aware IntelliSense** provides autocomplete suggestions for labels, screens, images, characters, variables, and 28+ built-in Ren'Py code snippets.
 
 <img width="1233" height="1007" alt="Code Editor" src="https://github.com/user-attachments/assets/1aa05b75-7a9a-4356-b6a4-5a4589491a4e" />
 
@@ -61,6 +61,7 @@ If you just want to install the application on your desktop and run it, you can 
   Audio Viewer/Player:
   <img width="1537" height="1007" alt="Story Elements - Audio Viewer" src="https://github.com/user-attachments/assets/893ff1a3-72c7-48c7-ad5d-db547a6885b6" />
 
+- **Markdown Preview**: Double-click any `.md` file in the Project Explorer to open it in a tab with GitHub-style rendered preview. Toggle to edit mode for a full Monaco editor with Ctrl+S save support.
 - **File System Integration**: Works directly with your local project folders for a seamless development experience.
 - **Theme Support**: Personalize your workspace with multiple themes, including Light, Dark, Solarized, and Colorful variants.
 - **UI State Persistence**: The editor remembers your theme, sidebar layout, and open tabs between sessions for a consistent workflow.
@@ -138,7 +139,7 @@ This panel shows a tree view of your project's file system.
   - **Delete** items (this will delete them from your disk if you have a project folder open!).
   - **Cut, Copy, and Paste** files and folders to reorganize your project.
 - **Navigation**:
-  - Double-click an `.rpy` file to open it in the editor.
+  - Double-click an `.rpy` file to open it in the editor, or a `.md` file to open the Markdown preview.
   - Right-click an `.rpy` file and select "Center on Canvas" to locate its block in the visual editor.
 
 
@@ -182,8 +183,8 @@ This powerful panel analyzes your entire project to give you an overview of all 
   - Copy/paste generated code directly into Ren'Py code file
 
 - **Snippets Tab**:
-  - A handy library of common Ren'Py code patterns for dialogue, logic, visual effects, and more.
-  - Find the snippet you need and click **Copy** to paste it into your code.
+  - A library of common Ren'Py code patterns for dialogue, logic, visual effects, and more. Find the snippet you need and click **Copy** to paste it into your code.
+  - **User Snippets**: Create your own reusable code snippets with custom trigger prefixes. User snippets integrate with IntelliSense — type the prefix in the editor to expand them. Supports VS Code-style tab-stop placeholders for interactive expansion.
 
  #### PunchList (View Menu -> Punchlist)
  - A list of generated tasks is added to a list that is maintained with the project
