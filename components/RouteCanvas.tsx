@@ -312,12 +312,60 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [checkedRoutes, setCheckedRoutes] = useState(new Set<number>());
   const [activePopover, setActivePopover] = useState<ActivePopover | null>(null);
+  const [showLegend, setShowLegend] = useState(false);
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const interactionState = useRef<InteractionState>({ type: 'idle' });
   const pointerStartPos = useRef<Position>({ x: 0, y: 0 });
   const nodeMap = useMemo(() => new Map(labelNodes.map(n => [n.id, n])), [labelNodes]);
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0 });
+
+  // Derive start→end label names for each identified route
+  const routeLabels = useMemo(() => {
+    const map = new Map<number, { startLabel: string; endLabel: string }>();
+    const toLabel = (id: string) => nodeMap.get(id)?.label ?? id.split(':').slice(1).join(':');
+    identifiedRoutes.forEach(route => {
+      const links = routeLinks.filter(l => route.linkIds.has(l.id));
+      if (links.length === 0) return;
+      const sourceIds = new Set(links.map(l => l.sourceId));
+      const targetIds = new Set(links.map(l => l.targetId));
+      const startCandidates = [...sourceIds].filter(id => !targetIds.has(id));
+      const endCandidates = [...targetIds].filter(id => !sourceIds.has(id));
+      const startLabel = startCandidates.length > 0 ? toLabel(startCandidates[0]) : toLabel(links[0].sourceId);
+      const endLabel = endCandidates.length > 0 ? toLabel(endCandidates[endCandidates.length - 1]) : toLabel(links[links.length - 1].targetId);
+      map.set(route.id, { startLabel, endLabel });
+    });
+    return map;
+  }, [identifiedRoutes, routeLinks, nodeMap]);
+
+  // Entry nodes: no other label jumps to them
+  const entryNodeIds = useMemo(() => {
+    const targeted = new Set(routeLinks.map(l => l.targetId));
+    return new Set(labelNodes.filter(n => !targeted.has(n.id)).map(n => n.id));
+  }, [routeLinks, labelNodes]);
+
+  // Dead-end nodes: no outgoing jumps from them
+  const deadEndNodeIds = useMemo(() => {
+    const sourced = new Set(routeLinks.map(l => l.sourceId));
+    return new Set(labelNodes.filter(n => !sourced.has(n.id)).map(n => n.id));
+  }, [routeLinks, labelNodes]);
+
+  const fitToScreen = useCallback(() => {
+    if (labelNodes.length === 0 || !canvasRef.current) return;
+    const { width: cw, height: ch } = canvasRef.current.getBoundingClientRect();
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    labelNodes.forEach(n => {
+      minX = Math.min(minX, n.position.x);
+      minY = Math.min(minY, n.position.y);
+      maxX = Math.max(maxX, n.position.x + n.width);
+      maxY = Math.max(maxY, n.position.y + n.height);
+    });
+    const PAD = 80;
+    const scale = Math.min((cw - PAD * 2) / (maxX - minX), (ch - PAD * 2) / (maxY - minY), 2);
+    const tx = (cw - (maxX - minX) * scale) / 2 - minX * scale;
+    const ty = (ch - (maxY - minY) * scale) / 2 - minY * scale;
+    onTransformChange({ x: tx, y: ty, scale });
+  }, [labelNodes, onTransformChange]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -330,6 +378,16 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
     observer.observe(canvasRef.current);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (e.key === 'f' || e.key === 'F') fitToScreen();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [fitToScreen]);
 
   const handleToggleRoute = (routeId: number) => {
     setCheckedRoutes(prev => {
@@ -634,7 +692,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
       style={backgroundStyle}
       onPointerDown={handlePointerDown}
     >
-      <ViewRoutesPanel routes={identifiedRoutes} checkedRoutes={checkedRoutes} onToggleRoute={handleToggleRoute} />
+      <ViewRoutesPanel routes={identifiedRoutes} checkedRoutes={checkedRoutes} onToggleRoute={handleToggleRoute} routeLabels={routeLabels} />
       <div
         className="absolute top-0 left-0"
         style={{
@@ -737,6 +795,8 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
             onOpenEditor={onOpenEditor}
             isSelected={selectedNodeIds.includes(node.id)}
             isDragging={isDraggingSelection && selectedNodeIds.includes(node.id)}
+            isEntry={entryNodeIds.has(node.id)}
+            isDeadEnd={deadEndNodeIds.has(node.id)}
           />
         ))}
       </div>
@@ -750,6 +810,65 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
           />
         </>
       )}
+      {/* Bottom-left controls: Fit + Legend */}
+      <div className="absolute bottom-4 left-4 z-20 flex flex-col items-start gap-2">
+        <button
+          onClick={fitToScreen}
+          title="Fit all nodes to screen (F)"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-xs font-medium text-gray-700 dark:text-gray-200 shadow hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H5.414l3.293 3.293a1 1 0 11-1.414 1.414L4 6.414V8a1 1 0 01-2 0V4zm13 0a1 1 0 01.707.293l-3.293 3.293a1 1 0 01-1.414-1.414L15.586 3H14a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V5.414l-3.293 3.293A1 1 0 0112.293 7.29zM3 16a1 1 0 010-2V12.414l3.293-3.293a1 1 0 011.414 1.414L4.414 14H6a1 1 0 010 2H4a1 1 0 01-1-1zm13 1a1 1 0 01-.707-.293l-3.293-3.293a1 1 0 011.414-1.414L16.586 15H15a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V16.586l-3.293 3.293A1 1 0 0113.293 19.29z" clipRule="evenodd" />
+          </svg>
+          Fit
+        </button>
+
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow overflow-hidden">
+          <button
+            onClick={() => setShowLegend(v => !v)}
+            className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 transition-transform ${showLegend ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+            Legend
+          </button>
+          {showLegend && (
+            <div className="px-3 pb-3 pt-1 space-y-2 text-xs text-gray-600 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-2">
+                <svg width="28" height="10" className="shrink-0">
+                  <path d="M0,5 L20,5" stroke="#4f46e5" strokeWidth="2.5" fill="none" />
+                  <polygon points="18,2 26,5 18,8" fill="#4f46e5" />
+                </svg>
+                Jump / Call
+              </div>
+              <div className="flex items-center gap-2">
+                <svg width="28" height="10" className="shrink-0">
+                  <path d="M0,5 L20,5" stroke="#94a3b8" strokeWidth="2.5" fill="none" strokeDasharray="4,2" />
+                  <polygon points="18,2 26,5 18,8" fill="#94a3b8" />
+                </svg>
+                Implicit flow
+              </div>
+              <div className="flex items-center gap-2">
+                <svg width="16" height="16" className="shrink-0">
+                  <circle cx="8" cy="8" r="7" fill="#4f46e5" opacity="0.9" />
+                  <text x="8" y="8" textAnchor="middle" dominantBaseline="central" fontSize="7" fontWeight="bold" fill="white">2</text>
+                </svg>
+                Menu choices
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 shrink-0 rounded-full bg-green-500 border-2 border-white dark:border-gray-800 inline-block" />
+                Entry point
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 shrink-0 rounded-full bg-amber-500 border-2 border-white dark:border-gray-800 inline-block" />
+                Dead end
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       <Minimap
         items={minimapItems}
         transform={transform}
