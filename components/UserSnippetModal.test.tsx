@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import UserSnippetModal from './UserSnippetModal';
@@ -91,8 +91,9 @@ describe('UserSnippetModal', () => {
 
     await user.type(screen.getByPlaceholderText('My Custom Snippet'), 'Labeled');
     await user.type(screen.getByPlaceholderText('mysnippet'), 'labeled');
-    // Use fireEvent.change because userEvent.type interprets { } as special keys
-    fireEvent.change(screen.getByPlaceholderText(/Hello, world/), { target: { value: 'label ${1:name}:\n    $0' } });
+    // Use escaped braces ({{ = literal {, }} = literal }) and {Enter} for newline
+    // to avoid userEvent interpreting $ { } as special sequences
+    await user.type(screen.getByPlaceholderText(/Hello, world/), 'label ${{1:name}:{Enter}    $0');
     await user.click(screen.getByRole('checkbox'));
     await user.click(screen.getByText('Create Snippet'));
 
