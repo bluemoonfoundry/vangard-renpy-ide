@@ -386,6 +386,9 @@ export interface JumpLocation {
   line: number;
   columnStart: number;
   columnEnd: number;
+  choiceText?: string;      // Set when this jump is inside a menu choice block
+  choiceCondition?: string; // The `if <expr>` guard on the choice, if any
+  menuLine?: number;        // 1-based line of the `menu:` keyword (groups choices in the same menu)
 }
 
 /**
@@ -437,6 +440,10 @@ export interface RouteLink {
   sourceId: string;
   targetId: string;
   type: 'jump' | 'call' | 'implicit';
+  choiceText?: string;      // Set when this link originated from a menu choice jump
+  choiceCondition?: string; // The `if <expr>` guard on the choice, if any
+  sourceLine?: number;      // Line number of the jump statement (for "Open in editor")
+  menuLine?: number;        // Line of the `menu:` keyword — groups all edges from the same menu
 }
 
 /**
@@ -504,6 +511,7 @@ export interface RenpyAnalysisResult {
   routeLinks: RouteLink[];
   identifiedRoutes: IdentifiedRoute[];
 }
+
 
 /**
  * Represents a single open tab in the main editor UI.

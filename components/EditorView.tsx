@@ -12,6 +12,9 @@ import type { Block, RenpyAnalysisResult, ToastMessage, UserSnippet } from '../t
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import { detectContext, getRenpyCompletions } from '../lib/renpyCompletionProvider';
 import type { RenpyCompletionData } from '../lib/renpyCompletionProvider';
+import { validateRenpyCode } from '../lib/renpyValidator';
+import DialoguePreview from './DialoguePreview';
+import type { DialoguePreviewData, MenuChoice } from './DialoguePreview';
 
 interface EditorViewProps {
   block: Block;
@@ -44,6 +47,148 @@ const JUMP_REGEX = /\b(jump|call)\s+([a-zA-Z0-9_]+)/g;
 const AUDIO_USAGE_REGEX = /^\s*(?:play|queue)\s+\w+\s+(.+)/;
 // Ren'Py keywords that follow `jump`/`call` but are not label targets.
 const JUMP_KEYWORD_TARGETS = new Set(['expression', 'screen']);
+
+// Ren'Py statement keywords — a line starting with one of these is NOT dialogue.
+const RENPY_STATEMENT_KEYWORDS = new Set([
+  'show', 'hide', 'scene', 'play', 'queue', 'stop', 'pause', 'with', 'window',
+  'define', 'default', 'init', 'label', 'jump', 'call', 'return', 'if', 'elif',
+  'else', 'for', 'while', 'pass', 'menu', 'image', 'transform', 'style', 'screen',
+  'python', 'translate', 'nvl', 'voice', 'renpy', 'config', 'gui', 'at', 'as',
+  'behind', 'onlayer', 'zorder', 'expression', 'extend', 'camera',
+]);
+
+function getIndent(line: string): number {
+  return line.match(/^(\s*)/)?.[1].length ?? 0;
+}
+
+function parseDialogueLine(
+  line: string,
+  characters: RenpyAnalysisResult['characters']
+): DialoguePreviewData | null {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('$')) return null;
+
+  // Character dialogue: tag "text"
+  const charMatch = trimmed.match(/^([a-zA-Z_]\w*)\s+"((?:[^"\\]|\\.)*)"/);
+  if (charMatch) {
+    const tag = charMatch[1];
+    if (RENPY_STATEMENT_KEYWORDS.has(tag)) return null;
+    const text = charMatch[2];
+    const char = characters.get(tag);
+    return {
+      kind: 'dialogue',
+      charName: char?.name ?? tag,
+      charColor: char?.color ?? null,
+      text,
+      whoPrefix: char?.who_prefix,
+      whoSuffix: char?.who_suffix,
+      whatPrefix: char?.what_prefix,
+      whatSuffix: char?.what_suffix,
+    };
+  }
+
+  // Narrator dialogue: "text"
+  const narrMatch = trimmed.match(/^"((?:[^"\\]|\\.)*)"/);
+  if (narrMatch) {
+    return { kind: 'dialogue', charName: null, charColor: null, text: narrMatch[1] };
+  }
+
+  return null;
+}
+
+function parseMenuBlock(
+  lines: string[],
+  cursorLineIdx: number // 0-indexed
+): DialoguePreviewData | null {
+  // Scan upward from cursor to find the enclosing menu: line
+  let menuLineIdx = -1;
+  let menuIndent = -1;
+
+  for (let i = cursorLineIdx; i >= 0; i--) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    if (/^\s*menu\s*:/.test(line)) {
+      menuLineIdx = i;
+      menuIndent = getIndent(line);
+      break;
+    }
+
+    // Stop if we reach a block-level statement that closes any menu scope
+    const indent = getIndent(line);
+    if (indent <= (menuIndent === -1 ? 0 : menuIndent) && trimmed && !trimmed.startsWith('#')) {
+      if (menuLineIdx === -1) break; // Haven't found menu yet, stop early
+    }
+  }
+
+  if (menuLineIdx === -1) return null;
+
+  // Detect choice indent — first non-empty line inside the menu block
+  let choiceIndent = -1;
+  for (let i = menuLineIdx + 1; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const indent = getIndent(line);
+    if (indent <= menuIndent) return null; // Empty menu
+    choiceIndent = indent;
+    break;
+  }
+
+  if (choiceIndent === -1) return null;
+
+  // Parse choices and prompt
+  const choices: MenuChoice[] = [];
+  let prompt: string | undefined;
+  let menuEndIdx = lines.length;
+
+  for (let i = menuLineIdx + 1; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    const indent = getIndent(line);
+    if (indent <= menuIndent) {
+      menuEndIdx = i;
+      break;
+    }
+
+    if (indent === choiceIndent) {
+      // Choice line: "text" [optional condition]:
+      // Be permissive — capture anything between the closing quote and the colon.
+      const choiceMatch = trimmed.match(/^"((?:[^"\\]|\\.)*)"(.*)?:/);
+      if (choiceMatch) {
+        const rawCond = choiceMatch[2]?.trim();
+        let condition: string | undefined;
+        if (rawCond) {
+          const ifMatch = rawCond.match(/^if\s+(.+)$/);
+          condition = ifMatch ? ifMatch[1].trim() : rawCond;
+        }
+        choices.push({ text: choiceMatch[1], condition });
+      } else if (choices.length === 0 && !prompt) {
+        // Prompt string: "text" with no colon
+        const promptMatch = trimmed.match(/^"((?:[^"\\]|\\.)*)"$/);
+        if (promptMatch) prompt = promptMatch[1];
+      }
+    } else if (indent > choiceIndent && choices.length > 0) {
+      // Inside a choice body — capture first jump or call as destination
+      const last = choices[choices.length - 1];
+      if (!last.destination) {
+        const jumpMatch = trimmed.match(/^jump\s+([a-zA-Z_]\w*)/);
+        const callMatch = trimmed.match(/^call\s+([a-zA-Z_]\w*)/);
+        if (jumpMatch) last.destination = jumpMatch[1];
+        else if (callMatch) last.destination = callMatch[1];
+      }
+    }
+  }
+
+  // Confirm cursor falls within the parsed menu block
+  if (cursorLineIdx < menuLineIdx || cursorLineIdx >= menuEndIdx) return null;
+  if (choices.length === 0) return null;
+
+  return { kind: 'menu', prompt, choices };
+}
 
 const Breadcrumbs: React.FC<{ filePath?: string, context?: string }> = ({ filePath, context }) => {
     if (!filePath) return null;
@@ -102,7 +247,10 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const decorationIds = useRef<string[]>([]);
   const draftingDecorationIds = useRef<string[]>([]);
   const [currentContext, setCurrentContext] = useState<string>('');
-  
+  const [dialoguePreview, setDialoguePreview] = useState<DialoguePreviewData | null>(null);
+  const [isDialoguePreviewExpanded, setIsDialoguePreviewExpanded] = useState(true);
+  const setDialoguePreviewRef = useRef(setDialoguePreview);
+
   // Track dirty state internally to prevent redundant updates
   const isDirtyRef = useRef(false);
 
@@ -130,12 +278,23 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     userSnippetsRef.current = props.userSnippets;
   }, [onDirtyChange, onTriggerSave, block, onSwitchFocusBlock, analysisResult, onEditorUnmount, onCursorPositionChange, onContentChange, props.userSnippets]);
 
-  // This effect resets the internal dirty flag when the block content is updated
-  // from an external source (like a save operation). This ensures the component can
-  // correctly detect the next user edit and report it.
+  // This effect syncs the Monaco model when block.content is updated externally
+  // (e.g. the character editor rewrites a define statement, or a file is reloaded).
+  // If the editor has no pending user edits, we push the new content into the model.
+  // If the user has edits in progress, we leave Monaco alone and only clear the
+  // dirty flag once the content comes back into sync (i.e. after a save).
   useEffect(() => {
-    if (editorRef.current) {
-        const isNowDirty = editorRef.current.getValue() !== block.content;
+    if (!editorRef.current) return;
+    const model = editorRef.current.getModel();
+    if (!model) return;
+
+    const editorValue = model.getValue();
+    if (editorValue !== block.content && !isDirtyRef.current) {
+        // External update with no pending user edits — sync Monaco.
+        model.setValue(block.content);
+    } else {
+        // Either already in sync, or user has pending edits; just update dirty tracking.
+        const isNowDirty = editorValue !== block.content;
         if (isDirtyRef.current && !isNowDirty) {
             isDirtyRef.current = false;
         }
@@ -317,6 +476,21 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       }
     });
 
+    // Syntax validation rules (show expression, play/queue channels, define/default, etc.)
+    const syntaxDiags = validateRenpyCode(code);
+    for (const d of syntaxDiags) {
+      markers.push({
+        startLineNumber: d.startLineNumber,
+        startColumn: d.startColumn,
+        endLineNumber: d.endLineNumber,
+        endColumn: d.endColumn,
+        message: d.message,
+        severity: d.severity === 'error'
+          ? monacoInstance.MarkerSeverity.Error
+          : monacoInstance.MarkerSeverity.Warning,
+      });
+    }
+
     return markers;
   };
 
@@ -361,6 +535,15 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     editor.focus();
     setIsMounted(true);
     updateContext();
+
+    // Scroll to the requested line on initial mount (the useEffect approach fires
+    // before editorRef is set, so new-tab scroll requests need handling here too)
+    if (initialScrollRequest) {
+      setTimeout(() => {
+        editor.revealLineInCenter(initialScrollRequest.line, monacoInstance.editor.ScrollType.Smooth);
+        editor.setPosition({ lineNumber: initialScrollRequest.line, column: 1 });
+      }, 50);
+    }
 
     aiFeaturesEnabledContextKey.current = editor.createContextKey('aiFeaturesEnabled', enableAiFeatures);
 
@@ -407,7 +590,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         }
 
         const markers = performValidation(currentContent, monacoInstance);
-        monacoInstance.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
+        monacoInstance.editor.setModelMarkers(editor.getModel()!, 'renpy-syntax', markers);
 
         // Debounced sync of editor content to React state so that
         // the analysis engine (links, labels, routes) stays up-to-date
@@ -423,7 +606,20 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     editor.onDidChangeCursorPosition(() => {
         updateContext();
         const pos = editor.getPosition();
-        if (pos) onCursorPositionChangeRef.current?.({ line: pos.lineNumber, column: pos.column });
+        if (pos) {
+            onCursorPositionChangeRef.current?.({ line: pos.lineNumber, column: pos.column });
+            const model = editor.getModel();
+            if (model) {
+                const lineText = model.getLineContent(pos.lineNumber);
+                const dialogue = parseDialogueLine(lineText, analysisResultRef.current.characters);
+                if (dialogue) {
+                    setDialoguePreviewRef.current(dialogue);
+                } else {
+                    const allLines = model.getValue().split('\n');
+                    setDialoguePreviewRef.current(parseMenuBlock(allLines, pos.lineNumber - 1));
+                }
+            }
+        }
     });
 
     editor.addAction({
@@ -491,7 +687,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     });
 
     const markers = performValidation(editor.getValue(), monacoInstance);
-    monacoInstance.editor.setModelMarkers(editor.getModel()!, 'renpy', markers);
+    monacoInstance.editor.setModelMarkers(editor.getModel()!, 'renpy-syntax', markers);
   };
   
   useEffect(() => {
@@ -527,7 +723,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
               severity: monacoInstance.MarkerSeverity.Error,
           }));
 
-      monacoInstance.editor.setModelMarkers(model, 'renpy', markers);
+      monacoInstance.editor.setModelMarkers(model, 'renpy-jumps', markers);
   }, [analysisResult, isMounted]);
   
   useEffect(() => {
@@ -748,28 +944,35 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
             }
         `}</style>
       <Breadcrumbs filePath={block.filePath} context={currentContext} />
-      <Editor
-        height="100%"
-        defaultLanguage="renpy"
-        path={block.filePath || block.id}
-        defaultValue={block.content}
-        theme={editorTheme === 'dark' ? 'renpy-dark' : 'renpy-light'}
-        onMount={handleEditorDidMount}
-        beforeMount={handleEditorWillMount}
-        options={{
-          minimap: { enabled: true },
-          fontSize: editorFontSize,
-          fontFamily: editorFontFamily,
-          wordWrap: 'on',
-          scrollBeyondLastLine: false,
-          automaticLayout: true,
-          tabSize: 4,
-          insertSpaces: true,
-          hover: {
-              enabled: true,
-              delay: 300,
-          }
-        }}
+      <div className="flex-1 min-h-0">
+        <Editor
+          height="100%"
+          defaultLanguage="renpy"
+          path={block.filePath || block.id}
+          defaultValue={block.content}
+          theme={editorTheme === 'dark' ? 'renpy-dark' : 'renpy-light'}
+          onMount={handleEditorDidMount}
+          beforeMount={handleEditorWillMount}
+          options={{
+            minimap: { enabled: true },
+            fontSize: editorFontSize,
+            fontFamily: editorFontFamily,
+            wordWrap: 'on',
+            scrollBeyondLastLine: false,
+            automaticLayout: true,
+            tabSize: 4,
+            insertSpaces: true,
+            hover: {
+                enabled: true,
+                delay: 300,
+            }
+          }}
+        />
+      </div>
+      <DialoguePreview
+        data={dialoguePreview}
+        isExpanded={isDialoguePreviewExpanded}
+        onToggleExpand={() => setIsDialoguePreviewExpanded(prev => !prev)}
       />
     </div>
   );

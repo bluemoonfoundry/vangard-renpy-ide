@@ -84,6 +84,76 @@ function parseCharacterArgs(argsString: string): { positional: string[]; kwargs:
   return { positional, kwargs };
 }
 
+interface ChoiceContext { text: string; condition?: string; menuLine: number; }
+
+/**
+ * Builds a map from 1-based line number → { text, condition } for all lines
+ * that fall inside a menu choice block in the given Ren'Py content. Used to
+ * annotate jumps/calls with the choice text (and optional guard condition) that
+ * triggered them.
+ */
+function buildMenuChoiceContextMap(content: string): Map<number, ChoiceContext> {
+  const map = new Map<number, ChoiceContext>();
+  const lines = content.split('\n').map(l => l.endsWith('\r') ? l.slice(0, -1) : l);
+
+  let menuIndent = -1;
+  let menuLine = 0;
+  let choiceIndent = -1;
+  let currentCtx: ChoiceContext | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    if (!raw.trim()) continue; // blank lines don't reset state
+
+    const indent = raw.length - raw.trimStart().length;
+    const trimmed = raw.trim();
+    const commentIdx = trimmed.indexOf('#');
+    const code = commentIdx >= 0 ? trimmed.slice(0, commentIdx).trimEnd() : trimmed;
+
+    // Detect "menu:" or "menu label:" line
+    if (/^menu(\s+\w+)?\s*:/.test(code)) {
+      menuIndent = indent;
+      menuLine = i + 1; // 1-based line of the menu: keyword
+      choiceIndent = -1;
+      currentCtx = null;
+      continue;
+    }
+
+    if (menuIndent >= 0) {
+      if (indent <= menuIndent) {
+        // Unindented back to or past menu level — menu ended
+        menuIndent = -1;
+        choiceIndent = -1;
+        currentCtx = null;
+        if (/^menu(\s+\w+)?\s*:/.test(code)) {
+          menuIndent = indent;
+          menuLine = i + 1;
+        }
+      } else if (choiceIndent < 0) {
+        // First indented line establishes choice indent level
+        const m = code.match(/^"([^"]*)"\s*(?:if\s+([^:]+?))?\s*:/);
+        if (m) {
+          choiceIndent = indent;
+          currentCtx = { text: m[1], condition: m[2]?.trim(), menuLine };
+        }
+      } else if (indent === choiceIndent) {
+        // Another choice at the same level
+        const m = code.match(/^"([^"]*)"\s*(?:if\s+([^:]+?))?\s*:/);
+        if (m) {
+          currentCtx = { text: m[1], condition: m[2]?.trim(), menuLine };
+        } else {
+          currentCtx = null;
+        }
+      } else if (currentCtx && indent > choiceIndent) {
+        // Inside a choice's body
+        map.set(i + 1, currentCtx);
+      }
+    }
+  }
+
+  return map;
+}
+
 export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
   const result: RenpyAnalysisResult = {
     labels: {},
@@ -215,6 +285,7 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
     if (block.content.includes('python:')) blockTypes.add('python');
 
     const lines = block.content.split('\n');
+    const choiceCtxMap = buildMenuChoiceContextMap(block.content);
     lines.forEach((line, index) => {
       let sanitizedLine = line.replace(/"[^"\\]*(?:\\.[^"\\]*)*"/g, '""').replace(/'[^'\\]*(?:\\.[^'\\]*)*'/g, "''");
       const commentIndex = sanitizedLine.indexOf('#');
@@ -233,6 +304,9 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
         const jumpLocation: JumpLocation = {
             blockId: block.id, target: targetLabel, type: jumpType, isDynamic: true, line: index + 1,
             columnStart: match.index + match[0].indexOf(targetLabel), columnEnd: match.index + match[0].indexOf(targetLabel) + targetLabel.length,
+            choiceText: choiceCtxMap.get(index + 1)?.text,
+            choiceCondition: choiceCtxMap.get(index + 1)?.condition,
+            menuLine: choiceCtxMap.get(index + 1)?.menuLine,
         };
         result.jumps[block.id].push(jumpLocation);
 
@@ -259,6 +333,9 @@ export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
           const jumpLocation: JumpLocation = {
             blockId: block.id, target: targetLabel, type: jumpType, isDynamic: false, line: index + 1,
             columnStart: match.index + match[1].length + 1, columnEnd: match.index + match[1].length + 1 + targetLabel.length,
+            choiceText: choiceCtxMap.get(index + 1)?.text,
+            choiceCondition: choiceCtxMap.get(index + 1)?.condition,
+            menuLine: choiceCtxMap.get(index + 1)?.menuLine,
           };
           result.jumps[block.id].push(jumpLocation);
 
@@ -482,7 +559,7 @@ export const performRouteAnalysis = (
         if (targetLabelDef && targetLabelDef.type !== 'menu') {
             const sourceNodeId = `${block.id}:${sourceLabel.label}`;
             const targetNodeId = `${targetLabelDef.blockId}:${targetLabelDef.label}`;
-            routeLinks.push({ id: `rlink-${routeLinkIdCounter++}`, sourceId: sourceNodeId, targetId: targetNodeId, type: jump.type });
+            routeLinks.push({ id: `rlink-${routeLinkIdCounter++}`, sourceId: sourceNodeId, targetId: targetNodeId, type: jump.type, choiceText: jump.choiceText, choiceCondition: jump.choiceCondition, sourceLine: jump.line, menuLine: jump.menuLine });
         }
     });
 

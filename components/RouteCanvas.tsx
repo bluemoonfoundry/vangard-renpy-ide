@@ -27,6 +27,22 @@ interface RouteCanvasProps {
 
 interface Rect { x: number; y: number; width: number; height: number; }
 
+interface MenuPopoverChoice {
+  choiceText: string;
+  choiceCondition?: string;
+  targetLabel: string;
+  sourceLine?: number;
+  blockId: string;
+}
+
+interface ActivePopover {
+  sourceLabel: string;
+  menuLine: number;
+  choices: MenuPopoverChoice[];
+  x: number;
+  y: number;
+}
+
 const getAttachmentPoint = (node: LabelNode, side: 'left' | 'right' | 'top' | 'bottom'): Position => {
     switch(side) {
         case 'left': return { x: node.position.x, y: node.position.y + node.height / 2 };
@@ -93,26 +109,24 @@ const getOptimalPath = (sourceNode: LabelNode, targetNode: LabelNode): [Position
     return bestPath;
 };
 
-const Arrow: React.FC<{ 
-  sourcePos: Position; 
+const Arrow: React.FC<{
+  sourcePos: Position;
   targetPos: Position;
   type: RouteLink['type'];
   color: string;
   isDimmed: boolean;
 }> = ({ sourcePos, targetPos, type, color, isDimmed }) => {
     const isVertical = Math.abs(targetPos.y - sourcePos.y) > Math.abs(targetPos.x - sourcePos.x);
-    
+
     let pathData: string;
-    
+
     if (isVertical) {
         const dy = targetPos.y - sourcePos.y;
         const midY = sourcePos.y + dy / 2;
-        // Cubic Bezier for vertical flow (Top-Down)
         pathData = `M${sourcePos.x},${sourcePos.y} C${sourcePos.x},${midY} ${targetPos.x},${midY} ${targetPos.x},${targetPos.y}`;
     } else {
         const dx = targetPos.x - sourcePos.x;
         const midX = sourcePos.x + dx / 2;
-        // Cubic Bezier for horizontal flow (Left-Right)
         pathData = `M${sourcePos.x},${sourcePos.y} C${midX},${sourcePos.y} ${midX},${targetPos.y} ${targetPos.x},${targetPos.y}`;
     }
 
@@ -128,6 +142,38 @@ const Arrow: React.FC<{
           />
         </g>
     );
+};
+
+const MenuPill: React.FC<{
+  cx: number;
+  cy: number;
+  count: number;
+  color: string;
+  onClick: (e: React.MouseEvent<SVGGElement>) => void;
+}> = ({ cx, cy, count, color, onClick }) => {
+  const R = 11;
+  return (
+    <g
+      style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+      onPointerDown={e => e.stopPropagation()}
+      onClick={onClick}
+    >
+      <circle cx={cx} cy={cy} r={R + 4} fill="transparent" />
+      <circle cx={cx} cy={cy} r={R} fill={color} opacity={0.95} />
+      <circle cx={cx} cy={cy} r={R} fill="none" stroke="white" strokeWidth={1.5} opacity={0.4} />
+      <text
+        x={cx} y={cy}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize={10}
+        fontFamily="sans-serif"
+        fontWeight="700"
+        fill="white"
+      >
+        {count > 9 ? '9+' : count}
+      </text>
+    </g>
+  );
 };
 
 const RubberBand: React.FC<{ rect: Rect }> = ({ rect }) => {
@@ -177,7 +223,84 @@ const BlockContainer: React.FC<{
     );
 };
 
-type InteractionState = 
+const MenuPopover: React.FC<{
+  popover: ActivePopover;
+  onClose: () => void;
+  onOpenEditor: (blockId: string, line: number) => void;
+}> = ({ popover, onClose, onOpenEditor }) => {
+  const { sourceLabel, menuLine, choices, x, y } = popover;
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  const firstChoice = choices[0];
+
+  return (
+    <div
+      className="absolute z-50 w-72 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl text-sm"
+      style={{ left: x, top: y }}
+      onPointerDown={e => e.stopPropagation()}
+      onClick={e => e.stopPropagation()}
+    >
+      <div className="px-3 py-2.5 flex items-center gap-2 border-b border-gray-100 dark:border-gray-700">
+        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Menu</span>
+        <span className="font-mono text-xs text-indigo-600 dark:text-indigo-400 truncate flex-1">{sourceLabel}</span>
+        <button
+          className="shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+          onClick={onClose}
+          aria-label="Close"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <ul className="divide-y divide-gray-100 dark:divide-gray-700 max-h-64 overflow-y-auto">
+        {choices.map((choice, i) => (
+          <li key={i} className="px-3 py-2">
+            <div className="flex items-start gap-2">
+              <span className="shrink-0 mt-0.5 w-4 h-4 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold flex items-center justify-center">
+                {i + 1}
+              </span>
+              <div className="min-w-0">
+                <p className="text-gray-900 dark:text-gray-100 leading-snug break-words">
+                  &ldquo;{choice.choiceText}&rdquo;
+                </p>
+                {choice.choiceCondition && (
+                  <span className="mt-1 text-xs font-mono text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 rounded px-1 py-px inline-block">
+                    if {choice.choiceCondition}
+                  </span>
+                )}
+                <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+                  → <span className="font-mono text-indigo-500 dark:text-indigo-400">{choice.targetLabel}</span>
+                </p>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {firstChoice && (
+        <>
+          <div className="border-t border-gray-100 dark:border-gray-700" />
+          <div className="px-3 py-2 flex items-center justify-between">
+            <span className="text-xs text-gray-400 dark:text-gray-500">line {menuLine}</span>
+            <button
+              className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 hover:underline"
+              onClick={() => { onOpenEditor(firstChoice.blockId, menuLine); onClose(); }}
+            >
+              Open in editor ↗
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+type InteractionState =
   | { type: 'idle' }
   | { type: 'panning'; }
   | { type: 'rubber-band'; start: Position; }
@@ -188,6 +311,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [checkedRoutes, setCheckedRoutes] = useState(new Set<number>());
+  const [activePopover, setActivePopover] = useState<ActivePopover | null>(null);
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const interactionState = useRef<InteractionState>({ type: 'idle' });
@@ -234,6 +358,63 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
     });
     return colorMap;
   }, [checkedRoutes, identifiedRoutes]);
+
+  // Group visible choice links by (sourceId, menuLine) for per-menu pills
+  const menuGroups = useMemo(() => {
+    const groups = new Map<string, { links: RouteLink[]; sourcePos: Position }[]>();
+    routeLinks.forEach(link => {
+      if (!link.choiceText || link.menuLine === undefined) return;
+      if (linkColors && !linkColors.has(link.id)) return; // only show when route is highlighted
+      const sourceNode = nodeMap.get(link.sourceId);
+      const targetNode = nodeMap.get(link.targetId);
+      if (!sourceNode || !targetNode) return;
+      const [srcPos] = getOptimalPath(sourceNode, targetNode);
+      const key = `${link.sourceId}::${link.menuLine}`;
+      const existing = groups.get(key);
+      if (existing) {
+        existing[0].links.push(link);
+        existing[0].sourcePos = {
+          x: (existing[0].sourcePos.x * (existing[0].links.length - 1) + srcPos.x) / existing[0].links.length,
+          y: (existing[0].sourcePos.y * (existing[0].links.length - 1) + srcPos.y) / existing[0].links.length,
+        };
+      } else {
+        groups.set(key, [{ links: [link], sourcePos: srcPos }]);
+      }
+    });
+    return groups;
+  }, [routeLinks, linkColors, nodeMap]);
+
+  const handleMenuPillClick = useCallback((e: React.MouseEvent<SVGGElement>, groupKey: string) => {
+    e.stopPropagation();
+    if (!canvasRef.current) return;
+    const group = menuGroups.get(groupKey);
+    if (!group) return;
+    const { links } = group[0];
+    const firstLink = links[0];
+
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const clickX = e.clientX - canvasRect.left;
+    const clickY = e.clientY - canvasRect.top;
+
+    const POPOVER_W = 288; // w-72
+    const POPOVER_H = 80 + links.length * 56; // approximate
+
+    let px = clickX + 12;
+    let py = clickY - POPOVER_H - 8;
+    if (px + POPOVER_W > canvasRect.width - 8) px = clickX - POPOVER_W - 12;
+    if (py < 8) py = clickY + 12;
+
+    const sourceLabel = nodeMap.get(firstLink.sourceId)?.label ?? firstLink.sourceId.split(':').slice(1).join(':');
+    const choices: MenuPopoverChoice[] = links.map(link => ({
+      choiceText: link.choiceText!,
+      choiceCondition: link.choiceCondition,
+      targetLabel: nodeMap.get(link.targetId)?.label ?? link.targetId.split(':').slice(1).join(':'),
+      sourceLine: link.sourceLine,
+      blockId: link.sourceId.split(':')[0],
+    }));
+
+    setActivePopover({ sourceLabel, menuLine: firstLink.menuLine!, choices, x: px, y: py });
+  }, [canvasRef, menuGroups, nodeMap]);
 
   // Compute Group Bounding Boxes
   const blockGroups = useMemo(() => {
@@ -512,6 +693,38 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
 
               return <Arrow key={link.id} sourcePos={sourcePos} targetPos={targetPos} type={link.type} color={color} isDimmed={isDimmed} />;
             })}
+            {/* One pill per menu group — offset outward from the node boundary */}
+            {Array.from(menuGroups.entries()).map(([key, group]) => {
+              const { links, sourcePos } = group[0];
+              const firstLink = links[0];
+              const color = linkColors?.get(firstLink.id) ?? '#4f46e5';
+
+              // Push the pill outward past the node edge so it isn't obscured
+              const sourceNode = nodeMap.get(firstLink.sourceId);
+              let cx = sourcePos.x;
+              let cy = sourcePos.y;
+              if (sourceNode) {
+                const ncx = sourceNode.position.x + sourceNode.width / 2;
+                const ncy = sourceNode.position.y + sourceNode.height / 2;
+                const dx = sourcePos.x - ncx;
+                const dy = sourcePos.y - ncy;
+                const dist = Math.hypot(dx, dy) || 1;
+                const offset = 11 + 10; // pill radius + gap
+                cx = sourcePos.x + (dx / dist) * offset;
+                cy = sourcePos.y + (dy / dist) * offset;
+              }
+
+              return (
+                <MenuPill
+                  key={key}
+                  cx={cx}
+                  cy={cy}
+                  count={links.length}
+                  color={color}
+                  onClick={(e) => handleMenuPillClick(e, key)}
+                />
+              );
+            })}
           </g>
         </svg>
 
@@ -527,6 +740,16 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
           />
         ))}
       </div>
+      {activePopover && (
+        <>
+          <div className="absolute inset-0 z-40" onClick={() => setActivePopover(null)} />
+          <MenuPopover
+            popover={activePopover}
+            onClose={() => setActivePopover(null)}
+            onOpenEditor={onOpenEditor}
+          />
+        </>
+      )}
       <Minimap
         items={minimapItems}
         transform={transform}
