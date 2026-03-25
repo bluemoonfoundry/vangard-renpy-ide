@@ -33,14 +33,14 @@ interface MenuPopoverChoice {
   targetLabel: string;
   sourceLine?: number;
   blockId: string;
+  routeColors: string[]; // colors of currently-checked routes that include this choice
 }
 
-interface ActivePopover {
+interface SelectedMenu {
+  groupKey: string;
   sourceLabel: string;
   menuLine: number;
   choices: MenuPopoverChoice[];
-  x: number;
-  y: number;
 }
 
 const getAttachmentPoint = (node: LabelNode, side: 'left' | 'right' | 'top' | 'bottom'): Position => {
@@ -140,6 +140,9 @@ const Arrow: React.FC<{
               strokeDasharray={type === 'implicit' ? "10, 6" : "none"}
               markerEnd={`url(#arrowhead-${color.replace('#', '')})`}
           />
+          {type === 'call' && (
+            <circle cx={sourcePos.x} cy={sourcePos.y} r={5} fill="none" stroke={color} strokeWidth={2.5} />
+          )}
         </g>
     );
 };
@@ -149,8 +152,9 @@ const MenuPill: React.FC<{
   cy: number;
   count: number;
   color: string;
+  isActive: boolean;
   onClick: (e: React.MouseEvent<SVGGElement>) => void;
-}> = ({ cx, cy, count, color, onClick }) => {
+}> = ({ cx, cy, count, color, isActive, onClick }) => {
   const R = 11;
   return (
     <g
@@ -159,8 +163,9 @@ const MenuPill: React.FC<{
       onClick={onClick}
     >
       <circle cx={cx} cy={cy} r={R + 4} fill="transparent" />
+      {isActive && <circle cx={cx} cy={cy} r={R + 3} fill="none" stroke="white" strokeWidth={2.5} opacity={0.85} />}
       <circle cx={cx} cy={cy} r={R} fill={color} opacity={0.95} />
-      <circle cx={cx} cy={cy} r={R} fill="none" stroke="white" strokeWidth={1.5} opacity={0.4} />
+      <circle cx={cx} cy={cy} r={R} fill="none" stroke="white" strokeWidth={isActive ? 2 : 1.5} opacity={isActive ? 0.9 : 0.4} />
       <text
         x={cx} y={cy}
         textAnchor="middle"
@@ -223,78 +228,83 @@ const BlockContainer: React.FC<{
     );
 };
 
-const MenuPopover: React.FC<{
-  popover: ActivePopover;
-  onClose: () => void;
+const MenuInspectorPanel: React.FC<{
+  selectedMenu: SelectedMenu | null;
+  isOpen: boolean;
+  onToggle: () => void;
   onOpenEditor: (blockId: string, line: number) => void;
-}> = ({ popover, onClose, onOpenEditor }) => {
-  const { sourceLabel, menuLine, choices, x, y } = popover;
-
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [onClose]);
-
-  const firstChoice = choices[0];
-
+}> = ({ selectedMenu, isOpen, onToggle, onOpenEditor }) => {
+  const firstChoice = selectedMenu?.choices[0];
   return (
     <div
-      className="absolute z-50 w-72 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl text-sm"
-      style={{ left: x, top: y }}
+      className="absolute top-4 left-4 z-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 w-64 overflow-hidden"
       onPointerDown={e => e.stopPropagation()}
-      onClick={e => e.stopPropagation()}
     >
-      <div className="px-3 py-2.5 flex items-center gap-2 border-b border-gray-100 dark:border-gray-700">
-        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Menu</span>
-        <span className="font-mono text-xs text-indigo-600 dark:text-indigo-400 truncate flex-1">{sourceLabel}</span>
-        <button
-          className="shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-          onClick={onClose}
-          aria-label="Close"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
-          </svg>
-        </button>
-      </div>
-      <ul className="divide-y divide-gray-100 dark:divide-gray-700 max-h-64 overflow-y-auto">
-        {choices.map((choice, i) => (
-          <li key={i} className="px-3 py-2">
-            <div className="flex items-start gap-2">
-              <span className="shrink-0 mt-0.5 w-4 h-4 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold flex items-center justify-center">
-                {i + 1}
-              </span>
-              <div className="min-w-0">
-                <p className="text-gray-900 dark:text-gray-100 leading-snug break-words">
-                  &ldquo;{choice.choiceText}&rdquo;
-                </p>
-                {choice.choiceCondition && (
-                  <span className="mt-1 text-xs font-mono text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 rounded px-1 py-px inline-block">
-                    if {choice.choiceCondition}
-                  </span>
-                )}
-                <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
-                  → <span className="font-mono text-indigo-500 dark:text-indigo-400">{choice.targetLabel}</span>
-                </p>
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
-      {firstChoice && (
-        <>
-          <div className="border-t border-gray-100 dark:border-gray-700" />
-          <div className="px-3 py-2 flex items-center justify-between">
-            <span className="text-xs text-gray-400 dark:text-gray-500">line {menuLine}</span>
-            <button
-              className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 hover:underline"
-              onClick={() => { onOpenEditor(firstChoice.blockId, menuLine); onClose(); }}
-            >
-              Open in editor ↗
-            </button>
+      <button
+        className="w-full flex items-center justify-between px-3 py-2 text-sm font-semibold border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        onClick={onToggle}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="shrink-0">Menu Inspector</span>
+          {selectedMenu && (
+            <span className="font-mono text-xs text-indigo-600 dark:text-indigo-400 truncate">
+              {selectedMenu.sourceLabel}
+            </span>
+          )}
+        </div>
+        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 text-gray-400 shrink-0 transition-transform ml-1 ${isOpen ? '' : '-rotate-90'}`} viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+        </svg>
+      </button>
+      {isOpen && (
+        !selectedMenu ? (
+          <div className="px-3 py-5 text-xs text-center text-gray-400 dark:text-gray-500">
+            Click a menu pill <span className="inline-block w-3 h-3 rounded-full bg-indigo-500 opacity-80 align-middle" /> to inspect choices
           </div>
-        </>
+        ) : (
+          <>
+            <ul className="divide-y divide-gray-100 dark:divide-gray-700 max-h-64 overflow-y-auto">
+              {selectedMenu.choices.map((choice, i) => (
+                <li key={i} className="px-3 py-2">
+                  <div className="flex items-start gap-2">
+                    <span className="shrink-0 mt-0.5 w-4 h-4 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold flex items-center justify-center">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs text-gray-900 dark:text-gray-100 leading-snug break-words">
+                        &ldquo;{choice.choiceText}&rdquo;
+                      </p>
+                      {choice.choiceCondition && (
+                        <span className="mt-1 text-xs font-mono text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 rounded px-1 py-px inline-block">
+                          if {choice.choiceCondition}
+                        </span>
+                      )}
+                      <div className="mt-0.5 flex items-center gap-1.5">
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                          → <span className="font-mono text-indigo-500 dark:text-indigo-400">{choice.targetLabel}</span>
+                        </span>
+                        {choice.routeColors.map((color, ci) => (
+                          <span key={ci} className="w-2 h-2 rounded-full shrink-0 inline-block" style={{ backgroundColor: color }} title="Part of a highlighted route" />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="border-t border-gray-100 dark:border-gray-700 px-3 py-2 flex items-center justify-between">
+              <span className="text-xs text-gray-400 dark:text-gray-500">line {selectedMenu.menuLine}</span>
+              {firstChoice && (
+                <button
+                  className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 hover:underline"
+                  onClick={() => onOpenEditor(firstChoice.blockId, selectedMenu.menuLine)}
+                >
+                  Open in editor ↗
+                </button>
+              )}
+            </div>
+          </>
+        )
       )}
     </div>
   );
@@ -311,7 +321,8 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [checkedRoutes, setCheckedRoutes] = useState(new Set<number>());
-  const [activePopover, setActivePopover] = useState<ActivePopover | null>(null);
+  const [selectedMenu, setSelectedMenu] = useState<SelectedMenu | null>(null);
+  const [isMenuPanelOpen, setIsMenuPanelOpen] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -338,11 +349,16 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
     return map;
   }, [identifiedRoutes, routeLinks, nodeMap]);
 
-  // Entry nodes: no other label jumps to them
-  const entryNodeIds = useMemo(() => {
+  // Entry node: the canonical 'start' label (Ren'Py convention)
+  const entryNodeId = useMemo(() =>
+    labelNodes.find(n => n.label === 'start')?.id ?? null,
+  [labelNodes]);
+
+  // Unreachable nodes: no incoming links and not the story entry point
+  const unreachableNodeIds = useMemo(() => {
     const targeted = new Set(routeLinks.map(l => l.targetId));
-    return new Set(labelNodes.filter(n => !targeted.has(n.id)).map(n => n.id));
-  }, [routeLinks, labelNodes]);
+    return new Set(labelNodes.filter(n => !targeted.has(n.id) && n.id !== entryNodeId).map(n => n.id));
+  }, [routeLinks, labelNodes, entryNodeId]);
 
   // Dead-end nodes: no outgoing jumps from them
   const deadEndNodeIds = useMemo(() => {
@@ -444,35 +460,41 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
 
   const handleMenuPillClick = useCallback((e: React.MouseEvent<SVGGElement>, groupKey: string) => {
     e.stopPropagation();
-    if (!canvasRef.current) return;
     const group = menuGroups.get(groupKey);
     if (!group) return;
     const { links } = group[0];
     const firstLink = links[0];
 
-    const canvasRect = canvasRef.current.getBoundingClientRect();
-    const clickX = e.clientX - canvasRect.left;
-    const clickY = e.clientY - canvasRect.top;
-
-    const POPOVER_W = 288; // w-72
-    const POPOVER_H = 80 + links.length * 56; // approximate
-
-    let px = clickX + 12;
-    let py = clickY - POPOVER_H - 8;
-    if (px + POPOVER_W > canvasRect.width - 8) px = clickX - POPOVER_W - 12;
-    if (py < 8) py = clickY + 12;
+    // Always show ALL choices for this menu block, not just those in the active route
+    const allMenuLinks = routeLinks.filter(l =>
+      l.sourceId === firstLink.sourceId &&
+      l.menuLine === firstLink.menuLine &&
+      l.choiceText !== undefined
+    );
 
     const sourceLabel = nodeMap.get(firstLink.sourceId)?.label ?? firstLink.sourceId.split(':').slice(1).join(':');
-    const choices: MenuPopoverChoice[] = links.map(link => ({
-      choiceText: link.choiceText!,
-      choiceCondition: link.choiceCondition,
-      targetLabel: nodeMap.get(link.targetId)?.label ?? link.targetId.split(':').slice(1).join(':'),
-      sourceLine: link.sourceLine,
-      blockId: link.sourceId.split(':')[0],
-    }));
+    const choices: MenuPopoverChoice[] = allMenuLinks.map(link => {
+      const routeColors: string[] = [];
+      if (checkedRoutes.size > 0) {
+        identifiedRoutes.forEach(route => {
+          if (checkedRoutes.has(route.id) && route.linkIds.has(link.id)) {
+            routeColors.push(route.color);
+          }
+        });
+      }
+      return {
+        choiceText: link.choiceText!,
+        choiceCondition: link.choiceCondition,
+        targetLabel: nodeMap.get(link.targetId)?.label ?? link.targetId.split(':').slice(1).join(':'),
+        sourceLine: link.sourceLine,
+        blockId: link.sourceId.split(':')[0],
+        routeColors,
+      };
+    });
 
-    setActivePopover({ sourceLabel, menuLine: firstLink.menuLine!, choices, x: px, y: py });
-  }, [canvasRef, menuGroups, nodeMap]);
+    setSelectedMenu({ groupKey, sourceLabel, menuLine: firstLink.menuLine!, choices });
+    setIsMenuPanelOpen(true);
+  }, [menuGroups, nodeMap, routeLinks, checkedRoutes, identifiedRoutes]);
 
   // Compute Group Bounding Boxes
   const blockGroups = useMemo(() => {
@@ -779,6 +801,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
                   cy={cy}
                   count={links.length}
                   color={color}
+                  isActive={selectedMenu?.groupKey === key}
                   onClick={(e) => handleMenuPillClick(e, key)}
                 />
               );
@@ -795,21 +818,18 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
             onOpenEditor={onOpenEditor}
             isSelected={selectedNodeIds.includes(node.id)}
             isDragging={isDraggingSelection && selectedNodeIds.includes(node.id)}
-            isEntry={entryNodeIds.has(node.id)}
+            isEntry={node.id === entryNodeId}
+            isUnreachable={unreachableNodeIds.has(node.id)}
             isDeadEnd={deadEndNodeIds.has(node.id)}
           />
         ))}
       </div>
-      {activePopover && (
-        <>
-          <div className="absolute inset-0 z-40" onClick={() => setActivePopover(null)} />
-          <MenuPopover
-            popover={activePopover}
-            onClose={() => setActivePopover(null)}
-            onOpenEditor={onOpenEditor}
-          />
-        </>
-      )}
+      <MenuInspectorPanel
+        selectedMenu={selectedMenu}
+        isOpen={isMenuPanelOpen}
+        onToggle={() => setIsMenuPanelOpen(v => !v)}
+        onOpenEditor={onOpenEditor}
+      />
       {/* Bottom-left controls: Fit + Legend */}
       <div className="absolute bottom-4 left-4 z-20 flex flex-col items-start gap-2" onPointerDown={e => e.stopPropagation()}>
         <button
@@ -840,7 +860,15 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
                   <path d="M0,5 L20,5" stroke="#4f46e5" strokeWidth="2.5" fill="none" />
                   <polygon points="18,2 26,5 18,8" fill="#4f46e5" />
                 </svg>
-                Jump / Call
+                Jump
+              </div>
+              <div className="flex items-center gap-2">
+                <svg width="28" height="10" className="shrink-0">
+                  <circle cx="4" cy="5" r="3.5" fill="none" stroke="#4f46e5" strokeWidth="2" />
+                  <path d="M8,5 L20,5" stroke="#4f46e5" strokeWidth="2.5" fill="none" />
+                  <polygon points="18,2 26,5 18,8" fill="#4f46e5" />
+                </svg>
+                Call (returns)
               </div>
               <div className="flex items-center gap-2">
                 <svg width="28" height="10" className="shrink-0">
@@ -858,7 +886,11 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 shrink-0 rounded-full bg-green-500 border-2 border-white dark:border-gray-800 inline-block" />
-                Entry point
+                Entry (start)
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 shrink-0 rounded-full bg-orange-400 border-2 border-white dark:border-gray-800 inline-block" />
+                Unreachable
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 shrink-0 rounded-full bg-amber-500 border-2 border-white dark:border-gray-800 inline-block" />
