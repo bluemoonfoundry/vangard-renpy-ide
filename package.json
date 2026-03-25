@@ -9,6 +9,7 @@
     "build:debug": "vite build --mode development",
     "preview": "vite preview",
     "electron:start": "npm run build && electron .",
+    "predist": "node -e \"const fs=require('fs');try{fs.rmSync('release',{recursive:true,force:true})}catch(e){}\"",
     "dist": "npm run build && electron-builder",
     "version:patch": "node version.js patch",
     "version:minor": "node version.js minor",
