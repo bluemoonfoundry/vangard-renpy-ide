@@ -2922,7 +2922,7 @@ const App: React.FC = () => {
         hoverImage: null,
         hotspots: []
       };
-      const allLabels = Array.from(analysisResult.labels.keys());
+      const allLabels = Object.keys(analysisResult.labels);
       return <ImageMapComposer
         images={Array.from(images.values())}
         imagemap={composition}
