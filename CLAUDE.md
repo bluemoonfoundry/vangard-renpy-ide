@@ -69,7 +69,7 @@ Key rules: `react-hooks/rules-of-hooks` (error), `react-hooks/exhaustive-deps` (
 - **Character, Variable, ImageAsset, AudioAsset, Screen, Scene**: Story element types
 - **UserSnippet**: User-defined code snippet (id, title, prefix, description, code, optional monacoBody for placeholder support)
 - **ProjectLoadResult, ScanDirectoryResult**: Typed IPC return shapes (replacing prior `any` usage)
-- **SerializedSprite, SerializedSceneComposition**: JSON-safe versions of scene composer types
+- **SerializedSprite, SerializedSceneComposition**: JSON-safe versions of scene composer types. `SceneComposition` carries an optional `resolution?: { width: number; height: number }` field (defaults to 1920×1080 when absent) persisted in `project.ide.json`.
 - **ImageMapComposition**: Container for a clickable imagemap — ground image, optional hover overlay, and an array of hotspots. Persisted in `ProjectSettings.imagemapCompositions` (keyed by id) and saved to `project.ide.json`.
 - **ImageMapHotspot**: A single clickable region with `x`, `y`, `width`, `height`, an `ImageMapActionType` (`'jump' | 'call'`), and a target label
 - **SerializedImageMapComposition**: JSON-safe version of an imagemap composition
@@ -131,6 +131,7 @@ API keys are stored encrypted via Electron's `safeStorage` at `userData/api-keys
 - **UI rendering**: Functional components with hooks only, no class components
 - **Modals/overlays**: Rendered via `createPortal()`; all modals use `useModalAccessibility` hook for focus trap, Escape key close, and focus restore
 - **Styling**: Tailwind CSS utility classes; dark mode via `class` strategy
+- **Copy-to-clipboard**: Always use `components/CopyButton.tsx`. Props: `text` (string to copy), `label` (default `"Copy to Clipboard"`), `size` (`'xs'` for code-preview headers / list rows, `'sm'` default, `'md'` for primary action buttons). Idle state: clipboard icon + label. After click: green bg, checkmark, "Copied!" for 2 s. Never write per-component clipboard state or `alert()` feedback.
 - **Path alias**: `@/*` maps to project root in imports (tsconfig)
 - **Block = file**: Each `.rpy` file maps 1:1 to a Block on the canvas; the first label becomes the block title
 - **Accessibility**: Icon-only buttons must have `aria-label`; modals must have `role="dialog"`, `aria-modal`, and `aria-labelledby`
@@ -180,6 +181,15 @@ Users can create custom code snippets (persisted in `AppSettings.userSnippets`):
 ## AI Story Generator
 
 The app integrates AI APIs (Google Gemini via `@google/genai`, with optional OpenAI and Anthropic support via dynamic imports) for generating story content. API keys are encrypted at rest using Electron's `safeStorage`. The generator UI lives in `components/AIGenerator.tsx`.
+
+## Scene Composer
+
+`components/SceneComposer.tsx` provides a visual layout editor for positioning backgrounds and sprites:
+- Drag-and-drop images from the Image Assets panel onto the stage; drag sprites to reposition
+- Supports per-sprite zoom, flip, rotate, alpha, and blur controls; layer reordering via drag in the layer list
+- **Configurable canvas resolution**: toolbar dropdown offers presets (1920×1080, 1280×720, 1024×768, 800×600) plus a "Custom…" option revealing W×H number inputs. Resolution persists in `SceneComposition.resolution` and is saved to `project.ide.json`. Defaults to 1920×1080 when absent (backwards compatible).
+- Generates Ren'Py `scene`/`show` code in the Code Preview panel; exports a composited PNG via canvas
+- Keyboard: Delete/Backspace removes selected sprite; Arrow keys nudge (Shift = 5× step); Escape clears selection
 
 ## ImageMap Composer
 
