@@ -19,6 +19,7 @@ import ImageEditorView from './components/ImageEditorView';
 import AudioEditorView from './components/AudioEditorView';
 import CharacterEditorView from './components/CharacterEditorView';
 import SceneComposer from './components/SceneComposer';
+import ImageMapComposer from './components/ImageMapComposer';
 import MarkdownPreviewView from './components/MarkdownPreviewView';
 import PunchlistManager from './components/PunchlistManager';
 import TabContextMenu from './components/TabContextMenu';
@@ -36,7 +37,7 @@ import type {
   Block, BlockGroup, Link, Position, FileSystemTreeNode, EditorTab,
   ToastMessage, IdeSettings, Theme, ProjectImage, RenpyAudio,
   ClipboardState, ImageMetadata, AudioMetadata, LabelNode, Character,
-  AppSettings, ProjectSettings, StickyNote, SceneComposition, SceneSprite, PunchlistMetadata, MouseGestureSettings,
+  AppSettings, ProjectSettings, StickyNote, SceneComposition, SceneSprite, ImageMapComposition, PunchlistMetadata, MouseGestureSettings,
   ProjectLoadResult, ScannedImageAsset, ScannedAudioAsset, SerializedSprite, SerializedSceneComposition, UserSnippet
 } from './types';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
@@ -375,6 +376,9 @@ const App: React.FC = () => {
   const [sceneCompositions, setSceneCompositions] = useImmer<Record<string, SceneComposition>>({});
   const [sceneNames, setSceneNames] = useImmer<Record<string, string>>({});
 
+  // ImageMap Composer State
+  const [imagemapCompositions, setImagemapCompositions] = useImmer<Record<string, ImageMapComposition>>({});
+
   // Punchlist State
   const [punchlistMetadata, setPunchlistMetadata] = useImmer<Record<string, PunchlistMetadata>>({});
   
@@ -607,11 +611,69 @@ const App: React.FC = () => {
   const handleDeleteScene = useCallback((sceneId: string) => {
       setSceneCompositions(draft => { delete draft[sceneId]; });
       setSceneNames(draft => { delete draft[sceneId]; });
-      
+
       setOpenTabs(prev => prev.filter(t => t.id !== sceneId));
       if (activeTabId === sceneId) setActiveTabId('canvas');
       setHasUnsavedSettings(true);
   }, [setSceneCompositions, setSceneNames, activeTabId]);
+
+  // --- ImageMap Composer Management ---
+  const handleCreateImageMap = useCallback((initialName?: string) => {
+      const id = `imagemap-${Date.now()}`;
+      const name = initialName || `imagemap_${Object.keys(imagemapCompositions).length + 1}`;
+
+      setImagemapCompositions(draft => {
+          draft[id] = {
+              screenName: name,
+              groundImage: null,
+              hoverImage: null,
+              hotspots: []
+          };
+      });
+
+      setOpenTabs(prev => [...prev, { id, type: 'imagemap-composer', imagemapId: id }]);
+      setActiveTabId(id);
+      setHasUnsavedSettings(true);
+  }, [imagemapCompositions, setImagemapCompositions]);
+
+  const handleOpenImageMap = useCallback((imagemapId: string) => {
+      setOpenTabs(prev => {
+          if (!prev.find(t => t.id === imagemapId)) {
+              return [...prev, { id: imagemapId, type: 'imagemap-composer', imagemapId }];
+          }
+          return prev;
+      });
+      setActiveTabId(imagemapId);
+  }, []);
+
+  const handleImageMapUpdate = useCallback((imagemapId: string, value: React.SetStateAction<ImageMapComposition>) => {
+      setImagemapCompositions(draft => {
+          const prev = draft[imagemapId] || { screenName: '', groundImage: null, hoverImage: null, hotspots: [] };
+          const next = typeof value === 'function' ? (value as (prevState: ImageMapComposition) => ImageMapComposition)(prev) : value;
+
+          if (JSON.stringify(prev) !== JSON.stringify(next)) {
+              draft[imagemapId] = next;
+              setHasUnsavedSettings(true);
+          }
+      });
+  }, [setImagemapCompositions]);
+
+  const handleRenameImageMap = useCallback((imagemapId: string, newName: string) => {
+      setImagemapCompositions(draft => {
+          if (draft[imagemapId] && draft[imagemapId].screenName !== newName) {
+              draft[imagemapId].screenName = newName;
+              setHasUnsavedSettings(true);
+          }
+      });
+  }, [setImagemapCompositions]);
+
+  const handleDeleteImageMap = useCallback((imagemapId: string) => {
+      setImagemapCompositions(draft => { delete draft[imagemapId]; });
+
+      setOpenTabs(prev => prev.filter(t => t.id !== imagemapId));
+      if (activeTabId === imagemapId) setActiveTabId('canvas');
+      setHasUnsavedSettings(true);
+  }, [setImagemapCompositions, activeTabId]);
 
 
   // --- Sync Explorer with Active Tab ---
@@ -1256,6 +1318,24 @@ const App: React.FC = () => {
                   setSceneNames({});
               }
 
+              // Restore ImageMap Compositions
+              if (projectData.settings.imagemapCompositions) {
+                  const restoredImagemaps: Record<string, ImageMapComposition> = {};
+                  Object.entries(projectData.settings.imagemapCompositions).forEach(([id, im]) => {
+                      const groundImg = im.groundImage ? imagesMap.get((im.groundImage as any).filePath) : null;
+                      const hoverImg = im.hoverImage ? imagesMap.get((im.hoverImage as any).filePath) : null;
+                      restoredImagemaps[id] = {
+                          screenName: im.screenName,
+                          groundImage: groundImg || null,
+                          hoverImage: hoverImg || null,
+                          hotspots: im.hotspots
+                      };
+                  });
+                  setImagemapCompositions(restoredImagemaps);
+              } else {
+                  setImagemapCompositions({});
+              }
+
               // Restore Scan Directories
               if (projectData.settings.scannedImagePaths) {
                   const paths = projectData.settings.scannedImagePaths;
@@ -1741,6 +1821,17 @@ const App: React.FC = () => {
           };
       });
 
+      // Serialize imagemaps: map images to just their paths
+      const serializableImagemaps: Record<string, ImageMapComposition> = {};
+      Object.entries(imagemapCompositions).forEach(([id, im]) => {
+          serializableImagemaps[id] = {
+              screenName: im.screenName,
+              groundImage: im.groundImage ? { filePath: im.groundImage.filePath } as any : null,
+              hoverImage: im.hoverImage ? { filePath: im.hoverImage.filePath } as any : null,
+              hotspots: im.hotspots
+          };
+      });
+
       const settingsToSave: ProjectSettings = {
         ...projectSettings,
         openTabs,
@@ -1754,6 +1845,7 @@ const App: React.FC = () => {
         punchlistMetadata,
         sceneCompositions: serializableScenes as unknown as Record<string, SceneComposition>,
         sceneNames,
+        imagemapCompositions: serializableImagemaps,
         scannedImagePaths: Array.from(imageScanDirectories.keys()),
         scannedAudioPaths: Array.from(audioScanDirectories.keys()),
       };
@@ -1764,7 +1856,7 @@ const App: React.FC = () => {
       console.error("Failed to save IDE settings:", e);
       addToast('Failed to save workspace settings', 'error');
     }
-  }, [projectRootPath, projectSettings, openTabs, activeTabId, splitLayout, splitPrimarySize, secondaryOpenTabs, secondaryActiveTabId, stickyNotes, characterProfiles, addToast, sceneCompositions, sceneNames, imageScanDirectories, audioScanDirectories, punchlistMetadata]);
+  }, [projectRootPath, projectSettings, openTabs, activeTabId, splitLayout, splitPrimarySize, secondaryOpenTabs, secondaryActiveTabId, stickyNotes, characterProfiles, addToast, sceneCompositions, sceneNames, imagemapCompositions, imageScanDirectories, audioScanDirectories, punchlistMetadata]);
 
 
   const handleSaveAll = useCallback(async () => {
@@ -2723,6 +2815,7 @@ const App: React.FC = () => {
     if (tab.id === 'stats') return 'Stats';
     if (tab.type === 'ai-generator') return 'AI Generator';
     if (tab.type === 'scene-composer') return sceneNames[tab.sceneId!] || 'Scene';
+    if (tab.type === 'imagemap-composer') return imagemapCompositions[tab.imagemapId!]?.screenName || 'ImageMap';
     if (tab.type === 'character') return `Char: ${analysisResult.characters.get(tab.characterTag!)?.name || tab.characterTag}`;
     if (tab.type === 'editor') return blocks.find(b => b.id === tab.blockId)?.title || 'Untitled';
     if (tab.type === 'markdown') return tab.filePath?.split('/').pop() ?? 'Markdown';
@@ -2820,6 +2913,23 @@ const App: React.FC = () => {
         images={Array.from(images.values())} metadata={imageMetadata} scene={composition}
         onSceneChange={(val) => handleSceneUpdate(tab.sceneId!, val)} sceneName={name}
         onRenameScene={(newName) => handleRenameScene(tab.sceneId!, newName)}
+      />;
+    }
+    if (tab.type === 'imagemap-composer' && tab.imagemapId) {
+      const composition = imagemapCompositions[tab.imagemapId] || {
+        screenName: 'imagemap',
+        groundImage: null,
+        hoverImage: null,
+        hotspots: []
+      };
+      const allLabels = Object.keys(analysisResult.labels);
+      return <ImageMapComposer
+        images={Array.from(images.values())}
+        imagemap={composition}
+        onImageMapChange={(val) => handleImageMapUpdate(tab.imagemapId!, val)}
+        imagemapName={composition.screenName}
+        onRenameImageMap={(newName) => handleRenameImageMap(tab.imagemapId!, newName)}
+        labels={allLabels}
       />;
     }
     if (tab.type === 'markdown' && tab.filePath) {
@@ -3283,6 +3393,11 @@ const App: React.FC = () => {
                 onOpenScene={handleOpenScene}
                 onCreateScene={handleCreateScene}
                 onDeleteScene={handleDeleteScene}
+                // ImageMap Props
+                imagemaps={Object.keys(imagemapCompositions).map(id => ({ id, name: imagemapCompositions[id]?.screenName || 'ImageMap' }))}
+                onOpenImageMap={handleOpenImageMap}
+                onCreateImageMap={handleCreateImageMap}
+                onDeleteImageMap={handleDeleteImageMap}
                 // Snippet Props
                 snippetCategoriesState={snippetCategoriesState}
                 onToggleSnippetCategory={handleToggleSnippetCategory}

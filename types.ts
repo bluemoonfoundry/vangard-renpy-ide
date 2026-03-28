@@ -530,11 +530,12 @@ export interface RenpyAnalysisResult {
  */
 export interface EditorTab {
   id: string;
-  type: 'canvas' | 'route-canvas' | 'punchlist' | 'editor' | 'image' | 'audio' | 'character' | 'scene-composer' | 'ai-generator' | 'stats' | 'markdown';
+  type: 'canvas' | 'route-canvas' | 'punchlist' | 'editor' | 'image' | 'audio' | 'character' | 'scene-composer' | 'imagemap-composer' | 'ai-generator' | 'stats' | 'markdown';
   blockId?: string;
   filePath?: string;
   characterTag?: string;
   sceneId?: string;
+  imagemapId?: string;
   scrollRequest?: { line: number; key: number };
 }
 
@@ -669,6 +670,50 @@ export interface SceneComposition {
 }
 
 /**
+ * Action type for ImageMap hotspot interactions.
+ * Determines what happens when a hotspot is clicked.
+ * @typedef {('jump' | 'call')} ImageMapActionType
+ */
+export type ImageMapActionType = 'jump' | 'call';
+
+/**
+ * Represents a clickable hotspot region in an imagemap.
+ * @interface ImageMapHotspot
+ * @property {string} id - Unique identifier for the hotspot
+ * @property {number} x - X coordinate of top-left corner (pixels)
+ * @property {number} y - Y coordinate of top-left corner (pixels)
+ * @property {number} width - Width of the hotspot region (pixels)
+ * @property {number} height - Height of the hotspot region (pixels)
+ * @property {ImageMapActionType} actionType - Type of action (jump or call)
+ * @property {string} targetLabel - Label to jump/call when clicked
+ */
+export interface ImageMapHotspot {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  actionType: ImageMapActionType;
+  targetLabel: string;
+}
+
+/**
+ * Represents a complete imagemap composition with ground image and hotspots.
+ * Used by ImageMap Composer to design clickable image regions.
+ * @interface ImageMapComposition
+ * @property {string} screenName - Name of the Ren'Py screen
+ * @property {ProjectImage | null} groundImage - Base image for the imagemap
+ * @property {ProjectImage | null} hoverImage - Optional hover overlay image
+ * @property {ImageMapHotspot[]} hotspots - Array of clickable hotspot regions
+ */
+export interface ImageMapComposition {
+  screenName: string;
+  groundImage: ProjectImage | null;
+  hoverImage: ProjectImage | null;
+  hotspots: ImageMapHotspot[];
+}
+
+/**
  * Project-level settings stored per Ren'Py project.
  * Includes AI features, tab state, and custom content.
  * @interface ProjectSettings
@@ -700,6 +745,7 @@ export interface ProjectSettings {
   punchlistMetadata?: Record<string, PunchlistMetadata>;
   sceneCompositions?: Record<string, SceneComposition>;
   sceneNames?: Record<string, string>;
+  imagemapCompositions?: Record<string, ImageMapComposition>;
   scannedImagePaths?: string[];
   scannedAudioPaths?: string[];
 }
