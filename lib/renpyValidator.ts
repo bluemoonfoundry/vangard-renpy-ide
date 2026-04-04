@@ -479,6 +479,11 @@ export function validateRenpyCode(code: string): RenpyDiagnostic[] {
   let inScreenBlock = false;
   let screenBlockIndent = -1;
 
+  // Triple-quoted strings (""" or ''') span multiple lines.
+  // All content inside them is dialogue/narration — never validate it.
+  let inTripleQuoteBlock = false;
+  let tripleQuoteSeq = '"""';
+
   lines.forEach((line, idx) => {
     const lineNum = idx + 1;
     const trimmed = line.trim();
@@ -505,6 +510,32 @@ export function validateRenpyCode(code: string): RenpyDiagnostic[] {
       screenBlockIndent = -1;
       // Fall through — validate this line normally
     }
+
+    // ── Triple-quote block tracking ────────────────────────────────────────
+    // Multi-line triple-quoted strings (used for long narration/dialogue) must
+    // be entirely skipped. No rule should fire on content inside them.
+    if (inTripleQuoteBlock) {
+      if (line.includes(tripleQuoteSeq)) {
+        inTripleQuoteBlock = false;
+      }
+      return; // skip validation on every line inside the block (including the closing line)
+    }
+
+    // An odd number of """ (or ''') on a line means a block opens here and
+    // continues until the matching delimiter appears on a later line.
+    const dqCount = (line.match(/"""/g) ?? []).length;
+    const sqCount = (line.match(/'''/g) ?? []).length;
+    if (dqCount % 2 === 1) {
+      inTripleQuoteBlock = true;
+      tripleQuoteSeq = '"""';
+      return; // skip this line — it starts (or is entirely) a triple-quoted block
+    }
+    if (sqCount % 2 === 1) {
+      inTripleQuoteBlock = true;
+      tripleQuoteSeq = "'''";
+      return;
+    }
+    // ── End triple-quote tracking ──────────────────────────────────────────
 
     // Detect start of python block
     if (PYTHON_BLOCK_RE.test(line)) {

@@ -1,22 +1,14 @@
 {
   "enableAiFeatures": false,
   "selectedModel": "gemini-2.5-flash",
-  "draftingMode": false,
+  "draftingMode": true,
   "openTabs": [
     {
       "id": "canvas",
       "type": "canvas"
-    },
-    {
-      "id": "route-canvas",
-      "type": "route-canvas"
-    },
-    {
-      "id": "stats",
-      "type": "stats"
     }
   ],
-  "activeTabId": "route-canvas",
+  "activeTabId": "canvas",
   "splitLayout": "none",
   "splitPrimarySize": 600,
   "secondaryOpenTabs": [],
@@ -26,16 +18,28 @@
       "id": "note-1764176814595",
       "content": "This is a note that gets saved with the project but isn't part of the ren'py scripts",
       "position": {
-        "x": 819.5,
-        "y": 386.5
+        "x": 957.5,
+        "y": 542.5
       },
       "width": 200,
       "height": 200,
       "color": "green"
+    },
+    {
+      "id": "note-1775273153995",
+      "content": "This is a note",
+      "position": {
+        "x": 3279,
+        "y": 520.5
+      },
+      "width": 200,
+      "height": 200,
+      "color": "yellow"
     }
   ],
   "characterProfiles": {},
   "punchlistMetadata": {},
+  "diagnosticsTasks": [],
   "sceneCompositions": {
     "scene-1764262740876": {
       "background": {
@@ -59,30 +63,32 @@
           "image": {
             "filePath": "game/images/cg/m.png"
           },
-          "x": 0.8395140664961641,
-          "y": 0.7504159733777039,
-          "zoom": 1,
+          "x": 0.759389720981143,
+          "y": 0.7974946779293919,
+          "zoom": 0.7,
           "zIndex": 1,
           "flipH": false,
           "flipV": false,
           "rotation": 0,
-          "alpha": 1,
-          "blur": 0
+          "alpha": 0.7,
+          "blur": 0,
+          "visible": true
         },
         {
           "id": "sprite-1764262756852",
           "image": {
             "filePath": "game/images/cg/s.png"
           },
-          "x": 0.2928388746803069,
-          "y": 0.7237936772046589,
-          "zoom": 1,
+          "x": 0.2235788472012209,
+          "y": 0.8107082086846967,
+          "zoom": 0.7,
           "zIndex": 2,
-          "flipH": false,
+          "flipH": true,
           "flipV": false,
           "rotation": 0,
           "alpha": 1,
-          "blur": 0
+          "blur": 0,
+          "visible": true
         }
       ]
     },
@@ -154,6 +160,103 @@
   "sceneNames": {
     "scene-1764262740876": "Garden",
     "scene-1764262795876": "Nascent"
+  },
+  "imagemapCompositions": {
+    "imagemap-1775273324257": {
+      "screenName": "imagemap_1",
+      "groundImage": {
+        "filePath": "game/images/bg/art_room.png"
+      },
+      "hoverImage": null,
+      "hotspots": [
+        {
+          "id": "hotspot-1775273335845",
+          "x": 69,
+          "y": 359,
+          "width": 108,
+          "height": 139,
+          "actionType": "jump",
+          "targetLabel": "scene_02_first_choice"
+        },
+        {
+          "id": "hotspot-1775273337679",
+          "x": 644,
+          "y": 280,
+          "width": 97,
+          "height": 93,
+          "actionType": "jump",
+          "targetLabel": ""
+        },
+        {
+          "id": "hotspot-1775273338895",
+          "x": 785,
+          "y": 274,
+          "width": 71,
+          "height": 51,
+          "actionType": "jump",
+          "targetLabel": ""
+        },
+        {
+          "id": "hotspot-1775273340384",
+          "x": 1205,
+          "y": 468,
+          "width": 132,
+          "height": 140,
+          "actionType": "jump",
+          "targetLabel": ""
+        },
+        {
+          "id": "hotspot-1775273341762",
+          "x": 948,
+          "y": 226,
+          "width": 75,
+          "height": 47,
+          "actionType": "jump",
+          "targetLabel": ""
+        }
+      ]
+    }
+  },
+  "screenLayoutCompositions": {
+    "screenlayout-1774715232464": {
+      "screenName": "screen_1",
+      "gameWidth": 1920,
+      "gameHeight": 1080,
+      "modal": false,
+      "zorder": 0,
+      "widgets": [
+        {
+          "id": "widget-1774715234546-6pnn9",
+          "type": "vbox",
+          "children": [
+            {
+              "id": "widget-1774715238825-p6w02",
+              "type": "hbox",
+              "children": [
+                {
+                  "id": "widget-1774715251568-r1ym3",
+                  "type": "text",
+                  "text": "Hey why are you here and not there?"
+                }
+              ]
+            },
+            {
+              "id": "widget-1774715243854-94n6y",
+              "type": "hbox",
+              "children": [
+                {
+                  "id": "widget-1774715265450-tprhy",
+                  "type": "button",
+                  "action": "Return()",
+                  "children": [],
+                  "text": "Press Me"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
   },
   "scannedImagePaths": [],
   "scannedAudioPaths": []

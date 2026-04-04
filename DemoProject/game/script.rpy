@@ -15,7 +15,13 @@ image bg computer_lab = Image("images/bg/computer_lab.png") #Solid("#333333")
 # image leo_neutral = "images/leo_neutral.png"
 # For simplicity, we will just show the character names.
 
-
+screen screen_1():
+    vbox:
+        hbox:
+            text "Hey why are you here and not there?"
+        hbox:
+            button action Return()
+            button action foobarbaz()
 
 init:
     transform size_normal:
@@ -29,6 +35,8 @@ init:
 label start:
     # Set the main character's name
     $ mc_name = persistent.mc_name
+
+    #call screen screen_1
 
     # Jump to the very first scene file.
     jump scene_01_start

@@ -1,5 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import type { Variable, RenpyAnalysisResult } from '../types';
+import { useVirtualList } from '../hooks/useVirtualList';
+
+// p-2 (16px) + name line (20px) + value line (16px) + space-y-2 gap (8px)
+const VAR_ITEM_HEIGHT = 60;
 
 interface VariableManagerProps {
     analysisResult: RenpyAnalysisResult;
@@ -101,6 +105,12 @@ const VariableManager: React.FC<VariableManagerProps> = ({ analysisResult, onAdd
 
     const VariableList: React.FC<{ title: string; vars: Variable[] }> = ({ title, vars }) => {
         const [collapsed, setCollapsed] = useState(false);
+        const { containerRef, handleScroll, virtualItems, totalHeight } = useVirtualList(
+            collapsed ? [] : vars,
+            VAR_ITEM_HEIGHT,
+        );
+        // Cap the virtual scroll container height so it doesn't swallow the whole panel for small lists
+        const listHeight = Math.min(vars.length * VAR_ITEM_HEIGHT, 400);
         return (
             <div className="mt-4">
                 <button
@@ -113,29 +123,40 @@ const VariableManager: React.FC<VariableManagerProps> = ({ analysisResult, onAdd
                     {title} ({vars.length})
                 </button>
                 {!collapsed && (
-                    <ul className="space-y-2">
-                        {vars.map(variable => (
-                            <li
-                              key={variable.name}
-                              className="p-2 rounded-md bg-gray-50 dark:bg-gray-700/50 flex items-center justify-between"
-                              onMouseEnter={() => onHoverHighlightStart(variable.name, 'variable')}
-                              onMouseLeave={onHoverHighlightEnd}
+                    vars.length === 0
+                        ? <p className="text-xs text-gray-400 dark:text-gray-500 pl-1">None found.</p>
+                        : (
+                            <div
+                                ref={containerRef}
+                                className="overflow-y-auto overscroll-contain"
+                                style={{ height: listHeight }}
+                                onScroll={handleScroll}
                             >
-                                <div className="flex-grow min-w-0">
-                                    <p className="font-semibold font-mono text-sm truncate" title={variable.name}>{variable.name}</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={`= ${variable.initialValue}`}>
-                                        = {variable.initialValue}
-                                    </p>
+                                <div style={{ height: totalHeight, position: 'relative' }}>
+                                    {virtualItems.map(({ item: variable, offsetTop }) => (
+                                        <div
+                                            key={variable.name}
+                                            style={{ position: 'absolute', top: offsetTop, left: 0, right: 0, height: VAR_ITEM_HEIGHT - 8 }}
+                                            className="p-2 rounded-md bg-gray-50 dark:bg-gray-700/50 flex items-center justify-between"
+                                            onMouseEnter={() => onHoverHighlightStart(variable.name, 'variable')}
+                                            onMouseLeave={onHoverHighlightEnd}
+                                        >
+                                            <div className="flex-grow min-w-0">
+                                                <p className="font-semibold font-mono text-sm truncate" title={variable.name}>{variable.name}</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={`= ${variable.initialValue}`}>
+                                                    = {variable.initialValue}
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center space-x-1 flex-shrink-0 pl-2">
+                                                <button onClick={() => onFindUsages(variable.name)} title="Find Usages" className="p-1 text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 rounded">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                                <div className="flex items-center space-x-1 flex-shrink-0 pl-2">
-                                    <button onClick={() => onFindUsages(variable.name)} title="Find Usages" className="p-1 text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 rounded">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                    </button>
-                                </div>
-                            </li>
-                        ))}
-                        {vars.length === 0 && <p className="text-xs text-gray-400 dark:text-gray-500 pl-1">None found.</p>}
-                    </ul>
+                            </div>
+                        )
                 )}
             </div>
         );

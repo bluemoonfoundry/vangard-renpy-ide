@@ -14,6 +14,7 @@ import CreateBlockModal, { BlockType } from './components/CreateBlockModal';
 import ConfigureRenpyModal from './components/ConfigureRenpyModal';
 import Toast from './components/Toast';
 import LoadingOverlay from './components/LoadingOverlay';
+import AnalysisOverlay from './components/AnalysisOverlay';
 import WelcomeScreen from './components/WelcomeScreen';
 import ImageEditorView from './components/ImageEditorView';
 import AudioEditorView from './components/AudioEditorView';
@@ -24,6 +25,7 @@ import ScreenLayoutComposer from './components/ScreenLayoutComposer';
 import MarkdownPreviewView from './components/MarkdownPreviewView';
 import DiagnosticsPanel from './components/DiagnosticsPanel';
 import { useDiagnostics, migratePunchlistToTasks } from './hooks/useDiagnostics';
+import { useDebounce } from './hooks/useDebounce';
 import TabContextMenu from './components/TabContextMenu';
 import Sash from './components/Sash';
 import StatusBar from './components/StatusBar';
@@ -394,9 +396,11 @@ const App: React.FC = () => {
   const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false); // Track project setting changes like sticky notes
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saved');
   const [statusBarMessage, setStatusBarMessage] = useState('');
+  const [isScanningAssets, setIsScanningAssets] = useState(false);
   
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialAnalysisPending, setIsInitialAnalysisPending] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [loadingProgress, setLoadingProgress] = useState(0);
   const loadCancelRef = useRef(false);
@@ -460,11 +464,65 @@ const App: React.FC = () => {
   const [activeLeftPanel, setActiveLeftPanel] = useState<'explorer' | 'search'>('explorer');
 
   // --- Analysis ---
-  const analysisResult = useRenpyAnalysis(blocks, 0); // 0 is a trigger for force re-analysis if needed
-  const diagnosticsResult = useDiagnostics(blocks, analysisResult, images, imageMetadata, audios, audioMetadata);
+  // Debounce block content changes before feeding them into expensive analysis passes.
+  // The editor state (`blocks`) updates immediately on every keystroke; analysis only
+  // runs after 500 ms of inactivity, preventing main-thread freezes during active typing.
+  const debouncedBlocks = useDebounce(blocks, 500);
+
+  // Slim block objects for the analysis worker — position/size are irrelevant to parsing
+  // and including them caused re-analysis on every canvas drag.
+  const analysisBlocks = useMemo(
+    () => debouncedBlocks.map(({ id, content, filePath }) => ({ id, content, filePath })),
+    [debouncedBlocks],
+  );
+
+  const [analysisResult, isWorkerPending] = useRenpyAnalysis(analysisBlocks, 0);
+  // Pending covers both: the 500ms debounce window AND the worker's async computation
+  const isAnalysisPending = blocks !== debouncedBlocks || isWorkerPending;
+  const diagnosticsResult = useDiagnostics(debouncedBlocks, analysisResult, images, imageMetadata, audios, audioMetadata);
+
+  // Ref that latches to true once the analysis worker starts (isWorkerPending goes true)
+  // after a project load. Prevents the overlay from closing during the one-render gap
+  // between debouncedBlocks updating (which makes isAnalysisPending briefly false) and
+  // the useRenpyAnalysis effect actually posting to the worker.
+  const analysisWorkerHasStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isInitialAnalysisPending) {
+      // Reset the latch so the next project load works correctly.
+      analysisWorkerHasStartedRef.current = false;
+      return;
+    }
+    if (isWorkerPending) {
+      // Worker has started — latch on.
+      analysisWorkerHasStartedRef.current = true;
+    } else if (analysisWorkerHasStartedRef.current) {
+      // Worker was running and is now done — safe to close the overlay.
+      setIsInitialAnalysisPending(false);
+    }
+  }, [isWorkerPending, isInitialAnalysisPending]);
+
+  // Memoized flat arrays — Map.values() iteration is O(n); without this every
+  // renderTabContent call recreated 14,000-item arrays on each re-render.
+  const imagesArray = useMemo(() => Array.from(images.values()), [images]);
+  const audiosArray = useMemo(() => Array.from(audios.values()), [audios]);
+
+  // Stable array of character tag strings passed to CharacterEditorView.
+  // Without this, Array.from() in renderTabContent creates a new reference every
+  // render, defeating React.memo on CharacterEditorView.
+  const characterTagsArray = useMemo(
+    () => Array.from(analysisResult.characters.keys()),
+    [analysisResult.characters],
+  );
   
   // --- Refs ---
   const editorInstances = useRef<Map<string, monaco.editor.IStandaloneCodeEditor>>(new Map());
+  // Lazy-mount sets: a tab's content is only rendered once it has been the active tab at
+  // least once. After first activation the content stays mounted (visibility: hidden when
+  // inactive) so editor state, scroll positions, etc. are preserved across tab switches
+  // without paying the mount cost every time.
+  const primaryMountedTabsRef = useRef(new Set<string>());
+  const secondaryMountedTabsRef = useRef(new Set<string>());
   const primaryTabBarRef = useRef<HTMLDivElement>(null);
   const secondaryTabBarRef = useRef<HTMLDivElement>(null);
   const initialLayoutNeeded = useRef(false);
@@ -547,8 +605,13 @@ const App: React.FC = () => {
       });
   }, []);
 
+  // Stable callbacks for StoryCanvas — previously inline lambdas that caused the
+  // canvas to re-render on every App.tsx state change (e.g. switching any tab).
+  const handleClearFindUsages = useCallback(() => setFindUsagesHighlightIds(null), []);
+  const canvasInteractionEnd = useCallback(() => {}, []);
+
   const routeAnalysisResult = useMemo(() => {
-      const raw = performRouteAnalysis(blocks, analysisResult.labels, analysisResult.jumps);
+      const raw = performRouteAnalysis(debouncedBlocks, analysisResult.labels, analysisResult.jumps);
       
       // Compute default layout for all nodes to prevent stacking at 0,0
       // We run this every time the graph structure changes, essentially
@@ -566,7 +629,7 @@ const App: React.FC = () => {
           ...raw,
           labelNodes: finalNodes
       };
-  }, [blocks, analysisResult, routeNodeLayoutCache]);
+  }, [debouncedBlocks, analysisResult, routeNodeLayoutCache]);
 
   // --- Scene Composer Management ---
   const handleCreateScene = useCallback((initialName?: string) => {
@@ -1254,13 +1317,20 @@ const App: React.FC = () => {
         }
   }, [openTabs, secondaryOpenTabs, activePaneId, splitLayout]);
 
+  const handleOpenRouteCanvasTab = useCallback(() => handleOpenStaticTab('route-canvas'), [handleOpenStaticTab]);
+
   // --- File System Integration ---
   
   const loadProject = useCallback(async (path: string) => {
       loadCancelRef.current = false;
       setIsLoading(true);
+      setLoadingProgress(5);
       setLoadingMessage('Reading project files...');
       setStatusBarMessage(`Loading project from ${path}...`);
+      const unsubscribeProgress = window.electronAPI?.onLoadProgress?.((value, message) => {
+          setLoadingProgress(value);
+          setLoadingMessage(message);
+      });
       try {
           const projectData = await window.electronAPI!.loadProject(path);
 
@@ -1269,7 +1339,10 @@ const App: React.FC = () => {
               setStatusBarMessage('');
               return;
           }
-          
+
+          setLoadingProgress(93);
+          setLoadingMessage(`Processing ${projectData.files.length} files and ${projectData.images.length} images...`);
+
           // Map existing blocks to preserve IDs and positions
           const existingBlocksMap = new Map<string, Block>();
           // Use ref to get current blocks to avoid stale closures and infinite loop dependency
@@ -1349,6 +1422,9 @@ const App: React.FC = () => {
               });
           });
           setAudios(audioMap);
+
+          setLoadingProgress(96);
+          setLoadingMessage('Restoring workspace...');
 
           if (projectData.settings) {
               updateProjectSettings(draft => {
@@ -1446,7 +1522,8 @@ const App: React.FC = () => {
 
                   // Trigger scan
                   if (window.electronAPI) {
-                       paths.forEach((dirPath) => {
+                       setIsScanningAssets(true);
+                       Promise.all(paths.map((dirPath) =>
                            window.electronAPI!.scanDirectory(dirPath).then(({ images: scanned }) => {
                                setImages(prev => {
                                    const next = new Map(prev);
@@ -1458,19 +1535,19 @@ const App: React.FC = () => {
                                            const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
 
                                            // Ensure external images also have filePath set correctly
-                                           next.set(img.path, { 
-                                             ...img, 
-                                             filePath: img.path, 
-                                             isInProject: false, 
+                                           next.set(img.path, {
+                                             ...img,
+                                             filePath: img.path,
+                                             isInProject: false,
                                              fileHandle: null,
-                                             projectFilePath: linkedPath 
+                                             projectFilePath: linkedPath
                                            });
                                        }
                                    });
                                    return next;
                                });
-                           });
-                       });
+                           })
+                       )).finally(() => setIsScanningAssets(false));
                   }
               }
               
@@ -1482,7 +1559,8 @@ const App: React.FC = () => {
 
                   // Trigger scan
                   if (window.electronAPI) {
-                       paths.forEach((dirPath) => {
+                       setIsScanningAssets(true);
+                       Promise.all(paths.map((dirPath) =>
                            window.electronAPI!.scanDirectory(dirPath).then(({ audios: scanned }) => {
                                setAudios(prev => {
                                    const next = new Map(prev);
@@ -1494,24 +1572,23 @@ const App: React.FC = () => {
                                            const linkedPath = next.has(potentialProjectPath) ? potentialProjectPath : undefined;
 
                                            // Ensure external audio also have filePath set correctly
-                                           next.set(aud.path, { 
-                                             ...aud, 
-                                             filePath: aud.path, 
-                                             isInProject: false, 
-                                             fileHandle: null, 
+                                           next.set(aud.path, {
+                                             ...aud,
+                                             filePath: aud.path,
+                                             isInProject: false,
+                                             fileHandle: null,
                                              projectFilePath: linkedPath
                                            });
                                        }
                                    });
                                    return next;
                                });
-                           });
-                       });
+                           })
+                       )).finally(() => setIsScanningAssets(false));
                   }
               }
 
               const savedTabs: EditorTab[] = projectData.settings.openTabs ?? [{ id: 'canvas', type: 'canvas' }];
-              const tempAnalysis = performRenpyAnalysis(loadedBlocks);
 
               const validTabs = savedTabs.filter(tab => {
                   if (tab.type === 'editor' && tab.filePath) {
@@ -1524,7 +1601,7 @@ const App: React.FC = () => {
                       return audioMap.has(tab.filePath);
                   }
                   if (tab.type === 'character' && tab.characterTag) {
-                      return tempAnalysis.characters.has(tab.characterTag);
+                      return true; // deferred — worker analysis validates at render time
                   }
                   if (tab.type === 'scene-composer' && tab.sceneId) {
                       // We allow opening even if not strictly in state yet (might be migrated)
@@ -1566,7 +1643,7 @@ const App: React.FC = () => {
                   if (tab.type === 'editor' && tab.filePath) return blockFilePathMap.has(tab.filePath);
                   if (tab.type === 'image' && tab.filePath) return imgMap.has(tab.filePath);
                   if (tab.type === 'audio' && tab.filePath) return audioMap.has(tab.filePath);
-                  if (tab.type === 'character' && tab.characterTag) return tempAnalysis.characters.has(tab.characterTag);
+                  if (tab.type === 'character' && tab.characterTag) return true;
                   if (tab.type === 'markdown' && tab.filePath) return true;
                   return tab.type === 'canvas' || tab.type === 'route-canvas' || tab.type === 'punchlist' || tab.type === 'diagnostics' || tab.type === 'ai-generator' || tab.type === 'stats' || tab.type === 'scene-composer';
               });
@@ -1594,6 +1671,9 @@ const App: React.FC = () => {
               setSceneNames({});
           }
           
+          setLoadingProgress(99);
+          setLoadingMessage('Done');
+          setIsInitialAnalysisPending(true);
           setHasUnsavedSettings(false);
           setShowWelcome(false);
           addToast('Project loaded successfully', 'success');
@@ -1608,6 +1688,7 @@ const App: React.FC = () => {
           addToast('Failed to load project', 'error');
           setStatusBarMessage('Error loading project.');
       } finally {
+          unsubscribeProgress?.();
           setIsLoading(false);
           setLoadingMessage('');
           setLoadingProgress(0);
@@ -1617,13 +1698,12 @@ const App: React.FC = () => {
 
   const handleCancelLoad = useCallback(() => {
       loadCancelRef.current = true;
-      // Terminate the worker thread in the main process immediately.
-      // The overlay stays visible in its "Cancelling..." state (local state in LoadingOverlay)
-      // until the worker exits and the finally block in loadProject sets isLoading = false.
-      // We deliberately do NOT call setIsLoading(false) here — doing so with flushSync caused
-      // a blocking synchronous render that prevented Electron's IPC quit handshake from
-      // being processed, making File->Quit appear broken for several seconds after cancel.
       window.electronAPI?.cancelProjectLoad?.();
+      // Close the overlay immediately — don't wait for the IPC to reject.
+      // The loadProject finally block will also call setIsLoading(false) harmlessly.
+      setIsLoading(false);
+      setLoadingMessage('');
+      setLoadingProgress(0);
       addToast('Project loading cancelled.', 'info');
   }, [addToast]);
 
@@ -1676,6 +1756,60 @@ const App: React.FC = () => {
           addToast('Failed to create project', 'error');
       }
   }, [loadProject, addToast]);
+
+  // --- Stable callbacks for ImageEditorView / AudioEditorView tabs ---
+  // These are extracted from the inline renderTabContent so React.memo on the
+  // tab components can bail out when switching tabs (instead of re-rendering
+  // with 14,000 image DOM nodes every time).
+  const handleUpdateImageMetadata = useCallback((path: string, newMeta: ImageMetadata) => {
+      setImageMetadata(prev => {
+          const next = new Map(prev);
+          next.set(path, newMeta);
+          return next;
+      });
+      setHasUnsavedSettings(true);
+  }, []);
+
+  const handleCopyImageToProject = useCallback(async (sourcePath: string, meta: ImageMetadata) => {
+      try {
+          if (window.electronAPI && projectRootPath) {
+              const fileName = sourcePath.split('/').pop() || 'image.png';
+              const subfolder = meta.projectSubfolder || '';
+              const destDir = await window.electronAPI.path.join(projectRootPath, 'game', 'images', subfolder);
+              const destPath = await window.electronAPI.path.join(destDir, fileName);
+              await window.electronAPI.copyEntry(sourcePath, destPath);
+              await loadProject(projectRootPath);
+          }
+      } catch (err) {
+          console.error('Failed to copy image to project:', err);
+          addToast('Failed to copy image to project', 'error');
+      }
+  }, [projectRootPath, loadProject, addToast]);
+
+  const handleUpdateAudioMetadata = useCallback((path: string, newMeta: AudioMetadata) => {
+      setAudioMetadata(prev => {
+          const next = new Map(prev);
+          next.set(path, newMeta);
+          return next;
+      });
+      setHasUnsavedSettings(true);
+  }, []);
+
+  const handleCopyAudioToProject = useCallback(async (sourcePath: string, meta: AudioMetadata) => {
+      try {
+          if (window.electronAPI && projectRootPath) {
+              const fileName = sourcePath.split('/').pop() || 'audio.ogg';
+              const subfolder = meta.projectSubfolder || '';
+              const destDir = await window.electronAPI.path.join(projectRootPath, 'game', 'audio', subfolder);
+              const destPath = await window.electronAPI.path.join(destDir, fileName);
+              await window.electronAPI.copyEntry(sourcePath, destPath);
+              await loadProject(projectRootPath);
+          }
+      } catch (err) {
+          console.error('Failed to copy audio to project:', err);
+          addToast('Failed to copy audio to project', 'error');
+      }
+  }, [projectRootPath, loadProject, addToast]);
 
   // --- Drafting Mode Logic ---
   const updateDraftingArtifacts = useCallback(async () => {
@@ -2937,15 +3071,15 @@ const App: React.FC = () => {
         blocks={blocks} groups={groups} stickyNotes={stickyNotes} analysisResult={analysisResult}
         updateBlock={updateBlock} updateGroup={updateGroup} updateBlockPositions={updateBlockPositions}
         updateGroupPositions={updateGroupPositions} updateStickyNote={updateStickyNote} deleteStickyNote={deleteStickyNote}
-        onInteractionEnd={() => {}} deleteBlock={deleteBlock} onOpenEditor={handleOpenEditor}
+        onInteractionEnd={canvasInteractionEnd} deleteBlock={deleteBlock} onOpenEditor={handleOpenEditor}
         selectedBlockIds={selectedBlockIds} setSelectedBlockIds={setSelectedBlockIds}
         selectedGroupIds={selectedGroupIds} setSelectedGroupIds={setSelectedGroupIds}
-        findUsagesHighlightIds={findUsagesHighlightIds} clearFindUsages={() => setFindUsagesHighlightIds(null)}
+        findUsagesHighlightIds={findUsagesHighlightIds} clearFindUsages={handleClearFindUsages}
         dirtyBlockIds={dirtyBlockIds} canvasFilters={canvasFilters} setCanvasFilters={setCanvasFilters}
         centerOnBlockRequest={centerOnBlockRequest} flashBlockRequest={flashBlockRequest}
         hoverHighlightIds={hoverHighlightIds} transform={storyCanvasTransform} onTransformChange={setStoryCanvasTransform}
         onCreateBlock={handleCreateBlockFromCanvas} onAddStickyNote={addStickyNote} mouseGestures={appSettings.mouseGestures}
-        onOpenRouteCanvas={() => handleOpenStaticTab('route-canvas')}
+        onOpenRouteCanvas={handleOpenRouteCanvasTab}
       />;
     }
     if (tab.type === 'route-canvas') {
@@ -3003,31 +3137,31 @@ const App: React.FC = () => {
     if (tab.type === 'image' && tab.filePath) {
       const img = images.get(tab.filePath);
       if (img) { const meta = imageMetadata.get(img.projectFilePath || img.filePath); return <ImageEditorView
-        image={img} allImages={Array.from(images.values())} metadata={meta}
-        onUpdateMetadata={(path, newMeta) => { setImageMetadata(prev => { const next = new Map(prev); next.set(path, newMeta); return next; }); setHasUnsavedSettings(true); }}
-        onCopyToProject={async (sourcePath, meta) => { try { if (window.electronAPI && projectRootPath) { const fileName = sourcePath.split('/').pop() || 'image.png'; const subfolder = meta.projectSubfolder || ''; const destDir = await window.electronAPI.path.join(projectRootPath, 'game', 'images', subfolder); const destPath = await window.electronAPI.path.join(destDir, fileName); await window.electronAPI.copyEntry(sourcePath, destPath); await loadProject(projectRootPath); } } catch (err) { console.error('Failed to copy image to project:', err); addToast('Failed to copy image to project', 'error'); } }}
+        image={img} allImages={imagesArray} metadata={meta}
+        onUpdateMetadata={handleUpdateImageMetadata}
+        onCopyToProject={handleCopyImageToProject}
       />; }
     }
     if (tab.type === 'audio' && tab.filePath) {
       const aud = audios.get(tab.filePath);
       if (aud) { const meta = audioMetadata.get(aud.projectFilePath || aud.filePath); return <AudioEditorView
         audio={aud} metadata={meta}
-        onUpdateMetadata={(path, newMeta) => { setAudioMetadata(prev => { const next = new Map(prev); next.set(path, newMeta); return next; }); setHasUnsavedSettings(true); }}
-        onCopyToProject={async (sourcePath, meta) => { try { if (window.electronAPI && projectRootPath) { const fileName = sourcePath.split('/').pop() || 'audio.ogg'; const subfolder = meta.projectSubfolder || ''; const destDir = await window.electronAPI.path.join(projectRootPath, 'game', 'audio', subfolder); const destPath = await window.electronAPI.path.join(destDir, fileName); await window.electronAPI.copyEntry(sourcePath, destPath); await loadProject(projectRootPath); } } catch (err) { console.error('Failed to copy audio to project:', err); addToast('Failed to copy audio to project', 'error'); } }}
+        onUpdateMetadata={handleUpdateAudioMetadata}
+        onCopyToProject={handleCopyAudioToProject}
       />; }
     }
     if (tab.type === 'character' && tab.characterTag) {
       const char = analysisResultWithProfiles.characters.get(tab.characterTag);
       return <CharacterEditorView character={char} onSave={handleUpdateCharacter}
-        existingTags={Array.from(analysisResult.characters.keys())}
-        projectImages={Array.from(images.values())} imageMetadata={imageMetadata}
+        existingTags={characterTagsArray}
+        projectImages={imagesArray} imageMetadata={imageMetadata}
       />;
     }
     if (tab.type === 'scene-composer' && tab.sceneId) {
       const composition = sceneCompositions[tab.sceneId] || { background: null, sprites: [] };
       const name = sceneNames[tab.sceneId] || 'Scene';
       return <SceneComposer
-        images={Array.from(images.values())} metadata={imageMetadata} scene={composition}
+        images={imagesArray} metadata={imageMetadata} scene={composition}
         onSceneChange={(val) => handleSceneUpdate(tab.sceneId!, val)} sceneName={name}
         onRenameScene={(newName) => handleRenameScene(tab.sceneId!, newName)}
       />;
@@ -3041,7 +3175,7 @@ const App: React.FC = () => {
       };
       const allLabels = Object.keys(analysisResult.labels);
       return <ImageMapComposer
-        images={Array.from(images.values())}
+        images={imagesArray}
         imagemap={composition}
         onImageMapChange={(val) => handleImageMapUpdate(tab.imagemapId!, val)}
         imagemapName={composition.screenName}
@@ -3286,11 +3420,15 @@ const App: React.FC = () => {
             >
               {renderTabBar(openTabs, activeTabId, 'primary', primaryTabBarRef)}
               <div className="flex-grow relative overflow-hidden">
-                {openTabs.map(tab => (
-                    <div key={tab.id} className="w-full h-full absolute" style={{ visibility: tab.id === activeTabId ? 'visible' : 'hidden' }}>
-                        {renderTabContent(tab)}
-                    </div>
-                ))}
+                {openTabs.map(tab => {
+                    const isActive = tab.id === activeTabId;
+                    if (isActive) primaryMountedTabsRef.current.add(tab.id);
+                    return (
+                        <div key={tab.id} className="w-full h-full absolute" style={{ visibility: isActive ? 'visible' : 'hidden' }}>
+                            {primaryMountedTabsRef.current.has(tab.id) ? renderTabContent(tab) : null}
+                        </div>
+                    );
+                })}
               </div>
             </div>
 
@@ -3310,11 +3448,15 @@ const App: React.FC = () => {
               >
                 {renderTabBar(secondaryOpenTabs, secondaryActiveTabId, 'secondary', secondaryTabBarRef)}
                 <div className="flex-grow relative overflow-hidden">
-                  {secondaryOpenTabs.map(tab => (
-                    <div key={tab.id} className="w-full h-full absolute" style={{ visibility: tab.id === secondaryActiveTabId ? 'visible' : 'hidden' }}>
-                        {renderTabContent(tab)}
-                    </div>
-                  ))}
+                  {secondaryOpenTabs.map(tab => {
+                    const isActive = tab.id === secondaryActiveTabId;
+                    if (isActive) secondaryMountedTabsRef.current.add(tab.id);
+                    return (
+                        <div key={tab.id} className="w-full h-full absolute" style={{ visibility: isActive ? 'visible' : 'hidden' }}>
+                            {secondaryMountedTabsRef.current.has(tab.id) ? renderTabContent(tab) : null}
+                        </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -3322,33 +3464,12 @@ const App: React.FC = () => {
           </div>{/* end panes container */}
 
           <StatusBar
-              totalWords={useMemo(() => {
-                  return blocks.reduce((acc, b) => acc + countWordsInRenpyScript(b.content), 0);
-              }, [blocks])}
-              currentFileWords={useMemo(() => {
-                  if (activeTabId && activeTabId !== 'canvas') {
-                      const activeBlock = blocks.find(b => b.id === activeTabId);
-                      if (activeBlock) return countWordsInRenpyScript(activeBlock.content);
-                  }
-                  return null;
-              }, [blocks, activeTabId])}
-              readingTime={useMemo(() => {
-                  const totalWords = blocks.reduce((acc, b) => acc + countWordsInRenpyScript(b.content), 0);
-                  const minutes = Math.ceil(totalWords / 200);
-                  if (minutes < 60) return `${minutes} min read`;
-                  const hours = Math.floor(minutes / 60);
-                  const mins = minutes % 60;
-                  return `${hours}h ${mins}m read`;
-              }, [blocks])}
-              statusMessage={statusBarMessage}
-              version={APP_VERSION}
-              build={BUILD_NUMBER}
-              cursorPosition={(() => {
-                const focusedTabs = activePaneId === 'primary' ? openTabs : secondaryOpenTabs;
-                const focusedActiveId = activePaneId === 'primary' ? activeTabId : secondaryActiveTabId;
-                const focusedTab = focusedTabs.find(t => t.id === focusedActiveId);
-                return focusedTab?.type === 'editor' ? editorCursorPosition : null;
-              })()}
+              isAnalysisPending={isAnalysisPending}
+              isScanningAssets={isScanningAssets}
+              saveStatus={saveStatus}
+              blockCount={blocks.length}
+              errorCount={diagnosticsResult.errorCount}
+              warningCount={diagnosticsResult.warningCount}
           />
 
         </div>
@@ -3396,14 +3517,19 @@ const App: React.FC = () => {
                             const path = await window.electronAPI.openDirectory();
                             if (path) {
                                 setImageScanDirectories(prev => new Map(prev).set(path, null as unknown as FileSystemDirectoryHandle));
-                                const { images: scanned } = await window.electronAPI.scanDirectory(path);
-                                setImages(prev => {
-                                    const next = new Map(prev);
-                                    scanned.forEach((img) => {
-                                        if (!next.has(img.path)) next.set(img.path, { ...img, filePath: img.path, isInProject: false, fileHandle: null });
+                                setIsScanningAssets(true);
+                                try {
+                                    const { images: scanned } = await window.electronAPI.scanDirectory(path);
+                                    setImages(prev => {
+                                        const next = new Map(prev);
+                                        scanned.forEach((img) => {
+                                            if (!next.has(img.path)) next.set(img.path, { ...img, filePath: img.path, isInProject: false, fileHandle: null });
+                                        });
+                                        return next;
                                     });
-                                    return next;
-                                });
+                                } finally {
+                                    setIsScanningAssets(false);
+                                }
                                 setHasUnsavedSettings(true);
                             }
                         } catch (err) {
@@ -3459,14 +3585,19 @@ const App: React.FC = () => {
                             const path = await window.electronAPI.openDirectory();
                             if (path) {
                                 setAudioScanDirectories(prev => new Map(prev).set(path, null as unknown as FileSystemDirectoryHandle));
-                                const { audios: scanned } = await window.electronAPI.scanDirectory(path);
-                                setAudios(prev => {
-                                    const next = new Map(prev);
-                                    scanned.forEach((aud) => {
-                                        if (!next.has(aud.path)) next.set(aud.path, { ...aud, filePath: aud.path, isInProject: false, fileHandle: null });
+                                setIsScanningAssets(true);
+                                try {
+                                    const { audios: scanned } = await window.electronAPI.scanDirectory(path);
+                                    setAudios(prev => {
+                                        const next = new Map(prev);
+                                        scanned.forEach((aud) => {
+                                            if (!next.has(aud.path)) next.set(aud.path, { ...aud, filePath: aud.path, isInProject: false, fileHandle: null });
+                                        });
+                                        return next;
                                     });
-                                    return next;
-                                });
+                                } finally {
+                                    setIsScanningAssets(false);
+                                }
                                 setHasUnsavedSettings(true);
                             }
                         } catch (err) {
@@ -3604,6 +3735,7 @@ const App: React.FC = () => {
       )}
 
       {isLoading && <LoadingOverlay progress={loadingProgress} message={loadingMessage} onCancel={handleCancelLoad} />}
+      {isInitialAnalysisPending && !isLoading && <AnalysisOverlay blockCount={blocks.length} />}
       
       <div className="fixed bottom-4 right-4 z-[9999] flex flex-col space-y-2 pointer-events-none">
         {toasts.map(toast => (

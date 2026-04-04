@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import type { ProjectImage, ImageMetadata } from '../types';
 
 interface ImageEditorViewProps {
@@ -43,6 +43,7 @@ const ImageEditorView: React.FC<ImageEditorViewProps> = ({ image, allImages, met
   const [onionSkinImageId, setOnionSkinImageId] = useState<string>('');
   const [onionSkinOpacity, setOnionSkinOpacity] = useState(0.5);
   const [showOnionSkin, setShowOnionSkin] = useState(true);
+  const [onionSkinSearch, setOnionSkinSearch] = useState('');
 
   // Zoom & pan state
   const [zoom, setZoom] = useState<number | null>(null); // null = fit to viewport
@@ -195,11 +196,16 @@ const ImageEditorView: React.FC<ImageEditorViewProps> = ({ image, allImages, met
       return allImages.find(img => img.filePath === onionSkinImageId);
   }, [onionSkinImageId, allImages]);
 
+  // Only compute + render options matching the search term (capped at 100) to
+  // avoid creating thousands of <option> DOM nodes with large image libraries.
   const onionSkinOptions = useMemo(() => {
+      const lowerSearch = onionSkinSearch.toLowerCase().trim();
+      if (!lowerSearch) return [];
       return allImages
-        .filter(img => img.filePath !== image.filePath)
-        .sort((a, b) => a.fileName.localeCompare(b.fileName));
-  }, [allImages, image.filePath]);
+        .filter(img => img.filePath !== image.filePath && img.fileName.toLowerCase().includes(lowerSearch))
+        .sort((a, b) => a.fileName.localeCompare(b.fileName))
+        .slice(0, 100);
+  }, [allImages, image.filePath, onionSkinSearch]);
 
   const zoomPct = `${Math.round(effectiveZoom * 100)}%`;
   const checkered = "bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScyMCcgaGVpZ2h0PScyMCc+PHJlY3Qgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSIjZjBmMGYwIiAvPjxyZWN0IHg9JzEwJyB5PScxMCcgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSIjZjBmMGYwIiAvPjwvc3ZnPg==')] dark:bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScyMCcgaGVpZ2h0PScyMCc+PHJlY3Qgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSIjMjcyNzJhIiAvPjxyZWN0IHg9JzEwJyB5PScxMCcgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSIjMjcyNzJhIiAvPjwvc3ZnPg==')]";
@@ -328,12 +334,20 @@ const ImageEditorView: React.FC<ImageEditorViewProps> = ({ image, allImages, met
                 </button>
             </div>
             <div className="space-y-2">
+                <input
+                    type="text"
+                    value={onionSkinSearch}
+                    onChange={e => setOnionSkinSearch(e.target.value)}
+                    placeholder="Search images to overlay…"
+                    className="w-full text-xs p-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 placeholder-gray-400"
+                />
                 <select
                     value={onionSkinImageId}
                     onChange={(e) => setOnionSkinImageId(e.target.value)}
                     className="w-full text-xs p-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+                    size={onionSkinOptions.length > 0 ? Math.min(onionSkinOptions.length + 1, 6) : 2}
                 >
-                    <option value="">-- Select Image to Overlay --</option>
+                    <option value="">{onionSkinSearch ? `${onionSkinOptions.length} result${onionSkinOptions.length !== 1 ? 's' : ''}` : '— type to search —'}</option>
                     {onionSkinOptions.map(img => (
                         <option key={img.filePath} value={img.filePath}>{img.fileName}</option>
                     ))}
@@ -438,4 +452,4 @@ const ImageEditorView: React.FC<ImageEditorViewProps> = ({ image, allImages, met
   );
 };
 
-export default ImageEditorView;
+export default memo(ImageEditorView);

@@ -6,8 +6,19 @@
  * Uses regex patterns to parse Ren'Py syntax and build connection maps between story blocks.
  */
 
-import { useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Block, RenpyAnalysisResult, LabelLocation, JumpLocation, Character, Variable, RenpyScreen, LabelNode, RouteLink, IdentifiedRoute } from '../types';
+
+/**
+ * Minimal block shape used by the analysis engine — only the fields it actually reads.
+ * Passing this instead of full Block[] to the worker avoids sending position/size/etc.
+ * over the postMessage boundary on every canvas drag or resize.
+ */
+export interface AnalysisBlock {
+  id: string;
+  content: string;
+  filePath?: string;
+}
 
 const LABEL_REGEX = /^\s*label\s+([a-zA-Z0-9_]+):/;
 const JUMP_CALL_EXPRESSION_REGEX = /\b(jump|call)\s+expression\s+(?:"([a-zA-Z0-9_]+)"|'([a-zA-Z0-9_]+)'|([a-zA-Z0-9_.]+))/g;
@@ -154,7 +165,7 @@ function buildMenuChoiceContextMap(content: string): Map<number, ChoiceContext> 
   return map;
 }
 
-export const performRenpyAnalysis = (blocks: Block[]): RenpyAnalysisResult => {
+export const performRenpyAnalysis = (blocks: AnalysisBlock[]): RenpyAnalysisResult => {
   const result: RenpyAnalysisResult = {
     labels: {},
     jumps: {},
@@ -509,8 +520,8 @@ const computeGraphLayout = (nodes: LabelNode[], links: RouteLink[]) => {
 };
 
 export const performRouteAnalysis = (
-    blocks: Block[], 
-    labels: RenpyAnalysisResult['labels'], 
+    blocks: AnalysisBlock[],
+    labels: RenpyAnalysisResult['labels'],
     jumps: RenpyAnalysisResult['jumps']
 ): { labelNodes: LabelNode[], routeLinks: RouteLink[], identifiedRoutes: IdentifiedRoute[] } => {
   const labelNodes = new Map<string, LabelNode>();
@@ -650,20 +661,98 @@ export const performRouteAnalysis = (
   return { labelNodes: nodesArray, routeLinks, identifiedRoutes };
 }
 
-export const useRenpyAnalysis = (blocks: Block[], trigger: number): RenpyAnalysisResult => {
-  const analysisKey = useMemo(() => blocks.map(b => `${b.id}:${b.content}`).join('||'), [blocks]);
+/** Empty result returned on first render before the worker responds. */
+export const EMPTY_ANALYSIS_RESULT: RenpyAnalysisResult = {
+  links: [],
+  invalidJumps: {},
+  firstLabels: {},
+  labels: {},
+  jumps: {},
+  rootBlockIds: new Set(),
+  leafBlockIds: new Set(),
+  branchingBlockIds: new Set(),
+  screenOnlyBlockIds: new Set(),
+  storyBlockIds: new Set(),
+  configBlockIds: new Set(),
+  characters: new Map(),
+  dialogueLines: new Map(),
+  characterUsage: new Map(),
+  variables: new Map(),
+  variableUsages: new Map(),
+  screens: new Map(),
+  definedImages: new Set(),
+  blockTypes: new Map(),
+  labelNodes: [],
+  routeLinks: [],
+  identifiedRoutes: [],
+};
 
-  const analysisResult = useMemo(() => {
-    const result = performRenpyAnalysis(blocks);
-    const routeData = performRouteAnalysis(blocks, result.labels, result.jumps);
-    
-    result.labelNodes = routeData.labelNodes;
-    result.routeLinks = routeData.routeLinks;
-    result.identifiedRoutes = routeData.identifiedRoutes;
+/** Module-level worker singleton — created once, reused across re-renders. */
+let _analysisWorker: Worker | null = null;
 
-    return result;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analysisKey, trigger]);
+const getAnalysisWorker = (): Worker | null => {
+  if (typeof Worker === 'undefined') return null;
+  if (!_analysisWorker) {
+    try {
+      _analysisWorker = new Worker(
+        new URL('../workers/renpyAnalysis.worker.ts', import.meta.url),
+        { type: 'module' }
+      );
+    } catch {
+      return null;
+    }
+  }
+  return _analysisWorker;
+};
 
-  return analysisResult;
+/**
+ * Hook that runs Ren'Py analysis asynchronously via a Web Worker.
+ * Returns `[result, isPending]` — `isPending` is true while the worker is computing.
+ * Falls back to synchronous analysis if Web Workers are unavailable (e.g. test env).
+ */
+export const useRenpyAnalysis = (blocks: AnalysisBlock[], trigger: number): [RenpyAnalysisResult, boolean] => {
+  const [result, setResult] = useState<RenpyAnalysisResult>(EMPTY_ANALYSIS_RESULT);
+  const [isPending, setIsPending] = useState(false);
+  const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    const currentId = ++requestIdRef.current;
+    setIsPending(true);
+
+    const worker = getAnalysisWorker();
+
+    if (!worker) {
+      // Synchronous fallback — test environment or Worker unavailable
+      const r = performRenpyAnalysis(blocks);
+      const routeData = performRouteAnalysis(blocks, r.labels, r.jumps);
+      r.labelNodes = routeData.labelNodes;
+      r.routeLinks = routeData.routeLinks;
+      r.identifiedRoutes = routeData.identifiedRoutes;
+      setResult(r);
+      setIsPending(false);
+      return;
+    }
+
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data.id !== currentId) return; // stale — a newer request superseded this one
+      worker.removeEventListener('message', handleMessage);
+      if (!e.data.error) {
+        setResult(e.data.result);
+      }
+      setIsPending(false);
+    };
+
+    worker.addEventListener('message', handleMessage);
+    worker.postMessage({ id: currentId, blocks });
+
+    return () => {
+      worker.removeEventListener('message', handleMessage);
+      // Worker keeps running but its response will be ignored (stale id)
+    };
+  // blocks reference only changes when debouncedBlocks updates (after debounce fires),
+  // so this is safe to use directly without a content-hash key.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocks, trigger]);
+
+  return [result, isPending];
 };

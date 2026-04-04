@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
 import type { Character, ProjectImage, ImageMetadata } from '../types';
 
 interface CharacterEditorViewProps {
@@ -21,6 +21,7 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
     const [name, setName] = useState(character?.name || '');
     const [color, setColor] = useState(character?.color || '#E57373');
     const [image, setImage] = useState(character?.image || '');
+    const [imageSearch, setImageSearch] = useState('');
     const [profile, setProfile] = useState(character?.profile || '');
 
     // Dialogue color — tracked separately so empty = "no override"
@@ -84,7 +85,11 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
         }
     }, [character]);
 
+    // Only compute + render options matching the search term (capped at 100) to avoid
+    // creating thousands of <option> DOM nodes for large image libraries.
     const imageOptions = useMemo(() => {
+        const lowerSearch = imageSearch.toLowerCase().trim();
+        if (!lowerSearch) return [];
         const options = new Map<string, string>();
         projectImages.forEach(img => {
             if (!img.isInProject) return;
@@ -92,10 +97,10 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
             if (normalizedPath.includes('/gui/')) return;
             const meta = imageMetadata.get(img.projectFilePath || '');
             const renpyName = meta?.renpyName || img.fileName.split('.').slice(0, -1).join('.');
-            options.set(renpyName, renpyName);
+            if (renpyName.toLowerCase().includes(lowerSearch)) options.set(renpyName, renpyName);
         });
-        return Array.from(options.keys()).sort();
-    }, [projectImages, imageMetadata]);
+        return Array.from(options.keys()).sort().slice(0, 100);
+    }, [projectImages, imageMetadata, imageSearch]);
 
     const handleSave = () => {
         const isTagUnique = !existingTags.some(t => t === tag && t !== character?.tag);
@@ -210,9 +215,18 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
 
                     <div>
                         <label className="text-sm font-medium">Image Tag</label>
+                        <input
+                            type="text"
+                            value={imageSearch}
+                            onChange={e => setImageSearch(e.target.value)}
+                            placeholder="Search image tags…"
+                            className="w-full mt-1 p-2 rounded bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        />
                         <select value={image} onChange={e => setImage(e.target.value)}
-                            className="w-full mt-1 p-2 rounded bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500">
-                            <option value="">None</option>
+                            className="w-full mt-1 p-2 rounded bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500"
+                            size={imageOptions.length > 0 ? Math.min(imageOptions.length + 1, 6) : 2}
+                        >
+                            <option value="">{imageSearch ? `${imageOptions.length} result${imageOptions.length !== 1 ? 's' : ''}` : '— type to search —'}</option>
                             {imageOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                         </select>
                         <HelpText>Associates this character with an image tag for side images.</HelpText>
@@ -315,4 +329,4 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
     );
 };
 
-export default CharacterEditorView;
+export default memo(CharacterEditorView);

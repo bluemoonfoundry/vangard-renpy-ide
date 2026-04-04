@@ -1,6 +1,9 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { RenpyAudio, AudioMetadata } from '../types';
+import { useVirtualList } from '../hooks/useVirtualList';
+
+const AUDIO_ITEM_HEIGHT = 44; // p-2 (16px) + h-5 icon (20px) + border-2 (4px) + space-y-2 gap (8px)
 import AudioContextMenu from './AudioContextMenu';
 
 interface AudioManagerProps {
@@ -116,6 +119,8 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
     }
     return visibleAudios;
   }, [audios, metadata, searchTerm, selectedSource]);
+
+  const { containerRef, handleScroll, virtualItems, totalHeight } = useVirtualList(filteredAudios, AUDIO_ITEM_HEIGHT);
 
   const handleSelectAudio = (filePath: string, isCurrentlySelected: boolean) => {
     setSelectedAudioPaths(prev => {
@@ -289,20 +294,25 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
           </button>
         </div>
       </div>
-      <div className="flex-grow overflow-y-auto -mr-4 pr-4 overscroll-contain">
-        <div className="space-y-2">
-          {filteredAudios.map(audio => (
-            <AudioItem
-              key={audio.filePath}
-              audio={audio}
-              isSelected={selectedAudioPaths.has(audio.filePath)}
-              onSelect={handleSelectAudio}
-              onDoubleClick={onOpenAudioEditor}
-              onContextMenu={handleContextMenu}
-              onDragStart={(e) => handleDragStart(e, audio)}
-              isPlaying={playingFile === audio.filePath}
-              onTogglePlay={() => handleTogglePlay(audio)}
-            />
+      <div
+        ref={containerRef}
+        className="flex-grow overflow-y-auto -mr-4 pr-4 overscroll-contain"
+        onScroll={handleScroll}
+      >
+        <div style={{ height: totalHeight, position: 'relative' }}>
+          {virtualItems.map(({ item: audio, offsetTop }) => (
+            <div key={audio.filePath} style={{ position: 'absolute', top: offsetTop, left: 0, right: '1rem', height: AUDIO_ITEM_HEIGHT - 8 }}>
+              <AudioItem
+                audio={audio}
+                isSelected={selectedAudioPaths.has(audio.filePath)}
+                onSelect={handleSelectAudio}
+                onDoubleClick={onOpenAudioEditor}
+                onContextMenu={handleContextMenu}
+                onDragStart={(e) => handleDragStart(e, audio)}
+                isPlaying={playingFile === audio.filePath}
+                onTogglePlay={() => handleTogglePlay(audio)}
+              />
+            </div>
           ))}
         </div>
         {audios.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No audio found. Add a source directory to get started.</p>}

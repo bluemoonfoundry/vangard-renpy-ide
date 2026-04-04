@@ -1046,6 +1046,7 @@ declare global {
           createProject?: () => Promise<string | null>;
           checkRenpyProject?: (path: string) => Promise<{ hasGameFolder: boolean; isRenpyProject: boolean }>;
           cancelProjectLoad?: () => void;
+          onLoadProgress?: (callback: (value: number, message: string) => void) => () => void;
           loadProject: (path: string) => Promise<ProjectLoadResult>;
           refreshProjectTree: (path: string) => Promise<FileSystemTreeNode>;
           readFile: (path: string) => Promise<string>;

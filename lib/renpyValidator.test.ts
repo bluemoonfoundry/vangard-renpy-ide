@@ -244,6 +244,74 @@ label broken`;
   });
 });
 
+// ── triple-quote block skipping ───────────────────────────────────────────
+
+describe('triple-quote block skipping', () => {
+  it('does not flag keywords inside a """ block', () => {
+    const code = `label start:
+    narrator """
+    You could jump off a cliff, or call for help.
+    play music "something.ogg"
+    define x = 5
+    """`;
+    expect(errors(code)).toHaveLength(0);
+  });
+
+  it('does not flag the original false-positive: nar """..."""', () => {
+    const code = `label start:
+    nar """This is multi-line
+    dialogue text here."""`;
+    expect(errors(code)).toHaveLength(0);
+  });
+
+  it('does not flag content inside a single-block """ span', () => {
+    const code = `label start:
+    e """
+    jump missing_colon
+    bare_stop
+    window
+    """`;
+    expect(errors(code)).toHaveLength(0);
+  });
+
+  it('resumes validation after """ block closes', () => {
+    const code = `label start:
+    narrator """
+    some text
+    """
+    jump`;
+    const e = errors(code);
+    expect(e).toHaveLength(1);
+    expect(e[0]).toContain('requires a label name');
+  });
+
+  it('handles \'\'\' triple-quote blocks', () => {
+    const code = `label start:
+    narrator '''
+    jump bare_call
+    stop
+    '''`;
+    expect(errors(code)).toHaveLength(0);
+  });
+
+  it('does not affect single-line triple-quotes (even count)', () => {
+    // A line with two """ is self-contained — no block opens, validation continues
+    const code = `label start:
+    jump`;
+    const e = errors(code);
+    expect(e).toHaveLength(1); // jump is still flagged
+  });
+
+  it('does not flag menu-choice-like lines inside a """ block', () => {
+    const code = `label start:
+    narrator """
+    "This looks like a menu choice"
+    "Another one" missing_colon
+    """`;
+    expect(errors(code)).toHaveLength(0);
+  });
+});
+
 // ── bare statements ────────────────────────────────────────────────────────
 
 describe('bare statements', () => {

@@ -154,6 +154,8 @@ const path = require('path');
 const fs = require('fs/promises');
 const { pathToFileURL } = require('url');
 
+const progress = (value, message) => parentPort.postMessage({ type: 'progress', value, message });
+
 async function run() {
     const { rootPath, readContent } = workerData;
     const results = {
@@ -165,10 +167,21 @@ async function run() {
         tree: { name: path.basename(rootPath), path: '', children: [] }
     };
 
+    progress(5, 'Scanning directory...');
+
+    // Phase 1: Build directory tree and collect .rpy paths (no content yet)
+    const rpyPaths = [];
+    let scannedEntries = 0;
     const readDirRecursive = async (dirPath, treeNode) => {
         const entries = await fs.readdir(dirPath, { withFileTypes: true });
         const children = [];
         for (const entry of entries) {
+            scannedEntries++;
+            // Emit scan progress every 500 entries (5% → 18%, capped)
+            if (scannedEntries % 500 === 0) {
+                const pct = Math.min(18, 5 + Math.floor(scannedEntries / 500));
+                progress(pct, 'Scanning... (' + scannedEntries.toLocaleString() + ' entries)');
+            }
             const fullPath = path.join(dirPath, entry.name);
             const relativePath = path.relative(rootPath, fullPath).replace(/\\/g, '/');
             const childNode = { name: entry.name, path: relativePath, children: entry.isDirectory() ? [] : undefined };
@@ -177,10 +190,7 @@ async function run() {
                 await readDirRecursive(fullPath, childNode);
             } else if (entry.isFile()) {
                 if (/\.(rpy)$/i.test(entry.name)) {
-                    if (readContent) {
-                        const content = await fs.readFile(fullPath, 'utf-8');
-                        results.files.push({ path: relativePath, content });
-                    }
+                    rpyPaths.push({ fullPath, relativePath });
                 } else if (/\.(png|jpe?g|webp)$/i.test(entry.name)) {
                     const stats = await fs.stat(fullPath);
                     const mediaUrl = pathToFileURL(fullPath).toString().replace(/^file:/, 'media:');
@@ -202,6 +212,22 @@ async function run() {
     };
 
     await readDirRecursive(rootPath, results.tree);
+    progress(20, 'Found ' + rpyPaths.length + ' script file' + (rpyPaths.length !== 1 ? 's' : '') + ', ' + results.images.length + ' image' + (results.images.length !== 1 ? 's' : '') + '...');
+
+    // Phase 2: Read .rpy content with per-file progress (20% → 88%)
+    if (readContent) {
+        for (let i = 0; i < rpyPaths.length; i++) {
+            const { fullPath, relativePath } = rpyPaths[i];
+            const content = await fs.readFile(fullPath, 'utf-8');
+            results.files.push({ path: relativePath, content });
+            const pct = 20 + Math.round(((i + 1) / Math.max(rpyPaths.length, 1)) * 68);
+            progress(pct, 'Reading ' + path.basename(relativePath) + '...');
+        }
+    } else {
+        results.files = rpyPaths.map(({ relativePath }) => ({ path: relativePath, content: '' }));
+    }
+
+    progress(92, 'Loading project settings...');
 
     try {
         const settingsContent = await fs.readFile(path.join(rootPath, 'game', 'project.ide.json'), 'utf-8');
@@ -210,13 +236,13 @@ async function run() {
         results.settings = {};
     }
 
-    parentPort.postMessage({ ok: true, data: results });
+    parentPort.postMessage({ type: 'result', ok: true, data: results });
 }
 
-run().catch(err => parentPort.postMessage({ ok: false, error: err.message }));
+run().catch(err => parentPort.postMessage({ type: 'result', ok: false, error: err.message }));
 `;
 
-function readProjectFiles(rootPath, { readContent = true } = {}) {
+function readProjectFiles(rootPath, { readContent = true } = {}, onProgress = null) {
     return new Promise((resolve, reject) => {
         const worker = new Worker(PROJECT_LOAD_WORKER_CODE, {
             eval: true,
@@ -226,6 +252,11 @@ function readProjectFiles(rootPath, { readContent = true } = {}) {
         let settled = false;
 
         worker.on('message', (msg) => {
+            if (msg.type === 'progress') {
+                if (onProgress) onProgress(msg.value, msg.message);
+                return;
+            }
+            // type === 'result'
             settled = true;
             activeLoadWorker = null;
             if (msg.ok) {
@@ -723,7 +754,11 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('project:load', async (event, rootPath) => {
-    return await readProjectFiles(rootPath);
+    return await readProjectFiles(rootPath, { readContent: true }, (value, message) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('project:load-progress', value, message);
+      }
+    });
   });
 
   ipcMain.handle('project:refresh-tree', async (event, rootPath) => {

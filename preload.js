@@ -5,6 +5,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createProject: () => ipcRenderer.invoke('dialog:createProject'),
   checkRenpyProject: (rootPath) => ipcRenderer.invoke('dialog:checkRenpyProject', rootPath),
   cancelProjectLoad: () => ipcRenderer.send('project:cancel-load'),
+  onLoadProgress: (callback) => {
+    const handler = (_event, value, message) => callback(value, message);
+    ipcRenderer.on('project:load-progress', handler);
+    return () => ipcRenderer.removeListener('project:load-progress', handler);
+  },
   loadProject: (rootPath) => ipcRenderer.invoke('project:load', rootPath),
   refreshProjectTree: (rootPath) => ipcRenderer.invoke('project:refresh-tree', rootPath),
   readFile: (filePath) => ipcRenderer.invoke('fs:readFile', filePath),
