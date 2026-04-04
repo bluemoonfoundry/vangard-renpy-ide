@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import type { RenpyAudio, AudioMetadata } from '../types';
 
 interface AudioEditorViewProps {
@@ -133,4 +133,4 @@ const AudioEditorView: React.FC<AudioEditorViewProps> = ({ audio, metadata, onUp
   );
 };
 
-export default AudioEditorView;
+export default memo(AudioEditorView);

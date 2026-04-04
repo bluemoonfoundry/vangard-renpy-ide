@@ -1,5 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import type { Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, RenpyScreen, RenpyAnalysisResult, UserSnippet } from '../types';
+import { useVirtualList } from '../hooks/useVirtualList';
+
+// p-2 (16px) + color dot/name/tag rows (~36px) + space-y-2 gap (8px)
+const CHAR_ITEM_HEIGHT = 60;
 import VariableManager from './VariableManager';
 import ImageManager from './ImageManager';
 import AudioManager from './AudioManager';
@@ -113,8 +117,17 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('characters');
 
+    // Memoize Map→Array conversions so child components don't see a new reference
+    // on every parent re-render (which would blow their own useMemo caches).
+    const imagesArray = useMemo(() => Array.from(projectImages.values()), [projectImages]);
+    const audiosArray = useMemo(() => Array.from(projectAudios.values()), [projectAudios]);
+
     const { characters, characterUsage } = analysisResult;
-    const characterList = Array.from(characters.values()).sort((a: Character, b: Character) => a.name.localeCompare(b.name));
+    const characterList = useMemo(
+        () => Array.from(characters.values()).sort((a: Character, b: Character) => a.name.localeCompare(b.name)),
+        [characters],
+    );
+    const { containerRef: charContainerRef, handleScroll: charHandleScroll, virtualItems: charVirtualItems, totalHeight: charTotalHeight } = useVirtualList(characterList, CHAR_ITEM_HEIGHT);
 
     const handleCharacterDragStart = (e: React.DragEvent, char: Character) => {
         e.dataTransfer.setData('application/renpy-dnd', JSON.stringify({
@@ -141,46 +154,57 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
             </nav>
             <main className="flex-grow flex flex-col min-h-0 overflow-hidden relative">
                 {activeTab === 'characters' && (
-                    <div className="flex-grow overflow-y-auto p-4 overscroll-contain space-y-3">
-                        <div className="flex justify-between items-center">
+                    <div className="flex-grow flex flex-col min-h-0 p-4 gap-3">
+                        <div className="flex justify-between items-center flex-none">
                             <h3 className="font-semibold">Characters ({characterList.length})</h3>
                             <button onClick={() => onOpenCharacterEditor('new_character')} className="px-3 py-1 rounded bg-accent hover:bg-accent-hover text-white text-sm font-bold">+ Add</button>
                         </div>
-                        <ul className="space-y-2">
-                            {characterList.map((char: Character) => (
-                                <li
-                                  key={char.tag}
-                                  draggable
-                                  onDragStart={(e) => handleCharacterDragStart(e, char)}
-                                  className="p-2 rounded-md bg-secondary border border-primary flex items-center justify-between cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
-                                  onMouseEnter={() => onHoverHighlightStart(char.tag, 'character')}
-                                  onMouseLeave={onHoverHighlightEnd}
-                                  title="Drag to editor to insert dialogue"
+                        {characterList.length === 0
+                            ? <p className="text-sm text-secondary text-center py-4">No characters defined yet.</p>
+                            : (
+                                <div
+                                    ref={charContainerRef}
+                                    className="flex-grow overflow-y-auto overscroll-contain"
+                                    onScroll={charHandleScroll}
                                 >
-                                    <div className="flex items-center space-x-3 min-w-0 pointer-events-none">
-                                        <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: char.color }}></div>
-                                        <div className="min-w-0">
-                                            <p className="font-semibold truncate text-primary">{char.name}</p>
-                                            <p className="text-xs text-secondary font-mono truncate">{char.tag}</p>
-                                        </div>
+                                    <div style={{ height: charTotalHeight, position: 'relative' }}>
+                                        {charVirtualItems.map(({ item: char, offsetTop }) => (
+                                            <div
+                                                key={char.tag}
+                                                style={{ position: 'absolute', top: offsetTop, left: 0, right: 0, height: CHAR_ITEM_HEIGHT - 8 }}
+                                                draggable
+                                                onDragStart={(e) => handleCharacterDragStart(e, char)}
+                                                className="p-2 rounded-md bg-secondary border border-primary flex items-center justify-between cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
+                                                onMouseEnter={() => onHoverHighlightStart(char.tag, 'character')}
+                                                onMouseLeave={onHoverHighlightEnd}
+                                                title="Drag to editor to insert dialogue"
+                                            >
+                                                <div className="flex items-center space-x-3 min-w-0 pointer-events-none">
+                                                    <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: char.color }}></div>
+                                                    <div className="min-w-0">
+                                                        <p className="font-semibold truncate text-primary">{char.name}</p>
+                                                        <p className="text-xs text-secondary font-mono truncate">{char.tag}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center space-x-1 flex-shrink-0 pl-2">
+                                                    <span className="text-xs text-secondary mr-2">({characterUsage.get(char.tag) || 0} lines)</span>
+                                                    <button onClick={() => onFindCharacterUsages(char.tag)} title="Find Usages" className="p-1 text-secondary hover:text-accent rounded">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                                    </button>
+                                                    <button onClick={() => onOpenCharacterEditor(char.tag)} title="Edit Character" className="p-1 text-secondary hover:text-accent rounded">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" /></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                    <div className="flex items-center space-x-1 flex-shrink-0 pl-2">
-                                        <span className="text-xs text-secondary mr-2">({characterUsage.get(char.tag) || 0} lines)</span>
-                                        <button onClick={() => onFindCharacterUsages(char.tag)} title="Find Usages" className="p-1 text-secondary hover:text-accent rounded">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                        </button>
-                                        <button onClick={() => onOpenCharacterEditor(char.tag)} title="Edit Character" className="p-1 text-secondary hover:text-accent rounded">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" /></svg>
-                                        </button>
-                                    </div>
-                                </li>
-                            ))}
-                            {characterList.length === 0 && <p className="text-sm text-secondary text-center py-4">No characters defined yet.</p>}
-                        </ul>
+                                </div>
+                            )
+                        }
                     </div>
                 )}
                 {activeTab === 'variables' && (
-                    <div className="flex-grow overflow-y-auto p-4 overscroll-contain">
+                    <div className="flex-grow overflow-y-auto p-4 overscroll-contain min-h-0">
                         <VariableManager
                             analysisResult={analysisResult}
                             onAddVariable={onAddVariable}
@@ -194,7 +218,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                     <div className="h-full flex flex-col">
                         <div className="flex-1 overflow-hidden">
                             <ImageManager
-                                images={Array.from(projectImages.values())}
+                                images={imagesArray}
                                 metadata={imageMetadata}
                                 scanDirectories={Array.from(imageScanDirectories.keys())}
                                 onAddScanDirectory={onAddImageScanDirectory}
@@ -213,7 +237,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                     <div className="h-full flex flex-col">
                         <div className="flex-1 overflow-hidden">
                             <AudioManager
-                                audios={Array.from(projectAudios.values())}
+                                audios={audiosArray}
                                 metadata={audioMetadata}
                                 scanDirectories={Array.from(audioScanDirectories.keys())}
                                 onAddScanDirectory={onAddAudioScanDirectory}
@@ -229,7 +253,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                     </div>
                 )}
                 {activeTab === 'screens' && (
-                    <div className="flex-grow overflow-y-auto p-4 overscroll-contain">
+                    <div className="flex-grow flex flex-col min-h-0">
                         <ScreenManager
                             screens={analysisResult.screens}
                             onFindDefinition={onFindScreenDefinition}

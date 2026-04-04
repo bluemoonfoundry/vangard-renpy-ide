@@ -36,7 +36,7 @@ const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ progress, message, onCa
             </p>
             <div className="w-full bg-gray-200 rounded-full h-4 dark:bg-gray-700">
               <div
-                className="bg-indigo-600 h-4 rounded-full transition-all duration-500 ease-out"
+                className="bg-indigo-600 h-4 rounded-full transition-all duration-150 ease-out"
                 style={{ width: `${progress}%` }}
               ></div>
             </div>
