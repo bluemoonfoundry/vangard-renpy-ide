@@ -4,9 +4,73 @@ All notable changes to Vangard Ren'Py IDE are documented here. Note that this is
 
 ---
 
-## [v0.7.0] — Public Beta 4 (Not Yet Released)
+## [v0.7.0] — Public Beta 4
 
 ### New Features
+
+#### ImageMap Composer
+- **Visual imagemap editor** — draw, resize, and manage clickable hotspot rectangles over a ground image with optional hover overlay. Each hotspot has a configurable action type (`jump` or `call`) and target label.
+- **Drag-and-drop images** — ground and hover images are set by dragging from the Image Assets panel.
+- **Ren'Py code generation** — generates `imagebutton`/`imagemap` screen code ready to copy into your project.
+- Compositions are persisted in `project.ide.json` and managed from the "Composers" tab in Story Elements.
+
+#### Screen Layout Composer
+- **Visual screen builder** — lay out Ren'Py screen widgets (vbox, hbox, text, imagebutton, etc.) with a drag-and-drop interface and live preview.
+- **Asset drag-and-drop** — drag images from the Image Assets panel directly onto screen widgets.
+- **Locked-screen workflow** — existing screens can be viewed in read-only mode; duplicate to create an editable copy.
+- **Code generation** — generates Ren'Py `screen` code with copy-to-clipboard support.
+
+#### Story Canvas Enhancements
+- **Fit-to-screen** — a button to automatically zoom and pan so all blocks fit within the viewport.
+- **Call arrows** — `call` connections are now visually distinct from `jump` arrows.
+- **Character filter** — hide blocks that don't involve a selected character for focused story review.
+- **Role tinting** — blocks are color-tinted based on character roles for quick visual identification.
+- **Legend overlay** — a floating legend explains the arrow types and role colors on the canvas.
+- **Route Canvas button** — quick-access button to open the Route Canvas directly from the Story Canvas.
+
+#### Route Canvas Enhancements
+- **Unreachable label detection** — labels not reachable from the start are highlighted as warnings.
+- **Call vs. jump distinction** — call arrows are rendered differently from jump arrows for clearer flow analysis.
+- **Menu decision inspector** — hover over menu nodes to see a popover with all choices and their targets.
+- **Route names & node roles** — routes display descriptive names; nodes show their role (start, end, choice, etc.).
+- **Collapsible panel** — the route list panel can be collapsed for more canvas space.
+- **Hover-to-expand** — route list entries expand on hover to show full details.
+
+#### TextMate Syntax Highlighting
+- **Proper Ren'Py grammar** — replaced basic keyword highlighting with a full TextMate grammar (`renpy.tmLanguage.json`) for accurate, context-aware syntax coloring of Ren'Py code.
+- **Semantic tokens** — additional semantic token provider for enhanced highlighting of labels, variables, and screen references.
+
+#### Diagnostics Panel
+- **Code diagnostics tab** — a new panel showing errors, warnings, and info issues across your project files. Click an issue to jump directly to the relevant file and line.
+- **Task tracking** — integrated task list within the diagnostics panel for managing code-related TODOs.
+- **Severity filtering** — filter diagnostics by severity level (error, warning, info).
+
+#### Stats Tab Improvements
+- Enhanced statistics dashboard with additional metrics and improved chart visualizations.
+
+### Improvements
+
+#### Performance (Tier 2)
+- **Web worker analysis** — Ren'Py analysis now runs in a background web worker, keeping the UI responsive during large project scans.
+- **Virtual list rendering** — long lists in the file explorer and story elements panels use virtualized rendering for smoother scrolling with large datasets.
+- **Debounced updates** — file change handlers are debounced to prevent redundant analysis passes during rapid editing.
+- **Memoization** — expensive computations and component renders are memoized to reduce unnecessary re-renders.
+
+#### UX
+- **Standardized copy-to-clipboard** — all copy-to-clipboard interactions across the app now use a shared `CopyButton` component with consistent visual feedback (checkmark + "Copied!" confirmation).
+- **"Composers" tab** — the former "Scenes" tab in Story Elements has been renamed to "Composers" to reflect both Scene Composer and ImageMap Composer. The tab badge shows the combined count of scenes and imagemaps.
+
+#### Developer
+- **New `useDebounce` hook** — reusable debounce hook with test coverage.
+- **Ren'Py validator** — `lib/renpyValidator.ts` provides structured code validation with test suite.
+- **Pre-dist cleanup** — a `predist` script cleans the release folder before electron-builder runs.
+
+### Bug Fixes
+
+- **ImageMap serialization error** — fixed a serialization issue that prevented projects from loading after adding an imagemap composition. ([#76](https://github.com/bluemoonfoundry/vangard-renpy-ide/issues/76))
+- **ImageMap labels access** — fixed `Map.keys()` usage where `Object.keys()` was needed, preventing label suggestions from appearing in the ImageMap Composer.
+- **Fit button and Legend clicks** — fixed event propagation issue where the fit-to-screen button and legend overlay did not respond to clicks on the canvas.
+- **Flaky snippet test** — stabilized a timing-dependent test for UserSnippetModal in CI environments.
 
 #### IntelliSense & Autocomplete
 - **Context-aware autocomplete** — the Monaco editor now provides intelligent completions as you type. The system detects your cursor context (after `jump`, `call`, `show`, `scene`, etc.) and offers relevant suggestions: labels, screen names, image tags, character tags, or variables.

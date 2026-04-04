@@ -25,17 +25,17 @@ If you just want to install the application on your desktop and run it, you can 
 
 ## Key Features
 
-- **Visual Story Canvas**: Drag, resize, and arrange blocks representing your `.rpy` files. Arrows are automatically drawn between blocks to show `jump` and `call` relationships.
+- **Visual Story Canvas**: Drag, resize, and arrange blocks representing your `.rpy` files. Arrows are automatically drawn between blocks to show `jump` and `call` relationships. Fit-to-screen zoom, character filtering, role-based color tinting, and a legend overlay help you navigate complex projects at a glance.
 
 <img width="1103" height="389" alt="Story Canvas" src="https://github.com/user-attachments/assets/b594803d-7909-4ff1-9d90-227d7e906596" />
 
 
-- **On-Demand Route Canvas**: Generate a detailed, label-by-label graph of your story's control flow to understand complex branching. This is an opt-in feature to maintain performance on large projects. The Route Canvas automatically identifies all unique paths from start to finish. A floating panel allows you to highlight specific routes with distinct colors.
+- **On-Demand Route Canvas**: Generate a detailed, label-by-label graph of your story's control flow to understand complex branching. This is an opt-in feature to maintain performance on large projects. The Route Canvas automatically identifies all unique paths from start to finish. A floating panel allows you to highlight specific routes with distinct colors. Features include unreachable label detection, distinct call vs. jump arrows, menu decision point inspection, and collapsible route panels.
 
 <img width="1964" height="1114" alt="Route Canvas" src="https://github.com/user-attachments/assets/62da186a-7505-406d-b66c-b4d7f9ed8d7e" />
 
 
-- **Integrated Code Editor**: A full-featured Monaco editor (the engine behind VS Code) is built-in for editing your script files directly within the app. The editor supports a **split-pane layout** (side-by-side or top/bottom) so you can view two files at once. Tabs can be dragged between panes. **Context-aware IntelliSense** provides autocomplete suggestions for labels, screens, images, characters, variables, and 28+ built-in Ren'Py code snippets.
+- **Integrated Code Editor**: A full-featured Monaco editor (the engine behind VS Code) is built-in for editing your script files directly within the app. The editor supports a **split-pane layout** (side-by-side or top/bottom) so you can view two files at once. Tabs can be dragged between panes. **Context-aware IntelliSense** provides autocomplete suggestions for labels, screens, images, characters, variables, and 28+ built-in Ren'Py code snippets. **TextMate syntax highlighting** provides accurate, context-aware coloring of Ren'Py code with semantic token support.
 
 <img width="1233" height="1007" alt="Code Editor" src="https://github.com/user-attachments/assets/1aa05b75-7a9a-4356-b6a4-5a4589491a4e" />
 
@@ -52,8 +52,14 @@ If you just want to install the application on your desktop and run it, you can 
   <img width="306" height="1011" alt="Story Elements - Screens" src="https://github.com/user-attachments/assets/40e83b54-44b0-4207-888b-c9ebd11286da" />
   <img width="310" height="1008" alt="Story Elements - Scenes" src="https://github.com/user-attachments/assets/5a45c071-9ca0-4fe7-94c1-8e92a1dfeec0" />
 
+  Composers Tab (Scene Composer + ImageMap Composer):
+
   Scene Composer: Visually build scenes by layering backgrounds and sprites. Scale, zoom, orient them as you like. The application generates the Ren'Py code that can be copy/pasted. 
   <img width="1718" height="1001" alt="Story Elements - Scene Editor Tab" src="https://github.com/user-attachments/assets/3dd84ee3-7eb6-4664-b93d-ada3690d039a" />
+
+  ImageMap Composer: Draw clickable hotspot regions over a ground image to create `imagebutton`/`imagemap` screens. Each hotspot has a configurable action (`jump` or `call`) and target label. Ground and hover images are set by dragging from the Image Assets panel.
+
+  Screen Layout Composer: Build Ren'Py screens visually by arranging widgets (vbox, hbox, text, imagebutton, etc.) with drag-and-drop. Generates screen code with copy-to-clipboard support.
 
   Image Viewer:
   <img width="1229" height="1001" alt="Image Viewer" src="https://github.com/user-attachments/assets/7c3360fb-484f-4be2-9d61-12c382ca6ef8" />
@@ -67,6 +73,7 @@ If you just want to install the application on your desktop and run it, you can 
 - **UI State Persistence**: The editor remembers your theme, sidebar layout, and open tabs between sessions for a consistent workflow.
 - **Customizable Layout**: Sidebars are resizable, allowing you to tailor the interface to your needs.
 - **AI Integration**: Optional feature to generate AI content using Google Gemini, OpenAI, and Anthropic models. Generated content can be copy/pasted wherever you want.
+- **Diagnostics Panel**: A dedicated panel showing errors, warnings, and info-level issues across your project files. Click any issue to jump directly to the source. Includes severity filtering and an integrated task list.
 - **Project Statistics**: A Stats dashboard provides word count, estimated play time, per-character dialogue breakdowns, and branching complexity scores.
 
 ---
@@ -178,18 +185,23 @@ This powerful panel analyzes your entire project to give you an overview of all 
   - You can **Add** a new screen, which will create a new `.rpy` file with boilerplate code.
   - You can also quickly **Find Definition** to jump to the code where a screen is defined.
  
-- **Scene Tab**:
-  - Create a scene image by layering images and sprites and arranging them to suit
-  - Copy/paste generated code directly into Ren'Py code file
+- **Composers Tab** (formerly "Scenes"):
+  - **Scene Composer**: Create a scene image by layering images and sprites and arranging them to suit. Copy/paste generated code directly into Ren'Py code file.
+  - **ImageMap Composer**: Visually create clickable imagemap screens by drawing hotspot regions over a ground image. Assign `jump` or `call` actions to each hotspot. Generates Ren'Py `imagebutton`/`imagemap` screen code.
+  - **Screen Layout Composer**: Build Ren'Py screens by arranging widgets visually with drag-and-drop and live preview. Supports locked-screen viewing and duplication.
 
 - **Snippets Tab**:
   - A library of common Ren'Py code patterns for dialogue, logic, visual effects, and more. Find the snippet you need and click **Copy** to paste it into your code.
   - **User Snippets**: Create your own reusable code snippets with custom trigger prefixes. User snippets integrate with IntelliSense — type the prefix in the editor to expand them. Supports VS Code-style tab-stop placeholders for interactive expansion.
 
- #### PunchList (View Menu -> Punchlist)
+ #### Diagnostics (View Menu -> Diagnostics)
+ - Shows code errors, warnings, and informational issues across all project files
+ - Click an issue to jump to the source file and line
+ - Filter by severity level (error, warning, info)
+ - Includes an integrated task checklist for tracking code-related TODOs
  - A list of generated tasks is added to a list that is maintained with the project
  - Includes images and audio files that are referenced in the code but don't exist in the project yet
- - Project notes are included in the punchlist automatically
+ - Project notes are included in the diagonistics automatically
 
  #### AI Generator (View Menu -> AI Generator)
  - Opens a tab in which the user can generate AI content using Google Gemini, OpenAI, or Anthropic
