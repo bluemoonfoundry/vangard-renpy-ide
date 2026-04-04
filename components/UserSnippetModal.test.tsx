@@ -55,14 +55,25 @@ describe('UserSnippetModal', () => {
     expect(screen.getByText('Prefix should only contain letters, numbers, and underscores.')).toBeInTheDocument();
   });
 
-  it('shows error when code is empty', async () => {
-    const user = userEvent.setup();
-    render(<UserSnippetModal {...defaultProps} />);
-    await user.type(screen.getByPlaceholderText('My Custom Snippet'), 'Test');
-    await user.type(screen.getByPlaceholderText('mysnippet'), 'tst');
-    await user.click(screen.getByText('Create Snippet'));
-    expect(screen.getByText('Code is required.')).toBeInTheDocument();
-  });
+it('shows error when code is empty', async () => {
+  const user = userEvent.setup();
+  render(<UserSnippetModal {...defaultProps} />);
+  await user.type(screen.getByPlaceholderText('My Custom Snippet'), 'Test');
+  await user.type(screen.getByPlaceholderText('mysnippet'), 'tst');
+  await user.click(screen.getByText('Create Snippet'));
+  expect(screen.getByText((content, element) => {
+    return element?.textContent === 'Code is required.';
+  })).toBeInTheDocument();
+});
+  
+  // it('shows error when code is empty', async () => {
+  //   const user = userEvent.setup();
+  //   render(<UserSnippetModal {...defaultProps} />);
+  //   await user.type(screen.getByPlaceholderText('My Custom Snippet'), 'Test');
+  //   await user.type(screen.getByPlaceholderText('mysnippet'), 'tst');
+  //   await user.click(screen.getByText('Create Snippet'));
+  //   expect(screen.getByText('Code is required.')).toBeInTheDocument();
+  // });
 
   it('calls onSave and onClose with valid data', async () => {
     const onSave = vi.fn();
