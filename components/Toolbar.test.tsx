@@ -7,8 +7,8 @@ vi.mock('../vangard-renide-512x512.png', () => ({ default: 'logo.png' }));
 
 describe('Toolbar', () => {
   const createProps = (overrides?: Partial<Parameters<typeof Toolbar>[0]>) => ({
-    directoryHandle: null,
     projectRootPath: '/project',
+    activeCanvasTarget: 'story' as const,
     dirtyBlockIds: new Set<string>(),
     dirtyEditors: new Set<string>(),
     hasUnsavedSettings: false,
@@ -19,16 +19,14 @@ describe('Toolbar', () => {
     redo: vi.fn(),
     addBlock: vi.fn(),
     handleTidyUp: vi.fn(),
-    onRequestNewProject: vi.fn(),
-    requestOpenFolder: vi.fn(),
     handleSave: vi.fn(),
     onOpenSettings: vi.fn(),
     onOpenStaticTab: vi.fn(),
+    diagnosticsErrorCount: 0,
     onAddStickyNote: vi.fn(),
     isGameRunning: false,
     onRunGame: vi.fn(),
     onStopGame: vi.fn(),
-    renpyPath: '/path/to/renpy',
     isRenpyPathValid: true,
     draftingMode: false,
     onToggleDraftingMode: vi.fn(),
@@ -44,7 +42,7 @@ describe('Toolbar', () => {
 
     expect(screen.getByText('Add Block')).toBeInTheDocument();
     expect(screen.getByText('Add Note')).toBeInTheDocument();
-    expect(screen.getByText('Tidy Up')).toBeInTheDocument();
+    expect(screen.getByText('Redraw')).toBeInTheDocument();
     expect(screen.getByText('Run')).toBeInTheDocument();
   });
 
@@ -145,5 +143,15 @@ describe('Toolbar', () => {
 
     await user.click(screen.getByText('Add Block'));
     expect(props.addBlock).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls redraw for the active canvas', async () => {
+    const props = createProps();
+    const user = userEvent.setup();
+    render(<Toolbar {...props} />);
+
+    await user.click(screen.getByText('Redraw'));
+
+    expect(props.handleTidyUp).toHaveBeenCalledTimes(1);
   });
 });

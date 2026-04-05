@@ -64,7 +64,12 @@ Key rules: `react-hooks/rules-of-hooks` (error), `react-hooks/exhaustive-deps` (
 - **BlockGroup**: Groups blocks visually on the canvas
 - **Link**: Connection between blocks (from `jump`/`call` statements)
 - **EditorTab**: Open tab in the editor pane; `type` union includes `canvas`, `route-canvas`, `punchlist`, `editor`, `image`, `audio`, `character`, `scene-composer`, `imagemap-composer`, `ai-generator`, `stats`, `markdown`. Tabs with `imagemap-composer` type carry an `imagemapId` property.
-- **ProjectSettings**: Persisted per-project IDE state including split pane layout, open tabs, canvas transforms, `sceneCompositions`, and `imagemapCompositions`
+- **StoryCanvasLayoutMode**: `'flow-lr' | 'flow-td' | 'connected-components' | 'clustered-flow'` — auto-layout algorithm for both canvases
+- **StoryCanvasGroupingMode**: `'none' | 'connected-component' | 'filename-prefix'` — cluster grouping strategy applied within `clustered-flow` mode
+- **SavedStoryBlockLayout**: Persisted per-block position/size/color keyed by `filePath` in `ProjectSettings.storyBlockLayouts`
+- **LabelNode**: A node in the RouteCanvas graph; carries `id`, `label`, `blockId`, `startLine`, `width`, `height`, `position`, and optional `containerName`
+- **RouteLink**: A directed edge in the RouteCanvas graph with `sourceId`, `targetId`, and `type` (`'jump' | 'call'`)
+- **ProjectSettings**: Persisted per-project IDE state including split pane layout, open tabs, canvas transforms, `sceneCompositions`, `imagemapCompositions`, canvas layout/grouping modes (`storyCanvasLayoutMode`, `storyCanvasGroupingMode`, `routeCanvasLayoutMode`, `routeCanvasGroupingMode`), persisted block layouts (`storyBlockLayouts`), and layout fingerprints/versions for change detection
 - **AppSettings**: Global app preferences (theme, Ren'Py path, etc.)
 - **Character, Variable, ImageAsset, AudioAsset, Screen, Scene**: Story element types
 - **UserSnippet**: User-defined code snippet (id, title, prefix, description, code, optional monacoBody for placeholder support)
@@ -80,9 +85,38 @@ The largest source file (~25K lines). Regex-based parser that extracts labels, j
 
 ### Visual Canvas System
 
-- **StoryCanvas**: Main view — blocks as draggable rectangles with auto-drawn `jump`/`call` flow arrows. Features: fit-to-screen button, character filter (hide non-player characters), role tinting (visual styling by character role), and a legend overlay.
-- **RouteCanvas**: Label-by-label control flow graph with route highlighting, unreachable label detection, call vs. jump arrow distinction, collapsible panel layout, route names/node roles display, hover-to-expand, fit-to-screen, and a menu inspector for route metadata.
+- **StoryCanvas**: Main view — blocks as draggable rectangles with auto-drawn `jump`/`call` flow arrows. Features: fit-to-screen button, character filter (hide non-player characters), role tinting (visual styling by character role), legend overlay, and an in-canvas layout control panel (top-left).
+- **RouteCanvas**: Label-by-label control flow graph with route highlighting, unreachable label detection, call vs. jump arrow distinction, collapsible panel layout, route names/node roles display, hover-to-expand, fit-to-screen, a menu inspector for route metadata, and an in-canvas layout control panel (top-left).
 - Canvas coordinates use a transform system (pan via Shift+drag, zoom via scroll)
+
+### Canvas Auto-Layout System
+
+Two pure-function layout engines (no external graph library) share the same algorithm family:
+
+- **`lib/storyCanvasLayout.ts`** — operates on `Block[]` + `Link[]`; exports:
+  - `computeStoryLayout(blocks, links, layoutMode, groupingMode)` → repositioned `Block[]`
+  - `computeStoryLayoutFingerprint(...)` → stable string for change detection (avoids redundant re-layouts)
+  - `buildSavedStoryBlockLayouts(blocks)` → `Record<filePath, SavedStoryBlockLayout>` for persistence
+  - `getStoryLayoutVersion()` → version number for migration guards
+
+- **`lib/routeCanvasLayout.ts`** — operates on `LabelNode[]` + `RouteLink[]`; exports:
+  - `computeRouteCanvasLayout(nodes, edges, layoutMode, groupingMode)` → repositioned `LabelNode[]`
+  - `computeRouteCanvasLayoutFingerprint(...)` and `getRouteCanvasLayoutVersion()`
+
+**Layout modes** (shared by both canvases via `StoryCanvasLayoutMode`):
+- `flow-lr` — Sugiyama-style layered DAG, left-to-right (default)
+- `flow-td` — same algorithm, top-to-bottom
+- `connected-components` — separate connected components laid out left-to-right
+- `clustered-flow` — two-level layout: clusters positioned as super-nodes, internal nodes laid out within each cluster
+
+**Grouping modes** (active only in `clustered-flow`):
+- `none` — no grouping (falls back to connected-component clustering)
+- `connected-component` — clusters = graph connected components
+- `filename-prefix` — clusters = blocks sharing a filename prefix (e.g. `ep01`, `ch3`)
+
+**`components/CanvasLayoutControls.tsx`** — shared panel rendered inside both canvases. Displays icon-toggle buttons for layout mode (4 options) and grouping mode (3 options). Accepts `canvasLabel`, `layoutMode`, `groupingMode`, and change callbacks as props.
+
+Layout mode and grouping mode are stored in `ProjectSettings` (`storyCanvasLayoutMode`, `storyCanvasGroupingMode`, `routeCanvasLayoutMode`, `routeCanvasGroupingMode`) and persisted to `project.ide.json`. Layout fingerprints (`storyCanvasLayoutFingerprint`, `routeCanvasLayoutFingerprint`) prevent redundant re-layouts on reload.
 
 ### Split Pane / Tab System
 

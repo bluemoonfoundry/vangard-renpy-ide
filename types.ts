@@ -147,6 +147,20 @@ export interface IgnoredDiagnosticRule {
   message: string;
 }
 
+export type StoryCanvasLayoutMode = 'flow-lr' | 'flow-td' | 'connected-components' | 'clustered-flow';
+export type StoryCanvasGroupingMode = 'none' | 'connected-component' | 'filename-prefix';
+
+export interface SavedStoryBlockLayout {
+  position: Position;
+  width: number;
+  height: number;
+  color?: string;
+}
+
+export interface SavedRouteNodeLayout {
+  position: Position;
+}
+
 export interface DiagnosticsTask {
   id: string;               // crypto.randomUUID()
   title: string;
@@ -827,6 +841,18 @@ export interface ProjectSettings {
   enableAiFeatures: boolean;
   selectedModel: string;
   draftingMode: boolean;
+  storyCanvasLayoutMode?: StoryCanvasLayoutMode;
+  storyCanvasGroupingMode?: StoryCanvasGroupingMode;
+  storyCanvasLayoutFingerprint?: string;
+  storyCanvasLayoutVersion?: number;
+  storyCanvasLayoutWasUserAdjusted?: boolean;
+  storyBlockLayouts?: Record<string, SavedStoryBlockLayout>;
+  routeCanvasLayoutMode?: StoryCanvasLayoutMode;
+  routeCanvasGroupingMode?: StoryCanvasGroupingMode;
+  routeCanvasLayoutFingerprint?: string;
+  routeCanvasLayoutVersion?: number;
+  routeCanvasLayoutWasUserAdjusted?: boolean;
+  routeNodeLayouts?: Record<string, SavedRouteNodeLayout>;
   openTabs: EditorTab[];
   activeTabId: string;
   splitLayout?: 'none' | 'right' | 'bottom';

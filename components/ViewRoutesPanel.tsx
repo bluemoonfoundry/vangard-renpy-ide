@@ -11,13 +11,14 @@ interface ViewRoutesPanelProps {
   checkedRoutes: Set<number>;
   onToggleRoute: (routeId: number) => void;
   routeLabels: Map<number, RouteLabel>;
+  className?: string;
 }
 
-const ViewRoutesPanel: React.FC<ViewRoutesPanelProps> = ({ routes, checkedRoutes, onToggleRoute, routeLabels }) => {
+const ViewRoutesPanel: React.FC<ViewRoutesPanelProps> = ({ routes, checkedRoutes, onToggleRoute, routeLabels, className = '' }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
-    <div className="view-routes-panel absolute top-4 right-4 z-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 w-52 overflow-hidden">
+    <div className={`view-routes-panel bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 w-52 max-w-full overflow-hidden ${className}`}>
       <button
         className="w-full flex items-center justify-between px-3 py-2 text-sm font-semibold border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
         onClick={() => setIsCollapsed(v => !v)}

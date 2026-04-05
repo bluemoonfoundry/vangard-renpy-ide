@@ -12,8 +12,9 @@ import GroupContainer from './GroupContainer';
 import StickyNote from './StickyNote';
 import Minimap from './Minimap';
 import CanvasContextMenu from './CanvasContextMenu';
+import CanvasLayoutControls from './CanvasLayoutControls';
 import type { MinimapItem } from './Minimap';
-import type { Block, Position, RenpyAnalysisResult, BlockGroup, StickyNote as StickyNoteType, MouseGestureSettings } from '../types';
+import type { Block, Position, RenpyAnalysisResult, BlockGroup, StickyNote as StickyNoteType, MouseGestureSettings, StoryCanvasGroupingMode, StoryCanvasLayoutMode } from '../types';
 import type { BlockType } from './CreateBlockModal';
 
 interface StoryCanvasProps {
@@ -48,6 +49,10 @@ interface StoryCanvasProps {
   onAddStickyNote?: (position: Position) => void;
   onOpenRouteCanvas?: () => void;
   mouseGestures?: MouseGestureSettings;
+  layoutMode: StoryCanvasLayoutMode;
+  groupingMode: StoryCanvasGroupingMode;
+  onChangeLayoutMode: (mode: StoryCanvasLayoutMode) => void;
+  onChangeGroupingMode: (mode: StoryCanvasGroupingMode) => void;
 }
 
 const getBlockById = (blocks: Block[], id: string) => blocks.find(b => b.id === id);
@@ -209,7 +214,8 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
     selectedBlockIds, setSelectedBlockIds, selectedGroupIds, setSelectedGroupIds, 
     findUsagesHighlightIds, clearFindUsages, dirtyBlockIds, 
     canvasFilters, setCanvasFilters, centerOnBlockRequest, flashBlockRequest, hoverHighlightIds, 
-    transform, onTransformChange, onCreateBlock, onAddStickyNote, onOpenRouteCanvas, mouseGestures
+    transform, onTransformChange, onCreateBlock, onAddStickyNote, onOpenRouteCanvas, mouseGestures,
+    layoutMode, groupingMode, onChangeLayoutMode, onChangeGroupingMode
 }) => {
   const [rubberBandRect, setRubberBandRect] = useState<Rect | null>(null);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
@@ -369,7 +375,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
 
     const targetEl = e.target as HTMLElement;
     
-    if (targetEl.closest('.arrow-interaction-group') || targetEl.closest('.filter-panel')) {
+    if (targetEl.closest('.arrow-interaction-group') || targetEl.closest('.filter-panel') || targetEl.closest('.layout-panel')) {
       return;
     }
 
@@ -733,7 +739,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
   };
   
   const handleWheel = (e: React.WheelEvent) => {
-    if (!canvasRef.current || (e.target as HTMLElement).closest('.filter-panel')) return;
+    if (!canvasRef.current || (e.target as HTMLElement).closest('.filter-panel') || (e.target as HTMLElement).closest('.layout-panel')) return;
     e.preventDefault();
     const rect = canvasRef.current.getBoundingClientRect();
     const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -910,6 +916,15 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
           </div>
         </div>
       )}
+      <CanvasLayoutControls
+        canvasLabel="Story Canvas"
+        layoutMode={layoutMode}
+        groupingMode={groupingMode}
+        onChangeLayoutMode={onChangeLayoutMode}
+        onChangeGroupingMode={onChangeGroupingMode}
+        className="absolute top-4 left-4"
+      />
+
       <div className="filter-panel absolute top-4 right-4 z-20 bg-secondary p-2 rounded-lg shadow-lg border border-primary flex flex-col space-y-2">
             <h4 className="text-sm font-semibold text-center px-2 text-primary">View Filters</h4>
             <label className="flex items-center space-x-2 cursor-pointer text-sm text-secondary">
