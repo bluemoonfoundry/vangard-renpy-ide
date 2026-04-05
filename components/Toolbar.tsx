@@ -1,11 +1,9 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react';
-import type { Theme } from '../types';
+import React, { useMemo } from 'react';
 import logo from '../vangard-renide-512x512.png';
-
 type SaveStatus = 'saving' | 'saved' | 'error';
 
 interface ToolbarProps {
-  directoryHandle: FileSystemDirectoryHandle | null;
+  activeCanvasTarget: 'story' | 'route';
   projectRootPath: string | null;
   dirtyBlockIds: Set<string>;
   dirtyEditors: Set<string>;
@@ -17,8 +15,6 @@ interface ToolbarProps {
   redo: () => void;
   addBlock: () => void;
   handleTidyUp: () => void;
-  onRequestNewProject: () => void;
-  requestOpenFolder: () => void;
   handleSave: () => void;
   onOpenSettings: () => void;
   onOpenStaticTab: (type: 'canvas' | 'route-canvas' | 'stats' | 'diagnostics') => void;
@@ -27,7 +23,6 @@ interface ToolbarProps {
   isGameRunning: boolean;
   onRunGame: () => void;
   onStopGame: () => void;
-  renpyPath: string;
   isRenpyPathValid: boolean;
   draftingMode: boolean;
   onToggleDraftingMode: (enabled: boolean) => void;
@@ -50,8 +45,8 @@ const ToolbarButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { 
 };
 
 const Toolbar: React.FC<ToolbarProps> = ({
-  directoryHandle,
   projectRootPath,
+  activeCanvasTarget,
   dirtyBlockIds,
   dirtyEditors,
   hasUnsavedSettings,
@@ -62,8 +57,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
   redo,
   addBlock,
   handleTidyUp,
-  onRequestNewProject,
-  requestOpenFolder,
   handleSave,
   onOpenSettings,
   onOpenStaticTab,
@@ -72,7 +65,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
   isGameRunning,
   onRunGame,
   onStopGame,
-  renpyPath,
   isRenpyPathValid,
   draftingMode,
   onToggleDraftingMode,
@@ -133,9 +125,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v11a3 3 0 106 0V4a2 2 0 00-2-2H4zm1 14a1 1 0 100-2 1 1 0 000 2zm5-1.757l4.9-4.9a2 2 0 000-2.828L13.485 5.1a2 2 0 00-2.828 0L10 5.757v8.486zM16 18H9.071l6-6H16a2 2 0 012 2v2a2 2 0 01-2 2z" clipRule="evenodd" /></svg>
             <span>Add Note</span>
         </ToolbarButton>
-        <ToolbarButton onClick={handleTidyUp} title="Tidy Up Layout">
+        <ToolbarButton onClick={handleTidyUp} title={`Redraw ${activeCanvasTarget === 'route' ? 'Route' : 'Story'} Canvas`}>
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
-            <span>Tidy Up</span>
+            <span>Redraw</span>
         </ToolbarButton>
         <div className="h-6 w-px bg-primary"></div>
         <ToolbarButton onClick={() => onOpenStaticTab('diagnostics')} title="Diagnostics" aria-label="Diagnostics">

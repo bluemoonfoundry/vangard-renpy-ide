@@ -7,7 +7,7 @@
 
 import React, { createContext, useState, useCallback, useContext, useMemo } from 'react';
 import { useImmer } from 'use-immer';
-import type { SearchResult, Block, RenpyAnalysisResult } from '../types';
+import type { SearchResult, Block } from '../types';
 
 interface SearchOptions {
   isCaseSensitive: boolean;
@@ -113,7 +113,7 @@ export const SearchProvider: React.FC<SearchProviderProps> = ({
     executeSearch,
     executeReplaceAll,
     handleResultClick,
-  }), [searchQuery, replaceQuery, searchOptions, searchResults, isSearching, executeSearch, executeReplaceAll, handleResultClick, setSearchOptions, setSearchResults]);
+  }), [searchQuery, replaceQuery, searchOptions, searchResults, isSearching, executeSearch, executeReplaceAll, handleResultClick, setSearchOptions]);
 
   return (
     <SearchContext.Provider value={value}>

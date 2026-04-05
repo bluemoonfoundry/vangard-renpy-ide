@@ -11,7 +11,17 @@ node_modules
 dist
 dist-ssr
 release
+coverage
 *.local
+.claude/
+
+# Demo project runtime artifacts
+DemoProject/game/cache/
+DemoProject/game/saves/
+DemoProject/**/*.rpyc
+DemoProject/*.log
+DemoProject/traceback.txt
+DemoProject/errors.txt
 
 # Editor directories and files
 .vscode/*

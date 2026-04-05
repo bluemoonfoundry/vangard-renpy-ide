@@ -7,7 +7,10 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import type { Block, RenpyAnalysisResult, LabelLocation, JumpLocation, Character, Variable, RenpyScreen, LabelNode, RouteLink, IdentifiedRoute } from '../types';
+import type { RenpyAnalysisResult, LabelLocation, JumpLocation, Character, Variable, RenpyScreen, LabelNode, RouteLink, IdentifiedRoute } from '../types';
+import { getTripleQuotedLineMask } from '../lib/renpyTripleQuotes';
+import { isReservedRenpyName } from '../lib/renpyNames';
+import { collectRenpyHasLabelGuards, isJumpGuardedByHasLabel } from '../lib/renpyLabelGuards';
 
 /**
  * Minimal block shape used by the analysis engine — only the fields it actually reads.
@@ -235,7 +238,10 @@ export const performRenpyAnalysis = (blocks: AnalysisBlock[]): RenpyAnalysisResu
     
     let isFirstLabelInBlock = true;
     const lines = block.content.split('\n');
+    const tripleQuotedLineMask = getTripleQuotedLineMask(block.content);
     lines.forEach((line, index) => {
+      if (tripleQuotedLineMask[index]) return;
+
       const labelMatch = line.match(LABEL_REGEX);
       if (labelMatch && labelMatch[1]) {
         const labelName = labelMatch[1];
@@ -294,10 +300,14 @@ export const performRenpyAnalysis = (blocks: AnalysisBlock[]): RenpyAnalysisResu
     result.jumps[block.id] = [];
     const blockTypes = new Set<string>();
     if (block.content.includes('python:')) blockTypes.add('python');
+    const hasLabelGuards = collectRenpyHasLabelGuards(block.content);
 
     const lines = block.content.split('\n');
+    const tripleQuotedLineMask = getTripleQuotedLineMask(block.content);
     const choiceCtxMap = buildMenuChoiceContextMap(block.content);
     lines.forEach((line, index) => {
+      if (tripleQuotedLineMask[index]) return;
+
       let sanitizedLine = line.replace(/"[^"\\]*(?:\\.[^"\\]*)*"/g, '""').replace(/'[^'\\]*(?:\\.[^'\\]*)*'/g, "''");
       const commentIndex = sanitizedLine.indexOf('#');
       if (commentIndex !== -1) sanitizedLine = sanitizedLine.substring(0, commentIndex);
@@ -363,7 +373,7 @@ export const performRenpyAnalysis = (blocks: AnalysisBlock[]): RenpyAnalysisResu
                 result.links[existingIdx] = { ...result.links[existingIdx], type: 'call' };
               }
             }
-          } else {
+          } else if (!isReservedRenpyName(targetLabel) && !isJumpGuardedByHasLabel(hasLabelGuards, index + 1, targetLabel)) {
             if (!result.invalidJumps[block.id]) result.invalidJumps[block.id] = [];
             if (!result.invalidJumps[block.id].includes(targetLabel)) {
               result.invalidJumps[block.id].push(targetLabel);
@@ -533,6 +543,7 @@ export const performRouteAnalysis = (
     if (block.filePath && (block.filePath.endsWith('debug_placeholders.rpy') || block.filePath === 'game/debug_placeholders.rpy')) return;
 
     const lines = block.content.split('\n');
+    const tripleQuotedLineMask = getTripleQuotedLineMask(block.content);
     const labelsInBlock: { label: string; startLine: number }[] = [];
     Object.values(labels).forEach(labelLoc => {
         if (labelLoc.blockId === block.id && labelLoc.type !== 'menu') {
@@ -544,7 +555,10 @@ export const performRouteAnalysis = (
     const labelInfoForBlock: { label: string; startLine: number; endLine: number; hasTerminal: boolean; hasReturn: boolean; }[] = [];
     labelsInBlock.forEach(({ label, startLine }, i) => {
         const endLine = (i + 1 < labelsInBlock.length) ? labelsInBlock[i + 1].startLine - 1 : lines.length;
-        const contentSlice = lines.slice(startLine, endLine).join('\n');
+        const contentSlice = lines
+          .slice(startLine, endLine)
+          .map((line, offset) => (tripleQuotedLineMask[startLine + offset] ? '' : line))
+          .join('\n');
         const hasTerminal = /\b(jump|call|return)\b/.test(contentSlice);
         const hasReturn = /\breturn\b/.test(contentSlice);
 
@@ -749,9 +763,6 @@ export const useRenpyAnalysis = (blocks: AnalysisBlock[], trigger: number): [Ren
       worker.removeEventListener('message', handleMessage);
       // Worker keeps running but its response will be ignored (stale id)
     };
-  // blocks reference only changes when debouncedBlocks updates (after debounce fires),
-  // so this is safe to use directly without a content-hash key.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocks, trigger]);
 
   return [result, isPending];

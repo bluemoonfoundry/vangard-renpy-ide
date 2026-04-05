@@ -6,9 +6,32 @@
     {
       "id": "canvas",
       "type": "canvas"
+    },
+    {
+      "id": "stats",
+      "type": "stats"
+    },
+    {
+      "id": "diagnostics",
+      "type": "diagnostics"
+    },
+    {
+      "id": "block-16-1775358578049",
+      "type": "editor",
+      "blockId": "block-16-1775358578049",
+      "filePath": "game/screens.rpy",
+      "scrollRequest": {
+        "line": 66,
+        "key": 1775358586453
+      }
+    },
+    {
+      "id": "img-game/images/bg/art_room.png",
+      "type": "image",
+      "filePath": "game/images/bg/art_room.png"
     }
   ],
-  "activeTabId": "canvas",
+  "activeTabId": "img-game/images/bg/art_room.png",
   "splitLayout": "none",
   "splitPrimarySize": 600,
   "secondaryOpenTabs": [],

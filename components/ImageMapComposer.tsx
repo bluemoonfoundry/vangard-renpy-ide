@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { ProjectImage, ImageMapComposition, ImageMapHotspot, ImageMapActionType } from '../types';
 import CopyButton from './CopyButton';
 
@@ -27,8 +27,6 @@ const ImageMapComposer: React.FC<ImageMapComposerProps> = ({
     const [editName, setEditName] = useState(imagemapName);
     const [draggingHotspotId, setDraggingHotspotId] = useState<string | null>(null);
     const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-    const [isResizing, setIsResizing] = useState(false);
-    const [resizeHandle, setResizeHandle] = useState<'se' | 'sw' | 'ne' | 'nw' | null>(null);
 
     const canvasRef = useRef<HTMLDivElement>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
@@ -44,6 +42,14 @@ const ImageMapComposer: React.FC<ImageMapComposerProps> = ({
             nameInputRef.current.select();
         }
     }, [isRenaming]);
+
+    const removeHotspot = useCallback((id: string) => {
+        onImageMapChange(prev => ({
+            ...prev,
+            hotspots: prev.hotspots.filter(h => h.id !== id)
+        }));
+        setSelectedHotspotId(null);
+    }, [onImageMapChange]);
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -72,15 +78,7 @@ const ImageMapComposer: React.FC<ImageMapComposerProps> = ({
         return () => {
             if (container) container.removeEventListener('keydown', handleKeyDown);
         };
-    }, [selectedHotspotId]);
-
-    const removeHotspot = (id: string) => {
-        onImageMapChange(prev => ({
-            ...prev,
-            hotspots: prev.hotspots.filter(h => h.id !== id)
-        }));
-        setSelectedHotspotId(null);
-    };
+    }, [removeHotspot, selectedHotspotId]);
 
     const handleCanvasMouseDown = (e: React.MouseEvent) => {
         if (!canvasRef.current || !imagemap.groundImage) return;

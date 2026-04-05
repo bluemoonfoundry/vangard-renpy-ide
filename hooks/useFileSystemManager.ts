@@ -6,37 +6,16 @@
  * Supports both Electron and browser modes with different API compatibility.
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import type { FileSystemTreeNode, Block, BlockGroup, ProjectImage, RenpyAudio, ImageMetadata, AudioMetadata, ClipboardState, Link } from '../types';
 import { produce } from 'https://aistudiocdn.com/immer@^10.1.1';
 import { useToasts } from '../contexts/ToastContext';
-import { performRenpyAnalysis } from './useRenpyAnalysis';
-import JSZip from 'jszip';
+import { createId } from '../lib/createId';
 
 // Add necessary FS API types to the global scope
 declare global {
   interface AIStudio { showDirectoryPicker(): Promise<FileSystemDirectoryHandle>; }
   interface Window { aistudio?: AIStudio; showDirectoryPicker?(): Promise<FileSystemDirectoryHandle>; }
-}
-
-const isFileSystemApiSupported = (() => {
-  try { return !!(window.showDirectoryPicker || (window.aistudio && window.aistudio.showDirectoryPicker)); } 
-  catch (e) { console.warn("Could not access file system APIs, features disabled.", e); return false; }
-})();
-
-const fileToDataUrl = (file: File | Blob): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-};
-
-function uuidv4() {
-  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c =>
-    (Number(c) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(c) / 4).toString(16)
-  );
 }
 
 // Helper to add a node to the file tree immutably, creating parent directories if needed.
@@ -107,15 +86,19 @@ interface FileSystemManagerProps {
     onPathsDeleted: (paths: string[]) => void;
 }
 
-export const useFileSystemManager = ({ blocks, onProjectLoaded, onPathsUpdated, onBlockCreated, onFileCreated, onPathsDeleted }: FileSystemManagerProps) => {
-    const [directoryHandle, setDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
-    const [fileTree, setFileTree] = useState<FileSystemTreeNode | null>(null);
+/**
+ * @deprecated Legacy placeholder hook retained for reference and helper exports.
+ * App.tsx owns the active file-system behavior; avoid adding new usages here.
+ */
+export const useFileSystemManager = ({ blocks: _blocks, onProjectLoaded: _onProjectLoaded, onPathsUpdated: _onPathsUpdated, onBlockCreated, onFileCreated, onPathsDeleted: _onPathsDeleted }: FileSystemManagerProps) => {
+    const [directoryHandle, _setDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
+    const [fileTree, _setFileTree] = useState<FileSystemTreeNode | null>(null);
     const [clipboard, setClipboard] = useState<ClipboardState>(null);
     const [isWelcomeScreenVisible, setIsWelcomeScreenVisible] = useState(false);
-    const [openFolderConfirmVisible, setOpenFolderConfirmVisible] = useState(false);
+    const [_openFolderConfirmVisible, _setOpenFolderConfirmVisible] = useState(false);
     const [uploadConfirm, setUploadConfirm] = useState<{ visible: boolean, file: File | null }>({ visible: false, file: null });
     // FIX: Initialized state with required `filePaths` property to avoid type errors.
-    const [deleteConfirm, setDeleteConfirm] = useState<{ visible: boolean, filePaths: string[], message?: string, warning?: string }>({ visible: false, filePaths: [] });
+    const [_deleteConfirm, _setDeleteConfirm] = useState<{ visible: boolean, filePaths: string[], message?: string, warning?: string }>({ visible: false, filePaths: [] });
     const { addToast } = useToasts();
     
     const tidyUpLayout = useCallback((blocksToLayout: Block[], links: Link[]): Block[] => {
@@ -175,17 +158,17 @@ export const useFileSystemManager = ({ blocks, onProjectLoaded, onPathsUpdated, 
       return newBlocks;
     }, []);
 
-    const handleOpenFolder = useCallback(async () => {
+    const _handleOpenFolder = useCallback(async () => {
         // ... (handleOpenFolder logic)
-    }, [addToast, onProjectLoaded, tidyUpLayout]);
+    }, []);
 
     const requestOpenFolder = useCallback(() => {
         // ... (requestOpenFolder logic)
-    }, [directoryHandle, blocks, handleOpenFolder]);
+    }, []);
     
-    const processUploadedFile = useCallback(async (file: File) => {
+    const processUploadedFile = useCallback(async (_file: File) => {
         // ... (processUploadedFile logic)
-    }, [addToast, onProjectLoaded, tidyUpLayout]);
+    }, []);
 
     const getHandleFromPath = useCallback(async (path: string): Promise<FileSystemFileHandle | FileSystemDirectoryHandle | null> => {
         // FIX: Implemented function to resolve "must return a value" error.
@@ -225,7 +208,7 @@ export const useFileSystemManager = ({ blocks, onProjectLoaded, onPathsUpdated, 
                 const newFileHandle = await parentDirHandle.getFileHandle(name, { create: true });
                 if (name.endsWith('.rpy')) {
                     const newBlock: Block = {
-                        id: uuidv4(),
+                        id: createId('block'),
                         content: `label ${name.replace('.rpy', '')}_label:\n    # New content for ${name}\n    return`,
                         position: { x: 50, y: 50 }, width: 300, height: 120, filePath: newPath, fileHandle: newFileHandle
                     };
@@ -239,28 +222,28 @@ export const useFileSystemManager = ({ blocks, onProjectLoaded, onPathsUpdated, 
         }
     }, [directoryHandle, getHandleFromPath, onBlockCreated, onFileCreated, addToast]);
     
-    const handleRenameNode = useCallback(async (oldPath: string, newName: string) => {
+    const handleRenameNode = useCallback(async (_oldPath: string, _newName: string) => {
         // ... (handleRenameNode logic)
-    }, [directoryHandle, getHandleFromPath, onPathsUpdated, onFileCreated, addToast]);
+    }, []);
     
-    const handleDeleteNode = useCallback((paths: string[]) => {
+    const handleDeleteNode = useCallback((_paths: string[]) => {
         // ... (handleDeleteNode logic using setDeleteConfirm)
     }, []);
     
-    const handleConfirmDelete = useCallback(async () => {
+    const _handleConfirmDelete = useCallback(async () => {
         // ... (handleConfirmDelete logic)
-    }, [deleteConfirm, directoryHandle, onPathsDeleted]);
+    }, []);
 
     const handleCut = useCallback((paths: string[]) => setClipboard({ type: 'cut', paths: new Set(paths) }), []);
     const handleCopy = useCallback((paths: string[]) => setClipboard({ type: 'copy', paths: new Set(paths) }), []);
     
-    const handleMoveNode = useCallback(async (sourcePaths: string[], targetFolderPath: string) => {
+    const handleMoveNode = useCallback(async (_sourcePaths: string[], _targetFolderPath: string) => {
         // ... (handleMoveNode logic)
-    }, [directoryHandle, getHandleFromPath, onPathsUpdated]);
+    }, []);
     
-    const handlePaste = useCallback(async (targetFolderPath: string) => {
+    const handlePaste = useCallback(async (_targetFolderPath: string) => {
         // ... (handlePaste logic)
-    }, [clipboard, directoryHandle, handleMoveNode, getHandleFromPath, onFileCreated, onBlockCreated, addToast]);
+    }, []);
 
     return {
         directoryHandle, fileTree, clipboard,

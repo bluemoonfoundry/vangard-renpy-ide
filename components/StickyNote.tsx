@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect, forwardRef } from 'react';
+import React, { useState, forwardRef } from 'react';
 import type { StickyNote as StickyNoteType, NoteColor } from '../types';
 
 interface StickyNoteProps {

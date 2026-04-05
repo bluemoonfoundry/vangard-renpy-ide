@@ -6,14 +6,18 @@ import type {
   DiagnosticIssue,
   DiagnosticSeverity,
   DiagnosticsTask,
+  IgnoredDiagnosticRule,
 } from '../types';
+import { createIgnoredDiagnosticRule } from '../lib/diagnosticIgnores';
 
 interface DiagnosticsPanelProps {
   diagnostics: DiagnosticsResult;
   blocks: Block[];
   stickyNotes: StickyNote[];
   tasks: DiagnosticsTask[];
+  ignoredDiagnostics: IgnoredDiagnosticRule[];
   onUpdateTasks: (tasks: DiagnosticsTask[]) => void;
+  onUpdateIgnoredDiagnostics: (rules: IgnoredDiagnosticRule[]) => void;
   onOpenBlock: (blockId: string, line: number) => void;
   onHighlightBlock: (blockId: string) => void;
 }
@@ -72,9 +76,10 @@ const CATEGORY_COLORS: Record<string, string> = {
 // ---------------------------------------------------------------------------
 // Issue row
 // ---------------------------------------------------------------------------
-function IssueRow({ issue, blocks, onOpenBlock }: {
+function IssueRow({ issue, blocks, onIgnoreIssue, onOpenBlock }: {
   issue: DiagnosticIssue;
   blocks: Block[];
+  onIgnoreIssue: (issue: DiagnosticIssue) => void;
   onOpenBlock: (blockId: string, line: number) => void;
 }) {
   const block = blocks.find(b => b.id === issue.blockId);
@@ -89,9 +94,7 @@ function IssueRow({ issue, blocks, onOpenBlock }: {
 
   return (
     <div
-      className={`flex items-start gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-700 last:border-0 ${canNavigate ? 'hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer' : ''}`}
-      onClick={() => canNavigate && onOpenBlock(issue.blockId!, issue.line ?? 1)}
-      title={canNavigate ? `Go to ${locationText}` : undefined}
+      className="flex items-start gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-700 last:border-0"
     >
       <div className="mt-0.5">
         <SeverityIcon severity={issue.severity} />
@@ -109,6 +112,31 @@ function IssueRow({ issue, blocks, onOpenBlock }: {
           )}
         </div>
       </div>
+      {canNavigate && (
+        <button
+          type="button"
+          className="flex-none p-1 text-gray-400 hover:text-indigo-500 rounded"
+          title={`Go to ${locationText}`}
+          aria-label={`Open ${locationText}`}
+          onClick={() => onOpenBlock(issue.blockId!, issue.line ?? 1)}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 3h7m0 0v7m0-7L10 14" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 7v12a2 2 0 002 2h12" />
+          </svg>
+        </button>
+      )}
+      <button
+        type="button"
+        className="flex-none p-1 text-gray-400 hover:text-indigo-500 rounded"
+        title="Ignore issue"
+        aria-label="Ignore issue"
+        onClick={() => onIgnoreIssue(issue)}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
     </div>
   );
 }
@@ -121,7 +149,9 @@ const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
   blocks,
   stickyNotes,
   tasks,
+  ignoredDiagnostics,
   onUpdateTasks,
+  onUpdateIgnoredDiagnostics,
   onOpenBlock,
   onHighlightBlock,
 }) => {
@@ -230,6 +260,34 @@ const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
     onUpdateTasks(tasks.filter(t => t.id !== id));
   }
 
+  function ignoreIssue(issue: DiagnosticIssue) {
+    const rule = createIgnoredDiagnosticRule(issue);
+    const exists = ignoredDiagnostics.some(existing =>
+      existing.category === rule.category &&
+      existing.filePath === rule.filePath &&
+      existing.blockId === rule.blockId &&
+      existing.line === rule.line &&
+      existing.message === rule.message
+    );
+    if (!exists) {
+      onUpdateIgnoredDiagnostics([...ignoredDiagnostics, rule]);
+    }
+  }
+
+  function removeIgnoredRule(rule: IgnoredDiagnosticRule) {
+    onUpdateIgnoredDiagnostics(
+      ignoredDiagnostics.filter(existing =>
+        !(
+          existing.category === rule.category &&
+          existing.filePath === rule.filePath &&
+          existing.blockId === rule.blockId &&
+          existing.line === rule.line &&
+          existing.message === rule.message
+        )
+      )
+    );
+  }
+
   // ---- Tab counts ----------------------------------------------------------
 
   const openTaskCount = allTasks.filter(t => t.status === 'open').length;
@@ -284,6 +342,38 @@ const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
       {/* Issues view */}
       {activeView === 'issues' && (
         <div className="flex flex-col flex-1 min-h-0">
+          {ignoredDiagnostics.length > 0 && (
+            <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700 flex-none">
+              <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+                Ignored Issues ({ignoredDiagnostics.length})
+              </div>
+              <div className="space-y-1 max-h-24 overflow-y-auto">
+                {ignoredDiagnostics.map((rule, index) => (
+                  <div key={`${rule.category}:${rule.filePath ?? rule.blockId ?? 'unknown'}:${rule.line ?? 0}:${index}`} className="flex items-start gap-2 text-xs">
+                    <div className="flex-1 min-w-0 text-gray-500 dark:text-gray-400">
+                      <div className="truncate">{rule.message}</div>
+                      <div className="font-mono text-[10px] opacity-75">
+                        {rule.filePath ?? rule.blockId ?? 'unknown'}
+                        {rule.line ? `:${rule.line}` : ''}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="flex-none p-1 text-gray-400 hover:text-indigo-500 rounded"
+                      title="Unignore issue"
+                      aria-label="Unignore issue"
+                      onClick={() => removeIgnoredRule(rule)}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 12h16" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Severity filter pills */}
           <div className="flex items-center gap-1.5 px-3 py-2 border-b border-gray-100 dark:border-gray-700 flex-none flex-wrap">
             {(['all', 'error', 'warning', 'info'] as const).map(s => {
@@ -350,6 +440,7 @@ const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
                       key={issue.id}
                       issue={issue}
                       blocks={blocks}
+                      onIgnoreIssue={ignoreIssue}
                       onOpenBlock={onOpenBlock}
                     />
                   ))}

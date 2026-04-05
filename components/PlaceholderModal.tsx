@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface PlaceholderModalProps {
@@ -20,13 +20,7 @@ const PlaceholderModal: React.FC<PlaceholderModalProps> = ({ isOpen, onClose, on
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-        generatePreview();
-    }
-  }, [isOpen, width, height, color, text, textColor]);
-
-  const generatePreview = () => {
+  const generatePreview = useCallback(() => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       
@@ -75,7 +69,13 @@ const PlaceholderModal: React.FC<PlaceholderModalProps> = ({ isOpen, onClose, on
 
       // Reset shadow
       ctx.shadowColor = "transparent";
-  };
+  }, [color, height, text, textColor, width]);
+
+  useEffect(() => {
+    if (isOpen) {
+        generatePreview();
+    }
+  }, [isOpen, generatePreview]);
 
   const handleConfirm = () => {
       const canvas = canvasRef.current;

@@ -20,10 +20,11 @@ import { resolve } from 'path'
  */
 export default defineConfig(({ mode }) => {
   const isDevelopment = mode === 'development';
+  const processWithCwd = process as NodeJS.Process;
   
   // Load environment variables from .env files
   // Third parameter '' loads all variables regardless of VITE_ prefix
-  const env = loadEnv(mode, (process as any).cwd(), '');
+  const env = loadEnv(mode, processWithCwd.cwd(), '');
 
   // Read package.json to inject application version
   const packageJson = JSON.parse(readFileSync(resolve('package.json'), 'utf-8'));

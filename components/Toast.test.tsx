@@ -1,5 +1,4 @@
 import { render, screen, act } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import Toast from './Toast';
 import type { ToastMessage } from '../types';
 

@@ -148,13 +148,6 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
     });
   };
 
-  const getRenpyAudioTag = (audio: RenpyAudio): string => {
-    const meta = metadata.get(audio.projectFilePath || audio.filePath);
-    const name = meta?.renpyName || audio.fileName.split('.').slice(0, -1).join('.');
-    const tags = (meta?.tags || []).join(' ');
-    return `${name}${tags ? ` ${tags}` : ''}`.trim().replace(/\s+/g, ' ');
-  };
-
   // Helper to get clean path for drag/drop and clipboard
   const getSmartAudioPath = (audio: RenpyAudio) => {
       let path = audio.projectFilePath || audio.filePath;

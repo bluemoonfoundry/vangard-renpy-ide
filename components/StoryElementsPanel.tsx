@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import type { Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, RenpyScreen, RenpyAnalysisResult, UserSnippet } from '../types';
+import type { Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, RenpyAnalysisResult, UserSnippet } from '../types';
 import { useVirtualList } from '../hooks/useVirtualList';
 
 // p-2 (16px) + color dot/name/tag rows (~36px) + space-y-2 gap (8px)
@@ -28,7 +28,6 @@ interface StoryElementsPanelProps {
     onAddImageScanDirectory: () => void;
     onRemoveImageScanDirectory: (dirName: string) => void;
     onCopyImagesToProject: (sourceFilePaths: string[]) => void;
-    onUpdateImageMetadata: (filePath: string, newMetadata: ImageMetadata) => void;
     onOpenImageEditor: (filePath: string) => void;
     imagesLastScanned: number | null;
     isRefreshingImages: boolean;
@@ -40,7 +39,6 @@ interface StoryElementsPanelProps {
     onAddAudioScanDirectory: () => void;
     onRemoveAudioScanDirectory: (dirName: string) => void;
     onCopyAudiosToProject: (sourceFilePaths: string[]) => void;
-    onUpdateAudioMetadata: (filePath: string, newMetadata: AudioMetadata) => void;
     onOpenAudioEditor: (filePath: string) => void;
     audiosLastScanned: number | null;
     isRefreshingAudios: boolean;
@@ -105,8 +103,8 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     onOpenCharacterEditor, onFindCharacterUsages,
     onAddVariable, onFindVariableUsages,
     onFindScreenDefinition,
-    projectImages, imageMetadata, onAddImageScanDirectory, onRemoveImageScanDirectory, imageScanDirectories, onCopyImagesToProject, onUpdateImageMetadata, onOpenImageEditor, imagesLastScanned, isRefreshingImages, onRefreshImages,
-    projectAudios, audioMetadata, onAddAudioScanDirectory, onRemoveAudioScanDirectory, audioScanDirectories, onCopyAudiosToProject, onUpdateAudioMetadata, onOpenAudioEditor, audiosLastScanned, isRefreshingAudios, onRefreshAudios,
+    projectImages, imageMetadata, onAddImageScanDirectory, onRemoveImageScanDirectory, imageScanDirectories, onCopyImagesToProject, onOpenImageEditor, imagesLastScanned, isRefreshingImages, onRefreshImages,
+    projectAudios, audioMetadata, onAddAudioScanDirectory, onRemoveAudioScanDirectory, audioScanDirectories, onCopyAudiosToProject, onOpenAudioEditor, audiosLastScanned, isRefreshingAudios, onRefreshAudios,
     isFileSystemApiSupported,
     onHoverHighlightStart, onHoverHighlightEnd,
     scenes, onOpenScene, onCreateScene, onDeleteScene,

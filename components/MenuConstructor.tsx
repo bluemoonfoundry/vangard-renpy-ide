@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { RenpyAnalysisResult } from '../types';
 import CopyButton from './CopyButton';
 
@@ -187,7 +187,7 @@ const MenuConstructor: React.FC<MenuConstructorProps> = ({ analysisResult }) => 
             setCaption(newCaption);
             setChoices(newChoices);
             setParseError(null);
-        } catch (e) {
+        } catch {
             setParseError("Cannot parse complex or invalid code. Visual editing disabled.");
         }
     };

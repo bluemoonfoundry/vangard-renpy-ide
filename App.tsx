@@ -35,258 +35,43 @@ import UserSnippetModal from './components/UserSnippetModal';
 import { SearchProvider } from './contexts/SearchContext';
 import AIGeneratorView from './components/AIGeneratorView';
 import StatsView from './components/StatsView';
-import { useRenpyAnalysis, performRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
+import { useRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
+import { createId } from './lib/createId';
+import {
+  buildSavedStoryBlockLayouts,
+  computeStoryLayout,
+  computeStoryLayoutFingerprint,
+  getStoryLayoutVersion,
+} from './lib/storyCanvasLayout';
+import {
+  computeRouteCanvasLayout,
+  computeRouteCanvasLayoutFingerprint,
+  getRouteCanvasLayoutVersion,
+} from './lib/routeCanvasLayout';
 import type {
-  Block, BlockGroup, Link, Position, FileSystemTreeNode, EditorTab,
-  ToastMessage, IdeSettings, Theme, ProjectImage, RenpyAudio,
-  ClipboardState, ImageMetadata, AudioMetadata, LabelNode, Character,
-  AppSettings, ProjectSettings, StickyNote, SceneComposition, SceneSprite, ImageMapComposition, ScreenLayoutComposition, PunchlistMetadata, DiagnosticsTask, MouseGestureSettings,
-  ProjectLoadResult, ScannedImageAsset, ScannedAudioAsset, SerializedSprite, SerializedSceneComposition, UserSnippet
+  Block, BlockGroup, Position, FileSystemTreeNode, EditorTab,
+  ToastMessage, Theme, ProjectImage, RenpyAudio,
+  ClipboardState, ImageMetadata, AudioMetadata, Character,
+  AppSettings, ProjectSettings, StickyNote, SceneComposition, SceneSprite, ImageMapComposition, ScreenLayoutComposition, PunchlistMetadata, DiagnosticsTask, IgnoredDiagnosticRule,
+  SerializedSprite, SerializedSceneComposition, StoryCanvasGroupingMode, StoryCanvasLayoutMode, UserSnippet
 } from './types';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
-import packageJson from './package.json';
-
-// --- Versioning ---
-const APP_VERSION = process.env.APP_VERSION || '0.4.0';
-const BUILD_NUMBER = process.env.BUILD_NUMBER || 'dev';
-
-// --- Utility: ArrayBuffer to Base64 (Browser Compatible) ---
-const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
-  let binary = '';
-  const bytes = new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return window.btoa(binary);
-};
 
 // Minimal 1-sample silent WAV base64
 const SILENT_WAV_BASE64 = "UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAAAAAA==";
 
-// --- Utility: Word Count ---
-const countWordsInRenpyScript = (script: string): number => {
-    if (!script) return 0;
-    // Regex to find dialogue (e.g., e "...") and narration ("...")
-    const DIALOGUE_NARRATION_REGEX = /(?:[a-zA-Z0-9_]+\s)?"((?:\\.|[^"\\])*)"/g;
-    let totalWords = 0;
-    let match;
-    while ((match = DIALOGUE_NARRATION_REGEX.exec(script)) !== null) {
-        const text = match[1];
-        if (text) {
-            const words = text.trim().split(/\s+/).filter(Boolean);
-            totalWords += words.length;
-        }
-    }
-    return totalWords;
-};
 
-
-// --- Generic Layout Algorithm ---
-interface LayoutNode {
-    id: string;
-    width: number;
-    height: number;
-    position: Position;
+interface SerializedImageRef {
+    filePath: string;
 }
 
-interface LayoutEdge {
-    sourceId: string;
-    targetId: string;
+interface SerializedImageMapComposition {
+    screenName: string;
+    groundImage: SerializedImageRef | null;
+    hoverImage: SerializedImageRef | null;
+    hotspots: ImageMapComposition['hotspots'];
 }
-
-const computeAutoLayout = <T extends LayoutNode>(nodes: T[], edges: LayoutEdge[]): T[] => {
-    if (!nodes || nodes.length === 0) return [];
-
-    const PADDING_X = 100;
-    const PADDING_Y = 80;
-    const COMPONENT_SPACING = 200;
-    const DEFAULT_WIDTH = 300;
-    const DEFAULT_HEIGHT = 150;
-
-    // 1. Sanitize inputs
-    const sanitizedNodes = nodes.map(n => ({
-        ...n,
-        width: (n.width && n.width > 50) ? n.width : DEFAULT_WIDTH,
-        height: (n.height && n.height > 50) ? n.height : DEFAULT_HEIGHT,
-    }));
-    
-    const nodeMap = new Map(sanitizedNodes.map(n => [n.id, n]));
-    const allNodeIds = new Set(sanitizedNodes.map(n => n.id));
-
-    // 2. Identify Connected Components
-    const undirectedAdj = new Map<string, string[]>();
-    allNodeIds.forEach(id => undirectedAdj.set(id, []));
-    
-    edges.forEach(edge => {
-        if (allNodeIds.has(edge.sourceId) && allNodeIds.has(edge.targetId)) {
-            undirectedAdj.get(edge.sourceId)?.push(edge.targetId);
-            undirectedAdj.get(edge.targetId)?.push(edge.sourceId);
-        }
-    });
-
-    const components: string[][] = [];
-    const visited = new Set<string>();
-
-    for (const nodeId of allNodeIds) {
-        if (!visited.has(nodeId)) {
-            const component: string[] = [];
-            const queue = [nodeId];
-            visited.add(nodeId);
-            while (queue.length > 0) {
-                const u = queue.shift()!;
-                component.push(u);
-                undirectedAdj.get(u)?.forEach(v => {
-                    if (!visited.has(v)) {
-                        visited.add(v);
-                        queue.push(v);
-                    }
-                });
-            }
-            components.push(component);
-        }
-    }
-
-    // Sort components by size (largest first)
-    components.sort((a, b) => b.length - a.length);
-
-    // 3. Layout each component
-    const finalPositions = new Map<string, Position>();
-    let currentOffsetX = 50;
-
-    // Directed adjacency for layering
-    const adj = new Map<string, string[]>();
-    allNodeIds.forEach(id => adj.set(id, []));
-    edges.forEach(edge => {
-        if (allNodeIds.has(edge.sourceId) && allNodeIds.has(edge.targetId)) {
-            adj.get(edge.sourceId)?.push(edge.targetId);
-        }
-    });
-
-    components.forEach(componentIds => {
-        const compNodes = new Set(componentIds);
-        const compInDegree = new Map<string, number>();
-        componentIds.forEach(id => compInDegree.set(id, 0));
-
-        componentIds.forEach(u => {
-            adj.get(u)?.forEach(v => {
-                if (compNodes.has(v)) {
-                    compInDegree.set(v, (compInDegree.get(v) || 0) + 1);
-                }
-            });
-        });
-
-        const queue: string[] = [];
-        compInDegree.forEach((d, id) => { if (d === 0) queue.push(id); });
-        
-        // Cycle breaking
-        if (queue.length === 0 && componentIds.length > 0) {
-            let minDegree = Infinity;
-            let candidate = componentIds[0];
-            compInDegree.forEach((d, id) => {
-                if (d < minDegree) {
-                    minDegree = d;
-                    candidate = id;
-                }
-            });
-            queue.push(candidate);
-        }
-
-        const layers: string[][] = [];
-        const visitedInLayering = new Set<string>();
-        let iterationCount = 0;
-        const MAX_ITERATIONS = componentIds.length * 2 + 100; 
-
-        while(queue.length > 0) {
-            iterationCount++;
-            if (iterationCount > MAX_ITERATIONS) break;
-
-            const layerSize = queue.length;
-            const layer: string[] = [];
-            
-            for(let i=0; i<layerSize; i++) {
-                const u = queue.shift()!;
-                if (visitedInLayering.has(u)) continue;
-                visitedInLayering.add(u);
-                layer.push(u);
-
-                adj.get(u)?.forEach(v => {
-                    if (compNodes.has(v)) {
-                        const currentDeg = compInDegree.get(v) || 0;
-                        compInDegree.set(v, currentDeg - 1);
-                        if ((compInDegree.get(v) || 0) <= 0 && !visitedInLayering.has(v)) {
-                            if (!queue.includes(v)) queue.push(v);
-                        }
-                    }
-                });
-            }
-            if (layer.length > 0) layers.push(layer);
-        }
-
-        const remaining = componentIds.filter(id => !visitedInLayering.has(id));
-        if (remaining.length > 0) layers.push(remaining);
-
-        // Position layers
-        let layerX = 0;
-        layers.forEach(layer => {
-            let maxW = 0;
-            let totalH = 0;
-            layer.forEach(id => {
-                const n = nodeMap.get(id);
-                if (n) {
-                    maxW = Math.max(maxW, n.width);
-                    totalH += n.height;
-                }
-            });
-            totalH += (layer.length - 1) * PADDING_Y;
-
-            let currentY = -totalH / 2;
-            layer.forEach(id => {
-                const n = nodeMap.get(id);
-                if (n) {
-                    const x = layerX + (maxW - n.width) / 2;
-                    finalPositions.set(id, {
-                        x: currentOffsetX + x,
-                        y: currentY + 100 // Offset to avoid top edge
-                    });
-                    currentY += n.height + PADDING_Y;
-                }
-            });
-
-            layerX += maxW + PADDING_X;
-        });
-
-        const componentWidth = Math.max(layerX - PADDING_X, DEFAULT_WIDTH); 
-        currentOffsetX += componentWidth + COMPONENT_SPACING;
-    });
-
-    // Normalize Y
-    let minY = Infinity;
-    finalPositions.forEach(p => { if (p.y < minY) minY = p.y; });
-    
-    if (minY !== Infinity) {
-        const targetY = 100;
-        const shift = targetY - minY;
-        finalPositions.forEach(p => { p.y += shift; });
-    } else {
-         // Fallback for completely disconnected single nodes if algorithm somehow failed
-         let x = 50;
-         const y = 100;
-         nodes.forEach(n => {
-             if (!finalPositions.has(n.id)) {
-                 finalPositions.set(n.id, { x, y });
-                 x += n.width + 50;
-             }
-         });
-    }
-
-    return nodes.map(n => {
-        const pos = finalPositions.get(n.id);
-        return pos ? { ...n, position: pos } : n;
-    });
-};
-
 
 // --- Main App Component ---
 
@@ -298,6 +83,20 @@ interface UnsavedChangesModalInfo {
     onConfirm: () => Promise<void> | void;
     onDontSave: () => void;
     onCancel: () => void;
+}
+
+interface PendingStoryLayoutRefresh {
+    hasSavedLayouts: boolean;
+    savedFingerprint?: string;
+    savedVersion?: number;
+    savedWasUserAdjusted: boolean;
+}
+
+interface PendingRouteLayoutRefresh {
+    hasSavedLayouts: boolean;
+    savedFingerprint?: string;
+    savedVersion?: number;
+    savedWasUserAdjusted: boolean;
 }
 
 const AVAILABLE_MODELS = [
@@ -341,7 +140,7 @@ const App: React.FC = () => {
     }
   }, [projectRootPath]);
 
-  const [directoryHandle, setDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  const [directoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [fileSystemTree, setFileSystemTree] = useState<FileSystemTreeNode | null>(null);
   
   // Use standard useState for Maps to avoid Immer proxy issues with native Maps
@@ -358,10 +157,10 @@ const App: React.FC = () => {
   // --- State: Scanning ---
   const [imageScanDirectories, setImageScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
   const [audioScanDirectories, setAudioScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
-  const [imagesLastScanned, setImagesLastScanned] = useState<number | null>(null);
-  const [audiosLastScanned, setAudiosLastScanned] = useState<number | null>(null);
-  const [isRefreshingImages, setIsRefreshingImages] = useState(false);
-  const [isRefreshingAudios, setIsRefreshingAudios] = useState(false);
+  const [imagesLastScanned] = useState<number | null>(null);
+  const [audiosLastScanned] = useState<number | null>(null);
+  const [isRefreshingImages] = useState(false);
+  const [isRefreshingAudios] = useState(false);
 
   // --- State: UI & Editor ---
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([{ id: 'canvas', type: 'canvas' }]);
@@ -390,12 +189,13 @@ const App: React.FC = () => {
   const [punchlistMetadata, setPunchlistMetadata] = useImmer<Record<string, PunchlistMetadata>>({});
   // Diagnostics Tasks State
   const [diagnosticsTasks, setDiagnosticsTasks] = useImmer<DiagnosticsTask[]>([]);
+  const [ignoredDiagnostics, setIgnoredDiagnostics] = useImmer<IgnoredDiagnosticRule[]>([]);
   
   const [dirtyBlockIds, setDirtyBlockIds] = useState<Set<string>>(new Set());
   const [dirtyEditors, setDirtyEditors] = useState<Set<string>>(new Set()); // Blocks modified in editor but not synced to block state yet
   const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false); // Track project setting changes like sticky notes
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saved');
-  const [statusBarMessage, setStatusBarMessage] = useState('');
+  const [, setStatusBarMessage] = useState('');
   const [isScanningAssets, setIsScanningAssets] = useState(false);
   
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -442,10 +242,18 @@ const App: React.FC = () => {
     mouseGestures: { canvasPanGesture: 'shift-drag', middleMouseAlwaysPans: false, zoomScrollDirection: 'normal', zoomScrollSensitivity: 1.0 },
   });
   const [isRenpyPathValid, setIsRenpyPathValid] = useState(false);
-  const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'punchlistMetadata' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>>({
+  const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'punchlistMetadata' | 'diagnosticsTasks' | 'ignoredDiagnostics' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>>({
     enableAiFeatures: false,
     selectedModel: 'gemini-2.5-flash',
     draftingMode: false,
+    storyCanvasLayoutMode: 'flow-lr',
+    storyCanvasGroupingMode: 'none',
+    storyCanvasLayoutVersion: getStoryLayoutVersion(),
+    storyCanvasLayoutWasUserAdjusted: false,
+    routeCanvasLayoutMode: 'flow-lr',
+    routeCanvasGroupingMode: 'none',
+    routeCanvasLayoutVersion: getRouteCanvasLayoutVersion(),
+    routeCanvasLayoutWasUserAdjusted: false,
   });
 
   // --- State: Clipboard & Highlights ---
@@ -454,7 +262,7 @@ const App: React.FC = () => {
   const [centerOnBlockRequest, setCenterOnBlockRequest] = useState<{ blockId: string, key: number } | null>(null);
   const [flashBlockRequest, setFlashBlockRequest] = useState<{ blockId: string, key: number } | null>(null);
   const [canvasFilters, setCanvasFilters] = useState({ story: true, screens: true, config: false, notes: true, minimap: true });
-  const [editorCursorPosition, setEditorCursorPosition] = useState<{ line: number; column: number } | null>(null);
+  const [_editorCursorPosition, setEditorCursorPosition] = useState<{ line: number; column: number } | null>(null);
   const [hoverHighlightIds, setHoverHighlightIds] = useState<Set<string> | null>(null);
 
   // --- State: Route Canvas ---
@@ -479,7 +287,7 @@ const App: React.FC = () => {
   const [analysisResult, isWorkerPending] = useRenpyAnalysis(analysisBlocks, 0);
   // Pending covers both: the 500ms debounce window AND the worker's async computation
   const isAnalysisPending = blocks !== debouncedBlocks || isWorkerPending;
-  const diagnosticsResult = useDiagnostics(debouncedBlocks, analysisResult, images, imageMetadata, audios, audioMetadata);
+  const diagnosticsResult = useDiagnostics(debouncedBlocks, analysisResult, images, imageMetadata, audios, audioMetadata, ignoredDiagnostics);
 
   // Ref that latches to true once the analysis worker starts (isWorkerPending goes true)
   // after a project load. Prevents the overlay from closing during the one-render gap
@@ -505,7 +313,6 @@ const App: React.FC = () => {
   // Memoized flat arrays — Map.values() iteration is O(n); without this every
   // renderTabContent call recreated 14,000-item arrays on each re-render.
   const imagesArray = useMemo(() => Array.from(images.values()), [images]);
-  const audiosArray = useMemo(() => Array.from(audios.values()), [audios]);
 
   // Stable array of character tag strings passed to CharacterEditorView.
   // Without this, Array.from() in renderTabContent creates a new reference every
@@ -525,7 +332,8 @@ const App: React.FC = () => {
   const secondaryMountedTabsRef = useRef(new Set<string>());
   const primaryTabBarRef = useRef<HTMLDivElement>(null);
   const secondaryTabBarRef = useRef<HTMLDivElement>(null);
-  const initialLayoutNeeded = useRef(false);
+  const pendingStoryLayoutRefreshRef = useRef<PendingStoryLayoutRefresh | null>(null);
+  const pendingRouteLayoutRefreshRef = useRef<PendingRouteLayoutRefresh | null>(null);
 
   // --- Utility Functions ---
   const getCurrentContext = useCallback(() => {
@@ -603,7 +411,11 @@ const App: React.FC = () => {
           updates.forEach(u => next.set(u.id, u.position));
           return next;
       });
-  }, []);
+      updateProjectSettings(draft => {
+          draft.routeCanvasLayoutWasUserAdjusted = true;
+      });
+      setHasUnsavedSettings(true);
+  }, [updateProjectSettings]);
 
   // Stable callbacks for StoryCanvas — previously inline lambdas that caused the
   // canvas to re-render on every App.tsx state change (e.g. switching any tab).
@@ -612,11 +424,9 @@ const App: React.FC = () => {
 
   const routeAnalysisResult = useMemo(() => {
       const raw = performRouteAnalysis(debouncedBlocks, analysisResult.labels, analysisResult.jumps);
-      
-      // Compute default layout for all nodes to prevent stacking at 0,0
-      // We run this every time the graph structure changes, essentially
-      const edges = raw.routeLinks.map(l => ({ sourceId: l.sourceId, targetId: l.targetId }));
-      const layoutedNodes = computeAutoLayout(raw.labelNodes, edges);
+      const layoutMode = projectSettings.routeCanvasLayoutMode ?? 'flow-lr';
+      const groupingMode = projectSettings.routeCanvasGroupingMode ?? 'none';
+      const layoutedNodes = computeRouteCanvasLayout(raw.labelNodes, raw.routeLinks, layoutMode, groupingMode);
 
       // Apply User Overrides (Cache)
       // If the user has manually moved a node, we prioritize that position over the auto-layout
@@ -629,7 +439,7 @@ const App: React.FC = () => {
           ...raw,
           labelNodes: finalNodes
       };
-  }, [debouncedBlocks, analysisResult, routeNodeLayoutCache]);
+  }, [debouncedBlocks, analysisResult, routeNodeLayoutCache, projectSettings.routeCanvasGroupingMode, projectSettings.routeCanvasLayoutMode]);
 
   // --- Scene Composer Management ---
   const handleCreateScene = useCallback((initialName?: string) => {
@@ -970,7 +780,7 @@ const App: React.FC = () => {
 
   // --- Toast Helper ---
   const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
-    const id = Math.random().toString(36).substring(7);
+    const id = createId('toast');
     setToasts(prev => [...prev, { id, message, type }]);
   }, []);
 
@@ -984,7 +794,13 @@ const App: React.FC = () => {
     if (data.content !== undefined) {
       setDirtyBlockIds(prev => new Set(prev).add(id));
     }
-  }, [setBlocks]);
+    if (data.position || data.width !== undefined || data.height !== undefined || data.color !== undefined) {
+      updateProjectSettings(draft => {
+        draft.storyCanvasLayoutWasUserAdjusted = true;
+      });
+      setHasUnsavedSettings(true);
+    }
+  }, [setBlocks, updateProjectSettings]);
 
   const updateGroup = useCallback((id: string, data: Partial<BlockGroup>) => {
     setGroups(draft => {
@@ -1002,7 +818,11 @@ const App: React.FC = () => {
         });
         return next;
     });
-  }, [setBlocks]);
+    updateProjectSettings(draft => {
+        draft.storyCanvasLayoutWasUserAdjusted = true;
+    });
+    setHasUnsavedSettings(true);
+  }, [setBlocks, updateProjectSettings]);
 
    const updateGroupPositions = useCallback((updates: { id: string, position: Position }[]) => {
     setGroups(draft => {
@@ -1011,7 +831,11 @@ const App: React.FC = () => {
         if (g) g.position = u.position;
       });
     });
-  }, [setGroups]);
+    updateProjectSettings(draft => {
+        draft.storyCanvasLayoutWasUserAdjusted = true;
+    });
+    setHasUnsavedSettings(true);
+  }, [setGroups, updateProjectSettings]);
 
 
   const addBlock = useCallback((filePath: string, content: string, initialPosition?: Position) => {
@@ -1093,7 +917,7 @@ const App: React.FC = () => {
             
             const res = await window.electronAPI.writeFile(fullPath, content);
             if (res.success) {
-                const id = addBlock(relativePath, content);
+                addBlock(relativePath, content);
                 addToast(`Created ${fileName} in ${cleanFolderPath || 'root'}`, 'success');
                 const projData = await window.electronAPI.loadProject(projectRootPath!);
                 setFileSystemTree(projData.tree);
@@ -1262,35 +1086,285 @@ const App: React.FC = () => {
   }, [setBlocks, setGroups, activeTabId]);
 
   // --- Layout ---
-  const handleTidyUp = useCallback((showToast = true) => {
+  const applyStoryLayout = useCallback((
+    layoutMode: StoryCanvasLayoutMode,
+    groupingMode: StoryCanvasGroupingMode,
+    options?: { showToast?: boolean; successMessage?: string; statusMessage?: string; toastType?: ToastMessage['type']; },
+  ) => {
     setStatusBarMessage('Organizing layout...');
-    // Use setTimeout to allow the UI to update with the status message before the heavy calculation
-    setTimeout(() => {
-        try {
-            const links = analysisResult.links;
-            const newLayout = computeAutoLayout(blocks, links);
-            setBlocks(newLayout);
-            if (showToast) {
-                addToast('Layout organized', 'success');
-            }
-            setStatusBarMessage('Layout organized.');
-            setTimeout(() => setStatusBarMessage(''), 2000);
-        } catch (e) {
-            console.error("Failed to tidy up layout:", e);
-            if (showToast) {
-                addToast('Failed to organize layout', 'error');
-            }
-            setStatusBarMessage('Error organizing layout.');
+    try {
+        const links = analysisResult.links;
+        const newLayout = computeStoryLayout(blocks, links, layoutMode, groupingMode);
+        const layoutFingerprint = computeStoryLayoutFingerprint(newLayout, links, layoutMode, groupingMode);
+        setBlocks(newLayout);
+        updateProjectSettings(draft => {
+            draft.storyCanvasLayoutMode = layoutMode;
+            draft.storyCanvasGroupingMode = groupingMode;
+            draft.storyCanvasLayoutFingerprint = layoutFingerprint;
+            draft.storyCanvasLayoutVersion = getStoryLayoutVersion();
+            draft.storyCanvasLayoutWasUserAdjusted = false;
+        });
+        setHasUnsavedSettings(true);
+        if (options?.showToast ?? true) {
+            addToast(options?.successMessage ?? 'Layout organized', options?.toastType ?? 'success');
         }
-    }, 10);
-  }, [blocks, analysisResult, setBlocks, addToast]);
+        setStatusBarMessage(options?.statusMessage ?? 'Layout organized.');
+        setTimeout(() => setStatusBarMessage(''), 2000);
+    } catch (e) {
+        console.error("Failed to tidy up layout:", e);
+        if (options?.showToast ?? true) {
+            addToast('Failed to organize layout', 'error');
+        }
+        setStatusBarMessage('Error organizing layout.');
+    }
+  }, [blocks, analysisResult.links, setBlocks, addToast, updateProjectSettings]);
+
+  const handleTidyUp = useCallback((showToast = true) => {
+    applyStoryLayout(
+      projectSettings.storyCanvasLayoutMode ?? 'flow-lr',
+      projectSettings.storyCanvasGroupingMode ?? 'none',
+      { showToast },
+    );
+  }, [applyStoryLayout, projectSettings.storyCanvasGroupingMode, projectSettings.storyCanvasLayoutMode]);
+
+  const handleChangeStoryCanvasLayoutMode = useCallback((mode: StoryCanvasLayoutMode) => {
+    updateProjectSettings(draft => {
+      draft.storyCanvasLayoutMode = mode;
+    });
+    setHasUnsavedSettings(true);
+    if (blocks.length > 0 && !isAnalysisPending && !isInitialAnalysisPending) {
+      const groupingMode = projectSettings.storyCanvasGroupingMode ?? 'none';
+      setTimeout(() => {
+        applyStoryLayout(mode, groupingMode, {
+          showToast: false,
+          statusMessage: 'Story layout updated.',
+        });
+      }, 0);
+    }
+  }, [
+    updateProjectSettings,
+    blocks.length,
+    isAnalysisPending,
+    isInitialAnalysisPending,
+    projectSettings.storyCanvasGroupingMode,
+    applyStoryLayout,
+  ]);
+
+  const handleChangeStoryCanvasGroupingMode = useCallback((mode: StoryCanvasGroupingMode) => {
+    updateProjectSettings(draft => {
+      draft.storyCanvasGroupingMode = mode;
+    });
+    setHasUnsavedSettings(true);
+    if (blocks.length > 0 && !isAnalysisPending && !isInitialAnalysisPending) {
+      const layoutMode = projectSettings.storyCanvasLayoutMode ?? 'flow-lr';
+      setTimeout(() => {
+        applyStoryLayout(layoutMode, mode, {
+          showToast: false,
+          statusMessage: 'Story layout updated.',
+        });
+      }, 0);
+    }
+  }, [
+    updateProjectSettings,
+    blocks.length,
+    isAnalysisPending,
+    isInitialAnalysisPending,
+    projectSettings.storyCanvasLayoutMode,
+    applyStoryLayout,
+  ]);
+
+  const applyRouteLayout = useCallback((
+    layoutMode: StoryCanvasLayoutMode,
+    groupingMode: StoryCanvasGroupingMode,
+    options?: { showToast?: boolean; successMessage?: string; statusMessage?: string; toastType?: ToastMessage['type']; },
+  ) => {
+    setStatusBarMessage('Organizing route layout...');
+    try {
+        const sourceNodes = routeAnalysisResult.labelNodes.map(node => ({
+            ...node,
+            position: routeNodeLayoutCache.get(node.id) ?? node.position,
+        }));
+        const newLayout = computeRouteCanvasLayout(sourceNodes, routeAnalysisResult.routeLinks, layoutMode, groupingMode);
+        const layoutFingerprint = computeRouteCanvasLayoutFingerprint(newLayout, routeAnalysisResult.routeLinks, layoutMode, groupingMode);
+        setRouteNodeLayoutCache(new Map(newLayout.map(node => [node.id, node.position])));
+        updateProjectSettings(draft => {
+            draft.routeCanvasLayoutMode = layoutMode;
+            draft.routeCanvasGroupingMode = groupingMode;
+            draft.routeCanvasLayoutFingerprint = layoutFingerprint;
+            draft.routeCanvasLayoutVersion = getRouteCanvasLayoutVersion();
+            draft.routeCanvasLayoutWasUserAdjusted = false;
+        });
+        setHasUnsavedSettings(true);
+        if (options?.showToast ?? true) {
+            addToast(options?.successMessage ?? 'Route layout organized', options?.toastType ?? 'success');
+        }
+        setStatusBarMessage(options?.statusMessage ?? 'Route layout organized.');
+        setTimeout(() => setStatusBarMessage(''), 2000);
+    } catch (error) {
+        console.error('Failed to organize route layout:', error);
+        if (options?.showToast ?? true) {
+            addToast('Failed to organize route layout', 'error');
+        }
+        setStatusBarMessage('Error organizing route layout.');
+    }
+  }, [routeAnalysisResult.labelNodes, routeAnalysisResult.routeLinks, routeNodeLayoutCache, updateProjectSettings, addToast]);
+
+  const handleChangeRouteCanvasLayoutMode = useCallback((mode: StoryCanvasLayoutMode) => {
+    updateProjectSettings(draft => {
+      draft.routeCanvasLayoutMode = mode;
+    });
+    setHasUnsavedSettings(true);
+    if (routeAnalysisResult.labelNodes.length > 0 && !isAnalysisPending && !isInitialAnalysisPending) {
+      const groupingMode = projectSettings.routeCanvasGroupingMode ?? 'none';
+      setTimeout(() => {
+        applyRouteLayout(mode, groupingMode, {
+          showToast: false,
+          statusMessage: 'Route layout updated.',
+        });
+      }, 0);
+    }
+  }, [
+    updateProjectSettings,
+    routeAnalysisResult.labelNodes.length,
+    isAnalysisPending,
+    isInitialAnalysisPending,
+    projectSettings.routeCanvasGroupingMode,
+    applyRouteLayout,
+  ]);
+
+  const handleChangeRouteCanvasGroupingMode = useCallback((mode: StoryCanvasGroupingMode) => {
+    updateProjectSettings(draft => {
+      draft.routeCanvasGroupingMode = mode;
+    });
+    setHasUnsavedSettings(true);
+    if (routeAnalysisResult.labelNodes.length > 0 && !isAnalysisPending && !isInitialAnalysisPending) {
+      const layoutMode = projectSettings.routeCanvasLayoutMode ?? 'flow-lr';
+      setTimeout(() => {
+        applyRouteLayout(layoutMode, mode, {
+          showToast: false,
+          statusMessage: 'Route layout updated.',
+        });
+      }, 0);
+    }
+  }, [
+    updateProjectSettings,
+    routeAnalysisResult.labelNodes.length,
+    isAnalysisPending,
+    isInitialAnalysisPending,
+    projectSettings.routeCanvasLayoutMode,
+    applyRouteLayout,
+  ]);
 
   useEffect(() => {
-    if (initialLayoutNeeded.current && blocks.length > 0 && analysisResult) {
-        initialLayoutNeeded.current = false; 
-        setTimeout(() => handleTidyUp(false), 100);
+    const pendingRefresh = pendingStoryLayoutRefreshRef.current;
+    if (!pendingRefresh || blocks.length === 0 || isInitialAnalysisPending || isAnalysisPending) {
+        return;
     }
-  }, [blocks, analysisResult, handleTidyUp]);
+    pendingStoryLayoutRefreshRef.current = null;
+
+    const layoutMode = projectSettings.storyCanvasLayoutMode ?? 'flow-lr';
+    const groupingMode = projectSettings.storyCanvasGroupingMode ?? 'none';
+    const currentFingerprint = computeStoryLayoutFingerprint(blocks, analysisResult.links, layoutMode, groupingMode);
+    const savedVersionMatches = pendingRefresh.savedVersion === getStoryLayoutVersion();
+    const shouldRefreshLayout =
+      !pendingRefresh.hasSavedLayouts ||
+      !pendingRefresh.savedFingerprint ||
+      !savedVersionMatches ||
+      pendingRefresh.savedFingerprint !== currentFingerprint;
+
+    if (!shouldRefreshLayout) {
+      return;
+    }
+
+    if (pendingRefresh.hasSavedLayouts && pendingRefresh.savedWasUserAdjusted) {
+      updateProjectSettings(draft => {
+        draft.storyCanvasLayoutFingerprint = currentFingerprint;
+        draft.storyCanvasLayoutVersion = getStoryLayoutVersion();
+      });
+      setHasUnsavedSettings(true);
+      addToast('Story graph changed. Layout preserved; use Redraw to reorganize.', 'info');
+      return;
+    }
+
+    applyStoryLayout(layoutMode, groupingMode, {
+      showToast: pendingRefresh.hasSavedLayouts,
+      successMessage: pendingRefresh.hasSavedLayouts
+        ? 'Story layout refreshed for changed graph'
+        : 'Story layout generated',
+      statusMessage: pendingRefresh.hasSavedLayouts
+        ? 'Story layout refreshed.'
+        : 'Story layout generated.',
+      toastType: 'info',
+    });
+  }, [
+    blocks,
+    isInitialAnalysisPending,
+    isAnalysisPending,
+    projectSettings.storyCanvasGroupingMode,
+    projectSettings.storyCanvasLayoutMode,
+    analysisResult.links,
+    applyStoryLayout,
+    addToast,
+    updateProjectSettings,
+  ]);
+
+  useEffect(() => {
+    const pendingRefresh = pendingRouteLayoutRefreshRef.current;
+    if (!pendingRefresh || isInitialAnalysisPending || isAnalysisPending) {
+      return;
+    }
+    pendingRouteLayoutRefreshRef.current = null;
+
+    const layoutMode = projectSettings.routeCanvasLayoutMode ?? 'flow-lr';
+    const groupingMode = projectSettings.routeCanvasGroupingMode ?? 'none';
+    const sourceNodes = routeAnalysisResult.labelNodes.map(node => ({
+      ...node,
+      position: routeNodeLayoutCache.get(node.id) ?? node.position,
+    }));
+    const currentFingerprint = computeRouteCanvasLayoutFingerprint(sourceNodes, routeAnalysisResult.routeLinks, layoutMode, groupingMode);
+    const savedVersionMatches = pendingRefresh.savedVersion === getRouteCanvasLayoutVersion();
+    const shouldRefreshLayout =
+      !pendingRefresh.hasSavedLayouts ||
+      !pendingRefresh.savedFingerprint ||
+      !savedVersionMatches ||
+      pendingRefresh.savedFingerprint !== currentFingerprint;
+
+    if (!shouldRefreshLayout) {
+      return;
+    }
+
+    if (pendingRefresh.hasSavedLayouts && pendingRefresh.savedWasUserAdjusted) {
+      updateProjectSettings(draft => {
+        draft.routeCanvasLayoutFingerprint = currentFingerprint;
+        draft.routeCanvasLayoutVersion = getRouteCanvasLayoutVersion();
+      });
+      setHasUnsavedSettings(true);
+      addToast('Route graph changed. Layout preserved; use Redraw to reorganize.', 'info');
+      return;
+    }
+
+    applyRouteLayout(layoutMode, groupingMode, {
+      showToast: pendingRefresh.hasSavedLayouts,
+      successMessage: pendingRefresh.hasSavedLayouts
+        ? 'Route layout refreshed for changed graph'
+        : 'Route layout generated',
+      statusMessage: pendingRefresh.hasSavedLayouts
+        ? 'Route layout refreshed.'
+        : 'Route layout generated.',
+      toastType: 'info',
+    });
+  }, [
+    isInitialAnalysisPending,
+    isAnalysisPending,
+    routeAnalysisResult.labelNodes,
+    routeAnalysisResult.routeLinks,
+    routeNodeLayoutCache,
+    projectSettings.routeCanvasLayoutMode,
+    projectSettings.routeCanvasGroupingMode,
+    applyRouteLayout,
+    addToast,
+    updateProjectSettings,
+  ]);
 
   // --- Tab Management Helpers ---
   const handleOpenStaticTab = useCallback((type: 'canvas' | 'route-canvas' | 'diagnostics' | 'ai-generator' | 'stats') => {
@@ -1343,6 +1417,13 @@ const App: React.FC = () => {
           setLoadingProgress(93);
           setLoadingMessage(`Processing ${projectData.files.length} files and ${projectData.images.length} images...`);
 
+          const savedStoryBlockLayouts = projectData.settings?.storyBlockLayouts ?? {};
+          const savedStoryLayoutMode = projectData.settings?.storyCanvasLayoutMode ?? 'flow-lr';
+          const savedStoryGroupingMode = projectData.settings?.storyCanvasGroupingMode ?? 'none';
+          const savedRouteNodeLayouts = projectData.settings?.routeNodeLayouts ?? {};
+          const savedRouteLayoutMode = projectData.settings?.routeCanvasLayoutMode ?? 'flow-lr';
+          const savedRouteGroupingMode = projectData.settings?.routeCanvasGroupingMode ?? 'none';
+
           // Map existing blocks to preserve IDs and positions
           const existingBlocksMap = new Map<string, Block>();
           // Use ref to get current blocks to avoid stale closures and infinite loop dependency
@@ -1352,15 +1433,16 @@ const App: React.FC = () => {
 
           const loadedBlocks: Block[] = projectData.files.map((f, index) => {
               const existing = existingBlocksMap.get(f.path);
+              const savedLayout = savedStoryBlockLayouts[f.path];
               return {
                   id: existing ? existing.id : `block-${index}-${Date.now()}`,
                   content: f.content,
                   filePath: f.path,
-                  position: existing ? existing.position : { x: (index % 5) * 350, y: Math.floor(index / 5) * 250 },
-                  width: existing ? existing.width : 320,
-                  height: existing ? existing.height : 200,
+                  position: savedLayout?.position ?? existing?.position ?? { x: (index % 5) * 350, y: Math.floor(index / 5) * 250 },
+                  width: savedLayout?.width ?? existing?.width ?? 320,
+                  height: savedLayout?.height ?? existing?.height ?? 200,
                   title: f.path.split('/').pop(),
-                  color: existing ? existing.color : undefined
+                  color: savedLayout?.color ?? existing?.color ?? undefined
               };
           });
           const blockFilePathMap = new Map(loadedBlocks.map(b => [b.filePath, b]));
@@ -1393,10 +1475,21 @@ const App: React.FC = () => {
           });
 
           setBlocks(loadedBlocks);
-          // Only trigger layout if this is a fresh load (no existing blocks)
-          if (blocksRef.current.length === 0) {
-              initialLayoutNeeded.current = true;
-          }
+          pendingStoryLayoutRefreshRef.current = {
+              hasSavedLayouts: Object.keys(savedStoryBlockLayouts).length > 0,
+              savedFingerprint: projectData.settings?.storyCanvasLayoutFingerprint,
+              savedVersion: projectData.settings?.storyCanvasLayoutVersion,
+              savedWasUserAdjusted: projectData.settings?.storyCanvasLayoutWasUserAdjusted ?? false,
+          };
+          pendingRouteLayoutRefreshRef.current = {
+              hasSavedLayouts: Object.keys(savedRouteNodeLayouts).length > 0,
+              savedFingerprint: projectData.settings?.routeCanvasLayoutFingerprint,
+              savedVersion: projectData.settings?.routeCanvasLayoutVersion,
+              savedWasUserAdjusted: projectData.settings?.routeCanvasLayoutWasUserAdjusted ?? false,
+          };
+          setRouteNodeLayoutCache(new Map(
+            Object.entries(savedRouteNodeLayouts).map(([id, layout]) => [id, layout.position]),
+          ));
           setFileSystemTree(projectData.tree);
           
           const imgMap = new Map<string, ProjectImage>();
@@ -1431,6 +1524,16 @@ const App: React.FC = () => {
                   draft.enableAiFeatures = projectData.settings.enableAiFeatures ?? false;
                   draft.selectedModel = projectData.settings.selectedModel ?? 'gemini-2.5-flash';
                   draft.draftingMode = projectData.settings.draftingMode ?? false;
+                  draft.storyCanvasLayoutMode = savedStoryLayoutMode;
+                  draft.storyCanvasGroupingMode = savedStoryGroupingMode;
+                  draft.storyCanvasLayoutFingerprint = projectData.settings.storyCanvasLayoutFingerprint;
+                  draft.storyCanvasLayoutVersion = projectData.settings.storyCanvasLayoutVersion ?? getStoryLayoutVersion();
+                  draft.storyCanvasLayoutWasUserAdjusted = projectData.settings.storyCanvasLayoutWasUserAdjusted ?? false;
+                  draft.routeCanvasLayoutMode = savedRouteLayoutMode;
+                  draft.routeCanvasGroupingMode = savedRouteGroupingMode;
+                  draft.routeCanvasLayoutFingerprint = projectData.settings.routeCanvasLayoutFingerprint;
+                  draft.routeCanvasLayoutVersion = projectData.settings.routeCanvasLayoutVersion ?? getRouteCanvasLayoutVersion();
+                  draft.routeCanvasLayoutWasUserAdjusted = projectData.settings.routeCanvasLayoutWasUserAdjusted ?? false;
               });
               setStickyNotes(projectData.settings.stickyNotes || []);
               setCharacterProfiles(projectData.settings.characterProfiles || {});
@@ -1443,6 +1546,7 @@ const App: React.FC = () => {
               } else {
                 setDiagnosticsTasks([]);
               }
+              setIgnoredDiagnostics(projectData.settings.ignoredDiagnostics || []);
               
               // Load Scene Compositions
               // Helper to link saved paths back to loaded image objects
@@ -1491,9 +1595,9 @@ const App: React.FC = () => {
               // Restore ImageMap Compositions
               if (projectData.settings.imagemapCompositions) {
                   const restoredImagemaps: Record<string, ImageMapComposition> = {};
-                  Object.entries(projectData.settings.imagemapCompositions).forEach(([id, im]) => {
-                      const groundImg = im.groundImage ? imgMap.get((im.groundImage as any).filePath) : null;
-                      const hoverImg = im.hoverImage ? imgMap.get((im.hoverImage as any).filePath) : null;
+                  Object.entries(projectData.settings.imagemapCompositions as Record<string, SerializedImageMapComposition>).forEach(([id, im]) => {
+                      const groundImg = im.groundImage ? imgMap.get(im.groundImage.filePath) : null;
+                      const hoverImg = im.hoverImage ? imgMap.get(im.hoverImage.filePath) : null;
                       restoredImagemaps[id] = {
                           screenName: im.screenName,
                           groundImage: groundImg || null,
@@ -1658,7 +1762,18 @@ const App: React.FC = () => {
                   draft.enableAiFeatures = false;
                   draft.selectedModel = 'gemini-2.5-flash';
                   draft.draftingMode = false;
+                  draft.storyCanvasLayoutMode = 'flow-lr';
+                  draft.storyCanvasGroupingMode = 'none';
+                  draft.storyCanvasLayoutFingerprint = undefined;
+                  draft.storyCanvasLayoutVersion = getStoryLayoutVersion();
+                  draft.storyCanvasLayoutWasUserAdjusted = false;
+                  draft.routeCanvasLayoutMode = 'flow-lr';
+                  draft.routeCanvasGroupingMode = 'none';
+                  draft.routeCanvasLayoutFingerprint = undefined;
+                  draft.routeCanvasLayoutVersion = getRouteCanvasLayoutVersion();
+                  draft.routeCanvasLayoutWasUserAdjusted = false;
               });
+              setRouteNodeLayoutCache(new Map());
               setOpenTabs([{ id: 'canvas', type: 'canvas' }]);
               setActiveTabId('canvas');
               setSplitLayout('none');
@@ -1667,6 +1782,8 @@ const App: React.FC = () => {
               setStickyNotes([]);
               setCharacterProfiles({});
               setPunchlistMetadata({});
+              setDiagnosticsTasks([]);
+              setIgnoredDiagnostics([]);
               setSceneCompositions({});
               setSceneNames({});
           }
@@ -1693,7 +1810,7 @@ const App: React.FC = () => {
           setLoadingMessage('');
           setLoadingProgress(0);
       }
-  }, [setBlocks, setImages, setAudios, updateProjectSettings, addToast, setFileSystemTree, setStickyNotes, setCharacterProfiles, updateAppSettings, setSceneCompositions, setSceneNames, setPunchlistMetadata, setImagemapCompositions, setScreenLayoutCompositions]);
+  }, [setBlocks, setImages, setAudios, updateProjectSettings, addToast, setFileSystemTree, setStickyNotes, setCharacterProfiles, updateAppSettings, setSceneCompositions, setSceneNames, setPunchlistMetadata, setImagemapCompositions, setScreenLayoutCompositions, setDiagnosticsTasks, setIgnoredDiagnostics]);
 
 
   const handleCancelLoad = useCallback(() => {
@@ -1733,7 +1850,7 @@ const App: React.FC = () => {
                 await handleOpenWithRenpyCheck(path);
             }
         } else {
-            alert("To use local file system features, please run this app in Electron or use a compatible browser with FS Access API support (Chrome/Edge). For now, you are in Browser Mode.");
+            addToast('Local file system features require the Electron app or a compatible browser with File System Access support.', 'warning');
         }
     } catch (err) {
         console.error(err);
@@ -1749,7 +1866,7 @@ const App: React.FC = () => {
                   await loadProject(path);
               }
           } else {
-              alert("Project creation is only supported in the Electron app.");
+              addToast('Project creation is only supported in the Electron app.', 'warning');
           }
       } catch (err) {
           console.error(err);
@@ -2062,18 +2179,22 @@ const App: React.FC = () => {
       });
 
       // Serialize imagemaps: map images to just their paths
-      const serializableImagemaps: Record<string, ImageMapComposition> = {};
+      const serializableImagemaps: Record<string, SerializedImageMapComposition> = {};
       Object.entries(imagemapCompositions).forEach(([id, im]) => {
           serializableImagemaps[id] = {
               screenName: im.screenName,
-              groundImage: im.groundImage ? { filePath: im.groundImage.filePath } as any : null,
-              hoverImage: im.hoverImage ? { filePath: im.hoverImage.filePath } as any : null,
+              groundImage: im.groundImage ? { filePath: im.groundImage.filePath } : null,
+              hoverImage: im.hoverImage ? { filePath: im.hoverImage.filePath } : null,
               hotspots: im.hotspots
           };
       });
 
       const settingsToSave: ProjectSettings = {
         ...projectSettings,
+        storyBlockLayouts: buildSavedStoryBlockLayouts(blocks),
+        routeNodeLayouts: Object.fromEntries(
+          Array.from(routeNodeLayoutCache.entries()).map(([id, position]) => [id, { position }]),
+        ),
         openTabs,
         activeTabId,
         splitLayout,
@@ -2084,6 +2205,7 @@ const App: React.FC = () => {
         characterProfiles,
         punchlistMetadata,
         diagnosticsTasks,
+        ignoredDiagnostics,
         sceneCompositions: serializableScenes as unknown as Record<string, SceneComposition>,
         sceneNames,
         imagemapCompositions: serializableImagemaps,
@@ -2098,7 +2220,7 @@ const App: React.FC = () => {
       console.error("Failed to save IDE settings:", e);
       addToast('Failed to save workspace settings', 'error');
     }
-  }, [projectRootPath, projectSettings, openTabs, activeTabId, splitLayout, splitPrimarySize, secondaryOpenTabs, secondaryActiveTabId, stickyNotes, characterProfiles, addToast, sceneCompositions, sceneNames, imagemapCompositions, screenLayoutCompositions, imageScanDirectories, audioScanDirectories, punchlistMetadata, diagnosticsTasks]);
+  }, [projectRootPath, projectSettings, blocks, routeNodeLayoutCache, openTabs, activeTabId, splitLayout, splitPrimarySize, secondaryOpenTabs, secondaryActiveTabId, stickyNotes, characterProfiles, addToast, sceneCompositions, sceneNames, imagemapCompositions, screenLayoutCompositions, imageScanDirectories, audioScanDirectories, punchlistMetadata, diagnosticsTasks, ignoredDiagnostics]);
 
 
   const handleSaveAll = useCallback(async () => {
@@ -2770,12 +2892,12 @@ const App: React.FC = () => {
   }, [addToast, analysisResult.characters, blocks, projectRootPath, setCharacterProfiles, updateBlock, addBlock, setFileSystemTree]);
 
   // --- Search ---
-  const handleToggleSearch = () => {
+  const handleToggleSearch = useCallback(() => {
     setActiveLeftPanel('search');
     if (!appSettings.isLeftSidebarOpen) {
       updateAppSettings(draft => { draft.isLeftSidebarOpen = true; });
     }
-  };
+  }, [appSettings.isLeftSidebarOpen, updateAppSettings]);
 
   const handleCreateNode = useCallback(async (parentPath: string, name: string, type: 'file' | 'folder') => {
     if (!window.electronAPI || !projectRootPath) return;
@@ -3080,6 +3202,10 @@ const App: React.FC = () => {
         hoverHighlightIds={hoverHighlightIds} transform={storyCanvasTransform} onTransformChange={setStoryCanvasTransform}
         onCreateBlock={handleCreateBlockFromCanvas} onAddStickyNote={addStickyNote} mouseGestures={appSettings.mouseGestures}
         onOpenRouteCanvas={handleOpenRouteCanvasTab}
+        layoutMode={projectSettings.storyCanvasLayoutMode ?? 'flow-lr'}
+        groupingMode={projectSettings.storyCanvasGroupingMode ?? 'none'}
+        onChangeLayoutMode={handleChangeStoryCanvasLayoutMode}
+        onChangeGroupingMode={handleChangeStoryCanvasGroupingMode}
       />;
     }
     if (tab.type === 'route-canvas') {
@@ -3088,6 +3214,10 @@ const App: React.FC = () => {
         identifiedRoutes={routeAnalysisResult.identifiedRoutes} updateLabelNodePositions={handleUpdateRouteNodePositions}
         onOpenEditor={handleOpenEditor} transform={routeCanvasTransform} onTransformChange={setRouteCanvasTransform}
         mouseGestures={appSettings.mouseGestures}
+        layoutMode={projectSettings.routeCanvasLayoutMode ?? 'flow-lr'}
+        groupingMode={projectSettings.routeCanvasGroupingMode ?? 'none'}
+        onChangeLayoutMode={handleChangeRouteCanvasLayoutMode}
+        onChangeGroupingMode={handleChangeRouteCanvasGroupingMode}
       />;
     }
     if (tab.type === 'diagnostics' || tab.type === 'punchlist') {
@@ -3095,13 +3225,15 @@ const App: React.FC = () => {
         diagnostics={diagnosticsResult}
         blocks={blocks} stickyNotes={stickyNotes}
         tasks={diagnosticsTasks}
+        ignoredDiagnostics={ignoredDiagnostics}
         onUpdateTasks={(updated) => { setDiagnosticsTasks(updated); setHasUnsavedSettings(true); }}
+        onUpdateIgnoredDiagnostics={(updated) => { setIgnoredDiagnostics(updated); setHasUnsavedSettings(true); }}
         onOpenBlock={handleOpenEditor} onHighlightBlock={(id) => handleCenterOnBlock(id)}
       />;
     }
     if (tab.type === 'ai-generator') {
       return <AIGeneratorView
-        currentBlockId={getCurrentBlockId()} blocks={blocks} analysisResult={analysisResult}
+        currentBlockId={getCurrentBlockId()} blocks={blocks}
         getCurrentContext={getCurrentContext} availableModels={AVAILABLE_MODELS} selectedModel={projectSettings.selectedModel}
       />;
     }
@@ -3164,6 +3296,7 @@ const App: React.FC = () => {
         images={imagesArray} metadata={imageMetadata} scene={composition}
         onSceneChange={(val) => handleSceneUpdate(tab.sceneId!, val)} sceneName={name}
         onRenameScene={(newName) => handleRenameScene(tab.sceneId!, newName)}
+        addToast={addToast}
       />;
     }
     if (tab.type === 'imagemap-composer' && tab.imagemapId) {
@@ -3300,6 +3433,24 @@ const App: React.FC = () => {
     </div>
   );
 
+  const focusedTabId = activePaneId === 'secondary' && splitLayout !== 'none'
+    ? secondaryActiveTabId
+    : activeTabId;
+  const activeCanvasTarget: 'story' | 'route' = focusedTabId === 'route-canvas' ? 'route' : 'story';
+  const activeCanvasLayoutMode = activeCanvasTarget === 'route'
+    ? (projectSettings.routeCanvasLayoutMode ?? 'flow-lr')
+    : (projectSettings.storyCanvasLayoutMode ?? 'flow-lr');
+  const activeCanvasGroupingMode = activeCanvasTarget === 'route'
+    ? (projectSettings.routeCanvasGroupingMode ?? 'none')
+    : (projectSettings.storyCanvasGroupingMode ?? 'none');
+  const handleActiveCanvasTidyUp = () => {
+    if (activeCanvasTarget === 'route') {
+      applyRouteLayout(activeCanvasLayoutMode, activeCanvasGroupingMode, { showToast: true });
+      return;
+    }
+    handleTidyUp(true);
+  };
+
   return (
     <SearchProvider
       blocks={blocks}
@@ -3309,7 +3460,7 @@ const App: React.FC = () => {
     >
     <div className={`fixed inset-0 flex flex-col bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100 ${appSettings.theme}`}>
       <Toolbar
-        directoryHandle={directoryHandle}
+        activeCanvasTarget={activeCanvasTarget}
         projectRootPath={projectRootPath}
         dirtyBlockIds={dirtyBlockIds}
         dirtyEditors={dirtyEditors}
@@ -3320,9 +3471,7 @@ const App: React.FC = () => {
         undo={undo}
         redo={redo}
         addBlock={() => setCreateBlockModalOpen(true)}
-        handleTidyUp={() => handleTidyUp(true)}
-        onRequestNewProject={handleNewProjectRequest}
-        requestOpenFolder={handleOpenProjectFolder}
+        handleTidyUp={handleActiveCanvasTidyUp}
         handleSave={handleSaveAll}
         onOpenSettings={() => setSettingsModalOpen(true)}
         onOpenStaticTab={handleOpenStaticTab as (type: 'canvas' | 'route-canvas' | 'stats' | 'diagnostics') => void}
@@ -3331,7 +3480,6 @@ const App: React.FC = () => {
         isGameRunning={isGameRunning}
         onRunGame={() => window.electronAPI?.runGame(appSettings.renpyPath, projectRootPath!)}
         onStopGame={() => window.electronAPI?.stopGame()}
-        renpyPath={appSettings.renpyPath}
         isRenpyPathValid={isRenpyPathValid}
         draftingMode={projectSettings.draftingMode}
         onToggleDraftingMode={handleToggleDraftingMode}
@@ -3562,14 +3710,6 @@ const App: React.FC = () => {
                         }
                     }
                 }}
-                onUpdateImageMetadata={(path, meta) => {
-                    setImageMetadata(prev => { 
-                        const next = new Map(prev);
-                        next.set(path, meta);
-                        return next;
-                    });
-                    setHasUnsavedSettings(true);
-                }}
                 onOpenImageEditor={handleOpenImageEditorTab}
                 imagesLastScanned={imagesLastScanned}
                 isRefreshingImages={isRefreshingImages}
@@ -3629,14 +3769,6 @@ const App: React.FC = () => {
                             addToast('Failed to copy audio to project', 'error');
                         }
                     }
-                }}
-                onUpdateAudioMetadata={(path, meta) => {
-                    setAudioMetadata(prev => { 
-                        const next = new Map(prev);
-                        next.set(path, meta);
-                        return next;
-                    });
-                    setHasUnsavedSettings(true);
                 }}
                 onOpenAudioEditor={(filePath) => {
                     const tabId = `aud-${filePath}`;

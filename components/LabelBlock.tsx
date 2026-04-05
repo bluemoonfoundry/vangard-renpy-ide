@@ -9,7 +9,21 @@ interface LabelBlockProps {
   isEntry?: boolean;
   isUnreachable?: boolean;
   isDeadEnd?: boolean;
+  isDimmed?: boolean;
+  /** Active overlay type — renders a colored badge at the bottom-left of the node */
+  overlayHighlight?: 'hub' | 'branch' | 'menu-heavy' | 'call-heavy' | null;
+  /** Numeric count shown inside the overlay badge (e.g. number of incoming links for hubs) */
+  overlayCount?: number;
 }
+
+const OVERLAY_STYLES: Record<NonNullable<LabelBlockProps['overlayHighlight']>, {
+  bg: string; border: string; title: string;
+}> = {
+  hub:         { bg: 'bg-sky-500',    border: 'border-sky-500 dark:border-sky-400',    title: 'Hub — many incoming paths' },
+  branch:      { bg: 'bg-violet-500', border: 'border-violet-500 dark:border-violet-400', title: 'Branch — many outgoing paths' },
+  'menu-heavy':{ bg: 'bg-rose-500',   border: 'border-rose-500 dark:border-rose-400',  title: 'Menu-heavy — multiple choice menus' },
+  'call-heavy':{ bg: 'bg-teal-500',   border: 'border-teal-500 dark:border-teal-400',  title: 'Call-heavy — many incoming calls' },
+};
 
 const LabelBlock: React.FC<LabelBlockProps> = React.memo(({
   node,
@@ -19,10 +33,17 @@ const LabelBlock: React.FC<LabelBlockProps> = React.memo(({
   isEntry,
   isUnreachable,
   isDeadEnd,
+  isDimmed,
+  overlayHighlight,
+  overlayCount,
 }) => {
+
+  const overlayStyle = overlayHighlight ? OVERLAY_STYLES[overlayHighlight] : null;
 
   const borderClass = isSelected
     ? 'border-indigo-500 dark:border-indigo-400'
+    : overlayStyle
+    ? overlayStyle.border
     : isEntry
     ? 'border-green-500 dark:border-green-400'
     : isUnreachable
@@ -48,12 +69,14 @@ const LabelBlock: React.FC<LabelBlockProps> = React.memo(({
     ? '\nUnreachable — no label jumps here'
     : isDeadEnd
     ? '\nDead end — no outgoing jumps'
+    : overlayStyle
+    ? `\n${overlayStyle.title}${overlayCount !== undefined ? ` (${overlayCount})` : ''}`
     : '';
 
   return (
     <div
       data-label-node-id={node.id}
-      className={`group label-block-wrapper absolute rounded-md border-2 ${borderClass} ${shadowClass} ${bgClass} flex items-center px-3 space-x-2 cursor-grab transition-all duration-200`}
+      className={`group label-block-wrapper absolute rounded-md border-2 ${borderClass} ${shadowClass} ${bgClass} flex items-center px-3 space-x-2 cursor-grab transition-all duration-200 ${isDimmed ? 'opacity-20 pointer-events-none' : ''}`}
       style={{
         left: node.position.x,
         top: node.position.y,
@@ -72,6 +95,17 @@ const LabelBlock: React.FC<LabelBlockProps> = React.memo(({
         )}
         {isDeadEnd && !isSelected && (
           <span className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-amber-500 border-2 border-white dark:border-gray-900 pointer-events-none" />
+        )}
+        {/* Overlay badge — bottom-left, shows count */}
+        {overlayHighlight && overlayStyle && !isSelected && (
+          <span
+            className={`absolute -bottom-1.5 -left-1.5 min-w-[14px] h-3.5 px-0.5 rounded-full ${overlayStyle.bg} border border-white dark:border-gray-900 pointer-events-none flex items-center justify-center`}
+            title={overlayStyle.title}
+          >
+            {overlayCount !== undefined && (
+              <span className="text-[9px] font-bold leading-none text-white tabular-nums">{overlayCount > 9 ? '9+' : overlayCount}</span>
+            )}
+          </span>
         )}
         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A1 1 0 012 10V5a1 1 0 011-1h5a1 1 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
         <span className="text-sm font-semibold font-mono text-gray-800 dark:text-gray-200 truncate flex-1">

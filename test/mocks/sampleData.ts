@@ -160,8 +160,8 @@ export function createEmptyAnalysisResult(overrides: Partial<RenpyAnalysisResult
  * one character, and one variable. Good baseline for integration-style tests.
  */
 export function createSampleAnalysisResult(): RenpyAnalysisResult {
-  const block1 = createBlock();
-  const block2 = createBlock({
+  const _block1 = createBlock();
+  const _block2 = createBlock({
     id: 'block-2',
     content: 'label chapter1:\n    e "Welcome to chapter 1."\n    return\n',
     title: 'chapter1',

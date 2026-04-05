@@ -19,9 +19,10 @@ interface SceneComposerProps {
     onSceneChange: (newScene: React.SetStateAction<SceneComposition>) => void;
     sceneName: string;
     onRenameScene: (newName: string) => void;
+    addToast: (message: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
-const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, onSceneChange, sceneName, onRenameScene }) => {
+const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, onSceneChange, sceneName, onRenameScene, addToast }) => {
     const [selectedSpriteId, setSelectedSpriteId] = useState<string | null>(null);
     const [draggingId, setDraggingId] = useState<string | null>(null);
     const [isRenaming, setIsRenaming] = useState(false);
@@ -79,72 +80,13 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         }
     }, [isRenaming]);
 
-    // Keyboard Shortcuts
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            // Ignore if typing in an input
-            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-            
-            if (!selectedSpriteId) return;
-
-            if (e.key === 'Escape') {
-                setSelectedSpriteId(null);
-                return;
-            }
-
-            if (selectedSpriteId !== 'background') {
-                if (e.key === 'Delete' || e.key === 'Backspace') {
-                    removeSprite(selectedSpriteId);
-                    return;
-                }
-
-                // Nudging
-                const step = e.shiftKey ? 0.05 : 0.01;
-                let dx = 0;
-                let dy = 0;
-
-                if (e.key === 'ArrowLeft') dx = -step;
-                if (e.key === 'ArrowRight') dx = step;
-                if (e.key === 'ArrowUp') dy = -step;
-                if (e.key === 'ArrowDown') dy = step;
-
-                if (dx !== 0 || dy !== 0) {
-                    e.preventDefault();
-                    onSceneChange(prev => ({
-                        ...prev,
-                        sprites: prev.sprites.map(s => {
-                            if (s.id === selectedSpriteId) {
-                                return {
-                                    ...s,
-                                    x: Math.max(0, Math.min(1, s.x + dx)),
-                                    y: Math.max(0, Math.min(1, s.y + dy))
-                                };
-                            }
-                            return s;
-                        })
-                    }));
-                }
-            }
-        };
-
-        const container = containerRef.current;
-        if (container) {
-            container.addEventListener('keydown', handleKeyDown);
-            container.tabIndex = 0;
-        }
-        return () => {
-            if (container) container.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [selectedSpriteId, onSceneChange]);
-
-
     // Helpers to get display names
-    const getRenpyTag = (image: ProjectImage) => {
+    const getRenpyTag = useCallback((image: ProjectImage) => {
         const meta = metadata.get(image.projectFilePath || image.filePath);
         const name = meta?.renpyName || image.fileName.split('.').slice(0, -1).join('.');
         const tags = (meta?.tags || []).join(' ');
         return `${name}${tags ? ` ${tags}` : ''}`.trim().replace(/\s+/g, ' ');
-    };
+    }, [metadata]);
 
     const handleDropOnStage = (e: React.DragEvent) => {
         e.preventDefault();
@@ -230,7 +172,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         }
     };
 
-    const removeSprite = (id: string) => {
+    const removeSprite = useCallback((id: string) => {
         if (id === 'background') {
             onSceneChange(prev => ({ ...prev, background: null }));
         } else {
@@ -242,7 +184,65 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             });
         }
         if (selectedSpriteId === id) setSelectedSpriteId(null);
-    };
+    }, [onSceneChange, selectedSpriteId]);
+
+    // Keyboard Shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ignore if typing in an input
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+            
+            if (!selectedSpriteId) return;
+
+            if (e.key === 'Escape') {
+                setSelectedSpriteId(null);
+                return;
+            }
+
+            if (selectedSpriteId !== 'background') {
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    removeSprite(selectedSpriteId);
+                    return;
+                }
+
+                // Nudging
+                const step = e.shiftKey ? 0.05 : 0.01;
+                let dx = 0;
+                let dy = 0;
+
+                if (e.key === 'ArrowLeft') dx = -step;
+                if (e.key === 'ArrowRight') dx = step;
+                if (e.key === 'ArrowUp') dy = -step;
+                if (e.key === 'ArrowDown') dy = step;
+
+                if (dx !== 0 || dy !== 0) {
+                    e.preventDefault();
+                    onSceneChange(prev => ({
+                        ...prev,
+                        sprites: prev.sprites.map(s => {
+                            if (s.id === selectedSpriteId) {
+                                return {
+                                    ...s,
+                                    x: Math.max(0, Math.min(1, s.x + dx)),
+                                    y: Math.max(0, Math.min(1, s.y + dy))
+                                };
+                            }
+                            return s;
+                        })
+                    }));
+                }
+            }
+        };
+
+        const container = containerRef.current;
+        if (container) {
+            container.addEventListener('keydown', handleKeyDown);
+            container.tabIndex = 0;
+        }
+        return () => {
+            if (container) container.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [onSceneChange, removeSprite, selectedSpriteId]);
 
     const moveSpriteToGap = (fromIndex: number, gapIndex: number) => {
         onSceneChange(prev => {
@@ -358,7 +358,9 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                     
                     const res = await window.electronAPI.writeFile(filePath, base64Data, 'base64');
                     if (!res.success) {
-                        alert(`Failed to save image: ${res.error}`);
+                        addToast(`Failed to save image: ${res.error}`, 'error');
+                    } else {
+                        addToast('Scene exported successfully.', 'success');
                     }
                 }
             } else {
@@ -370,11 +372,12 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
+                addToast('Scene exported successfully.', 'success');
             }
 
         } catch (error) {
             console.error("Export failed:", error);
-            alert("Failed to export image.");
+            addToast('Failed to export image.', 'error');
         } finally {
             setIsExporting(false);
         }
@@ -486,7 +489,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             code += `# No background selected\n`;
         }
 
-        scene.sprites.forEach((sprite, index) => {
+        scene.sprites.forEach((sprite, _index) => {
             const tag = getRenpyTag(sprite.image);
             const x = sprite.x.toFixed(2);
             const y = sprite.y.toFixed(2);
@@ -509,7 +512,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             code += spriteCode;
         });
         return code;
-    }, [scene, metadata]);
+    }, [getRenpyTag, scene]);
 
     const activeSprite = useMemo(() => {
         if (selectedSpriteId === 'background') return scene.background;
@@ -548,7 +551,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         </div>
     );
 
-    const handleLayerListDragOver = (e: React.DragEvent, id: string, originalIndex: number) => {
+    const handleLayerListDragOver = (e: React.DragEvent, id: string, _originalIndex: number) => {
         e.preventDefault();
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
@@ -907,7 +910,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                     </div>
                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
                         {/* Draggable Layer List */}
-                        {layersReversed.map(({ sprite, originalIndex }, i) => {
+                        {layersReversed.map(({ sprite, originalIndex }, _i) => {
                             // Check if this item is being hovered during drag
                             const isDragOverTop = dragOverInfo?.id === sprite.id && dragOverInfo.position === 'top';
                             const isDragOverBottom = dragOverInfo?.id === sprite.id && dragOverInfo.position === 'bottom';

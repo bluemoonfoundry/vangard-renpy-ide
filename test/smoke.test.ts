@@ -23,6 +23,9 @@ import {
   createFileTree,
   createEditorTab,
 } from './mocks/sampleData';
+import type { MockElectronAPI } from './mocks/electronAPI';
+
+type WindowWithElectronAPI = typeof window & { electronAPI?: MockElectronAPI };
 
 describe('Test Infrastructure', () => {
   describe('Vitest globals', () => {
@@ -52,7 +55,7 @@ describe('Test Infrastructure', () => {
     });
 
     it('starts as undefined on window', () => {
-      expect((window as any).electronAPI).toBeUndefined();
+      expect((window as WindowWithElectronAPI).electronAPI).toBeUndefined();
     });
 
     it('can be created with all expected methods', () => {
@@ -71,7 +74,7 @@ describe('Test Infrastructure', () => {
     it('can be installed on window and returns sensible defaults', async () => {
       const api = installElectronAPI();
 
-      expect((window as any).electronAPI).toBe(api);
+      expect((window as WindowWithElectronAPI).electronAPI).toBe(api);
       expect(await api.openDirectory()).toBeNull();
       expect(await api.writeFile('/test', 'content')).toEqual({ success: true });
       expect(await api.scanDirectory('/dir')).toEqual({ images: [], audios: [] });

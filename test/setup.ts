@@ -7,15 +7,20 @@
 
 import '@testing-library/jest-dom/vitest';
 
+type GlobalFsTypes = typeof globalThis & {
+  FileSystemFileHandle?: typeof FileSystemFileHandle;
+  FileSystemDirectoryHandle?: typeof FileSystemDirectoryHandle;
+};
+
 // --- Global Browser API Mocks ---
 
 // FileSystemFileHandle and FileSystemDirectoryHandle are not available in jsdom.
 // Provide minimal stubs so type references don't throw at runtime.
 if (typeof globalThis.FileSystemFileHandle === 'undefined') {
-  (globalThis as any).FileSystemFileHandle = class FileSystemFileHandle {};
+  (globalThis as GlobalFsTypes).FileSystemFileHandle = class FileSystemFileHandle {};
 }
 if (typeof globalThis.FileSystemDirectoryHandle === 'undefined') {
-  (globalThis as any).FileSystemDirectoryHandle = class FileSystemDirectoryHandle {};
+  (globalThis as GlobalFsTypes).FileSystemDirectoryHandle = class FileSystemDirectoryHandle {};
 }
 
 // window.electronAPI is undefined by default in tests (browser/jsdom mode).

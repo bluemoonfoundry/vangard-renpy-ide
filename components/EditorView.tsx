@@ -14,6 +14,9 @@ import { detectContext, getRenpyCompletions } from '../lib/renpyCompletionProvid
 import type { RenpyCompletionData } from '../lib/renpyCompletionProvider';
 import { validateRenpyCode } from '../lib/renpyValidator';
 import { initTextMate, createTextMateTokensProvider } from '../lib/textmateGrammar';
+import { getTripleQuotedLineMask } from '../lib/renpyTripleQuotes';
+import { isReservedRenpyName } from '../lib/renpyNames';
+import { collectRenpyHasLabelGuards, isJumpGuardedByHasLabel } from '../lib/renpyLabelGuards';
 import {
   getSemanticTokensLegend,
   computeSemanticTokens,
@@ -225,11 +228,9 @@ const Breadcrumbs: React.FC<{ filePath?: string, context?: string }> = ({ filePa
 const EditorView: React.FC<EditorViewProps> = (props) => {
   const { 
     block, 
-    blocks,
     analysisResult,
     initialScrollRequest,
     onSwitchFocusBlock,
-    onSave, 
     onTriggerSave,
     onDirtyChange,
     onContentChange,
@@ -237,9 +238,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     editorFontFamily,
     editorFontSize,
     enableAiFeatures,
-    availableModels,
-    selectedModel,
-    addToast,
     onEditorMount,
     onEditorUnmount,
     onCursorPositionChange,
@@ -584,6 +582,8 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     if (Object.keys(analysisLabels).length === 0) return markers;
 
     const lines = code.split('\n');
+    const tripleQuotedLineMask = getTripleQuotedLineMask(code);
+    const hasLabelGuards = collectRenpyHasLabelGuards(code);
     const localLabels = new Set<string>();
     lines.forEach(line => {
         const match = line.match(LABEL_REGEX);
@@ -594,6 +594,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       const lineNumber = index + 1;
       const trimmedLine = line.trim();
       if (trimmedLine === '' || trimmedLine.startsWith('#')) return;
+      if (tripleQuotedLineMask[index]) return;
 
       // Strip string literals and inline comments before scanning for jumps so
       // we don't flag label names that appear inside quoted text or comments.
@@ -613,7 +614,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
           const globalLabelDef = analysisLabels[target];
           const isExternal = globalLabelDef && globalLabelDef.blockId !== blockRef.current.id;
 
-          if (!isLocal && !isExternal) {
+          if (!isLocal && !isExternal && !isJumpGuardedByHasLabel(hasLabelGuards, lineNumber, target)) {
               const targetStart = match.index + match[0].indexOf(target);
               markers.push({
                   startLineNumber: lineNumber,
@@ -793,6 +794,8 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       if (!model) return;
 
       const lineContent = model.getLineContent(position.lineNumber);
+      const tripleQuotedLineMask = getTripleQuotedLineMask(model.getValue());
+      if (tripleQuotedLineMask[position.lineNumber - 1]) return;
       
       const lineJumpRegex = new RegExp(JUMP_REGEX);
       let match;
@@ -875,7 +878,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
           }));
 
       monacoInstance.editor.setModelMarkers(model, 'renpy-jumps', markers);
-  }, [analysisResult, isMounted]);
+  }, [analysisResult, block.id, isMounted]);
   
   useEffect(() => {
       if (!isMounted || !editorRef.current || !monacoRef.current) return;
@@ -891,6 +894,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       const newDraftingDecorations: monaco.editor.IModelDeltaDecoration[] = [];
       
       const lines = model.getValue().split('\n');
+      const tripleQuotedLineMask = getTripleQuotedLineMask(model.getValue());
       const localLabels = new Set<string>();
       lines.forEach(line => {
           const match = line.match(LABEL_REGEX);
@@ -898,6 +902,8 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       });
 
       lines.forEach((line, index) => {
+          if (tripleQuotedLineMask[index]) return;
+
           const lineNumber = index + 1;
           let sanitizedLine = line.replace(/"[^"\\]*(?:\\.[^"\\]*)*"/g, m => ' '.repeat(m.length)).replace(/'[^'\\]*(?:\\.[^'\\]*)*'/g, m => ' '.repeat(m.length));
           const commentIndex = sanitizedLine.indexOf('#');
@@ -922,6 +928,13 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                       options: {
                           inlineClassName: 'renpy-jump-link',
                           hoverMessage: { value: `Cmd/Ctrl + click to jump to '${target}'`, isTrusted: true }
+                      }
+                  });
+              } else if (isReservedRenpyName(target)) {
+                  newDecorations.push({
+                      range: new monacoInstance.Range(lineNumber, startCol, lineNumber, endCol),
+                      options: {
+                          hoverMessage: { value: `Ren'Py reserved/internal target '${target}'.`, isTrusted: true }
                       }
                   });
               } else {
@@ -1068,21 +1081,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       draftingDecorationIds.current = editor.deltaDecorations(draftingDecorationIds.current, newDraftingDecorations);
   
   }, [analysisResult, block.id, isMounted, block.content, draftingMode, existingImageTags, existingAudioPaths]); 
-
-  const getCurrentContext = () => {
-      if (!editorRef.current) return '';
-      const model = editorRef.current.getModel();
-      const position = editorRef.current.getPosition();
-      if (model && position) {
-          return model.getValueInRange({
-              startLineNumber: 1,
-              startColumn: 1,
-              endLineNumber: position.lineNumber,
-              endColumn: position.column
-          });
-      }
-      return '';
-  };
 
   return (
     <div className="h-full flex flex-col overflow-hidden">

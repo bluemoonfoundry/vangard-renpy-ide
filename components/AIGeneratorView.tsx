@@ -1,11 +1,10 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import type { Block, RenpyAnalysisResult } from '../types';
+import type { Block } from '../types';
 import CopyButton from './CopyButton';
 
 interface AIGeneratorViewProps {
   currentBlockId: string;
   blocks: Block[];
-  analysisResult: RenpyAnalysisResult;
   getCurrentContext: () => string;
   availableModels: string[];
   selectedModel: string;
@@ -22,7 +21,6 @@ const modelProviderFor = (modelId: string): 'google' | 'openai' | 'anthropic' | 
 const AIGeneratorView: React.FC<AIGeneratorViewProps> = ({
   currentBlockId,
   blocks,
-  analysisResult,
   getCurrentContext,
   availableModels,
   selectedModel

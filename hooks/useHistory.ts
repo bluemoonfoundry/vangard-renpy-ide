@@ -35,45 +35,49 @@ export const useHistory = <T>(initialState: T) => {
 
   const undo = useCallback(() => {
     if (!canUndo) return;
+    setHistory(currentHistory => {
+      const newPast = currentHistory.past.slice(0, currentHistory.past.length - 1);
+      const newPresent = currentHistory.past[currentHistory.past.length - 1];
+      const newFuture = [currentHistory.present, ...currentHistory.future];
 
-    const newPast = history.past.slice(0, history.past.length - 1);
-    const newPresent = history.past[history.past.length - 1];
-    const newFuture = [history.present, ...history.future];
-
-    setHistory({
-      past: newPast,
-      present: newPresent,
-      future: newFuture,
+      return {
+        past: newPast,
+        present: newPresent,
+        future: newFuture,
+      };
     });
-  }, [canUndo, history]);
+  }, [canUndo]);
 
   const redo = useCallback(() => {
     if (!canRedo) return;
+    setHistory(currentHistory => {
+      const newPast = [...currentHistory.past, currentHistory.present];
+      const newPresent = currentHistory.future[0];
+      const newFuture = currentHistory.future.slice(1);
 
-    const newPast = [...history.past, history.present];
-    const newPresent = history.future[0];
-    const newFuture = history.future.slice(1);
-
-    setHistory({
-      past: newPast,
-      present: newPresent,
-      future: newFuture,
+      return {
+        past: newPast,
+        present: newPresent,
+        future: newFuture,
+      };
     });
-  }, [canRedo, history]);
+  }, [canRedo]);
 
   const setState = useCallback((action: T | ((prev: T) => T)) => {
-    const newState = action instanceof Function ? action(history.present) : action;
+    setHistory(currentHistory => {
+      const newState = action instanceof Function ? action(currentHistory.present) : action;
 
-    if (JSON.stringify(newState) === JSON.stringify(history.present)) {
-      return; // Do nothing if state is unchanged
-    }
+      if (JSON.stringify(newState) === JSON.stringify(currentHistory.present)) {
+        return currentHistory;
+      }
 
-    setHistory({
-      past: [...history.past, history.present],
-      present: newState,
-      future: [], // Clear future on new state
+      return {
+        past: [...currentHistory.past, currentHistory.present],
+        present: newState,
+        future: [],
+      };
     });
-  }, [history.present]);
+  }, []);
 
   return {
     state: history.present,

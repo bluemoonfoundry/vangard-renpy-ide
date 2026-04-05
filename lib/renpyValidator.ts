@@ -37,6 +37,9 @@ export interface RenpyDiagnostic {
   severity: 'error' | 'warning';
 }
 
+import { getLogicalLines } from './renpyLogicalLines';
+import { getTripleQuotedLineMask } from './renpyTripleQuotes';
+
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const BUILTIN_CHANNELS = new Set(['music', 'sound', 'voice', 'audio']);
@@ -61,6 +64,12 @@ const PYTHON_BLOCK_RE =
 // Inside screen blocks, `label` and `transform` are displayables, not story statements,
 // so colon-check and menu-choice rules must be suppressed.
 const SCREEN_BLOCK_RE = /^\s*screen\s+\w+(?:\s*\([^)]*\))?\s*:/;
+
+// ATL image block start — `image name:`
+// Inside ATL image blocks, quoted lines like `"path.webp" with dissolve`
+// are animation statements, not menu choices.
+const IMAGE_BLOCK_RE = /^\s*image\s+.+:\s*$/;
+const MENU_BLOCK_RE = /^\s*menu(?:\s+\w+)?\s*:/;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -101,8 +110,8 @@ function checkShowExpression(line: string, lineNum: number): RenpyDiagnostic | n
   if (/\bas\b/.test(sanitized)) return null;
   const [s, e] = wordRange(line, 'expression');
   return makeDiag(lineNum, s, e,
-    "`show expression` requires an `as <tag>` clause so Ren'Py can track the image layer.",
-    'error');
+    "`show expression` may need an `as <tag>` clause if you want Ren'Py to track or reference the shown image later.",
+    'warning');
 }
 
 function checkPlayQueue(line: string, lineNum: number): RenpyDiagnostic[] {
@@ -472,6 +481,14 @@ function checkPause(line: string, lineNum: number): RenpyDiagnostic | null {
 export function validateRenpyCode(code: string): RenpyDiagnostic[] {
   const diagnostics: RenpyDiagnostic[] = [];
   const lines = code.split('\n');
+  const logicalLines = getLogicalLines(code);
+  const lineToLogicalLine = new Map<number, { text: string; startLine: number; endLine: number }>();
+
+  logicalLines.forEach(logicalLine => {
+    for (let lineNumber = logicalLine.startLine; lineNumber <= logicalLine.endLine; lineNumber++) {
+      lineToLogicalLine.set(lineNumber, logicalLine);
+    }
+  });
 
   let inPythonBlock = false;
   let pythonBlockIndent = -1;
@@ -479,17 +496,29 @@ export function validateRenpyCode(code: string): RenpyDiagnostic[] {
   let inScreenBlock = false;
   let screenBlockIndent = -1;
 
+  let inImageBlock = false;
+  let imageBlockIndent = -1;
+
+  let inMenuBlock = false;
+  let menuBlockIndent = -1;
+  let menuChoiceIndent = -1;
+
   // Triple-quoted strings (""" or ''') span multiple lines.
   // All content inside them is dialogue/narration — never validate it.
+  const tripleQuotedLineMask = getTripleQuotedLineMask(code);
   let inTripleQuoteBlock = false;
   let tripleQuoteSeq = '"""';
 
   lines.forEach((line, idx) => {
     const lineNum = idx + 1;
+    const logicalLine = lineToLogicalLine.get(lineNum);
+    const statement = logicalLine?.text ?? line;
+    const isLogicalStart = !logicalLine || logicalLine.startLine === lineNum;
     const trimmed = line.trim();
 
     // Skip blank lines and comments
     if (!trimmed || trimmed.startsWith('#')) return;
+    if (tripleQuotedLineMask[idx]) return;
 
     const indent = indentOf(line);
 
@@ -508,6 +537,21 @@ export function validateRenpyCode(code: string): RenpyDiagnostic[] {
     if (inScreenBlock && indent <= screenBlockIndent) {
       inScreenBlock = false;
       screenBlockIndent = -1;
+      // Fall through — validate this line normally
+    }
+
+    // Exit image ATL block when indentation returns to the opening level
+    if (inImageBlock && indent <= imageBlockIndent) {
+      inImageBlock = false;
+      imageBlockIndent = -1;
+      // Fall through — validate this line normally
+    }
+
+    // Exit menu block when indentation returns to the opening level
+    if (inMenuBlock && indent <= menuBlockIndent) {
+      inMenuBlock = false;
+      menuBlockIndent = -1;
+      menuChoiceIndent = -1;
       // Fall through — validate this line normally
     }
 
@@ -538,65 +582,88 @@ export function validateRenpyCode(code: string): RenpyDiagnostic[] {
     // ── End triple-quote tracking ──────────────────────────────────────────
 
     // Detect start of python block
-    if (PYTHON_BLOCK_RE.test(line)) {
+    if (isLogicalStart && PYTHON_BLOCK_RE.test(statement)) {
       inPythonBlock = true;
       pythonBlockIndent = indent;
       return;
     }
 
     // Detect start of screen block
-    if (SCREEN_BLOCK_RE.test(line)) {
+    if (isLogicalStart && SCREEN_BLOCK_RE.test(statement)) {
       inScreenBlock = true;
       screenBlockIndent = indent;
       // Still validate the `screen name:` line itself, then skip inner lines
     }
 
+    // Detect start of image ATL block
+    if (isLogicalStart && IMAGE_BLOCK_RE.test(statement)) {
+      inImageBlock = true;
+      imageBlockIndent = indent;
+      // Still validate the `image name:` line itself, then skip ATL-specific false positives inside
+    }
+
+    if (isLogicalStart && MENU_BLOCK_RE.test(statement)) {
+      inMenuBlock = true;
+      menuBlockIndent = indent;
+      menuChoiceIndent = -1;
+    }
+
+    if (!isLogicalStart) {
+      return;
+    }
+
+    if (inMenuBlock && indent > menuBlockIndent && menuChoiceIndent === -1) {
+      menuChoiceIndent = indent;
+    }
+
     // Inline Python expressions — run $ checks then skip all other rules
     if (trimmed.startsWith('$')) {
-      const pyDiag = checkInlinePython(line, lineNum);
+      const pyDiag = checkInlinePython(statement, lineNum);
       if (pyDiag) diagnostics.push(pyDiag);
       return;
     }
 
     // Run rules
-    const show = checkShowExpression(line, lineNum);
+    const show = checkShowExpression(statement, lineNum);
     if (show) diagnostics.push(show);
 
-    const playDiags = checkPlayQueue(line, lineNum);
+    const playDiags = checkPlayQueue(statement, lineNum);
     diagnostics.push(...playDiags);
 
-    const stop = checkStop(line, lineNum);
+    const stop = checkStop(statement, lineNum);
     if (stop) diagnostics.push(stop);
 
-    const def = checkDefineDefault(line, lineNum);
+    const def = checkDefineDefault(statement, lineNum);
     if (def) diagnostics.push(def);
 
     // Inside screen blocks, `label`/`transform` are displayables and quoted strings
-    // are not menu choices — suppress these two rules to avoid false positives.
-    if (!inScreenBlock) {
-      const colon = checkMissingColon(line, lineNum);
+    // are not menu choices. Inside ATL image blocks, quoted ATL statements are also
+    // not menu choices. Suppress these rules to avoid false positives.
+    if (!inScreenBlock && !inImageBlock) {
+      const colon = checkMissingColon(statement, lineNum);
       if (colon) diagnostics.push(colon);
 
-      const choice = checkMenuChoiceCondition(line, lineNum);
+      const isMenuChoiceLine = inMenuBlock && indent === menuChoiceIndent;
+      const choice = isMenuChoiceLine ? checkMenuChoiceCondition(statement, lineNum) : null;
       if (choice) diagnostics.push(choice);
     }
 
-    const img = checkImageName(line, lineNum);
+    const img = checkImageName(statement, lineNum);
     if (img) diagnostics.push(img);
 
-    const bare = checkBareStatements(line, lineNum);
+    const bare = checkBareStatements(statement, lineNum);
     if (bare) diagnostics.push(bare);
 
-    const screen = checkScreenCommands(line, lineNum);
+    const screen = checkScreenCommands(statement, lineNum);
     if (screen) diagnostics.push(screen);
 
-    const win = checkWindow(line, lineNum);
+    const win = checkWindow(statement, lineNum);
     if (win) diagnostics.push(win);
 
-    const nvl = checkNvl(line, lineNum);
+    const nvl = checkNvl(statement, lineNum);
     if (nvl) diagnostics.push(nvl);
 
-    const pause = checkPause(line, lineNum);
+    const pause = checkPause(statement, lineNum);
     if (pause) diagnostics.push(pause);
   });
 

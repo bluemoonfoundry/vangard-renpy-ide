@@ -113,6 +113,22 @@ describe('performRenpyAnalysis — Jumps & Calls', () => {
     expect(result.invalidJumps['b1']).toContain('nonexistent');
   });
 
+  it('does not record reserved Ren\'Py internal targets as invalid jumps', () => {
+    const result = performRenpyAnalysis([
+      block('label start:\n    call _errorhandling\n', { id: 'b1' }),
+    ]);
+    expect(result.jumps['b1']).toHaveLength(1);
+    expect(result.jumps['b1'][0].target).toBe('_errorhandling');
+    expect(result.invalidJumps['b1'] ?? []).not.toContain('_errorhandling');
+  });
+
+  it('does not record other underscore-prefixed reserved targets as invalid jumps', () => {
+    const result = performRenpyAnalysis([
+      block('label start:\n    jump _rollback\n', { id: 'b1' }),
+    ]);
+    expect(result.invalidJumps['b1'] ?? []).not.toContain('_rollback');
+  });
+
   it('does not duplicate links for multiple jumps to the same block', () => {
     const blocks = [
       block('label start:\n    jump ch1\n    jump ch1\n', { id: 'b1' }),
@@ -147,6 +163,50 @@ describe('performRenpyAnalysis — Jumps & Calls', () => {
     ]);
     // The word "jump" is inside quotes, so it should not be parsed as a jump statement
     expect(result.jumps['b1']).toHaveLength(0);
+  });
+
+  it('ignores jumps inside triple-quoted strings', () => {
+    const result = performRenpyAnalysis([
+      block('label start:\n    """\n    jump nowhere\n    """\n    return\n', { id: 'b1' }),
+    ]);
+    expect(result.jumps['b1']).toHaveLength(0);
+    expect(result.invalidJumps['b1'] ?? []).not.toContain('nowhere');
+  });
+
+  it('ignores statement keywords inside inline-opened triple-quoted strings', () => {
+    const result = performRenpyAnalysis([
+      block('label start:\n    for i in """\nmenu\nnvl\njump nowhere\n""".split():\n        pass\n', { id: 'b1' }),
+    ]);
+    expect(result.jumps['b1']).toHaveLength(0);
+    expect(result.invalidJumps['b1'] ?? []).not.toContain('nowhere');
+  });
+
+  it('does not record invalid jumps when call is guarded by renpy.has_label', () => {
+    const result = performRenpyAnalysis([
+      block('label start:\n    if renpy.has_label("hide_windows"):\n        call hide_windows\n', { id: 'b1' }),
+    ]);
+    expect(result.invalidJumps['b1'] ?? []).not.toContain('hide_windows');
+  });
+
+  it('does not record invalid jumps when jump is nested inside a renpy.has_label guard', () => {
+    const result = performRenpyAnalysis([
+      block('label start:\n    if renpy.has_label("hide_windows"):\n        if condition:\n            jump hide_windows\n', { id: 'b1' }),
+    ]);
+    expect(result.invalidJumps['b1'] ?? []).not.toContain('hide_windows');
+  });
+
+  it('still records invalid jumps for a different target inside a renpy.has_label guard', () => {
+    const result = performRenpyAnalysis([
+      block('label start:\n    if renpy.has_label("hide_windows"):\n        call missing_label\n', { id: 'b1' }),
+    ]);
+    expect(result.invalidJumps['b1'] ?? []).toContain('missing_label');
+  });
+
+  it('does not treat variable-based renpy.has_label guards as suppressions', () => {
+    const result = performRenpyAnalysis([
+      block('label start:\n    if renpy.has_label(target_name):\n        call hide_windows\n', { id: 'b1' }),
+    ]);
+    expect(result.invalidJumps['b1'] ?? []).toContain('hide_windows');
   });
 });
 
@@ -311,6 +371,14 @@ describe('performRenpyAnalysis — Screens', () => {
     const screen = result.screens.get('main_menu');
     expect(screen).toBeDefined();
     expect(screen!.line).toBe(1);
+  });
+
+  it('does not extract labels from triple-quoted strings', () => {
+    const result = performRenpyAnalysis([
+      block('label start:\n    """\nlabel fake_label:\n    jump fake_target\n    """\n    return\n'),
+    ]);
+    expect(result.labels['fake_label']).toBeUndefined();
+    expect(result.invalidJumps['block-1'] ?? []).not.toContain('fake_target');
   });
 
   it('extracts screen parameters', () => {

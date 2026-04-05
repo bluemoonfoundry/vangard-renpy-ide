@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import type { ScreenLayoutComposition, ScreenWidget, ScreenWidgetType } from '../types';
 import { generateScreenCode } from '../lib/screenCodeGenerator';
+import { createId } from '../lib/createId';
 import CopyButton from './CopyButton';
 
 interface ScreenLayoutComposerProps {
@@ -164,7 +165,7 @@ interface TreeDragCallbacks {
 // Widget helpers
 // ---------------------------------------------------------------------------
 function makeWidget(type: ScreenWidgetType): ScreenWidget {
-    const id = `widget-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const id = createId('widget');
     const base: ScreenWidget = { id, type };
     if (type === 'text')        return { ...base, text: 'Text' };
     if (type === 'textbutton')  return { ...base, text: 'Button', action: 'Return()' };

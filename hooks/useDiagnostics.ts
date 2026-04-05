@@ -9,9 +9,11 @@ import type {
   DiagnosticIssue,
   DiagnosticsResult,
   DiagnosticsTask,
+  IgnoredDiagnosticRule,
   PunchlistMetadata,
 } from '../types';
 import { validateRenpyCode } from '../lib/renpyValidator';
+import { matchesIgnoredDiagnostic } from '../lib/diagnosticIgnores';
 
 // ---------------------------------------------------------------------------
 // Ren'Py statement keywords — these should not be treated as character names
@@ -39,7 +41,8 @@ export function useDiagnostics(
   projectImages: Map<string, ProjectImage>,
   imageMetadata: Map<string, ImageMetadata>,
   projectAudios: Map<string, RenpyAudio>,
-  audioMetadata: Map<string, AudioMetadata>,
+  _audioMetadata: Map<string, AudioMetadata>,
+  ignoredDiagnostics: IgnoredDiagnosticRule[] = [],
 ): DiagnosticsResult {
   // Build image and audio lookup sets (same logic as PunchlistManager)
   const existingImageTags = useMemo(() => {
@@ -298,24 +301,29 @@ export function useDiagnostics(
       }
     }
 
+    const visibleIssues = ignoredDiagnostics.length > 0
+      ? issues.filter(issue => !ignoredDiagnostics.some(rule => matchesIgnoredDiagnostic(issue, rule)))
+      : issues;
+
     // -----------------------------------------------------------------------
     // Compute counts
     // -----------------------------------------------------------------------
     let errorCount = 0;
     let warningCount = 0;
     let infoCount = 0;
-    for (const issue of issues) {
+    for (const issue of visibleIssues) {
       if (issue.severity === 'error') errorCount++;
       else if (issue.severity === 'warning') warningCount++;
       else infoCount++;
     }
 
-    return { issues, errorCount, warningCount, infoCount };
+    return { issues: visibleIssues, errorCount, warningCount, infoCount };
   }, [
     blocks,
     analysisResult,
     existingImageTags,
     existingAudioPaths,
+    ignoredDiagnostics,
   ]);
 }
 

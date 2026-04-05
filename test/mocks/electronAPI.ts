@@ -18,13 +18,43 @@
 import { vi } from 'vitest';
 import type { AppSettings, SearchResult } from '../../types';
 
+interface MockLoadedProject {
+  blocks: unknown[];
+  settings: Record<string, unknown>;
+}
+
+interface MockRefreshProjectTree {
+  name: string;
+  path: string;
+  children: unknown[];
+}
+
+interface MockScannedDirectory {
+  images: unknown[];
+  audios: unknown[];
+}
+
+interface SearchInProjectArgs {
+  projectPath: string;
+  query: string;
+  isCaseSensitive?: boolean;
+  isWholeWord?: boolean;
+  isRegex?: boolean;
+}
+
+interface SaveDialogOptions {
+  title?: string;
+  defaultPath?: string;
+  filters?: Array<{ name: string; extensions: string[] }>;
+}
+
 /** The shape of window.electronAPI as exposed by preload.js. */
 export interface MockElectronAPI {
   // Directory / project
   openDirectory: ReturnType<typeof vi.fn<[], Promise<string | null>>>;
   createProject: ReturnType<typeof vi.fn<[], Promise<string | null>>>;
-  loadProject: ReturnType<typeof vi.fn<[string], Promise<any>>>;
-  refreshProjectTree: ReturnType<typeof vi.fn<[string], Promise<any>>>;
+  loadProject: ReturnType<typeof vi.fn<[string], Promise<MockLoadedProject>>>;
+  refreshProjectTree: ReturnType<typeof vi.fn<[string], Promise<MockRefreshProjectTree>>>;
 
   // File system
   writeFile: ReturnType<typeof vi.fn<[string, string, string?], Promise<{ success: boolean; error?: string }>>>;
@@ -32,7 +62,7 @@ export interface MockElectronAPI {
   removeEntry: ReturnType<typeof vi.fn<[string], Promise<{ success: boolean; error?: string }>>>;
   moveFile: ReturnType<typeof vi.fn<[string, string], Promise<{ success: boolean; error?: string }>>>;
   copyEntry: ReturnType<typeof vi.fn<[string, string], Promise<{ success: boolean; error?: string }>>>;
-  scanDirectory: ReturnType<typeof vi.fn<[string], Promise<{ images: any[]; audios: any[] }>>>;
+  scanDirectory: ReturnType<typeof vi.fn<[string], Promise<MockScannedDirectory>>>;
 
   // Menu commands
   onMenuCommand: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
@@ -72,8 +102,8 @@ export interface MockElectronAPI {
   openExternal: ReturnType<typeof vi.fn<[string], Promise<void>>>;
 
   // Search & dialogs
-  searchInProject: ReturnType<typeof vi.fn<[any], Promise<SearchResult[]>>>;
-  showSaveDialog: ReturnType<typeof vi.fn<[any], Promise<string | null>>>;
+  searchInProject: ReturnType<typeof vi.fn<[SearchInProjectArgs], Promise<SearchResult[]>>>;
+  showSaveDialog: ReturnType<typeof vi.fn<[SaveDialogOptions], Promise<string | null>>>;
   path: {
     join: ReturnType<typeof vi.fn<[...string[]], Promise<string>>>;
   };
@@ -155,7 +185,7 @@ export function createMockElectronAPI(): MockElectronAPI {
  */
 export function installElectronAPI(api?: MockElectronAPI): MockElectronAPI {
   const mock = api ?? createMockElectronAPI();
-  (window as any).electronAPI = mock;
+  (window as typeof window & { electronAPI?: MockElectronAPI }).electronAPI = mock;
   return mock;
 }
 
@@ -163,5 +193,5 @@ export function installElectronAPI(api?: MockElectronAPI): MockElectronAPI {
  * Removes the electronAPI mock from window, restoring the default state.
  */
 export function uninstallElectronAPI(): void {
-  (window as any).electronAPI = undefined;
+  (window as typeof window & { electronAPI?: MockElectronAPI }).electronAPI = undefined;
 }

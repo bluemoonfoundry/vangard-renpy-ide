@@ -1,7 +1,9 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState } from 'react';
 import { ScreenModel, ScreenComponent, ProjectImage } from '../types';
-import { useImmer } from 'use-immer';
 import CopyButton from './CopyButton';
+import { createId } from '../lib/createId';
+
+type ScreenComponentProps = Record<string, unknown>;
 
 interface ScreenEditorViewProps {
   screenModel: ScreenModel;
@@ -9,7 +11,7 @@ interface ScreenEditorViewProps {
   projectImages: ProjectImage[];
 }
 
-const COMPONENT_TYPES = [
+const COMPONENT_TYPES: Array<{ type: ScreenComponent['type']; label: string; icon: string }> = [
   { type: 'frame', label: 'Frame', icon: '□' },
   { type: 'vbox', label: 'VBox', icon: '☰' },
   { type: 'hbox', label: 'HBox', icon: '|||' },
@@ -20,7 +22,7 @@ const COMPONENT_TYPES = [
   { type: 'null', label: 'Null (Spacer)', icon: '∅' },
 ];
 
-const DEFAULT_PROPS: Record<string, any> = {
+const DEFAULT_PROPS: Record<ScreenComponent['type'], ScreenComponentProps> = {
   frame: { xpadding: 10, ypadding: 10, background: '#333333' },
   vbox: { spacing: 10 },
   hbox: { spacing: 10 },
@@ -31,56 +33,127 @@ const DEFAULT_PROPS: Record<string, any> = {
   null: { width: 10, height: 10 },
 };
 
+const CONTAINER_COMPONENT_TYPES = new Set<ScreenComponent['type']>(['frame', 'vbox', 'hbox']);
+
+function appendChildToComponent(
+  components: ScreenComponent[],
+  parentId: string,
+  child: ScreenComponent
+): ScreenComponent[] {
+  return components.map(component => {
+    if (component.id === parentId) {
+      return { ...component, children: [...component.children, child] };
+    }
+
+    if (component.children.length === 0) return component;
+    return { ...component, children: appendChildToComponent(component.children, parentId, child) };
+  });
+}
+
+function removeComponentFromTree(
+  components: ScreenComponent[],
+  id: string
+): { nextComponents: ScreenComponent[]; removedComponent: ScreenComponent | null } {
+  let removedComponent: ScreenComponent | null = null;
+
+  const nextComponents = components.flatMap(component => {
+    if (component.id === id) {
+      removedComponent = component;
+      return [];
+    }
+
+    if (component.children.length === 0) return [component];
+
+    const result = removeComponentFromTree(component.children, id);
+    if (result.removedComponent) {
+      removedComponent = result.removedComponent;
+      return [{ ...component, children: result.nextComponents }];
+    }
+
+    return [component];
+  });
+
+  return { nextComponents, removedComponent };
+}
+
+function updateComponentInTree(
+  components: ScreenComponent[],
+  id: string,
+  updater: (component: ScreenComponent) => ScreenComponent
+): ScreenComponent[] {
+  return components.map(component => {
+    if (component.id === id) return updater(component);
+    if (component.children.length === 0) return component;
+    return { ...component, children: updateComponentInTree(component.children, id, updater) };
+  });
+}
+
+function insertComponentInTree(
+  components: ScreenComponent[],
+  targetId: string,
+  newComponent: ScreenComponent
+): { nextComponents: ScreenComponent[]; inserted: boolean } {
+  const targetIndex = components.findIndex(component => component.id === targetId);
+  if (targetIndex !== -1) {
+    const targetComponent = components[targetIndex];
+    if (CONTAINER_COMPONENT_TYPES.has(targetComponent.type)) {
+      const nextComponents = components.map(component =>
+        component.id === targetId
+          ? { ...component, children: [...component.children, newComponent] }
+          : component
+      );
+      return { nextComponents, inserted: true };
+    }
+
+    const nextComponents = [...components];
+    nextComponents.splice(targetIndex + 1, 0, newComponent);
+    return { nextComponents, inserted: true };
+  }
+
+  for (let i = 0; i < components.length; i++) {
+    const component = components[i];
+    if (component.children.length === 0) continue;
+
+    const result = insertComponentInTree(component.children, targetId, newComponent);
+    if (result.inserted) {
+      const nextComponents = [...components];
+      nextComponents[i] = { ...component, children: result.nextComponents };
+      return { nextComponents, inserted: true };
+    }
+  }
+
+  return { nextComponents: components, inserted: false };
+}
+
 export default function ScreenEditorView({ screenModel, onChange, projectImages }: ScreenEditorViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draggedComponentId, setDraggedComponentId] = useState<string | null>(null);
 
   const handleAddComponent = (type: ScreenComponent['type'], parentId: string | null = null) => {
     const newComponent: ScreenComponent = {
-      id: `comp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: createId('comp'),
       type,
-      name: `${type}_${Math.floor(Math.random() * 1000)}`,
+      name: `${type}_${Date.now().toString().slice(-4)}`,
       props: { ...DEFAULT_PROPS[type] },
       children: []
     };
 
-    const newModel = { ...screenModel };
-    
-    if (!parentId) {
-      newModel.components = [...newModel.components, newComponent];
-    } else {
-      const addToParent = (comps: ScreenComponent[]): boolean => {
-        for (const comp of comps) {
-          if (comp.id === parentId) {
-            comp.children.push(newComponent);
-            return true;
-          }
-          if (addToParent(comp.children)) return true;
-        }
-        return false;
-      };
-      addToParent(newModel.components);
-    }
-    
-    onChange(newModel);
+    const nextComponents = parentId
+      ? appendChildToComponent(screenModel.components, parentId, newComponent)
+      : [...screenModel.components, newComponent];
+
+    onChange({ ...screenModel, components: nextComponents });
     setSelectedId(newComponent.id);
   };
 
   const handleDeleteComponent = (id: string) => {
-    const deleteFromList = (comps: ScreenComponent[]): ScreenComponent[] => {
-      return comps.filter(c => {
-        if (c.id === id) return false;
-        c.children = deleteFromList(c.children);
-        return true;
-      });
-    };
-
-    const newModel = { ...screenModel, components: deleteFromList([...screenModel.components]) };
+    const { nextComponents } = removeComponentFromTree(screenModel.components, id);
+    const newModel = { ...screenModel, components: nextComponents };
     onChange(newModel);
     if (selectedId === id) setSelectedId(null);
   };
 
-  const handleUpdateProps = (id: string, props: Record<string, any>) => {
+  const handleUpdateProps = (id: string, props: ScreenComponentProps) => {
     const updateInList = (comps: ScreenComponent[]): ScreenComponent[] => {
       return comps.map(c => {
         if (c.id === id) return { ...c, props: { ...c.props, ...props } };
@@ -108,7 +181,7 @@ export default function ScreenEditorView({ screenModel, onChange, projectImages 
     
     const indent = (level: number) => "    ".repeat(level);
     
-    const renderProps = (props: Record<string, any>) => {
+    const renderProps = (props: ScreenComponentProps) => {
       return Object.entries(props)
         .map(([k, v]) => {
           if (k === 'text' || k === 'file' || k === 'idle' || k === 'hover') return ''; // Handled specially
@@ -161,55 +234,14 @@ export default function ScreenEditorView({ screenModel, onChange, projectImages 
     e.stopPropagation();
     if (!draggedComponentId || draggedComponentId === targetId) return;
 
-    // Deep clone
-    const newComponents = JSON.parse(JSON.stringify(screenModel.components));
-    
-    // Find and remove dragged item
-    let draggedItem: ScreenComponent | null = null;
-    const remove = (list: ScreenComponent[]) => {
-      const idx = list.findIndex(c => c.id === draggedComponentId);
-      if (idx !== -1) {
-        draggedItem = list[idx];
-        list.splice(idx, 1);
-        return true;
-      }
-      for (const c of list) {
-        if (remove(c.children)) return true;
-      }
-      return false;
-    };
-    remove(newComponents);
+    const removalResult = removeComponentFromTree(screenModel.components, draggedComponentId);
+    if (!removalResult.removedComponent) return;
 
-    if (!draggedItem) return;
+    const nextComponents = targetId === null
+      ? [...removalResult.nextComponents, removalResult.removedComponent]
+      : insertComponentInTree(removalResult.nextComponents, targetId, removalResult.removedComponent).nextComponents;
 
-    // Insert at target
-    if (targetId === null) {
-      // Drop at root
-      newComponents.push(draggedItem);
-    } else {
-      const insert = (list: ScreenComponent[]) => {
-        const idx = list.findIndex(c => c.id === targetId);
-        if (idx !== -1) {
-          // Insert after target (simple reordering)
-          // To support nesting via drag, we'd need more complex hit testing (top/middle/bottom of item)
-          // For now, let's assume dropping ON an item nests it if it's a container, or puts it after if not.
-          const target = list[idx];
-          if (['frame', 'vbox', 'hbox', 'viewport', 'grid'].includes(target.type)) {
-             target.children.push(draggedItem!);
-          } else {
-             list.splice(idx + 1, 0, draggedItem!);
-          }
-          return true;
-        }
-        for (const c of list) {
-          if (insert(c.children)) return true;
-        }
-        return false;
-      };
-      insert(newComponents);
-    }
-
-    onChange({ ...screenModel, components: newComponents });
+    onChange({ ...screenModel, components: nextComponents });
     setDraggedComponentId(null);
   };
 
@@ -333,7 +365,7 @@ export default function ScreenEditorView({ screenModel, onChange, projectImages 
           {COMPONENT_TYPES.map(c => (
             <button
               key={c.type}
-              onClick={() => handleAddComponent(c.type as any, selectedId)}
+              onClick={() => handleAddComponent(c.type, selectedId)}
               className="flex flex-col items-center justify-center p-2 border border-gray-200 dark:border-gray-700 rounded hover:bg-blue-50 dark:hover:bg-blue-900 text-xs"
             >
               <span className="text-lg mb-1">{c.icon}</span>
@@ -395,10 +427,13 @@ export default function ScreenEditorView({ screenModel, onChange, projectImages 
                 type="text" 
                 value={selectedComponent.name}
                 onChange={(e) => {
-                  const newModel = { ...screenModel };
-                  const comp = findComponent(newModel.components, selectedComponent.id);
-                  if (comp) comp.name = e.target.value;
-                  onChange(newModel);
+                  onChange({
+                    ...screenModel,
+                    components: updateComponentInTree(screenModel.components, selectedComponent.id, component => ({
+                      ...component,
+                      name: e.target.value,
+                    })),
+                  });
                 }}
                 className="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600"
               />

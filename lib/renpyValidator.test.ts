@@ -12,18 +12,21 @@ function warnings(code: string) {
 // ── show expression ───────────────────────────────────────────────────────
 
 describe('show expression', () => {
-  it('flags show expression without as', () => {
+  it('warns on show expression without as', () => {
     const code = '    show expression some_displayable';
-    expect(errors(code)).toHaveLength(1);
-    expect(errors(code)[0]).toContain('`show expression` requires an `as <tag>`');
+    expect(warnings(code)).toHaveLength(1);
+    expect(warnings(code)[0]).toContain('`show expression` may need an `as <tag>`');
+    expect(errors(code)).toHaveLength(0);
   });
 
   it('accepts show expression with as', () => {
     expect(errors('    show expression some_displayable as tag')).toHaveLength(0);
+    expect(warnings('    show expression some_displayable as tag')).toHaveLength(0);
   });
 
   it('does not flag plain show statements', () => {
     expect(errors('    show bg_forest')).toHaveLength(0);
+    expect(warnings('    show bg_forest')).toHaveLength(0);
   });
 });
 
@@ -181,40 +184,78 @@ describe('image reserved words', () => {
 
 describe('menu choice condition', () => {
   it('flags parenthesized boolean condition without if', () => {
-    const code = '    "Yes, it is mine." ($mook==1):';
+    const code = `menu:
+    "Yes, it is mine." ($mook==1):`;
     const w = warnings(code);
     expect(w).toHaveLength(1);
     expect(w[0]).toContain('missing the `if` keyword');
   });
 
   it('flags bare condition without if', () => {
-    const code = '    "Choice text" $flag:';
+    const code = `menu:
+    "Choice text" $flag:`;
     const w = warnings(code);
     expect(w).toHaveLength(1);
     expect(w[0]).toContain('missing the `if` keyword');
   });
 
   it('accepts standard if condition', () => {
-    expect(warnings('    "Yes, it is mine." if mook == 1:')).toHaveLength(0);
+    expect(warnings(`menu:
+    "Yes, it is mine." if mook == 1:`)).toHaveLength(0);
   });
 
   it('accepts choice with no condition', () => {
-    expect(warnings('    "A simple choice":')).toHaveLength(0);
+    expect(warnings(`menu:
+    "A simple choice":`)).toHaveLength(0);
   });
 
   it('does not flag menu arguments (keyword=value)', () => {
     // (arg=value) is valid menu argument syntax, not a condition
-    expect(warnings('    "Choice with args" (some_arg=True):')).toHaveLength(0);
+    expect(warnings(`menu:
+    "Choice with args" (some_arg=True):`)).toHaveLength(0);
   });
 
   it('flags menu choice missing trailing colon', () => {
-    const e = errors('    "Yes, it is mine." ($mook==1)');
+    const e = errors(`menu:
+    "Yes, it is mine." ($mook==1)`);
     expect(e).toHaveLength(1);
     expect(e[0]).toContain('missing its trailing colon');
   });
 
   it('does not flag bare narration line without colon', () => {
     expect(errors('    "Just some narration."')).toHaveLength(0);
+  });
+
+  it('does not treat ATL image lines as menu choices', () => {
+    const code = `image ep17_sex_steve_nicole_1:
+    "/images/Ep_17/ep_17_149_anim.webp" with dissolve`;
+    expect(errors(code)).toHaveLength(0);
+    expect(warnings(code)).toHaveLength(0);
+  });
+
+  it('does not treat quoted say statements as menu choices outside a menu block', () => {
+    const code = `    al "Hey! Hello everyone! Did you miss me?"
+    "user 1" "Wow, you're super hot today, White Fox!"
+    "user 2" "Nice suit. I always wanted to fuck fox."
+    "user 3" "Hello my girl! I think about you all the time!"
+    "user 4" "Oh, you're cute. Let's meet."`;
+    expect(errors(code)).toHaveLength(0);
+    expect(warnings(code)).toHaveLength(0);
+  });
+
+  it('does not treat quoted dialogue inside a menu choice body as sibling menu choices', () => {
+    const code = `menu:
+        al0 "(How do I show them this?)"
+        "At the front":
+            scene st_al_1_24
+            show browser
+
+            al "Look. Do you like it?"
+            "user 1" "Oh, that's great. I want to tear them with my teeth!"
+            "user 2" "This is very sexy! My dick is super hard already! I want to fuck you, White Fox!"
+            "user 3" "It suits you very well. You are sexy girl."`;
+    expect(errors(code)).toHaveLength(0);
+    expect(warnings(code)).toHaveLength(0);
   });
 });
 
@@ -309,6 +350,57 @@ describe('triple-quote block skipping', () => {
     "Another one" missing_colon
     """`;
     expect(errors(code)).toHaveLength(0);
+  });
+
+  it('does not flag statement keywords inside an inline-opened triple-quoted string', () => {
+    const code = `for i in """
+adv
+alt
+anim
+blinds
+center
+default
+default_transition
+dissolve
+ease
+easeinbottom
+easeinleft
+easeinright
+easeintop
+easeoutbottom
+easeoutleft
+easeoutright
+easeouttop
+fade
+hpunch
+irisin
+irisout
+left
+menu
+mouse_visible
+move
+moveinbottom
+moveinleft
+moveinright
+moveintop
+moveoutbottom
+moveoutleft
+moveoutright
+moveouttop
+name_only
+nvl
+""".split()`;
+    expect(errors(code)).toHaveLength(0);
+    expect(warnings(code)).toHaveLength(0);
+  });
+
+  it('does not flag indented statement keywords inside an inline-opened triple-quoted string', () => {
+    const code = `    for i in """
+menu
+nvl
+""".split()`;
+    expect(errors(code)).toHaveLength(0);
+    expect(warnings(code)).toHaveLength(0);
   });
 });
 
@@ -540,5 +632,29 @@ describe('pause statement', () => {
 
   it('accepts pause with expression', () => {
     expect(errors('    pause config.default_pause_time')).toHaveLength(0);
+  });
+});
+
+describe('logical line handling', () => {
+  it('does not flag play when the statement continues with a backslash', () => {
+    const code = `    play music \\
+        "theme.ogg"`;
+    expect(errors(code)).toHaveLength(0);
+    expect(warnings(code)).toHaveLength(0);
+  });
+
+  it('does not flag define statements continued by open parentheses', () => {
+    const code = `define e = Character(
+    "Eileen",
+    color="#cc6600"
+)`;
+    expect(errors(code)).toHaveLength(0);
+  });
+
+  it('does not flag voice when the file path string continues across lines', () => {
+    const code = `    voice "lines/
+hello.ogg"`;
+    expect(warnings(code)).toHaveLength(0);
+    expect(errors(code)).toHaveLength(0);
   });
 });

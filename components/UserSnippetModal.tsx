@@ -1,16 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useModalAccessibility } from '../hooks/useModalAccessibility';
 import type { UserSnippet } from '../types';
+import { createId } from '../lib/createId';
 
 interface UserSnippetModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (snippet: UserSnippet) => void;
   existingSnippet?: UserSnippet | null;
-}
-
-function generateId() {
-  return `snippet-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
 const UserSnippetModal: React.FC<UserSnippetModalProps> = ({ isOpen, onClose, onSave, existingSnippet }) => {
@@ -54,7 +51,7 @@ const UserSnippetModal: React.FC<UserSnippetModalProps> = ({ isOpen, onClose, on
     if (!trimmedCode) { setError('Code is required.'); return; }
 
     onSave({
-      id: existingSnippet?.id || generateId(),
+      id: existingSnippet?.id || createId('snippet'),
       title: trimmedTitle,
       prefix: trimmedPrefix,
       description: description.trim(),
