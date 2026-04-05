@@ -9,10 +9,13 @@
 
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import LabelBlock from './LabelBlock';
+import FileBlock from './FileBlock';
 import ViewRoutesPanel from './ViewRoutesPanel';
 import Minimap from './Minimap';
+import CanvasLayoutControls from './CanvasLayoutControls';
 import type { MinimapItem } from './Minimap';
-import type { LabelNode, RouteLink, Position, IdentifiedRoute, MouseGestureSettings } from '../types';
+import type { LabelNode, RouteLink, Position, IdentifiedRoute, MouseGestureSettings, StoryCanvasGroupingMode, StoryCanvasLayoutMode } from '../types';
+import { computeRouteCanvasLayout } from '../lib/routeCanvasLayout';
 
 interface RouteCanvasProps {
   labelNodes: LabelNode[];
@@ -23,6 +26,10 @@ interface RouteCanvasProps {
   transform: { x: number, y: number, scale: number };
   onTransformChange: React.Dispatch<React.SetStateAction<{ x: number, y: number, scale: number }>>;
   mouseGestures?: MouseGestureSettings;
+  layoutMode: StoryCanvasLayoutMode;
+  groupingMode: StoryCanvasGroupingMode;
+  onChangeLayoutMode: (mode: StoryCanvasLayoutMode) => void;
+  onChangeGroupingMode: (mode: StoryCanvasGroupingMode) => void;
 }
 
 interface Rect { x: number; y: number; width: number; height: number; }
@@ -41,6 +48,17 @@ interface SelectedMenu {
   sourceLabel: string;
   menuLine: number;
   choices: MenuPopoverChoice[];
+}
+
+interface RouteNavigationEntry {
+  nodeId: string | null;
+  transform: { x: number; y: number; scale: number };
+}
+
+interface EdgeContextMenuState {
+  x: number;
+  y: number;
+  link: RouteLink;
 }
 
 const getAttachmentPoint = (node: LabelNode, side: 'left' | 'right' | 'top' | 'bottom'): Position => {
@@ -83,10 +101,8 @@ const getOptimalPath = (sourceNode: LabelNode, targetNode: LabelNode): [Position
 
     for (const sKey of Object.keys(sourcePoints)) {
         for (const tKey of Object.keys(targetPoints)) {
-            // @ts-expect-error — dynamic key access on typed object
-            const p1 = sourcePoints[sKey];
-            // @ts-expect-error — dynamic key access on typed object
-            const p2 = targetPoints[tKey];
+            const p1 = (sourcePoints as Record<string, Position>)[sKey];
+            const p2 = (targetPoints as Record<string, Position>)[tKey];
             const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
             
             // Penalize "backward" links slightly to encourage flow
@@ -110,12 +126,18 @@ const getOptimalPath = (sourceNode: LabelNode, targetNode: LabelNode): [Position
 };
 
 const Arrow: React.FC<{
+  link: RouteLink;
   sourcePos: Position;
   targetPos: Position;
+  sourceNode: LabelNode;
+  targetNode: LabelNode;
   type: RouteLink['type'];
   color: string;
   isDimmed: boolean;
-}> = ({ sourcePos, targetPos, type, color, isDimmed }) => {
+  onFollow: (link: RouteLink, target: 'source' | 'target') => void;
+  onOpenContextMenu: (event: React.MouseEvent<SVGGElement>, link: RouteLink) => void;
+}> = ({ link, sourcePos, targetPos, sourceNode, targetNode, type, color, isDimmed, onFollow, onOpenContextMenu }) => {
+    const [isHovered, setIsHovered] = useState(false);
     const isVertical = Math.abs(targetPos.y - sourcePos.y) > Math.abs(targetPos.x - sourcePos.x);
 
     let pathData: string;
@@ -131,17 +153,40 @@ const Arrow: React.FC<{
     }
 
     return (
-        <g className={`pointer-events-none transition-opacity duration-300 ${isDimmed ? 'opacity-20' : 'opacity-100'}`}>
+        <g
+          className={`transition-opacity duration-300 ${isDimmed ? 'opacity-20' : 'opacity-100'}`}
+          onPointerDown={event => event.stopPropagation()}
+          onPointerEnter={() => setIsHovered(true)}
+          onPointerLeave={() => setIsHovered(false)}
+          onClick={event => {
+            event.stopPropagation();
+            onFollow(link, event.altKey ? 'source' : 'target');
+          }}
+          onContextMenu={event => {
+            event.preventDefault();
+            event.stopPropagation();
+            onOpenContextMenu(event, link);
+          }}
+          title={`Click to center ${targetNode.label}. Alt+click centers ${sourceNode.label}.`}
+          style={{ cursor: 'pointer', pointerEvents: 'all', filter: isHovered ? 'brightness(1.5) drop-shadow(0 0 4px currentColor)' : undefined }}
+        >
+          <path
+              d={pathData}
+              stroke="transparent"
+              strokeWidth="18"
+              fill="none"
+              style={{ pointerEvents: 'all' }}
+          />
           <path
               d={pathData}
               stroke={color}
-              strokeWidth="4"
+              strokeWidth={isHovered ? 6 : 4}
               fill="none"
               strokeDasharray={type === 'implicit' ? "10, 6" : "none"}
               markerEnd={`url(#arrowhead-${color.replace('#', '')})`}
           />
           {type === 'call' && (
-            <circle cx={sourcePos.x} cy={sourcePos.y} r={5} fill="none" stroke={color} strokeWidth={2.5} />
+            <circle cx={sourcePos.x} cy={sourcePos.y} r={5} fill="none" stroke={color} strokeWidth={isHovered ? 3.5 : 2.5} />
           )}
         </g>
     );
@@ -316,7 +361,20 @@ type InteractionState =
   | { type: 'rubber-band'; start: Position; }
   | { type: 'dragging-nodes'; dragStartPositions: Map<string, Position>; };
 
-const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, identifiedRoutes, updateLabelNodePositions, onOpenEditor, transform, onTransformChange, mouseGestures }) => {
+const RouteCanvas: React.FC<RouteCanvasProps> = ({
+  labelNodes,
+  routeLinks,
+  identifiedRoutes,
+  updateLabelNodePositions,
+  onOpenEditor,
+  transform,
+  onTransformChange,
+  mouseGestures,
+  layoutMode,
+  groupingMode,
+  onChangeLayoutMode,
+  onChangeGroupingMode,
+}) => {
   const [rubberBandRect, setRubberBandRect] = useState<Rect | null>(null);
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
@@ -324,12 +382,83 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
   const [selectedMenu, setSelectedMenu] = useState<SelectedMenu | null>(null);
   const [isMenuPanelOpen, setIsMenuPanelOpen] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
-  
+  const [edgeContextMenu, setEdgeContextMenu] = useState<EdgeContextMenuState | null>(null);
+  const [routeSearchQuery, setRouteSearchQuery] = useState('');
+  const [showRouteSearchResults, setShowRouteSearchResults] = useState(false);
+  const [navHistory, setNavHistory] = useState<RouteNavigationEntry[]>([]);
+  const [navHistoryIndex, setNavHistoryIndex] = useState(-1);
+  const [chooserMode, setChooserMode] = useState<'incoming' | 'outgoing' | null>(null);
+  const [focusMode, setFocusMode] = useState<'none' | 'downstream' | 'upstream' | 'connected'>('none');
+  const [traceMode, setTraceMode] = useState(false);
+  const [tracePath, setTracePath] = useState<string[]>([]);
+  const [traceIndex, setTraceIndex] = useState(0);
+  const [traceChooserLinks, setTraceChooserLinks] = useState<RouteLink[]>([]);
+  const [selectedEdge, setSelectedEdge] = useState<RouteLink | null>(null);
+  const [viewLevel, setViewLevel] = useState<'label' | 'file'>('label');
+
+  // ── Phase 4: Narrative risk overlays + edge filters ──
+  const [overlayMode, setOverlayMode] = useState<'none' | 'hubs' | 'branch-points' | 'menu-heavy' | 'call-heavy'>('none');
+  const [hideImplicit, setHideImplicit] = useState(false);
+  const [showOnlyCalls, setShowOnlyCalls] = useState(false);
+
   const canvasRef = useRef<HTMLDivElement>(null);
+  const pendingDrillDownRef = useRef<string | null>(null);
   const interactionState = useRef<InteractionState>({ type: 'idle' });
   const pointerStartPos = useRef<Position>({ x: 0, y: 0 });
-  const nodeMap = useMemo(() => new Map(labelNodes.map(n => [n.id, n])), [labelNodes]);
+  const labelNodeMap = useMemo(() => new Map(labelNodes.map(n => [n.id, n])), [labelNodes]);
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0 });
+
+  // File-view graph: one node per file, one edge per cross-file transition
+  const fileGraph = useMemo(() => {
+    if (viewLevel === 'label') return null;
+    const fileGroups = new Map<string, LabelNode[]>();
+    labelNodes.forEach(node => {
+      const group = fileGroups.get(node.blockId) ?? [];
+      group.push(node);
+      fileGroups.set(node.blockId, group);
+    });
+    const fileNodes: LabelNode[] = Array.from(fileGroups.entries()).map(([blockId, groupNodes]) => ({
+      id: blockId,
+      label: (groupNodes[0].containerName ?? blockId).replace(/\.[^.]+$/, ''),
+      blockId,
+      containerName: groupNodes[0].containerName,
+      startLine: 1,
+      position: { x: 0, y: 0 },
+      width: 240,
+      height: 80,
+    }));
+    const fileLinkMap = new Map<string, RouteLink>();
+    routeLinks.forEach(link => {
+      const src = labelNodeMap.get(link.sourceId);
+      const tgt = labelNodeMap.get(link.targetId);
+      if (!src || !tgt || src.blockId === tgt.blockId) return;
+      const key = `${src.blockId}->${tgt.blockId}`;
+      if (!fileLinkMap.has(key)) {
+        fileLinkMap.set(key, { id: key, sourceId: src.blockId, targetId: tgt.blockId, type: link.type });
+      }
+    });
+    const fileLinks = Array.from(fileLinkMap.values());
+    const layoutedNodes = computeRouteCanvasLayout(fileNodes, fileLinks, layoutMode, groupingMode);
+    const labelCountByFile = new Map<string, number>(
+      Array.from(fileGroups.entries()).map(([id, g]) => [id, g.length])
+    );
+    return { nodes: layoutedNodes, links: fileLinks, labelCountByFile };
+  }, [viewLevel, labelNodes, routeLinks, labelNodeMap, layoutMode, groupingMode]);
+
+  // View-aware node map: label IDs in label view, blockIds in file view
+  const nodeMap = useMemo(() =>
+    viewLevel === 'file' && fileGraph
+      ? new Map(fileGraph.nodes.map(n => [n.id, n]))
+      : labelNodeMap,
+    [viewLevel, fileGraph, labelNodeMap],
+  );
+
+  const closeTransientUi = useCallback(() => {
+    setEdgeContextMenu(null);
+    setShowRouteSearchResults(false);
+    setChooserMode(null);
+    setTraceChooserLinks([]);
+  }, []);
 
   // Derive start→end label names for each identified route
   const routeLabels = useMemo(() => {
@@ -356,21 +485,189 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
 
   // Unreachable nodes: no incoming links and not the story entry point
   const unreachableNodeIds = useMemo(() => {
-    const targeted = new Set(routeLinks.map(l => l.targetId));
-    return new Set(labelNodes.filter(n => !targeted.has(n.id) && n.id !== entryNodeId).map(n => n.id));
-  }, [routeLinks, labelNodes, entryNodeId]);
+    const activeNodes = viewLevel === 'file' ? (fileGraph?.nodes ?? []) : labelNodes;
+    const activeLinks = viewLevel === 'file' ? (fileGraph?.links ?? []) : routeLinks;
+    const targeted = new Set(activeLinks.map(l => l.targetId));
+    return new Set(activeNodes.filter(n => !targeted.has(n.id) && n.id !== entryNodeId).map(n => n.id));
+  }, [viewLevel, fileGraph, routeLinks, labelNodes, entryNodeId]);
 
   // Dead-end nodes: no outgoing jumps from them
   const deadEndNodeIds = useMemo(() => {
-    const sourced = new Set(routeLinks.map(l => l.sourceId));
-    return new Set(labelNodes.filter(n => !sourced.has(n.id)).map(n => n.id));
-  }, [routeLinks, labelNodes]);
+    const activeNodes = viewLevel === 'file' ? (fileGraph?.nodes ?? []) : labelNodes;
+    const activeLinks = viewLevel === 'file' ? (fileGraph?.links ?? []) : routeLinks;
+    const sourced = new Set(activeLinks.map(l => l.sourceId));
+    return new Set(activeNodes.filter(n => !sourced.has(n.id)).map(n => n.id));
+  }, [viewLevel, fileGraph, routeLinks, labelNodes]);
+
+  // ── Phase 4: Overlay node sets + counts ──
+
+  /** Hub nodes: ≥3 incoming links (many paths converge) */
+  const hubData = useMemo(() => {
+    const activeLinks = viewLevel === 'file' ? (fileGraph?.links ?? []) : routeLinks;
+    const counts = new Map<string, number>();
+    activeLinks.forEach(link => counts.set(link.targetId, (counts.get(link.targetId) ?? 0) + 1));
+    const set = new Set<string>();
+    (viewLevel === 'file' ? (fileGraph?.nodes ?? []) : labelNodes).forEach(n => {
+      if ((counts.get(n.id) ?? 0) >= 3) set.add(n.id);
+    });
+    return { set, counts };
+  }, [viewLevel, fileGraph, labelNodes, routeLinks]);
+
+  /** Branch-point nodes: ≥3 outgoing non-implicit links */
+  const branchData = useMemo(() => {
+    const activeLinks = viewLevel === 'file' ? (fileGraph?.links ?? []) : routeLinks;
+    const counts = new Map<string, number>();
+    activeLinks.filter(l => l.type !== 'implicit').forEach(link =>
+      counts.set(link.sourceId, (counts.get(link.sourceId) ?? 0) + 1)
+    );
+    const set = new Set<string>();
+    (viewLevel === 'file' ? (fileGraph?.nodes ?? []) : labelNodes).forEach(n => {
+      if ((counts.get(n.id) ?? 0) >= 3) set.add(n.id);
+    });
+    return { set, counts };
+  }, [viewLevel, fileGraph, labelNodes, routeLinks]);
+
+  /** Menu-heavy nodes: ≥2 distinct menu groups as source (label view only) */
+  const menuHeavyData = useMemo(() => {
+    // Count distinct menus per node by iterating links grouped by sourceId+menuLine
+    const distinctMenusByNode = new Map<string, Set<number>>();
+    routeLinks.forEach(link => {
+      if (link.menuLine === undefined) return;
+      const s = distinctMenusByNode.get(link.sourceId) ?? new Set<number>();
+      s.add(link.menuLine);
+      distinctMenusByNode.set(link.sourceId, s);
+    });
+    const set = new Set<string>();
+    const counts = new Map<string, number>();
+    distinctMenusByNode.forEach((menus, nodeId) => {
+      counts.set(nodeId, menus.size);
+      if (menus.size >= 2) set.add(nodeId);
+    });
+    return { set, counts };
+  }, [routeLinks]);
+
+  /** Call-heavy nodes: ≥2 incoming call-type links */
+  const callHeavyData = useMemo(() => {
+    const activeLinks = viewLevel === 'file' ? (fileGraph?.links ?? []) : routeLinks;
+    const counts = new Map<string, number>();
+    activeLinks.filter(l => l.type === 'call').forEach(link =>
+      counts.set(link.targetId, (counts.get(link.targetId) ?? 0) + 1)
+    );
+    const set = new Set<string>();
+    (viewLevel === 'file' ? (fileGraph?.nodes ?? []) : labelNodes).forEach(n => {
+      if ((counts.get(n.id) ?? 0) >= 2) set.add(n.id);
+    });
+    return { set, counts };
+  }, [viewLevel, fileGraph, labelNodes, routeLinks]);
+
+  /** Links to render after applying edge-type filters */
+  const renderedLinks = useMemo(() => {
+    const activeLinks = viewLevel === 'file' ? (fileGraph?.links ?? []) : routeLinks;
+    if (!hideImplicit && !showOnlyCalls) return activeLinks;
+    return activeLinks.filter(link => {
+      if (showOnlyCalls) return link.type === 'call';
+      if (hideImplicit) return link.type !== 'implicit';
+      return true;
+    });
+  }, [viewLevel, fileGraph, routeLinks, hideImplicit, showOnlyCalls]);
+
+  const outgoingLinksByNode = useMemo(() => {
+    const activeLinks = viewLevel === 'file' ? (fileGraph?.links ?? []) : routeLinks;
+    const map = new Map<string, RouteLink[]>();
+    activeLinks.forEach(link => {
+      const entries = map.get(link.sourceId) ?? [];
+      entries.push(link);
+      map.set(link.sourceId, entries);
+    });
+    return map;
+  }, [viewLevel, fileGraph, routeLinks]);
+
+  const incomingLinksByNode = useMemo(() => {
+    const activeLinks = viewLevel === 'file' ? (fileGraph?.links ?? []) : routeLinks;
+    const map = new Map<string, RouteLink[]>();
+    activeLinks.forEach(link => {
+      const entries = map.get(link.targetId) ?? [];
+      entries.push(link);
+      map.set(link.targetId, entries);
+    });
+    return map;
+  }, [viewLevel, fileGraph, routeLinks]);
+
+  const selectedNode = selectedNodeIds.length === 1 ? nodeMap.get(selectedNodeIds[0]) ?? null : null;
+  const selectedOutgoingLinks = selectedNode ? (outgoingLinksByNode.get(selectedNode.id) ?? []) : [];
+  const selectedIncomingLinks = selectedNode ? (incomingLinksByNode.get(selectedNode.id) ?? []) : [];
+
+  // Focus mode: BFS from selected nodes in the chosen direction
+  const focusedNodeIds = useMemo<Set<string> | null>(() => {
+    if (focusMode === 'none' || traceMode || selectedNodeIds.length === 0) return null;
+    const result = new Set<string>(selectedNodeIds);
+    if (focusMode === 'downstream' || focusMode === 'connected') {
+      const queue = [...selectedNodeIds];
+      const visited = new Set<string>(selectedNodeIds);
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        for (const link of outgoingLinksByNode.get(current) ?? []) {
+          if (!visited.has(link.targetId)) {
+            visited.add(link.targetId);
+            result.add(link.targetId);
+            queue.push(link.targetId);
+          }
+        }
+      }
+    }
+    if (focusMode === 'upstream' || focusMode === 'connected') {
+      const queue = [...selectedNodeIds];
+      const visited = new Set<string>(selectedNodeIds);
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        for (const link of incomingLinksByNode.get(current) ?? []) {
+          if (!visited.has(link.sourceId)) {
+            visited.add(link.sourceId);
+            result.add(link.sourceId);
+            queue.push(link.sourceId);
+          }
+        }
+      }
+    }
+    return result;
+  }, [focusMode, traceMode, selectedNodeIds, outgoingLinksByNode, incomingLinksByNode]);
+
+  // Trace mode: set of nodes visited so far, and the edge IDs connecting them in order
+  const traceNodeIds = useMemo<Set<string> | null>(() => {
+    if (!traceMode || tracePath.length === 0) return null;
+    return new Set(tracePath.slice(0, traceIndex + 1));
+  }, [traceMode, tracePath, traceIndex]);
+
+  const traceEdgeIds = useMemo<Set<string> | null>(() => {
+    if (!traceMode || tracePath.length < 2) return null;
+    const edgeSet = new Set<string>();
+    const path = tracePath.slice(0, traceIndex + 1);
+    for (let i = 0; i < path.length - 1; i++) {
+      for (const link of outgoingLinksByNode.get(path[i]) ?? []) {
+        if (link.targetId === path[i + 1]) edgeSet.add(link.id);
+      }
+    }
+    return edgeSet;
+  }, [traceMode, tracePath, traceIndex, outgoingLinksByNode]);
+
+  const routeSearchResults = useMemo(() => {
+    const query = routeSearchQuery.trim().toLowerCase();
+    if (!query) return [];
+    const searchSource = viewLevel === 'file' ? (fileGraph?.nodes ?? labelNodes) : labelNodes;
+    return searchSource
+      .filter(node =>
+        node.label.toLowerCase().includes(query) ||
+        (node.containerName ?? '').toLowerCase().includes(query),
+      )
+      .slice(0, 8);
+  }, [viewLevel, fileGraph, labelNodes, routeSearchQuery]);
 
   const fitToScreen = useCallback(() => {
-    if (labelNodes.length === 0 || !canvasRef.current) return;
+    const activeNodes = viewLevel === 'file' && fileGraph ? fileGraph.nodes : labelNodes;
+    if (activeNodes.length === 0 || !canvasRef.current) return;
     const { width: cw, height: ch } = canvasRef.current.getBoundingClientRect();
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    labelNodes.forEach(n => {
+    activeNodes.forEach(n => {
       minX = Math.min(minX, n.position.x);
       minY = Math.min(minY, n.position.y);
       maxX = Math.max(maxX, n.position.x + n.width);
@@ -381,7 +678,46 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
     const tx = (cw - (maxX - minX) * scale) / 2 - minX * scale;
     const ty = (ch - (maxY - minY) * scale) / 2 - minY * scale;
     onTransformChange({ x: tx, y: ty, scale });
-  }, [labelNodes, onTransformChange]);
+  }, [viewLevel, fileGraph, labelNodes, onTransformChange]);
+
+  const centerOnNode = useCallback((nodeId: string, options?: { recordHistory?: boolean }) => {
+    const node = nodeMap.get(nodeId);
+    if (!node || !canvasRef.current) return;
+
+    const { width, height } = canvasRef.current.getBoundingClientRect();
+    const nextTransform = {
+      x: (width / 2) - ((node.position.x + node.width / 2) * transform.scale),
+      y: (height / 2) - ((node.position.y + node.height / 2) * transform.scale),
+      scale: transform.scale,
+    };
+
+    if (options?.recordHistory ?? true) {
+      setNavHistory(prev => {
+        const currentEntry: RouteNavigationEntry = {
+          nodeId: selectedNodeIds[0] ?? null,
+          transform,
+        };
+        const base = prev.slice(0, navHistoryIndex + 1);
+        return [...base, currentEntry, { nodeId, transform: nextTransform }];
+      });
+      setNavHistoryIndex(prev => prev + 2);
+    }
+
+    onTransformChange(nextTransform);
+    setSelectedNodeIds([nodeId]);
+    closeTransientUi();
+  }, [nodeMap, selectedNodeIds, transform, navHistoryIndex, onTransformChange, closeTransientUi]);
+
+  const applyHistoryEntry = useCallback((index: number) => {
+    const entry = navHistory[index];
+    if (!entry) return;
+    setNavHistoryIndex(index);
+    onTransformChange(entry.transform);
+    if (entry.nodeId) {
+      setSelectedNodeIds([entry.nodeId]);
+    }
+    closeTransientUi();
+  }, [navHistory, onTransformChange, closeTransientUi]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -400,12 +736,15 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if (e.key === 'f' || e.key === 'F') fitToScreen();
+      if (e.key === '[' && navHistoryIndex > 0) applyHistoryEntry(navHistoryIndex - 1);
+      if (e.key === ']' && navHistoryIndex >= 0 && navHistoryIndex < navHistory.length - 1) applyHistoryEntry(navHistoryIndex + 1);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [fitToScreen]);
+  }, [fitToScreen, navHistory, navHistoryIndex, applyHistoryEntry]);
 
   const handleToggleRoute = (routeId: number) => {
+    closeTransientUi();
     setCheckedRoutes(prev => {
         const newSet = new Set(prev);
         if (newSet.has(routeId)) {
@@ -433,8 +772,9 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
     return colorMap;
   }, [checkedRoutes, identifiedRoutes]);
 
-  // Group visible choice links by (sourceId, menuLine) for per-menu pills
+  // Group visible choice links by (sourceId, menuLine) for per-menu pills (label view only)
   const menuGroups = useMemo(() => {
+    if (viewLevel !== 'label') return new Map<string, { links: RouteLink[]; sourcePos: Position }[]>();
     const groups = new Map<string, { links: RouteLink[]; sourcePos: Position }[]>();
     routeLinks.forEach(link => {
       if (!link.choiceText || link.menuLine === undefined) return;
@@ -456,7 +796,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
       }
     });
     return groups;
-  }, [routeLinks, linkColors, nodeMap]);
+  }, [viewLevel, routeLinks, linkColors, nodeMap]);
 
   const handleMenuPillClick = useCallback((e: React.MouseEvent<SVGGElement>, groupKey: string) => {
     e.stopPropagation();
@@ -494,12 +834,126 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
 
     setSelectedMenu({ groupKey, sourceLabel, menuLine: firstLink.menuLine!, choices });
     setIsMenuPanelOpen(true);
-  }, [menuGroups, nodeMap, routeLinks, checkedRoutes, identifiedRoutes]);
+    closeTransientUi();
+  }, [menuGroups, nodeMap, routeLinks, checkedRoutes, identifiedRoutes, closeTransientUi]);
 
-  // Compute Group Bounding Boxes
+  const handleFollowLink = useCallback((link: RouteLink, target: 'source' | 'target') => {
+    setSelectedEdge(link);
+    centerOnNode(target === 'source' ? link.sourceId : link.targetId);
+  }, [centerOnNode]);
+
+  const handleStartTrace = useCallback(() => {
+    const startId = selectedNodeIds[0];
+    if (!startId) return;
+    setTraceMode(true);
+    setTracePath([startId]);
+    setTraceIndex(0);
+    setFocusMode('none');
+    setTraceChooserLinks([]);
+    centerOnNode(startId, { recordHistory: false });
+  }, [selectedNodeIds, centerOnNode]);
+
+  const handleExitTrace = useCallback(() => {
+    setTraceMode(false);
+    setTracePath([]);
+    setTraceIndex(0);
+    setTraceChooserLinks([]);
+  }, []);
+
+  const handleTraceStep = useCallback((direction: 'next' | 'prev') => {
+    if (direction === 'prev') {
+      if (traceIndex <= 0) return;
+      const prevId = tracePath[traceIndex - 1];
+      setTraceIndex(i => i - 1);
+      setTraceChooserLinks([]);
+      setSelectedNodeIds([prevId]);
+      centerOnNode(prevId, { recordHistory: false });
+      return;
+    }
+    // Advance along existing recorded path
+    if (traceIndex < tracePath.length - 1) {
+      const nextId = tracePath[traceIndex + 1];
+      setTraceIndex(i => i + 1);
+      setTraceChooserLinks([]);
+      setSelectedNodeIds([nextId]);
+      centerOnNode(nextId, { recordHistory: false });
+      return;
+    }
+    // At end of path — try to extend
+    const currentId = tracePath[traceIndex];
+    const outgoing = outgoingLinksByNode.get(currentId) ?? [];
+    if (outgoing.length === 0) return;
+    if (outgoing.length === 1) {
+      const nextId = outgoing[0].targetId;
+      setTracePath(p => [...p, nextId]);
+      setTraceIndex(i => i + 1);
+      setTraceChooserLinks([]);
+      setSelectedNodeIds([nextId]);
+      centerOnNode(nextId, { recordHistory: false });
+    } else {
+      setTraceChooserLinks(outgoing);
+    }
+  }, [traceIndex, tracePath, outgoingLinksByNode, centerOnNode]);
+
+  const handleTraceChoiceSelect = useCallback((nodeId: string) => {
+    setTracePath(p => [...p, nodeId]);
+    setTraceIndex(i => i + 1);
+    setTraceChooserLinks([]);
+    setSelectedNodeIds([nodeId]);
+    centerOnNode(nodeId, { recordHistory: false });
+  }, [centerOnNode]);
+
+  const handleOpenEdgeContextMenu = useCallback((event: React.MouseEvent<SVGGElement>, link: RouteLink) => {
+    setEdgeContextMenu({ x: event.clientX, y: event.clientY, link });
+    setShowRouteSearchResults(false);
+    setChooserMode(null);
+  }, []);
+
+  const handleChangeViewLevel = useCallback((level: 'label' | 'file') => {
+    if (level === 'file' && traceMode) handleExitTrace();
+    setViewLevel(level);
+    setSelectedNodeIds([]);
+    setSelectedEdge(null);
+    closeTransientUi();
+  }, [traceMode, handleExitTrace, closeTransientUi]);
+
+  const handleDrillDown = useCallback((blockId: string) => {
+    pendingDrillDownRef.current = blockId;
+    setViewLevel('label');
+    setSelectedNodeIds([]);
+    closeTransientUi();
+  }, [closeTransientUi]);
+
+  // When returning to label view via drill-down, fit to the labels in that file
+  useEffect(() => {
+    if (viewLevel !== 'label') return;
+    const targetBlockId = pendingDrillDownRef.current;
+    if (!targetBlockId) return;
+    pendingDrillDownRef.current = null;
+    const blockLabels = labelNodes.filter(n => n.blockId === targetBlockId);
+    if (blockLabels.length === 0 || !canvasRef.current) return;
+    const { width: cw, height: ch } = canvasRef.current.getBoundingClientRect();
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    blockLabels.forEach(n => {
+      minX = Math.min(minX, n.position.x);
+      minY = Math.min(minY, n.position.y);
+      maxX = Math.max(maxX, n.position.x + n.width);
+      maxY = Math.max(maxY, n.position.y + n.height);
+    });
+    const PAD = 80;
+    const dw = maxX - minX || 1;
+    const dh = maxY - minY || 1;
+    const scale = Math.min((cw - PAD * 2) / dw, (ch - PAD * 2) / dh, 2);
+    const tx = (cw - dw * scale) / 2 - minX * scale;
+    const ty = (ch - dh * scale) / 2 - minY * scale;
+    onTransformChange({ x: tx, y: ty, scale });
+  }, [viewLevel, labelNodes, onTransformChange]);
+
+  // Compute Group Bounding Boxes (label view only)
   const blockGroups = useMemo(() => {
+      if (viewLevel !== 'label') return [];
       const groups = new Map<string, { id: string, title: string, rect: Rect }>();
-      
+
       labelNodes.forEach(node => {
           if (!groups.has(node.blockId)) {
               groups.set(node.blockId, {
@@ -513,12 +967,12 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
               const minY = Math.min(group.rect.y, node.position.y);
               const maxX = Math.max(group.rect.x + group.rect.width, node.position.x + node.width);
               const maxY = Math.max(group.rect.y + group.rect.height, node.position.y + node.height);
-              
+
               group.rect = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
           }
       });
       return Array.from(groups.values());
-  }, [labelNodes]);
+  }, [viewLevel, labelNodes]);
 
   const getPointInWorldSpace = useCallback((clientX: number, clientY: number) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
@@ -536,9 +990,10 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
     const targetEl = e.target as HTMLElement;
 
     // Prevent canvas interactions when interacting with the panel
-    if (targetEl.closest('.view-routes-panel')) {
+    if (targetEl.closest('.view-routes-panel') || targetEl.closest('.layout-panel') || targetEl.closest('.route-nav-panel') || targetEl.closest('.route-edge-menu')) {
         return;
     }
+    closeTransientUi();
     
     pointerStartPos.current = getPointInWorldSpace(e.clientX, e.clientY);
     
@@ -658,7 +1113,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
       if (!el) return;
 
       const onWheel = (e: WheelEvent) => {
-          if ((e.target as HTMLElement).closest('.view-routes-panel')) return;
+          if ((e.target as HTMLElement).closest('.view-routes-panel') || (e.target as HTMLElement).closest('.layout-panel')) return;
           e.preventDefault(); // Stop browser native zoom/scroll
           const rect = el.getBoundingClientRect();
           const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -687,9 +1142,10 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
   };
   
   const svgBounds = useMemo(() => {
-    if (labelNodes.length === 0) return { top: 0, left: 0, width: 0, height: 0 };
+    const activeNodes = viewLevel === 'file' && fileGraph ? fileGraph.nodes : labelNodes;
+    if (activeNodes.length === 0) return { top: 0, left: 0, width: 0, height: 0 };
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    labelNodes.forEach(node => {
+    activeNodes.forEach(node => {
       minX = Math.min(minX, node.position.x);
       minY = Math.min(minY, node.position.y);
       maxX = Math.max(maxX, node.position.x + node.width);
@@ -701,11 +1157,12 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
       left: minX - PADDING, top: minY - PADDING,
       width: (maxX - minX) + PADDING * 2, height: (maxY - minY) + PADDING * 2,
     };
-  }, [labelNodes]);
+  }, [viewLevel, fileGraph, labelNodes]);
 
   const minimapItems = useMemo((): MinimapItem[] => {
-    return labelNodes.map(n => ({ ...n, type: 'label' }));
-  }, [labelNodes]);
+    const activeNodes = viewLevel === 'file' && fileGraph ? fileGraph.nodes : labelNodes;
+    return activeNodes.map(n => ({ ...n, type: 'label' }));
+  }, [viewLevel, fileGraph, labelNodes]);
 
   return (
     <div
@@ -714,7 +1171,28 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
       style={backgroundStyle}
       onPointerDown={handlePointerDown}
     >
-      <ViewRoutesPanel routes={identifiedRoutes} checkedRoutes={checkedRoutes} onToggleRoute={handleToggleRoute} routeLabels={routeLabels} />
+      <div
+        className="absolute top-4 right-4 z-20 flex max-w-[calc(100%-2rem)] flex-col gap-3 xl:flex-row xl:items-start"
+        onPointerDown={e => e.stopPropagation()}
+      >
+        <CanvasLayoutControls
+          canvasLabel="Route Canvas"
+          layoutMode={layoutMode}
+          groupingMode={groupingMode}
+          onChangeLayoutMode={onChangeLayoutMode}
+          onChangeGroupingMode={onChangeGroupingMode}
+          viewLevel={viewLevel}
+          onChangeViewLevel={handleChangeViewLevel}
+          className="order-2 xl:order-1"
+        />
+        <ViewRoutesPanel
+          routes={identifiedRoutes}
+          checkedRoutes={checkedRoutes}
+          onToggleRoute={handleToggleRoute}
+          routeLabels={routeLabels}
+          className="order-1 xl:order-2"
+        />
+      </div>
       <div
         className="absolute top-0 left-0"
         style={{
@@ -742,7 +1220,10 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
             <marker id="arrowhead-4f46e5" viewBox="0 0 10 10" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto" markerUnits="userSpaceOnUse">
               <path d="M0,0 L10,5 L0,10 z" fill="#4f46e5" />
             </marker>
-             <marker id="arrowhead-94a3b8" viewBox="0 0 10 10" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+            <marker id="arrowhead-7c3aed" viewBox="0 0 10 10" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#7c3aed" />
+            </marker>
+            <marker id="arrowhead-94a3b8" viewBox="0 0 10 10" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto" markerUnits="userSpaceOnUse">
               <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8" />
             </marker>
             {identifiedRoutes.map(route => (
@@ -752,29 +1233,58 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
             ))}
           </defs>
           <g transform={`translate(${-svgBounds.left}, ${-svgBounds.top})`}>
-            {routeLinks.map((link) => {
+            {renderedLinks.map((link) => {
               const sourceNode = nodeMap.get(link.sourceId);
               const targetNode = nodeMap.get(link.targetId);
               if (!sourceNode || !targetNode) return null;
 
               const [sourcePos, targetPos] = getOptimalPath(sourceNode, targetNode);
-              
-              let color = link.type === 'implicit' ? "#94a3b8" : "#4f46e5";
+
+              let color = link.type === 'implicit' ? "#94a3b8" : link.type === 'call' ? "#7c3aed" : "#4f46e5";
               let isDimmed = false;
 
-              if (linkColors) {
+              if (viewLevel === 'file') {
+                // In file view: only apply focus/trace dimming, no route coloring
+                if (traceNodeIds && traceEdgeIds) {
+                  isDimmed = !traceEdgeIds.has(link.id);
+                } else if (focusedNodeIds) {
+                  isDimmed = !focusedNodeIds.has(link.sourceId) || !focusedNodeIds.has(link.targetId);
+                }
+              } else {
+                if (traceNodeIds && traceEdgeIds) {
+                  isDimmed = !traceEdgeIds.has(link.id);
+                  if (!isDimmed) color = linkColors?.get(link.id) ?? '#4f46e5';
+                } else if (focusedNodeIds) {
+                  isDimmed = !focusedNodeIds.has(link.sourceId) || !focusedNodeIds.has(link.targetId);
+                  if (!isDimmed && linkColors?.has(link.id)) color = linkColors.get(link.id)!;
+                } else if (linkColors) {
                   if (linkColors.has(link.id)) {
-                      color = linkColors.get(link.id)!;
+                    color = linkColors.get(link.id)!;
                   } else {
-                      isDimmed = true;
-                      color = '#9ca3af'; // gray
+                    isDimmed = true;
+                    color = '#9ca3af'; // gray
                   }
+                }
               }
 
-              return <Arrow key={link.id} sourcePos={sourcePos} targetPos={targetPos} type={link.type} color={color} isDimmed={isDimmed} />;
+              return (
+                <Arrow
+                  key={link.id}
+                  link={link}
+                  sourcePos={sourcePos}
+                  targetPos={targetPos}
+                  sourceNode={sourceNode}
+                  targetNode={targetNode}
+                  type={link.type}
+                  color={color}
+                  isDimmed={isDimmed}
+                  onFollow={handleFollowLink}
+                  onOpenContextMenu={handleOpenEdgeContextMenu}
+                />
+              );
             })}
-            {/* One pill per menu group — offset outward from the node boundary */}
-            {Array.from(menuGroups.entries()).map(([key, group]) => {
+            {/* One pill per menu group — offset outward from the node boundary (label view only) */}
+            {viewLevel === 'label' && Array.from(menuGroups.entries()).map(([key, group]) => {
               const { links, sourcePos } = group[0];
               const firstLink = links[0];
               const color = linkColors?.get(firstLink.id) ?? '#4f46e5';
@@ -811,18 +1321,64 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
 
         {rubberBandRect && <RubberBand rect={rubberBandRect} />}
 
-        {labelNodes.map((node) => (
-          <LabelBlock
-            key={node.id}
-            node={node}
-            onOpenEditor={onOpenEditor}
-            isSelected={selectedNodeIds.includes(node.id)}
-            isDragging={isDraggingSelection && selectedNodeIds.includes(node.id)}
-            isEntry={node.id === entryNodeId}
-            isUnreachable={unreachableNodeIds.has(node.id)}
-            isDeadEnd={deadEndNodeIds.has(node.id)}
-          />
-        ))}
+        {viewLevel === 'file' && fileGraph
+          ? fileGraph.nodes.map(node => {
+              const isSelected = selectedNodeIds.includes(node.id);
+              let isNodeDimmed = false;
+              if (traceNodeIds) isNodeDimmed = !traceNodeIds.has(node.id);
+              else if (focusedNodeIds) isNodeDimmed = !focusedNodeIds.has(node.id);
+              return (
+                <FileBlock
+                  key={node.id}
+                  node={node}
+                  labelCount={fileGraph.labelCountByFile.get(node.id) ?? 0}
+                  onDrillDown={handleDrillDown}
+                  onOpenEditor={onOpenEditor}
+                  isSelected={isSelected}
+                  isDimmed={isNodeDimmed && !isSelected}
+                />
+              );
+            })
+          : labelNodes.map((node) => {
+              const isSelected = selectedNodeIds.includes(node.id);
+              let isNodeDimmed = false;
+              if (traceNodeIds) isNodeDimmed = !traceNodeIds.has(node.id);
+              else if (focusedNodeIds) isNodeDimmed = !focusedNodeIds.has(node.id);
+
+              // Overlay: only active when overlayMode is set and the node matches
+              let overlayHighlight: 'hub' | 'branch' | 'menu-heavy' | 'call-heavy' | null = null;
+              let overlayCount: number | undefined;
+              if (overlayMode === 'hubs' && hubData.set.has(node.id)) {
+                overlayHighlight = 'hub';
+                overlayCount = hubData.counts.get(node.id);
+              } else if (overlayMode === 'branch-points' && branchData.set.has(node.id)) {
+                overlayHighlight = 'branch';
+                overlayCount = branchData.counts.get(node.id);
+              } else if (overlayMode === 'menu-heavy' && menuHeavyData.set.has(node.id)) {
+                overlayHighlight = 'menu-heavy';
+                overlayCount = menuHeavyData.counts.get(node.id);
+              } else if (overlayMode === 'call-heavy' && callHeavyData.set.has(node.id)) {
+                overlayHighlight = 'call-heavy';
+                overlayCount = callHeavyData.counts.get(node.id);
+              }
+
+              return (
+                <LabelBlock
+                  key={node.id}
+                  node={node}
+                  onOpenEditor={onOpenEditor}
+                  isSelected={isSelected}
+                  isDragging={isDraggingSelection && isSelected}
+                  isEntry={node.id === entryNodeId}
+                  isUnreachable={unreachableNodeIds.has(node.id)}
+                  isDeadEnd={deadEndNodeIds.has(node.id)}
+                  isDimmed={isNodeDimmed && !isSelected}
+                  overlayHighlight={overlayHighlight}
+                  overlayCount={overlayCount}
+                />
+              );
+            })
+        }
       </div>
       <MenuInspectorPanel
         selectedMenu={selectedMenu}
@@ -830,8 +1386,424 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
         onToggle={() => setIsMenuPanelOpen(v => !v)}
         onOpenEditor={onOpenEditor}
       />
+      {edgeContextMenu && (
+        <div
+          className="route-edge-menu fixed z-30 w-52 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl"
+          style={{ left: edgeContextMenu.x, top: edgeContextMenu.y }}
+          onPointerDown={event => event.stopPropagation()}
+        >
+          <button className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700" onClick={() => handleFollowLink(edgeContextMenu.link, 'target')}>
+            Center target
+          </button>
+          <button className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700" onClick={() => handleFollowLink(edgeContextMenu.link, 'source')}>
+            Center source
+          </button>
+          <button className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700" onClick={() => {
+            const node = nodeMap.get(edgeContextMenu.link.targetId);
+            if (node) onOpenEditor(node.blockId, node.startLine);
+            closeTransientUi();
+          }}>
+            Open target in editor
+          </button>
+          <button className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700" onClick={() => {
+            const node = nodeMap.get(edgeContextMenu.link.sourceId);
+            if (node) onOpenEditor(node.blockId, node.startLine);
+            closeTransientUi();
+          }}>
+            Open source in editor
+          </button>
+        </div>
+      )}
+      <div className="route-nav-panel absolute bottom-4 left-4 z-20 flex w-72 max-w-[calc(100vw-2rem)] flex-col gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 shadow-lg" onPointerDown={e => e.stopPropagation()}>
+
+        {/* ── Row 1: Back / Forward / Go-to-label ── */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => applyHistoryEntry(navHistoryIndex - 1)}
+            disabled={navHistoryIndex <= 0}
+            title="Back ([)"
+            aria-label="Back"
+            className="h-8 w-8 shrink-0 rounded-md border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 15.707a1 1 0 01-1.414 0l-5-5a1 1 0 010-1.414l5-5a1 1 0 111.414 1.414L8.414 9H16a1 1 0 110 2H8.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" /></svg>
+          </button>
+          <button
+            onClick={() => applyHistoryEntry(navHistoryIndex + 1)}
+            disabled={navHistoryIndex < 0 || navHistoryIndex >= navHistory.length - 1}
+            title="Forward (])"
+            aria-label="Forward"
+            className="h-8 w-8 shrink-0 rounded-md border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 4.293a1 1 0 011.414 0l5 5a1 1 0 010 1.414l-5 5a1 1 0 01-1.414-1.414L11.586 11H4a1 1 0 110-2h7.586L7.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+          </button>
+          <input
+            value={routeSearchQuery}
+            onChange={event => {
+              setRouteSearchQuery(event.target.value);
+              setShowRouteSearchResults(true);
+              setChooserMode(null);
+              setEdgeContextMenu(null);
+            }}
+            onFocus={() => setShowRouteSearchResults(true)}
+            placeholder="Go to label..."
+            className="flex-1 rounded-md border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1.5 text-sm"
+          />
+        </div>
+        {showRouteSearchResults && routeSearchQuery.trim() && (
+          <div className="max-h-44 overflow-y-auto rounded-md border border-gray-200 dark:border-gray-700">
+            {routeSearchResults.length > 0 ? routeSearchResults.map(node => (
+              <button
+                key={node.id}
+                className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
+                onClick={() => centerOnNode(node.id)}
+              >
+                <div className="font-mono text-gray-900 dark:text-gray-100">{node.label}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">{node.containerName ?? 'Unknown file'}</div>
+              </button>
+            )) : (
+              <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">No matching labels.</div>
+            )}
+          </div>
+        )}
+
+        {/* ── Focus mode controls ── */}
+        {!traceMode && (
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-2">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Focus</span>
+              {focusMode !== 'none' && selectedNodeIds.length > 0 && (
+                <span className="text-[10px] font-medium text-indigo-500 dark:text-indigo-400">active</span>
+              )}
+            </div>
+            <div className="flex gap-1">
+              {(['downstream', 'upstream', 'connected'] as const).map(mode => {
+                const labels: Record<typeof mode, string> = { downstream: 'Down ↓', upstream: 'Up ↑', connected: 'Both ↕' };
+                const titles: Record<typeof mode, string> = {
+                  downstream: 'Show only nodes reachable from selection',
+                  upstream: 'Show only nodes that lead to selection',
+                  connected: 'Show all nodes connected to selection',
+                };
+                const active = focusMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    title={titles[mode]}
+                    onClick={() => setFocusMode(prev => prev === mode ? 'none' : mode)}
+                    className={`flex-1 rounded-md border px-1.5 py-1 text-xs transition-colors ${
+                      active
+                        ? 'border-indigo-500 bg-indigo-600 text-white'
+                        : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {labels[mode]}
+                  </button>
+                );
+              })}
+              {focusMode !== 'none' && (
+                <button
+                  title="Clear focus"
+                  aria-label="Clear focus"
+                  onClick={() => setFocusMode('none')}
+                  className="rounded-md border border-gray-200 dark:border-gray-700 px-2 py-1 text-xs text-red-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            {focusMode !== 'none' && selectedNodeIds.length === 0 && (
+              <p className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Select a node to activate focus.</p>
+            )}
+          </div>
+        )}
+
+        {/* ── Overlays (narrative risk lenses) ── */}
+        {viewLevel === 'label' && !traceMode && (
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-2">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Overlays</span>
+              {overlayMode !== 'none' && (
+                <button
+                  onClick={() => setOverlayMode('none')}
+                  className="text-[10px] text-red-400 hover:text-red-500 dark:hover:text-red-300"
+                >
+                  ✕ Clear
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+              {([
+                ['hubs',          'Hubs ↘',   'sky',    'Nodes with ≥3 incoming links — convergence points'],
+                ['branch-points', 'Branches ↗','violet', 'Nodes with ≥3 outgoing links — heavy branch points'],
+                ['menu-heavy',    'Menus ☰',  'rose',   'Nodes with multiple choice menus'],
+                ['call-heavy',    'Calls ⇝',  'teal',   'Nodes called from many places'],
+              ] as const).map(([mode, label, _color, title]) => {
+                const active = overlayMode === mode;
+                const activeClass: Record<string, string> = {
+                  hubs:            'border-sky-500 bg-sky-600 text-white',
+                  'branch-points': 'border-violet-500 bg-violet-600 text-white',
+                  'menu-heavy':    'border-rose-500 bg-rose-600 text-white',
+                  'call-heavy':    'border-teal-500 bg-teal-600 text-white',
+                };
+                return (
+                  <button
+                    key={mode}
+                    title={title}
+                    onClick={() => setOverlayMode(prev => prev === mode ? 'none' : mode)}
+                    className={`rounded-md border px-1.5 py-1 text-xs transition-colors ${
+                      active
+                        ? activeClass[mode]
+                        : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Edge filters ── */}
+        {!traceMode && (
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-2">
+            <div className="mb-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Edge Filters</span>
+            </div>
+            <div className="flex gap-1">
+              <button
+                title="Show only call edges — highlights reusable subflow structure"
+                onClick={() => {
+                  setShowOnlyCalls(v => {
+                    if (!v) setHideImplicit(false); // mutually exclusive
+                    return !v;
+                  });
+                }}
+                className={`flex-1 rounded-md border px-1.5 py-1 text-xs transition-colors ${
+                  showOnlyCalls
+                    ? 'border-purple-500 bg-purple-600 text-white'
+                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
+              >
+                Calls only
+              </button>
+              <button
+                title="Hide implicit fall-through edges"
+                disabled={showOnlyCalls}
+                onClick={() => setHideImplicit(v => !v)}
+                className={`flex-1 rounded-md border px-1.5 py-1 text-xs transition-colors ${
+                  hideImplicit && !showOnlyCalls
+                    ? 'border-gray-500 bg-gray-600 text-white'
+                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40'
+                }`}
+              >
+                Hide implicit
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Trace mode / selected-node section (label view only) ── */}
+        {viewLevel === 'label' && (traceMode ? (
+          <div className="space-y-2 border-t border-gray-200 dark:border-gray-700 pt-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">Trace Mode</span>
+              <button
+                onClick={handleExitTrace}
+                title="Exit trace mode"
+                aria-label="Exit trace mode"
+                className="rounded px-1.5 py-0.5 text-[10px] text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                ✕ Exit
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleTraceStep('prev')}
+                disabled={traceIndex <= 0}
+                title="Previous step"
+                aria-label="Previous step"
+                className="h-8 w-8 shrink-0 rounded-md border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 15.707a1 1 0 01-1.414 0l-5-5a1 1 0 010-1.414l5-5a1 1 0 111.414 1.414L8.414 9H16a1 1 0 110 2H8.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" /></svg>
+              </button>
+              <span className="flex-1 text-center text-xs text-gray-500 dark:text-gray-400">
+                step {traceIndex + 1} / {tracePath.length}
+              </span>
+              <button
+                onClick={() => handleTraceStep('next')}
+                disabled={
+                  traceIndex >= tracePath.length - 1 &&
+                  (outgoingLinksByNode.get(tracePath[traceIndex])?.length ?? 0) === 0
+                }
+                title="Next step"
+                aria-label="Next step"
+                className="h-8 w-8 shrink-0 rounded-md border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 4.293a1 1 0 011.414 0l5 5a1 1 0 010 1.414l-5 5a1 1 0 01-1.414-1.414L11.586 11H4a1 1 0 110-2h7.586L7.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+              </button>
+            </div>
+            <p className="truncate text-center text-xs font-mono text-gray-700 dark:text-gray-300">
+              {nodeMap.get(tracePath[traceIndex])?.label ?? tracePath[traceIndex]}
+            </p>
+            {traceChooserLinks.length > 0 && (
+              <div className="rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800">
+                  Choose next step
+                </p>
+                {traceChooserLinks.map(link => {
+                  const node = nodeMap.get(link.targetId);
+                  if (!node) return null;
+                  return (
+                    <button
+                      key={link.id}
+                      className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
+                      onClick={() => handleTraceChoiceSelect(link.targetId)}
+                    >
+                      <div className="font-mono text-gray-900 dark:text-gray-100">{node.label}</div>
+                      {link.choiceText && (
+                        <div className="text-xs text-indigo-500 dark:text-indigo-400 truncate">&ldquo;{link.choiceText}&rdquo;</div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : selectedNode ? (
+          <div className="space-y-2 border-t border-gray-200 dark:border-gray-700 pt-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Selected: <span className="font-mono normal-case text-gray-900 dark:text-gray-100">{selectedNode.label}</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => {
+                  if (selectedIncomingLinks.length === 1) centerOnNode(selectedIncomingLinks[0].sourceId);
+                  else if (selectedIncomingLinks.length > 1) setChooserMode(prev => prev === 'incoming' ? null : 'incoming');
+                }}
+                disabled={selectedIncomingLinks.length === 0}
+                className="flex-1 rounded-md border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-sm disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Prev ({selectedIncomingLinks.length})
+              </button>
+              <button
+                onClick={() => {
+                  if (selectedOutgoingLinks.length === 1) centerOnNode(selectedOutgoingLinks[0].targetId);
+                  else if (selectedOutgoingLinks.length > 1) setChooserMode(prev => prev === 'outgoing' ? null : 'outgoing');
+                }}
+                disabled={selectedOutgoingLinks.length === 0}
+                className="flex-1 rounded-md border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-sm disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Next ({selectedOutgoingLinks.length})
+              </button>
+              <button
+                onClick={handleStartTrace}
+                title="Walk this graph one step at a time"
+                className="rounded-md border border-indigo-200 dark:border-indigo-700 px-2 py-1.5 text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+              >
+                Trace ⇝
+              </button>
+            </div>
+            {chooserMode && (
+              <div className="max-h-40 overflow-y-auto rounded-md border border-gray-200 dark:border-gray-700">
+                {(chooserMode === 'incoming' ? selectedIncomingLinks : selectedOutgoingLinks).map(link => {
+                  const node = nodeMap.get(chooserMode === 'incoming' ? link.sourceId : link.targetId);
+                  if (!node) return null;
+                  return (
+                    <button
+                      key={`${chooserMode}-${link.id}`}
+                      className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
+                      onClick={() => centerOnNode(node.id)}
+                    >
+                      <div className="font-mono text-gray-900 dark:text-gray-100">{node.label}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{node.containerName ?? 'Unknown file'}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : null)}
+
+        {/* ── Edge inspector ── */}
+        {selectedEdge && (() => {
+          const src = nodeMap.get(selectedEdge.sourceId);
+          const tgt = nodeMap.get(selectedEdge.targetId);
+          const typeColors: Record<string, string> = {
+            jump: 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300',
+            call: 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300',
+            implicit: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400',
+          };
+          return (
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Edge</span>
+                <button
+                  onClick={() => setSelectedEdge(null)}
+                  title="Dismiss"
+                  aria-label="Dismiss edge inspector"
+                  className="rounded px-1.5 py-0.5 text-[10px] text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="font-mono text-gray-700 dark:text-gray-300 truncate">{src?.label ?? selectedEdge.sourceId}</span>
+                <span className="shrink-0 text-gray-400">→</span>
+                <span className="font-mono text-gray-700 dark:text-gray-300 truncate">{tgt?.label ?? selectedEdge.targetId}</span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${typeColors[selectedEdge.type] ?? typeColors.implicit}`}>
+                  {selectedEdge.type}
+                </span>
+                {selectedEdge.sourceLine !== undefined && (
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500">line {selectedEdge.sourceLine}</span>
+                )}
+              </div>
+              {selectedEdge.choiceText && (
+                <p className="text-xs italic text-gray-600 dark:text-gray-400 truncate">&ldquo;{selectedEdge.choiceText}&rdquo;</p>
+              )}
+              {selectedEdge.choiceCondition && (
+                <p className="font-mono text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-1.5 py-0.5 truncate">
+                  if {selectedEdge.choiceCondition}
+                </p>
+              )}
+              <div className="grid grid-cols-2 gap-1">
+                <button
+                  onClick={() => centerOnNode(selectedEdge.sourceId)}
+                  className="rounded-md border border-gray-200 dark:border-gray-700 px-2 py-1 text-xs hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Center source
+                </button>
+                <button
+                  onClick={() => centerOnNode(selectedEdge.targetId)}
+                  className="rounded-md border border-gray-200 dark:border-gray-700 px-2 py-1 text-xs hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Center target
+                </button>
+                {src && (
+                  <button
+                    onClick={() => onOpenEditor(src.blockId, src.startLine)}
+                    className="rounded-md border border-gray-200 dark:border-gray-700 px-2 py-1 text-xs hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    Open source ↗
+                  </button>
+                )}
+                {tgt && (
+                  <button
+                    onClick={() => onOpenEditor(tgt.blockId, tgt.startLine)}
+                    className="rounded-md border border-gray-200 dark:border-gray-700 px-2 py-1 text-xs hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    Open target ↗
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+      </div>
       {/* Bottom-left controls: Fit + Legend */}
-      <div className="absolute bottom-4 left-4 z-20 flex flex-col items-start gap-2" onPointerDown={e => e.stopPropagation()}>
+      <div className="absolute bottom-4 left-[312px] z-20 flex flex-col items-start gap-2" onPointerDown={e => e.stopPropagation()}>
         <button
           onClick={fitToScreen}
           title="Fit all nodes to screen (F)"
@@ -855,6 +1827,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
           </button>
           {showLegend && (
             <div className="px-3 pb-3 pt-1 space-y-2 text-xs text-gray-600 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Edges</p>
               <div className="flex items-center gap-2">
                 <svg width="28" height="10" className="shrink-0">
                   <path d="M0,5 L20,5" stroke="#4f46e5" strokeWidth="2.5" fill="none" />
@@ -864,11 +1837,11 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
               </div>
               <div className="flex items-center gap-2">
                 <svg width="28" height="10" className="shrink-0">
-                  <circle cx="4" cy="5" r="3.5" fill="none" stroke="#4f46e5" strokeWidth="2" />
-                  <path d="M8,5 L20,5" stroke="#4f46e5" strokeWidth="2.5" fill="none" />
-                  <polygon points="18,2 26,5 18,8" fill="#4f46e5" />
+                  <circle cx="4" cy="5" r="3.5" fill="none" stroke="#7c3aed" strokeWidth="2" />
+                  <path d="M8,5 L20,5" stroke="#7c3aed" strokeWidth="2.5" fill="none" />
+                  <polygon points="18,2 26,5 18,8" fill="#7c3aed" />
                 </svg>
-                Call (returns)
+                Call <span className="text-gray-400 dark:text-gray-500">(circle = returns)</span>
               </div>
               <div className="flex items-center gap-2">
                 <svg width="28" height="10" className="shrink-0">
@@ -884,6 +1857,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
                 </svg>
                 Menu choices
               </div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 pt-1">Nodes</p>
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 shrink-0 rounded-full bg-green-500 border-2 border-white dark:border-gray-800 inline-block" />
                 Entry (start)
@@ -895,6 +1869,23 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({ labelNodes, routeLinks, ident
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 shrink-0 rounded-full bg-amber-500 border-2 border-white dark:border-gray-800 inline-block" />
                 Dead end
+              </div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 pt-1">Overlays</p>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 shrink-0 rounded-full bg-sky-500 border-2 border-white dark:border-gray-800 inline-block" />
+                Hub (≥3 incoming)
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 shrink-0 rounded-full bg-violet-500 border-2 border-white dark:border-gray-800 inline-block" />
+                Branch (≥3 outgoing)
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 shrink-0 rounded-full bg-rose-500 border-2 border-white dark:border-gray-800 inline-block" />
+                Menu-heavy (≥2 menus)
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 shrink-0 rounded-full bg-teal-500 border-2 border-white dark:border-gray-800 inline-block" />
+                Call-heavy (≥2 calls in)
               </div>
             </div>
           )}
