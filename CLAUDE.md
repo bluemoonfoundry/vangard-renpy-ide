@@ -48,46 +48,55 @@ Key rules: `react-hooks/rules-of-hooks` (error), `react-hooks/exhaustive-deps` (
 
 ### Dual-Process Electron App
 
-- **Main process** (`electron.js`, ~25K lines): Window management, IPC handlers, file system operations, API key encryption (safeStorage), Ren'Py game execution as child process, custom `media://` protocol for assets.
+- **Main process** (`electron.js`, ~1K lines): Window management, IPC handlers, file system operations, API key encryption (safeStorage), Ren'Py game execution as child process, custom `media://` protocol for assets.
 - **Renderer process** (React app): All UI, state management, and Ren'Py analysis.
 - **Preload bridge** (`preload.js`): Exposes `electronAPI` via contextBridge for secure IPC between processes.
 
 ### Core Application State (App.tsx)
 
-`App.tsx` (~3.5K lines) is the central state hub. It manages all top-level state (blocks, groups, links, characters, variables, images, audio, screens, scenes, imagemapCompositions, settings) using `useImmer` for immutable draft-based updates. State flows down via props; update callbacks are passed through the component hierarchy. Some state has been extracted into context providers (see Context Providers below).
+`App.tsx` (~4K lines) is the central state hub. It manages all top-level state (blocks, groups, stickyNotes, links, characters, variables, images, audio, screens, scenes, imagemapCompositions, screenLayoutCompositions, diagnosticsTasks, ignoredDiagnostics, settings) using `useImmer` for immutable draft-based updates. State flows down via props; update callbacks are passed through the component hierarchy. Some state has been extracted into context providers (see Context Providers below).
 
 ### Key Data Model (types.ts)
 
-`types.ts` (~930 lines) is the single source of truth for TypeScript types. Key types:
+`types.ts` (~1,137 lines) is the single source of truth for TypeScript types. Key types:
 
 - **Block**: Represents a `.rpy` file with position, size, content, and filePath
 - **BlockGroup**: Groups blocks visually on the canvas
 - **Link**: Connection between blocks (from `jump`/`call` statements)
-- **EditorTab**: Open tab in the editor pane; `type` union includes `canvas`, `route-canvas`, `punchlist`, `editor`, `image`, `audio`, `character`, `scene-composer`, `imagemap-composer`, `ai-generator`, `stats`, `markdown`. Tabs with `imagemap-composer` type carry an `imagemapId` property.
+- **StickyNote**: Canvas annotation with text, position, size, and `NoteColor` (`'yellow' | 'blue' | 'green' | 'pink' | 'purple' | 'red'`)
+- **EditorTab**: Open tab in the editor pane; `type` union: `'canvas' | 'route-canvas' | 'punchlist' | 'diagnostics' | 'editor' | 'image' | 'audio' | 'character' | 'scene-composer' | 'imagemap-composer' | 'screen-layout-composer' | 'ai-generator' | 'stats' | 'markdown'`. Tabs with `imagemap-composer` carry `imagemapId`; tabs with `screen-layout-composer` carry `layoutId`.
 - **StoryCanvasLayoutMode**: `'flow-lr' | 'flow-td' | 'connected-components' | 'clustered-flow'` — auto-layout algorithm for both canvases
 - **StoryCanvasGroupingMode**: `'none' | 'connected-component' | 'filename-prefix'` — cluster grouping strategy applied within `clustered-flow` mode
 - **SavedStoryBlockLayout**: Persisted per-block position/size/color keyed by `filePath` in `ProjectSettings.storyBlockLayouts`
 - **LabelNode**: A node in the RouteCanvas graph; carries `id`, `label`, `blockId`, `startLine`, `width`, `height`, `position`, and optional `containerName`
 - **RouteLink**: A directed edge in the RouteCanvas graph with `sourceId`, `targetId`, and `type` (`'jump' | 'call'`)
-- **ProjectSettings**: Persisted per-project IDE state including split pane layout, open tabs, canvas transforms, `sceneCompositions`, `imagemapCompositions`, canvas layout/grouping modes (`storyCanvasLayoutMode`, `storyCanvasGroupingMode`, `routeCanvasLayoutMode`, `routeCanvasGroupingMode`), persisted block layouts (`storyBlockLayouts`), and layout fingerprints/versions for change detection
-- **AppSettings**: Global app preferences (theme, Ren'Py path, etc.)
-- **Character, Variable, ImageAsset, AudioAsset, Screen, Scene**: Story element types
+- **ProjectSettings**: Persisted per-project IDE state including split pane layout, open tabs, canvas transforms, `sceneCompositions`, `imagemapCompositions`, `screenLayoutCompositions`, canvas layout/grouping modes, persisted block layouts, and layout fingerprints/versions for change detection
+- **AppSettings**: Global app preferences (theme, Ren'Py path, mouse gesture settings, user snippets). `Theme` has 10 options: `'system' | 'light' | 'dark' | 'solarized-light' | 'solarized-dark' | 'colorful' | 'colorful-light' | 'neon-dark' | 'ocean-dark' | 'candy-light' | 'forest-light'`. `MouseGestureSettings` controls pan gesture (`CanvasPanGesture`: `'shift-drag' | 'drag' | 'middle-drag'`), scroll direction, and sensitivity.
+- **Character, Variable, RenpyScreen, RenpyAudio**: Story element types
+- **DiagnosticSeverity**: `'error' | 'warning' | 'info'`
+- **DiagnosticIssue**: Category, message, blockId, line, column, severity. Categories: `invalid-jump`, `syntax`, `missing-image`, `missing-audio`, `undefined-character`, `undefined-screen`, `unused-character`, `unreachable-label`
+- **DiagnosticsTask**: Task generated from a diagnostic issue — title, description, status, blockId, line, createdAt
+- **DiagnosticsResult**: Issues array + error/warning/info counts
+- **IgnoredDiagnosticRule**: Per-category/file/block/line suppression rule
 - **UserSnippet**: User-defined code snippet (id, title, prefix, description, code, optional monacoBody for placeholder support)
-- **ProjectLoadResult, ScanDirectoryResult**: Typed IPC return shapes (replacing prior `any` usage)
+- **ProjectLoadResult, ScanDirectoryResult**: Typed IPC return shapes
 - **SerializedSprite, SerializedSceneComposition**: JSON-safe versions of scene composer types. `SceneComposition` carries an optional `resolution?: { width: number; height: number }` field (defaults to 1920×1080 when absent) persisted in `project.ide.json`.
 - **ImageMapComposition**: Container for a clickable imagemap — ground image, optional hover overlay, and an array of hotspots. Persisted in `ProjectSettings.imagemapCompositions` (keyed by id) and saved to `project.ide.json`.
 - **ImageMapHotspot**: A single clickable region with `x`, `y`, `width`, `height`, an `ImageMapActionType` (`'jump' | 'call'`), and a target label
 - **SerializedImageMapComposition**: JSON-safe version of an imagemap composition
+- **ScreenWidget, ScreenWidgetType**: Widget and type union for screen layout composer (`'vbox' | 'hbox' | 'frame' | 'text' | 'image' | 'textbutton' | 'button' | 'imagebutton' | 'bar' | 'input' | 'null'`)
+- **ScreenLayoutComposition**: Screen name, game dimensions, modal flag, zorder, widgets array. Persisted in `ProjectSettings.screenLayoutCompositions`.
+- **LLMProvider**: `'google' | 'openai' | 'anthropic' | 'other'`; **LLMModel**: provider, modelId, label, requiresAuth
 
 ### Ren'Py Analysis Engine (hooks/useRenpyAnalysis.ts)
 
-The largest source file (~25K lines). Regex-based parser that extracts labels, jumps, calls, characters, variables, screens, images, and audio references from `.rpy` files. Generates flow visualization data. Called via `performRenpyAnalysis()` when files change.
+~769 lines. Regex-based parser that extracts labels, jumps, calls, characters, variables, screens, images, and audio references from `.rpy` files. Generates flow visualization data. Called via `performRenpyAnalysis()` when files change.
 
 ### Visual Canvas System
 
-- **StoryCanvas**: Main view — blocks as draggable rectangles with auto-drawn `jump`/`call` flow arrows. Features: fit-to-screen button, character filter (hide non-player characters), role tinting (visual styling by character role), legend overlay, and an in-canvas layout control panel (top-left).
+- **StoryCanvas**: Main view — blocks as draggable rectangles with auto-drawn `jump`/`call` flow arrows. Features: fit-to-screen button, character filter (hide non-player characters), role tinting (visual styling by character role), legend overlay, canvas filter toggles (story elements, screens, config, notes, minimap), sticky notes, and an in-canvas layout control panel (top-left).
 - **RouteCanvas**: Label-by-label control flow graph with route highlighting, unreachable label detection, call vs. jump arrow distinction, collapsible panel layout, route names/node roles display, hover-to-expand, fit-to-screen, a menu inspector for route metadata, and an in-canvas layout control panel (top-left).
-- Canvas coordinates use a transform system (pan via Shift+drag, zoom via scroll)
+- Canvas coordinates use a transform system (pan configurable via `MouseGestureSettings`, zoom via scroll)
 
 ### Canvas Auto-Layout System
 
@@ -139,7 +148,7 @@ Managed by `hooks/useFileSystemManager.ts` and `contexts/FileSystemContext.ts`.
 ### Context Providers
 
 - **AssetContext** (`contexts/AssetContext.ts` + `hooks/useAssetManager.ts`): Image/audio scanning, copy-to-project pipeline, metadata; persists scan directory paths in IDE settings
-- **FileSystemContext** (`contexts/FileSystemContext.ts` + `hooks/useFileSystemManager.ts`, ~13K lines): Directory/file handle state, clipboard (cut/copy/paste), tree node CRUD and drag-drop
+- **FileSystemContext** (`contexts/FileSystemContext.ts` + `hooks/useFileSystemManager.ts`): Directory/file handle state, clipboard (cut/copy/paste), tree node CRUD and drag-drop
 - **SearchContext** (`contexts/SearchContext.tsx`): Project-wide search/replace state and execution. SearchPanel consumes this context directly (no prop drilling). Extracted from App.tsx.
 - **ToastContext** (`contexts/ToastContext.tsx`): User notification system
 
@@ -174,16 +183,19 @@ API keys are stored encrypted via Electron's `safeStorage` at `userData/api-keys
 
 - **useHistory<T>**: Generic undo/redo — maintains `past[]`, `present`, `future[]`; exposes `undo()`, `redo()`, `setState()`, `canUndo`, `canRedo`. Guards against undoing past the initial loaded state.
 - **useRenpyAnalysis**: Returns `RenpyAnalysisResult` with links, characters, variables, screens, dialogue, and route graphs. Call `performRenpyAnalysis()` after any file change.
+- **useDiagnostics**: Consumes `RenpyAnalysisResult` and block content to produce `DiagnosticsResult` — checks for invalid jumps, missing images/audio, undefined characters/screens, unused characters, unreachable labels, and syntax errors. Exposes `ignoredDiagnostics` suppression.
 - **useFileSystemManager**: File system abstraction with clipboard state (`Set<string>` of paths for cut/copy).
 - **useAssetManager**: Manages `ProjectImage` and `RenpyAudio` Maps with metadata; handles scanning external directories and copying assets into the project.
 - **useModalAccessibility**: Reusable hook for dialog accessibility — focus trap (Tab/Shift+Tab cycling), Escape key close, auto-focus first element, focus restore on unmount. Used by all modals.
+- **useVirtualList**: Virtualizes long lists for performance.
+- **useDebounce**: Generic value debounce hook.
 
 ## Keyboard Shortcuts
 
 - `N` — New block
 - `G` — Group selected blocks
 - `Ctrl+S` — Save
-- `Shift+drag` — Pan canvas
+- `Shift+drag` — Pan canvas (default; configurable via `MouseGestureSettings` to `drag` or `middle-drag`)
 - `Scroll` — Zoom canvas
 
 ## IntelliSense / Autocomplete
@@ -214,7 +226,7 @@ Users can create custom code snippets (persisted in `AppSettings.userSnippets`):
 
 ## AI Story Generator
 
-The app integrates AI APIs (Google Gemini via `@google/genai`, with optional OpenAI and Anthropic support via dynamic imports) for generating story content. API keys are encrypted at rest using Electron's `safeStorage`. The generator UI lives in `components/AIGenerator.tsx`.
+The app integrates AI APIs (Google Gemini via `@google/genai`, with optional OpenAI and Anthropic support via dynamic imports) for generating story content. API keys are encrypted at rest using Electron's `safeStorage`. The generator UI lives in `components/AIGeneratorView.tsx`.
 
 ## Scene Composer
 
@@ -241,6 +253,24 @@ The app integrates AI APIs (Google Gemini via `@google/genai`, with optional Ope
 - Scene, route, character, and variable counts
 - Charts rendered via `recharts` (BarChart)
 - Opened as a `stats` editor tab
+
+## Diagnostics System
+
+`components/DiagnosticsPanel.tsx` + `hooks/useDiagnostics.ts` provide a comprehensive issue-tracking workflow:
+- **Issue categories**: `invalid-jump` (jump to undefined label), `syntax` (parse errors), `missing-image`/`missing-audio` (undefined assets), `undefined-character`/`undefined-screen`, `unused-character`, `unreachable-label`
+- Each `DiagnosticIssue` has severity (`error | warning | info`), category, message, blockId, line, column
+- Issues can be converted to `DiagnosticsTask` items (tracked separately in App.tsx state as `diagnosticsTasks`)
+- Per-rule suppression via `IgnoredDiagnosticRule` stored in `ignoredDiagnostics` state
+- Opened as a `diagnostics` editor tab
+
+## Screen Layout Composer
+
+`components/ScreenLayoutComposer.tsx` (~1,121 lines) provides a visual drag-and-drop builder for Ren'Py screen definitions:
+- Add, arrange, and nest `ScreenWidget` nodes representing Ren'Py screen DSL elements (`vbox`, `hbox`, `frame`, `text`, `image`, `textbutton`, `button`, `imagebutton`, `bar`, `input`, `null`)
+- Each widget has configurable `properties` and optional `children` array
+- `lib/screenCodeGenerator.ts` converts a `ScreenLayoutComposition` to Ren'Py screen code
+- Compositions stored in App.tsx as `screenLayoutCompositions: Record<string, ScreenLayoutComposition>` and persisted in `ProjectSettings`
+- Opened as a `screen-layout-composer` editor tab with `layoutId` property
 
 ## CI/CD
 

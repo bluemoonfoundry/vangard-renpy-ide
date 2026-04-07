@@ -13,15 +13,21 @@ import FileBlock from './FileBlock';
 import ViewRoutesPanel from './ViewRoutesPanel';
 import Minimap from './Minimap';
 import CanvasLayoutControls from './CanvasLayoutControls';
+import StickyNoteComponent from './StickyNote';
+import CanvasContextMenu from './CanvasContextMenu';
 import type { MinimapItem } from './Minimap';
-import type { LabelNode, RouteLink, Position, IdentifiedRoute, MouseGestureSettings, StoryCanvasGroupingMode, StoryCanvasLayoutMode } from '../types';
+import type { LabelNode, RouteLink, Position, IdentifiedRoute, MouseGestureSettings, StoryCanvasGroupingMode, StoryCanvasLayoutMode, StickyNote } from '../types';
 import { computeRouteCanvasLayout } from '../lib/routeCanvasLayout';
 
 interface RouteCanvasProps {
   labelNodes: LabelNode[];
   routeLinks: RouteLink[];
   identifiedRoutes: IdentifiedRoute[];
+  stickyNotes: StickyNote[];
   updateLabelNodePositions: (updates: { id: string, position: Position }[]) => void;
+  onAddStickyNote: (position: Position) => void;
+  updateStickyNote: (id: string, data: Partial<StickyNote>) => void;
+  deleteStickyNote: (id: string) => void;
   onOpenEditor: (blockId: string, line: number) => void;
   transform: { x: number, y: number, scale: number };
   onTransformChange: React.Dispatch<React.SetStateAction<{ x: number, y: number, scale: number }>>;
@@ -362,10 +368,14 @@ type InteractionState =
   | { type: 'dragging-nodes'; dragStartPositions: Map<string, Position>; };
 
 const RouteCanvas: React.FC<RouteCanvasProps> = ({
-  labelNodes,
-  routeLinks,
+  labelNodes: rawLabelNodes,
+  routeLinks: rawRouteLinks,
   identifiedRoutes,
+  stickyNotes,
   updateLabelNodePositions,
+  onAddStickyNote,
+  updateStickyNote,
+  deleteStickyNote,
   onOpenEditor,
   transform,
   onTransformChange,
@@ -383,6 +393,8 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
   const [isMenuPanelOpen, setIsMenuPanelOpen] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [edgeContextMenu, setEdgeContextMenu] = useState<EdgeContextMenuState | null>(null);
+  const [canvasContextMenu, setCanvasContextMenu] = useState<{ x: number; y: number; worldPos: Position } | null>(null);
+  const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const [routeSearchQuery, setRouteSearchQuery] = useState('');
   const [showRouteSearchResults, setShowRouteSearchResults] = useState(false);
   const [navHistory, setNavHistory] = useState<RouteNavigationEntry[]>([]);
@@ -405,6 +417,16 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
   const pendingDrillDownRef = useRef<string | null>(null);
   const interactionState = useRef<InteractionState>({ type: 'idle' });
   const pointerStartPos = useRef<Position>({ x: 0, y: 0 });
+  // ── Filter: exclude underscore-prefixed reserved Ren'Py labels ──
+  const labelNodes = useMemo(
+    () => rawLabelNodes.filter(n => !n.label.startsWith('_')),
+    [rawLabelNodes],
+  );
+  const routeLinks = useMemo(() => {
+    const validIds = new Set(labelNodes.map(n => n.id));
+    return rawRouteLinks.filter(l => validIds.has(l.sourceId) && validIds.has(l.targetId));
+  }, [rawRouteLinks, labelNodes]);
+
   const labelNodeMap = useMemo(() => new Map(labelNodes.map(n => [n.id, n])), [labelNodes]);
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0 });
 
@@ -455,10 +477,21 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
 
   const closeTransientUi = useCallback(() => {
     setEdgeContextMenu(null);
+    setCanvasContextMenu(null);
     setShowRouteSearchResults(false);
     setChooserMode(null);
     setTraceChooserLinks([]);
   }, []);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    if ((e.target as HTMLElement).closest('.sticky-note-wrapper') || (e.target as HTMLElement).closest('.label-block-wrapper') || (e.target as HTMLElement).closest('.route-nav-panel') || (e.target as HTMLElement).closest('.view-routes-panel')) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const worldX = (e.clientX - rect.left - transform.x) / transform.scale;
+    const worldY = (e.clientY - rect.top - transform.y) / transform.scale;
+    setCanvasContextMenu({ x: e.clientX, y: e.clientY, worldPos: { x: worldX, y: worldY } });
+  }, [transform]);
 
   // Derive start→end label names for each identified route
   const routeLabels = useMemo(() => {
@@ -1136,6 +1169,35 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
       return () => el.removeEventListener('wheel', onWheel);
   }, [onTransformChange, mouseGestures]);
 
+  // Sticky-note drag: self-contained pointer capture so canvas pan doesn't interfere
+  const handleNoteDragStart = useCallback((e: React.PointerEvent<HTMLDivElement>, noteId: string) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    // Don't capture for interactive elements — lets color picker, delete button, textarea work
+    if ((e.target as HTMLElement).closest('button, textarea, input')) return;
+    const startClientX = e.clientX;
+    const startClientY = e.clientY;
+    const note = stickyNotes.find(n => n.id === noteId);
+    if (!note) return;
+    const startWorldX = note.position.x;
+    const startWorldY = note.position.y;
+    setSelectedNoteIds([noteId]);
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+
+    const onMove = (me: PointerEvent) => {
+      const dx = (me.clientX - startClientX) / transform.scale;
+      const dy = (me.clientY - startClientY) / transform.scale;
+      updateStickyNote(noteId, { position: { x: startWorldX + dx, y: startWorldY + dy } });
+    };
+    const onUp = () => {
+      target.removeEventListener('pointermove', onMove);
+      target.removeEventListener('pointerup', onUp);
+    };
+    target.addEventListener('pointermove', onMove);
+    target.addEventListener('pointerup', onUp);
+  }, [stickyNotes, transform.scale, updateStickyNote]);
+
   const backgroundStyle = {
     backgroundSize: `${32 * transform.scale}px ${32 * transform.scale}px`,
     backgroundPosition: `${transform.x}px ${transform.y}px`,
@@ -1170,11 +1232,40 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
       className="absolute inset-0 overflow-hidden cursor-grab active:cursor-grabbing bg-gray-100 dark:bg-gray-900 bg-[radial-gradient(#d4d4d8_1px,transparent_1px)] dark:bg-[radial-gradient(#4b5563_1px,transparent_1px)]"
       style={backgroundStyle}
       onPointerDown={handlePointerDown}
+      onContextMenu={handleContextMenu}
     >
       <div
         className="absolute top-4 right-4 z-20 flex max-w-[calc(100%-2rem)] flex-col gap-3 xl:flex-row xl:items-start"
         onPointerDown={e => e.stopPropagation()}
       >
+        {/* Fit + Go-to-start — same position/style as in Choice Canvas */}
+        <div className="flex items-center gap-1.5 order-3 xl:order-0">
+          {labelNodes.some(n => n.label === 'start') && (
+            <button
+              onClick={() => {
+                const startNode = labelNodes.find(n => n.label === 'start');
+                if (startNode) centerOnNode(startNode.id, { recordHistory: true });
+              }}
+              title="Go to start label"
+              aria-label="Go to start label"
+              className="h-9 w-9 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center shadow"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 6a3 3 0 013-3h10a1 1 0 01.8 1.6L14.25 7l2.55 2.4A1 1 0 0116 11H6a1 1 0 00-1 1v3a1 1 0 11-2 0V6z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
+          <button
+            onClick={fitToScreen}
+            title="Fit all nodes to screen (F)"
+            aria-label="Fit all nodes to screen"
+            className="h-9 w-9 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center shadow"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H5.414l3.293 3.293a1 1 0 11-1.414 1.414L4 6.414V8a1 1 0 01-2 0V4zm13 0a1 1 0 01.707.293l-3.293 3.293a1 1 0 01-1.414-1.414L15.586 3H14a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V5.414l-3.293 3.293A1 1 0 0112.293 7.29zM3 16a1 1 0 010-2V12.414l3.293-3.293a1 1 0 011.414 1.414L4.414 14H6a1 1 0 010 2H4a1 1 0 01-1-1zm13 1a1 1 0 01-.707-.293l-3.293-3.293a1 1 0 011.414-1.414L16.586 15H15a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V16.586l-3.293 3.293A1 1 0 0113.293 19.29z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
         <CanvasLayoutControls
           canvasLabel="Route Canvas"
           layoutMode={layoutMode}
@@ -1320,6 +1411,22 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
         </svg>
 
         {rubberBandRect && <RubberBand rect={rubberBandRect} />}
+
+        {/* Sticky notes */}
+        {stickyNotes.map(note => (
+          <div
+            key={note.id}
+            onPointerDown={e => handleNoteDragStart(e, note.id)}
+          >
+            <StickyNoteComponent
+              note={note}
+              updateNote={updateStickyNote}
+              deleteNote={deleteStickyNote}
+              isSelected={selectedNoteIds.includes(note.id)}
+              isDragging={false}
+            />
+          </div>
+        ))}
 
         {viewLevel === 'file' && fileGraph
           ? fileGraph.nodes.map(node => {
@@ -1802,19 +1909,8 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
         })()}
 
       </div>
-      {/* Bottom-left controls: Fit + Legend */}
+      {/* Bottom-left controls: Legend */}
       <div className="absolute bottom-4 left-[312px] z-20 flex flex-col items-start gap-2" onPointerDown={e => e.stopPropagation()}>
-        <button
-          onClick={fitToScreen}
-          title="Fit all nodes to screen (F)"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-xs font-medium text-gray-700 dark:text-gray-200 shadow hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H5.414l3.293 3.293a1 1 0 11-1.414 1.414L4 6.414V8a1 1 0 01-2 0V4zm13 0a1 1 0 01.707.293l-3.293 3.293a1 1 0 01-1.414-1.414L15.586 3H14a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V5.414l-3.293 3.293A1 1 0 0112.293 7.29zM3 16a1 1 0 010-2V12.414l3.293-3.293a1 1 0 011.414 1.414L4.414 14H6a1 1 0 010 2H4a1 1 0 01-1-1zm13 1a1 1 0 01-.707-.293l-3.293-3.293a1 1 0 011.414-1.414L16.586 15H15a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V16.586l-3.293 3.293A1 1 0 0113.293 19.29z" clipRule="evenodd" />
-          </svg>
-          Fit
-        </button>
-
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow overflow-hidden">
           <button
             onClick={() => setShowLegend(v => !v)}
@@ -1898,6 +1994,14 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
         canvasDimensions={canvasDimensions}
         onTransformChange={onTransformChange}
       />
+      {canvasContextMenu && (
+        <CanvasContextMenu
+          x={canvasContextMenu.x}
+          y={canvasContextMenu.y}
+          onClose={() => setCanvasContextMenu(null)}
+          onAddStickyNote={() => onAddStickyNote(canvasContextMenu.worldPos)}
+        />
+      )}
     </div>
   );
 };

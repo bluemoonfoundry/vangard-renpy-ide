@@ -8,6 +8,7 @@ import SearchPanel from './components/SearchPanel';
 import EditorView from './components/EditorView';
 import StoryElementsPanel from './components/StoryElementsPanel';
 import RouteCanvas from './components/RouteCanvas';
+import ChoiceCanvas from './components/ChoiceCanvas';
 import SettingsModal from './components/SettingsModal';
 import ConfirmModal from './components/ConfirmModal';
 import CreateBlockModal, { BlockType } from './components/CreateBlockModal';
@@ -123,6 +124,8 @@ const App: React.FC = () => {
   const { state: blocks, setState: setBlocks, undo, redo, canUndo, canRedo } = useHistory<Block[]>([]);
   const [groups, setGroups] = useImmer<BlockGroup[]>([]);
   const [stickyNotes, setStickyNotes] = useImmer<StickyNote[]>([]);
+  const [routeStickyNotes, setRouteStickyNotes] = useImmer<StickyNote[]>([]);
+  const [choiceStickyNotes, setChoiceStickyNotes] = useImmer<StickyNote[]>([]);
   
   // Use a ref to track blocks for effects that need current blocks without triggering updates
   const blocksRef = useRef(blocks);
@@ -216,6 +219,7 @@ const App: React.FC = () => {
   // --- State: View Transforms ---
   const [storyCanvasTransform, setStoryCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [routeCanvasTransform, setRouteCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [choiceCanvasTransform, setChoiceCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
 
   // --- State: Game Execution ---
   const [isGameRunning, setIsGameRunning] = useState(false);
@@ -635,7 +639,7 @@ const App: React.FC = () => {
 
   // --- Sync Explorer with Active Tab ---
   useEffect(() => {
-    if (activeTabId === 'canvas' || activeTabId === 'route-canvas' || activeTabId === 'punchlist') return;
+    if (activeTabId === 'canvas' || activeTabId === 'route-canvas' || activeTabId === 'choice-canvas' || activeTabId === 'punchlist') return;
 
     const activeTab = openTabs.find(t => t.id === activeTabId);
     let filePathToSync: string | undefined;
@@ -1044,6 +1048,50 @@ const App: React.FC = () => {
       setHasUnsavedSettings(true);
   }, [setStickyNotes]);
 
+  // --- Route Canvas Sticky Note Management ---
+  const addRouteStickyNote = useCallback((initialPosition?: Position) => {
+      const id = `rnote-${Date.now()}`;
+      const width = 200;
+      const height = 200;
+      const pos = initialPosition
+        ? { x: initialPosition.x - width / 2, y: initialPosition.y - height / 2 }
+        : { x: 0, y: 0 };
+      setRouteStickyNotes(draft => { draft.push({ id, content: '', position: pos, width, height, color: 'yellow' }); });
+      setHasUnsavedSettings(true);
+  }, [setRouteStickyNotes]);
+
+  const updateRouteStickyNote = useCallback((id: string, data: Partial<StickyNote>) => {
+      setRouteStickyNotes(draft => { const idx = draft.findIndex(n => n.id === id); if (idx !== -1) Object.assign(draft[idx], data); });
+      setHasUnsavedSettings(true);
+  }, [setRouteStickyNotes]);
+
+  const deleteRouteStickyNote = useCallback((id: string) => {
+      setRouteStickyNotes(draft => { const idx = draft.findIndex(n => n.id === id); if (idx !== -1) draft.splice(idx, 1); });
+      setHasUnsavedSettings(true);
+  }, [setRouteStickyNotes]);
+
+  // --- Choice Canvas Sticky Note Management ---
+  const addChoiceStickyNote = useCallback((initialPosition?: Position) => {
+      const id = `cnote-${Date.now()}`;
+      const width = 200;
+      const height = 200;
+      const pos = initialPosition
+        ? { x: initialPosition.x - width / 2, y: initialPosition.y - height / 2 }
+        : { x: 0, y: 0 };
+      setChoiceStickyNotes(draft => { draft.push({ id, content: '', position: pos, width, height, color: 'yellow' }); });
+      setHasUnsavedSettings(true);
+  }, [setChoiceStickyNotes]);
+
+  const updateChoiceStickyNote = useCallback((id: string, data: Partial<StickyNote>) => {
+      setChoiceStickyNotes(draft => { const idx = draft.findIndex(n => n.id === id); if (idx !== -1) Object.assign(draft[idx], data); });
+      setHasUnsavedSettings(true);
+  }, [setChoiceStickyNotes]);
+
+  const deleteChoiceStickyNote = useCallback((id: string) => {
+      setChoiceStickyNotes(draft => { const idx = draft.findIndex(n => n.id === id); if (idx !== -1) draft.splice(idx, 1); });
+      setHasUnsavedSettings(true);
+  }, [setChoiceStickyNotes]);
+
 
   const getSelectedFolderForNewBlock = useCallback(() => {
     if (explorerSelectedPaths.size === 1) {
@@ -1255,6 +1303,16 @@ const App: React.FC = () => {
     applyRouteLayout,
   ]);
 
+  const handleChangeChoiceCanvasLayoutMode = useCallback((mode: StoryCanvasLayoutMode) => {
+    updateProjectSettings(draft => { draft.choiceCanvasLayoutMode = mode; });
+    setHasUnsavedSettings(true);
+  }, [updateProjectSettings]);
+
+  const handleChangeChoiceCanvasGroupingMode = useCallback((mode: StoryCanvasGroupingMode) => {
+    updateProjectSettings(draft => { draft.choiceCanvasGroupingMode = mode; });
+    setHasUnsavedSettings(true);
+  }, [updateProjectSettings]);
+
   useEffect(() => {
     const pendingRefresh = pendingStoryLayoutRefreshRef.current;
     if (!pendingRefresh || blocks.length === 0 || isInitialAnalysisPending || isAnalysisPending) {
@@ -1367,7 +1425,7 @@ const App: React.FC = () => {
   ]);
 
   // --- Tab Management Helpers ---
-  const handleOpenStaticTab = useCallback((type: 'canvas' | 'route-canvas' | 'diagnostics' | 'ai-generator' | 'stats') => {
+  const handleOpenStaticTab = useCallback((type: 'canvas' | 'route-canvas' | 'choice-canvas' | 'diagnostics' | 'ai-generator' | 'stats') => {
         const id = type;
         // If already open in primary, activate it there
         if (openTabs.find(t => t.id === id)) {
@@ -1392,6 +1450,7 @@ const App: React.FC = () => {
   }, [openTabs, secondaryOpenTabs, activePaneId, splitLayout]);
 
   const handleOpenRouteCanvasTab = useCallback(() => handleOpenStaticTab('route-canvas'), [handleOpenStaticTab]);
+  const handleOpenChoiceCanvasTab = useCallback(() => handleOpenStaticTab('choice-canvas'), [handleOpenStaticTab]);
 
   // --- File System Integration ---
   
@@ -1536,6 +1595,8 @@ const App: React.FC = () => {
                   draft.routeCanvasLayoutWasUserAdjusted = projectData.settings.routeCanvasLayoutWasUserAdjusted ?? false;
               });
               setStickyNotes(projectData.settings.stickyNotes || []);
+              setRouteStickyNotes(projectData.settings.routeStickyNotes || []);
+              setChoiceStickyNotes(projectData.settings.choiceStickyNotes || []);
               setCharacterProfiles(projectData.settings.characterProfiles || {});
               setPunchlistMetadata(projectData.settings.punchlistMetadata || {});
               // Diagnostics tasks — migrate from old punchlist metadata if needed
@@ -1714,7 +1775,7 @@ const App: React.FC = () => {
                   if (tab.type === 'markdown' && tab.filePath) {
                       return true; // File existence checked on tab render
                   }
-                  return tab.type === 'canvas' || tab.type === 'route-canvas' || tab.type === 'punchlist' || tab.type === 'diagnostics' || tab.type === 'ai-generator' || tab.type === 'stats';
+                  return tab.type === 'canvas' || tab.type === 'route-canvas' || tab.type === 'choice-canvas' || tab.type === 'punchlist' || tab.type === 'diagnostics' || tab.type === 'ai-generator' || tab.type === 'stats';
               });
 
               const rehydratedTabs = validTabs.map(tab => {
@@ -1749,7 +1810,7 @@ const App: React.FC = () => {
                   if (tab.type === 'audio' && tab.filePath) return audioMap.has(tab.filePath);
                   if (tab.type === 'character' && tab.characterTag) return true;
                   if (tab.type === 'markdown' && tab.filePath) return true;
-                  return tab.type === 'canvas' || tab.type === 'route-canvas' || tab.type === 'punchlist' || tab.type === 'diagnostics' || tab.type === 'ai-generator' || tab.type === 'stats' || tab.type === 'scene-composer';
+                  return tab.type === 'canvas' || tab.type === 'route-canvas' || tab.type === 'choice-canvas' || tab.type === 'punchlist' || tab.type === 'diagnostics' || tab.type === 'ai-generator' || tab.type === 'stats' || tab.type === 'scene-composer';
               });
               setSplitLayout(validSecondary.length > 0 ? savedSplitLayout : 'none');
               setSplitPrimarySize(projectData.settings.splitPrimarySize ?? 600);
@@ -1780,6 +1841,8 @@ const App: React.FC = () => {
               setSecondaryOpenTabs([]);
               setSecondaryActiveTabId('');
               setStickyNotes([]);
+              setRouteStickyNotes([]);
+              setChoiceStickyNotes([]);
               setCharacterProfiles({});
               setPunchlistMetadata({});
               setDiagnosticsTasks([]);
@@ -2202,6 +2265,8 @@ const App: React.FC = () => {
         secondaryOpenTabs,
         secondaryActiveTabId,
         stickyNotes: Array.from(stickyNotes),
+        routeStickyNotes: Array.from(routeStickyNotes),
+        choiceStickyNotes: Array.from(choiceStickyNotes),
         characterProfiles,
         punchlistMetadata,
         diagnosticsTasks,
@@ -2400,8 +2465,16 @@ const App: React.FC = () => {
   const handleCloseTab = useCallback((tabId: string, paneId: 'primary' | 'secondary', e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (paneId === 'primary') {
-        setOpenTabs(prev => prev.filter(t => t.id !== tabId));
-        if (activeTabId === tabId) setActiveTabId('canvas');
+        setOpenTabs(prev => {
+            const next = prev.filter(t => t.id !== tabId);
+            if (activeTabId === tabId) {
+                // Find adjacent tab: prefer next, then previous
+                const closedIdx = prev.findIndex(t => t.id === tabId);
+                const fallback = next[closedIdx] ?? next[closedIdx - 1] ?? next[0];
+                setActiveTabId(fallback?.id ?? '');
+            }
+            return next;
+        });
     } else {
         setSecondaryOpenTabs(prev => {
             const next = prev.filter(t => t.id !== tabId);
@@ -2431,8 +2504,20 @@ const App: React.FC = () => {
     const performClose = () => {
         const idsToClose = new Set(tabsToClose.map(t => t.id));
         if (paneId === 'primary') {
-            setOpenTabs(prev => prev.filter(t => !idsToClose.has(t.id)));
-            if (idsToClose.has(activeTabId)) setActiveTabId(fallbackTabId);
+            setOpenTabs(prev => {
+                const next = prev.filter(t => !idsToClose.has(t.id));
+                if (idsToClose.has(activeTabId)) {
+                    // Use the explicit fallback if it's still open, otherwise pick adjacent
+                    if (fallbackTabId && !idsToClose.has(fallbackTabId)) {
+                        setActiveTabId(fallbackTabId);
+                    } else {
+                        const closedIdx = prev.findIndex(t => t.id === activeTabId);
+                        const adjacent = next[closedIdx] ?? next[closedIdx - 1] ?? next[0];
+                        setActiveTabId(adjacent?.id ?? '');
+                    }
+                }
+                return next;
+            });
         } else {
             setSecondaryOpenTabs(prev => {
                 const next = prev.filter(t => !idsToClose.has(t.id));
@@ -2481,21 +2566,23 @@ const App: React.FC = () => {
 
   const handleCloseOthersRequest = useCallback((tabId: string, paneId: 'primary' | 'secondary' = 'primary') => {
     const tabs = paneId === 'primary' ? openTabs : secondaryOpenTabs;
-    const tabsToClose = tabs.filter(t => t.id !== tabId && t.id !== 'canvas' && t.id !== 'ai-generator');
+    const tabsToClose = tabs.filter(t => t.id !== tabId && t.id !== 'ai-generator');
     processTabCloseRequest(tabsToClose, tabId, paneId);
   }, [openTabs, secondaryOpenTabs, processTabCloseRequest]);
 
   const handleCloseAllRequest = useCallback((paneId: 'primary' | 'secondary' = 'primary') => {
     const tabs = paneId === 'primary' ? openTabs : secondaryOpenTabs;
-    const tabsToClose = tabs.filter(t => t.id !== 'canvas' && t.id !== 'ai-generator');
-    processTabCloseRequest(tabsToClose, 'canvas', paneId);
+    const tabsToClose = tabs.filter(t => t.id !== 'ai-generator');
+    // Find the first tab that isn't being closed as fallback; otherwise empty
+    const fallback = tabs.find(t => t.id === 'ai-generator')?.id ?? '';
+    processTabCloseRequest(tabsToClose, fallback, paneId);
   }, [openTabs, secondaryOpenTabs, processTabCloseRequest]);
 
   const handleCloseLeftRequest = useCallback((tabId: string, paneId: 'primary' | 'secondary' = 'primary') => {
     const tabs = paneId === 'primary' ? openTabs : secondaryOpenTabs;
     const index = tabs.findIndex(t => t.id === tabId);
     if (index === -1) return;
-    const tabsToClose = tabs.slice(0, index).filter(t => t.id !== 'canvas' && t.id !== 'ai-generator');
+    const tabsToClose = tabs.slice(0, index).filter(t => t.id !== 'ai-generator');
     processTabCloseRequest(tabsToClose, tabId, paneId);
   }, [openTabs, secondaryOpenTabs, processTabCloseRequest]);
 
@@ -2503,7 +2590,7 @@ const App: React.FC = () => {
     const tabs = paneId === 'primary' ? openTabs : secondaryOpenTabs;
     const index = tabs.findIndex(t => t.id === tabId);
     if (index === -1) return;
-    const tabsToClose = tabs.slice(index + 1).filter(t => t.id !== 'canvas' && t.id !== 'ai-generator');
+    const tabsToClose = tabs.slice(index + 1).filter(t => t.id !== 'ai-generator');
     processTabCloseRequest(tabsToClose, tabId, paneId);
   }, [openTabs, secondaryOpenTabs, processTabCloseRequest]);
 
@@ -3175,6 +3262,7 @@ const App: React.FC = () => {
   const getTabLabel = (tab: EditorTab): React.ReactNode => {
     if (tab.id === 'canvas') return 'Story Canvas';
     if (tab.id === 'route-canvas') return 'Route Canvas';
+    if (tab.id === 'choice-canvas') return 'Choice Canvas';
     if (tab.id === 'diagnostics' || tab.id === 'punchlist') return 'Diagnostics';
     if (tab.id === 'stats') return 'Stats';
     if (tab.type === 'ai-generator') return 'AI Generator';
@@ -3212,6 +3300,8 @@ const App: React.FC = () => {
       return <RouteCanvas
         labelNodes={routeAnalysisResult.labelNodes} routeLinks={routeAnalysisResult.routeLinks}
         identifiedRoutes={routeAnalysisResult.identifiedRoutes} updateLabelNodePositions={handleUpdateRouteNodePositions}
+        stickyNotes={routeStickyNotes} onAddStickyNote={addRouteStickyNote}
+        updateStickyNote={updateRouteStickyNote} deleteStickyNote={deleteRouteStickyNote}
         onOpenEditor={handleOpenEditor} transform={routeCanvasTransform} onTransformChange={setRouteCanvasTransform}
         mouseGestures={appSettings.mouseGestures}
         layoutMode={projectSettings.routeCanvasLayoutMode ?? 'flow-lr'}
@@ -3220,10 +3310,28 @@ const App: React.FC = () => {
         onChangeGroupingMode={handleChangeRouteCanvasGroupingMode}
       />;
     }
+    if (tab.type === 'choice-canvas') {
+      return <ChoiceCanvas
+        labelNodes={routeAnalysisResult.labelNodes}
+        routeLinks={routeAnalysisResult.routeLinks}
+        blocks={blocks}
+        analysisResult={analysisResult}
+        stickyNotes={choiceStickyNotes} onAddStickyNote={addChoiceStickyNote}
+        updateStickyNote={updateChoiceStickyNote} deleteStickyNote={deleteChoiceStickyNote}
+        onOpenEditor={handleOpenEditor}
+        transform={choiceCanvasTransform}
+        onTransformChange={setChoiceCanvasTransform}
+        mouseGestures={appSettings.mouseGestures}
+        layoutMode={projectSettings.choiceCanvasLayoutMode ?? 'flow-td'}
+        groupingMode={projectSettings.choiceCanvasGroupingMode ?? 'none'}
+        onChangeLayoutMode={handleChangeChoiceCanvasLayoutMode}
+        onChangeGroupingMode={handleChangeChoiceCanvasGroupingMode}
+      />;
+    }
     if (tab.type === 'diagnostics' || tab.type === 'punchlist') {
       return <DiagnosticsPanel
         diagnostics={diagnosticsResult}
-        blocks={blocks} stickyNotes={stickyNotes}
+        blocks={blocks} stickyNotes={[...stickyNotes, ...routeStickyNotes, ...choiceStickyNotes]}
         tasks={diagnosticsTasks}
         ignoredDiagnostics={ignoredDiagnostics}
         onUpdateTasks={(updated) => { setDiagnosticsTasks(updated); setHasUnsavedSettings(true); }}
@@ -3242,8 +3350,9 @@ const App: React.FC = () => {
         blocks={blocks}
         analysisResult={analysisResult}
         routeAnalysisResult={routeAnalysisResult}
-        imageCount={images.size}
-        audioCount={audios.size}
+        projectImages={images}
+        imageMetadata={imageMetadata}
+        projectAudios={audios}
         diagnosticsErrorCount={diagnosticsResult.errorCount}
         onOpenDiagnostics={() => handleOpenStaticTab('diagnostics')}
       />;
@@ -3377,11 +3486,9 @@ const App: React.FC = () => {
                 {diagnosticsResult.errorCount}
               </span>
             )}
-            {tab.id !== 'canvas' && (
-              <button onClick={(e) => handleCloseTab(tab.id, paneId, e)} aria-label="Close tab" className="ml-2 opacity-0 group-hover:opacity-100 hover:text-red-500 rounded-full p-0.5">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-              </button>
-            )}
+            <button onClick={(e) => handleCloseTab(tab.id, paneId, e)} aria-label="Close tab" className="ml-2 opacity-0 group-hover:opacity-100 hover:text-red-500 rounded-full p-0.5">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+            </button>
             {tab.blockId && (dirtyBlockIds.has(tab.blockId) || dirtyEditors.has(tab.blockId)) && <div className="w-2 h-2 ml-2 bg-blue-500 rounded-full flex-none" />}
           </div>
         ))}
@@ -3436,20 +3543,29 @@ const App: React.FC = () => {
   const focusedTabId = activePaneId === 'secondary' && splitLayout !== 'none'
     ? secondaryActiveTabId
     : activeTabId;
-  const activeCanvasTarget: 'story' | 'route' = focusedTabId === 'route-canvas' ? 'route' : 'story';
-  const activeCanvasLayoutMode = activeCanvasTarget === 'route'
+  const activeCanvasType: 'story' | 'route' | 'choice' | null =
+    focusedTabId === 'route-canvas' ? 'route' :
+    focusedTabId === 'choice-canvas' ? 'choice' :
+    focusedTabId === 'canvas' ? 'story' : null;
+  const activeCanvasLayoutMode = activeCanvasType === 'route'
     ? (projectSettings.routeCanvasLayoutMode ?? 'flow-lr')
     : (projectSettings.storyCanvasLayoutMode ?? 'flow-lr');
-  const activeCanvasGroupingMode = activeCanvasTarget === 'route'
+  const activeCanvasGroupingMode = activeCanvasType === 'route'
     ? (projectSettings.routeCanvasGroupingMode ?? 'none')
     : (projectSettings.storyCanvasGroupingMode ?? 'none');
   const handleActiveCanvasTidyUp = () => {
-    if (activeCanvasTarget === 'route') {
+    if (activeCanvasType === 'route') {
       applyRouteLayout(activeCanvasLayoutMode, activeCanvasGroupingMode, { showToast: true });
       return;
     }
+    if (activeCanvasType === 'choice') return; // Choice canvas has no tidy-up (auto-layout only)
     handleTidyUp(true);
   };
+  const activeCanvasOnAddStickyNote: (() => void) | null =
+    activeCanvasType === 'story' ? () => addStickyNote() :
+    activeCanvasType === 'route' ? () => addRouteStickyNote() :
+    activeCanvasType === 'choice' ? () => addChoiceStickyNote() :
+    null;
 
   return (
     <SearchProvider
@@ -3460,7 +3576,7 @@ const App: React.FC = () => {
     >
     <div className={`fixed inset-0 flex flex-col bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100 ${appSettings.theme}`}>
       <Toolbar
-        activeCanvasTarget={activeCanvasTarget}
+        activeCanvasType={activeCanvasType}
         projectRootPath={projectRootPath}
         dirtyBlockIds={dirtyBlockIds}
         dirtyEditors={dirtyEditors}
@@ -3474,9 +3590,9 @@ const App: React.FC = () => {
         handleTidyUp={handleActiveCanvasTidyUp}
         handleSave={handleSaveAll}
         onOpenSettings={() => setSettingsModalOpen(true)}
-        onOpenStaticTab={handleOpenStaticTab as (type: 'canvas' | 'route-canvas' | 'stats' | 'diagnostics') => void}
+        onOpenStaticTab={handleOpenStaticTab as (type: 'canvas' | 'route-canvas' | 'choice-canvas' | 'stats' | 'diagnostics') => void}
         diagnosticsErrorCount={diagnosticsResult.errorCount}
-        onAddStickyNote={() => addStickyNote()}
+        onAddStickyNote={activeCanvasOnAddStickyNote}
         isGameRunning={isGameRunning}
         onRunGame={() => window.electronAPI?.runGame(appSettings.renpyPath, projectRootPath!)}
         onStopGame={() => window.electronAPI?.stopGame()}

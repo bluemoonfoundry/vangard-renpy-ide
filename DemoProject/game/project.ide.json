@@ -2,36 +2,269 @@
   "enableAiFeatures": false,
   "selectedModel": "gemini-2.5-flash",
   "draftingMode": true,
+  "storyCanvasLayoutMode": "flow-lr",
+  "storyCanvasGroupingMode": "none",
+  "storyCanvasLayoutVersion": 1,
+  "storyCanvasLayoutWasUserAdjusted": false,
+  "routeCanvasLayoutMode": "flow-lr",
+  "routeCanvasGroupingMode": "none",
+  "routeCanvasLayoutVersion": 1,
+  "routeCanvasLayoutWasUserAdjusted": false,
+  "storyCanvasLayoutFingerprint": "v1;mode=flow-lr;group=none;blocks=game/characters.rpy:320x200|game/debug_placeholders.rpy:320x200|game/gui.rpy:320x200|game/options.rpy:320x200|game/scenes/scene_01_start.rpy:320x200|game/scenes/scene_02_first_choice.rpy:320x200|game/scenes/scene_03_book_club.rpy:320x200|game/scenes/scene_04_sports_club.rpy:320x200|game/scenes/scene_05_meet_sakura.rpy:320x200|game/scenes/scene_06_second_choice.rpy:320x200|game/scenes/scene_07_art_club.rpy:320x200|game/scenes/scene_08_gaming_club.rpy:320x200|game/scenes/scene_09_reflection.rpy:320x200|game/scenes/scene_10_final_choice.rpy:320x200|game/scenes/scene_11_ending.rpy:320x200|game/scenes/scene_12_goodbye.rpy:320x200|game/screens.rpy:320x200|game/script.rpy:320x200|game/variables.rpy:320x200;links=block-10-1775567282318->block-12-1775567282318:jump|block-11-1775567282318->block-12-1775567282318:jump|block-12-1775567282318->block-13-1775567282318:jump|block-13-1775567282318->block-14-1775567282318:jump|block-14-1775567282318->block-15-1775567282318:jump|block-17-1775567282318->block-4-1775567282318:jump|block-4-1775567282318->block-5-1775567282318:jump|block-5-1775567282318->block-6-1775567282318:jump|block-5-1775567282318->block-7-1775567282318:jump|block-6-1775567282318->block-8-1775567282318:jump|block-7-1775567282318->block-8-1775567282318:jump|block-8-1775567282318->block-9-1775567282318:jump|block-9-1775567282318->block-10-1775567282318:jump|block-9-1775567282318->block-11-1775567282318:jump",
+  "routeCanvasLayoutFingerprint": "v1;mode=flow-lr;group=none;nodes=block-10-1775567282318:scene_07_art_club:scene_07_art_club.rpy:180x40|block-11-1775567282318:scene_08_gaming_club:scene_08_gaming_club.rpy:180x40|block-12-1775567282318:scene_09_reflection:scene_09_reflection.rpy:180x40|block-13-1775567282318:scene_10_final_choice:scene_10_final_choice.rpy:180x40|block-14-1775567282318:scene_11_ending:scene_11_ending.rpy:180x40|block-15-1775567282318:scene_12_goodbye:scene_12_goodbye.rpy:180x40|block-17-1775567282318:start:script.rpy:180x40|block-4-1775567282318:scene_01_start:scene_01_start.rpy:180x40|block-5-1775567282318:scene_02_first_choice:scene_02_first_choice.rpy:180x40|block-6-1775567282318:scene_03_book_club:scene_03_book_club.rpy:180x40|block-7-1775567282318:scene_04_sports_club:scene_04_sports_club.rpy:180x40|block-8-1775567282318:scene_05_meet_sakura:scene_05_meet_sakura.rpy:180x40|block-9-1775567282318:scene_06_second_choice:scene_06_second_choice.rpy:180x40;edges=block-10-1775567282318:scene_07_art_club->block-12-1775567282318:scene_09_reflection:jump|block-11-1775567282318:scene_08_gaming_club->block-12-1775567282318:scene_09_reflection:jump|block-12-1775567282318:scene_09_reflection->block-13-1775567282318:scene_10_final_choice:jump|block-13-1775567282318:scene_10_final_choice->block-14-1775567282318:scene_11_ending:jump|block-13-1775567282318:scene_10_final_choice->block-14-1775567282318:scene_11_ending:jump|block-13-1775567282318:scene_10_final_choice->block-14-1775567282318:scene_11_ending:jump|block-13-1775567282318:scene_10_final_choice->block-14-1775567282318:scene_11_ending:jump|block-14-1775567282318:scene_11_ending->block-15-1775567282318:scene_12_goodbye:jump|block-17-1775567282318:start->block-4-1775567282318:scene_01_start:jump|block-4-1775567282318:scene_01_start->block-5-1775567282318:scene_02_first_choice:jump|block-5-1775567282318:scene_02_first_choice->block-6-1775567282318:scene_03_book_club:jump|block-5-1775567282318:scene_02_first_choice->block-7-1775567282318:scene_04_sports_club:jump|block-6-1775567282318:scene_03_book_club->block-8-1775567282318:scene_05_meet_sakura:jump|block-7-1775567282318:scene_04_sports_club->block-8-1775567282318:scene_05_meet_sakura:jump|block-8-1775567282318:scene_05_meet_sakura->block-9-1775567282318:scene_06_second_choice:jump|block-9-1775567282318:scene_06_second_choice->block-10-1775567282318:scene_07_art_club:jump|block-9-1775567282318:scene_06_second_choice->block-11-1775567282318:scene_08_gaming_club:jump",
+  "storyBlockLayouts": {
+    "game/characters.rpy": {
+      "position": {
+        "x": 0,
+        "y": 225
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/debug_placeholders.rpy": {
+      "position": {
+        "x": 520,
+        "y": 225
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/gui.rpy": {
+      "position": {
+        "x": 1040,
+        "y": 225
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/options.rpy": {
+      "position": {
+        "x": 1560,
+        "y": 225
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/scenes/scene_01_start.rpy": {
+      "position": {
+        "x": 2550,
+        "y": 225
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/scenes/scene_02_first_choice.rpy": {
+      "position": {
+        "x": 3020,
+        "y": 225
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/scenes/scene_03_book_club.rpy": {
+      "position": {
+        "x": 3490,
+        "y": 100
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/scenes/scene_04_sports_club.rpy": {
+      "position": {
+        "x": 3490,
+        "y": 350
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/scenes/scene_05_meet_sakura.rpy": {
+      "position": {
+        "x": 3960,
+        "y": 225
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/scenes/scene_06_second_choice.rpy": {
+      "position": {
+        "x": 4430,
+        "y": 225
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/scenes/scene_07_art_club.rpy": {
+      "position": {
+        "x": 4900,
+        "y": 100
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/scenes/scene_08_gaming_club.rpy": {
+      "position": {
+        "x": 4900,
+        "y": 350
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/scenes/scene_09_reflection.rpy": {
+      "position": {
+        "x": 5370,
+        "y": 225
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/scenes/scene_10_final_choice.rpy": {
+      "position": {
+        "x": 5840,
+        "y": 225
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/scenes/scene_11_ending.rpy": {
+      "position": {
+        "x": 6310,
+        "y": 225
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/scenes/scene_12_goodbye.rpy": {
+      "position": {
+        "x": 6780,
+        "y": 225
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/screens.rpy": {
+      "position": {
+        "x": 7300,
+        "y": 225
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/script.rpy": {
+      "position": {
+        "x": 2080,
+        "y": 225
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/variables.rpy": {
+      "position": {
+        "x": 7820,
+        "y": 225
+      },
+      "width": 320,
+      "height": 200
+    }
+  },
+  "routeNodeLayouts": {
+    "block-4-1775567282318:scene_01_start": {
+      "position": {
+        "x": 320,
+        "y": 155
+      }
+    },
+    "block-5-1775567282318:scene_02_first_choice": {
+      "position": {
+        "x": 640,
+        "y": 155
+      }
+    },
+    "block-6-1775567282318:scene_03_book_club": {
+      "position": {
+        "x": 960,
+        "y": 100
+      }
+    },
+    "block-7-1775567282318:scene_04_sports_club": {
+      "position": {
+        "x": 960,
+        "y": 210
+      }
+    },
+    "block-8-1775567282318:scene_05_meet_sakura": {
+      "position": {
+        "x": 1280,
+        "y": 155
+      }
+    },
+    "block-9-1775567282318:scene_06_second_choice": {
+      "position": {
+        "x": 1600,
+        "y": 155
+      }
+    },
+    "block-10-1775567282318:scene_07_art_club": {
+      "position": {
+        "x": 1920,
+        "y": 100
+      }
+    },
+    "block-11-1775567282318:scene_08_gaming_club": {
+      "position": {
+        "x": 1920,
+        "y": 210
+      }
+    },
+    "block-12-1775567282318:scene_09_reflection": {
+      "position": {
+        "x": 2240,
+        "y": 155
+      }
+    },
+    "block-13-1775567282318:scene_10_final_choice": {
+      "position": {
+        "x": 2560,
+        "y": 155
+      }
+    },
+    "block-14-1775567282318:scene_11_ending": {
+      "position": {
+        "x": 2880,
+        "y": 155
+      }
+    },
+    "block-15-1775567282318:scene_12_goodbye": {
+      "position": {
+        "x": 3200,
+        "y": 155
+      }
+    },
+    "block-17-1775567282318:start": {
+      "position": {
+        "x": 0,
+        "y": 155
+      }
+    }
+  },
   "openTabs": [
+    {
+      "id": "choice-canvas",
+      "type": "choice-canvas"
+    },
+    {
+      "id": "route-canvas",
+      "type": "route-canvas"
+    },
     {
       "id": "canvas",
       "type": "canvas"
     },
     {
-      "id": "stats",
-      "type": "stats"
-    },
-    {
       "id": "diagnostics",
       "type": "diagnostics"
-    },
-    {
-      "id": "block-16-1775358578049",
-      "type": "editor",
-      "blockId": "block-16-1775358578049",
-      "filePath": "game/screens.rpy",
-      "scrollRequest": {
-        "line": 66,
-        "key": 1775358586453
-      }
-    },
-    {
-      "id": "img-game/images/bg/art_room.png",
-      "type": "image",
-      "filePath": "game/images/bg/art_room.png"
     }
   ],
-  "activeTabId": "img-game/images/bg/art_room.png",
+  "activeTabId": "choice-canvas",
   "splitLayout": "none",
   "splitPrimarySize": 600,
   "secondaryOpenTabs": [],
@@ -60,9 +293,36 @@
       "color": "yellow"
     }
   ],
+  "routeStickyNotes": [
+    {
+      "id": "rnote-1775567321842",
+      "content": "ROUTE NOTE -- foo bar",
+      "position": {
+        "x": 471,
+        "y": 423
+      },
+      "width": 200,
+      "height": 200,
+      "color": "yellow"
+    }
+  ],
+  "choiceStickyNotes": [
+    {
+      "id": "cnote-1775567334162",
+      "content": "",
+      "position": {
+        "x": -290.77711078812933,
+        "y": 429.0403543602779
+      },
+      "width": 200,
+      "height": 200,
+      "color": "yellow"
+    }
+  ],
   "characterProfiles": {},
   "punchlistMetadata": {},
   "diagnosticsTasks": [],
+  "ignoredDiagnostics": [],
   "sceneCompositions": {
     "scene-1764262740876": {
       "background": {

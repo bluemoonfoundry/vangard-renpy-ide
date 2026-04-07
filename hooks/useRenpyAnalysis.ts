@@ -559,7 +559,40 @@ export const performRouteAnalysis = (
           .slice(startLine, endLine)
           .map((line, offset) => (tripleQuotedLineMask[startLine + offset] ? '' : line))
           .join('\n');
-        const hasTerminal = /\b(jump|call|return)\b/.test(contentSlice);
+
+        // Determine the direct body indentation — the indent of the first real content
+        // line after the label declaration. We only count jump/call/return as a terminal
+        // if they appear at this exact indent level. Terminals inside menu: or if: branches
+        // (which are at deeper indentation) do NOT prevent fall-through to the next label,
+        // because those branches are alternatives, not guaranteed exit paths.
+        // startLine is 1-based; use it directly as a 0-based array index to reach
+        // the first body line (lines[startLine] = the line immediately after the
+        // "label X:" declaration which is at lines[startLine - 1]).
+        let directBodyIndent: number | null = null;
+        for (let j = startLine; j < endLine; j++) {
+          if (tripleQuotedLineMask[j]) continue;
+          const trimmed = (lines[j] ?? '').trim();
+          if (!trimmed || trimmed.startsWith('#')) continue;
+          directBodyIndent = (lines[j].match(/^(\s*)/) ?? ['', ''])[1].length;
+          break;
+        }
+
+        let hasTerminal = false;
+        if (directBodyIndent !== null) {
+          for (let j = startLine; j < endLine; j++) {
+            if (tripleQuotedLineMask[j]) continue;
+            const ln = lines[j] ?? '';
+            const trimmed = ln.trim();
+            if (!trimmed || trimmed.startsWith('#')) continue;
+            const indent = (ln.match(/^(\s*)/) ?? ['', ''])[1].length;
+            // Only check lines at the direct body level — skip anything deeper (inside menus, ifs, etc.)
+            if (indent === directBodyIndent && /\b(jump|call|return)\b/.test(ln)) {
+              hasTerminal = true;
+              break;
+            }
+          }
+        }
+
         const hasReturn = /\breturn\b/.test(contentSlice);
 
         labelInfoForBlock.push({ label, startLine, endLine, hasTerminal, hasReturn });

@@ -270,6 +270,92 @@ export function useDiagnostics(
     });
 
     // -----------------------------------------------------------------------
+    // Source 9: Unused variables (defined but never referenced in code)
+    // Limit to story blocks to avoid false positives on GUI/config variables
+    // that Ren'Py may consume internally without explicit code references.
+    // -----------------------------------------------------------------------
+    analysisResult.variables.forEach((variable) => {
+      if (!analysisResult.storyBlockIds.has(variable.definedInBlockId)) return;
+      const usages = analysisResult.variableUsages.get(variable.name) ?? [];
+      if (usages.length === 0) {
+        const block = blocks.find(b => b.id === variable.definedInBlockId);
+        issues.push({
+          id: `unused-variable:${variable.name}`,
+          severity: 'info',
+          category: 'unused-variable',
+          message: `Variable "${variable.name}" is defined but never referenced`,
+          blockId: variable.definedInBlockId,
+          filePath: block?.filePath,
+          line: variable.line,
+        });
+      }
+    });
+
+    // -----------------------------------------------------------------------
+    // Source 10: Pickle-unsafe default variables
+    // Ren'Py save files use Python's pickle. Lambdas and instances of locally-
+    // defined classes cannot be pickled reliably, so storing them in a
+    // `default` variable will corrupt saves at runtime.
+    // Only `default` is affected — `define` variables are not saved.
+    // -----------------------------------------------------------------------
+    const RE_CLASS_INSTANCE = /^[A-Z][a-zA-Z0-9_.]*\s*\(/;
+    const SAFE_CAPITALS = new Set(['True', 'False', 'None']);
+    analysisResult.variables.forEach((variable) => {
+      if (variable.type !== 'default') return;
+      const val = variable.initialValue.trim();
+      const isLambda = /\blambda\b/.test(val);
+      const capitalWord = val.split('(')[0].trim();
+      const isClassInstance = RE_CLASS_INSTANCE.test(val) && !SAFE_CAPITALS.has(capitalWord);
+      if (isLambda || isClassInstance) {
+        const block = blocks.find(b => b.id === variable.definedInBlockId);
+        issues.push({
+          id: `pickle-unsafe:${variable.name}`,
+          severity: 'warning',
+          category: 'pickle-unsafe-variable',
+          message: `"${variable.name}" stores a ${isLambda ? 'lambda' : 'class instance'} which may not be pickle-safe — save files could break`,
+          blockId: variable.definedInBlockId,
+          filePath: block?.filePath,
+          line: variable.line,
+        });
+      }
+    });
+
+    // -----------------------------------------------------------------------
+    // Source 11: Define variables mutated in script
+    // `define` declares a constant evaluated once at startup and not saved.
+    // Assigning to it at runtime (e.g. `$ x = 5`) is almost certainly a bug;
+    // the developer likely meant `default`. Each mutation site is reported
+    // separately so the user can navigate directly to it.
+    // -----------------------------------------------------------------------
+    const defineVarNames = new Set<string>();
+    analysisResult.variables.forEach((variable) => {
+      if (variable.type === 'define') defineVarNames.add(variable.name);
+    });
+    if (defineVarNames.size > 0) {
+      // Matches inline Python assignment: `$ varname =` / `$ varname +=` etc.
+      // The `=(?!=)` negative lookahead excludes `==` (equality comparisons).
+      const RE_INLINE_ASSIGN = /^\s*\$\s*([a-zA-Z_][a-zA-Z0-9_.]*)\s*(?:[+\-*\/%]=|=(?!=))/;
+      for (const block of blocks) {
+        if (!block.content) continue;
+        const lines = block.content.split('\n');
+        lines.forEach((line, index) => {
+          const m = RE_INLINE_ASSIGN.exec(line);
+          if (m && defineVarNames.has(m[1])) {
+            issues.push({
+              id: `define-mutated:${m[1]}:${block.id}:${index + 1}`,
+              severity: 'warning',
+              category: 'define-mutated',
+              message: `"${m[1]}" is declared with define (constant) but assigned in script — use default instead`,
+              blockId: block.id,
+              filePath: block.filePath,
+              line: index + 1,
+            });
+          }
+        });
+      }
+    }
+
+    // -----------------------------------------------------------------------
     // Source 8: Unreachable labels
     // A label is unreachable if it is never the target of any jump/call and
     // it is not "start" or any conventional entry point.
@@ -299,6 +385,38 @@ export function useDiagnostics(
           line: (labelLoc as { line?: number }).line,
         });
       }
+    }
+
+    // -----------------------------------------------------------------------
+    // Source 12: Dead-end labels
+    // A label is a dead-end if it has no outgoing jump/call links and its
+    // block does not contain a standalone `return` statement (which would make
+    // it a valid callable subroutine).  Dead-ends are either intentional story
+    // endings or missing jumps — surfaced as info so writers can verify.
+    // -----------------------------------------------------------------------
+    const RE_RETURN = /^\s+return\b/m;
+    // Build set of label node IDs that have at least one outgoing routeLink
+    const sourcedLabelNodeIds = new Set(analysisResult.routeLinks.map(l => l.sourceId));
+    const DEAD_END_SKIP = new Set(['start', 'quit', 'after_load', 'splashscreen', 'main_menu']);
+
+    for (const node of analysisResult.labelNodes) {
+      if (DEAD_END_SKIP.has(node.label) || node.label.startsWith('_')) continue;
+      if (sourcedLabelNodeIds.has(node.id)) continue;
+
+      // Skip if the owning block contains a `return` statement — the label is
+      // likely a subroutine and the return is its intended exit.
+      const block = blocks.find(b => b.id === node.blockId);
+      if (block?.content && RE_RETURN.test(block.content)) continue;
+
+      issues.push({
+        id: `dead-end-label:${node.label}`,
+        severity: 'info',
+        category: 'dead-end-label',
+        message: `Label "${node.label}" has no jump, call, or return exit — verify this is an intentional ending`,
+        blockId: node.blockId,
+        filePath: block?.filePath,
+        line: node.startLine,
+      });
     }
 
     const visibleIssues = ignoredDiagnostics.length > 0

@@ -589,7 +589,7 @@ export interface RenpyAnalysisResult {
  */
 export interface EditorTab {
   id: string;
-  type: 'canvas' | 'route-canvas' | 'punchlist' | 'diagnostics' | 'editor' | 'image' | 'audio' | 'character' | 'scene-composer' | 'imagemap-composer' | 'screen-layout-composer' | 'ai-generator' | 'stats' | 'markdown';
+  type: 'canvas' | 'route-canvas' | 'choice-canvas' | 'punchlist' | 'diagnostics' | 'editor' | 'image' | 'audio' | 'character' | 'scene-composer' | 'imagemap-composer' | 'screen-layout-composer' | 'ai-generator' | 'stats' | 'markdown';
   blockId?: string;
   filePath?: string;
   characterTag?: string;
@@ -853,6 +853,8 @@ export interface ProjectSettings {
   routeCanvasLayoutVersion?: number;
   routeCanvasLayoutWasUserAdjusted?: boolean;
   routeNodeLayouts?: Record<string, SavedRouteNodeLayout>;
+  choiceCanvasLayoutMode?: StoryCanvasLayoutMode;
+  choiceCanvasGroupingMode?: StoryCanvasGroupingMode;
   openTabs: EditorTab[];
   activeTabId: string;
   splitLayout?: 'none' | 'right' | 'bottom';
@@ -860,6 +862,8 @@ export interface ProjectSettings {
   secondaryOpenTabs?: EditorTab[];
   secondaryActiveTabId?: string;
   stickyNotes?: StickyNote[];
+  routeStickyNotes?: StickyNote[];
+  choiceStickyNotes?: StickyNote[];
   characterProfiles?: Record<string, string>;
   punchlistMetadata?: Record<string, PunchlistMetadata>;
   diagnosticsTasks?: DiagnosticsTask[];

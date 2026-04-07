@@ -8,7 +8,7 @@ vi.mock('../vangard-renide-512x512.png', () => ({ default: 'logo.png' }));
 describe('Toolbar', () => {
   const createProps = (overrides?: Partial<Parameters<typeof Toolbar>[0]>) => ({
     projectRootPath: '/project',
-    activeCanvasTarget: 'story' as const,
+    activeCanvasType: 'story' as const,
     dirtyBlockIds: new Set<string>(),
     dirtyEditors: new Set<string>(),
     hasUnsavedSettings: false,

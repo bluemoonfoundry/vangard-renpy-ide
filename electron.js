@@ -455,6 +455,10 @@ async function updateApplicationMenu() {
               click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-static-tab', type: 'route-canvas' }); }
             },
             {
+              label: 'Choice Canvas',
+              click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-static-tab', type: 'choice-canvas' }); }
+            },
+            {
                 label: 'Diagnostics',
                 click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-static-tab', type: 'diagnostics' }); }
             },

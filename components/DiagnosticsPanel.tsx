@@ -52,25 +52,33 @@ function SeverityIcon({ severity }: { severity: DiagnosticSeverity }) {
 
 // Category display labels
 const CATEGORY_LABELS: Record<string, string> = {
-  'invalid-jump': 'Invalid Jump',
-  'syntax': 'Syntax',
-  'missing-image': 'Missing Image',
-  'missing-audio': 'Missing Audio',
-  'undefined-character': 'Undefined Character',
-  'undefined-screen': 'Undefined Screen',
-  'unused-character': 'Unused Character',
-  'unreachable-label': 'Unreachable Label',
+  'invalid-jump':          'Invalid Jump',
+  'syntax':                'Syntax',
+  'missing-image':         'Missing Image',
+  'missing-audio':         'Missing Audio',
+  'undefined-character':   'Undefined Character',
+  'undefined-screen':      'Undefined Screen',
+  'unused-character':      'Unused Character',
+  'unreachable-label':     'Unreachable Label',
+  'dead-end-label':        'Dead-End Label',
+  'unused-variable':       'Unused Variable',
+  'pickle-unsafe-variable':'Pickle Unsafe',
+  'define-mutated':        'Define Mutated',
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'invalid-jump':        'bg-red-50    text-red-700    dark:bg-red-900/30  dark:text-red-300',
-  'syntax':              'bg-red-50    text-red-700    dark:bg-red-900/30  dark:text-red-300',
-  'missing-image':       'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
-  'missing-audio':       'bg-pink-50   text-pink-700   dark:bg-pink-900/30 dark:text-pink-300',
-  'undefined-character': 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
-  'undefined-screen':    'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-  'unused-character':    'bg-blue-50   text-blue-700   dark:bg-blue-900/30 dark:text-blue-300',
-  'unreachable-label':   'bg-gray-100  text-gray-600   dark:bg-gray-700    dark:text-gray-300',
+  'invalid-jump':           'bg-red-50    text-red-700    dark:bg-red-900/30    dark:text-red-300',
+  'syntax':                 'bg-red-50    text-red-700    dark:bg-red-900/30    dark:text-red-300',
+  'missing-image':          'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+  'missing-audio':          'bg-pink-50   text-pink-700   dark:bg-pink-900/30   dark:text-pink-300',
+  'undefined-character':    'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+  'undefined-screen':       'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+  'unused-character':       'bg-blue-50   text-blue-700   dark:bg-blue-900/30   dark:text-blue-300',
+  'unreachable-label':      'bg-gray-100  text-gray-600   dark:bg-gray-700      dark:text-gray-300',
+  'dead-end-label':         'bg-teal-50   text-teal-700   dark:bg-teal-900/30   dark:text-teal-300',
+  'unused-variable':        'bg-gray-100  text-gray-600   dark:bg-gray-700      dark:text-gray-300',
+  'pickle-unsafe-variable': 'bg-amber-50  text-amber-700  dark:bg-amber-900/30  dark:text-amber-300',
+  'define-mutated':         'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
 };
 
 // ---------------------------------------------------------------------------
