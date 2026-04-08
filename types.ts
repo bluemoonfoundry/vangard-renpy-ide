@@ -1076,6 +1076,19 @@ export interface SerializedSceneComposition {
 }
 
 /**
+ * Options for creating a new Ren'Py project from template
+ */
+export interface CreateProjectOptions {
+  projectDir: string;      // Full path to project directory
+  projectName: string;     // User-entered project name
+  width: number;           // Game resolution width
+  height: number;          // Game resolution height
+  accentColor: string;     // Hex color string (e.g., "#00b8c3")
+  isLight: boolean;        // True for light theme, false for dark
+  sdkPath?: string;        // Optional Ren'Py SDK path
+}
+
+/**
  * Global Electron API interface available in windows.electronAPI.
  * Provides access to OS-level features in Electron app mode.
  * Methods for file operations, Ren'Py execution, game control, and IPC.
@@ -1085,6 +1098,7 @@ declare global {
     electronAPI?: {
           openDirectory: () => Promise<string | null>;
           createProject?: () => Promise<string | null>;
+          createProjectFromTemplate?: (options: CreateProjectOptions) => Promise<{ success: boolean; path?: string; error?: string }>;
           checkRenpyProject?: (path: string) => Promise<{ hasGameFolder: boolean; isRenpyProject: boolean }>;
           cancelProjectLoad?: () => void;
           onLoadProgress?: (callback: (value: number, message: string) => void) => () => void;

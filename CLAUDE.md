@@ -87,6 +87,7 @@ Key rules: `react-hooks/rules-of-hooks` (error), `react-hooks/exhaustive-deps` (
 - **ScreenWidget, ScreenWidgetType**: Widget and type union for screen layout composer (`'vbox' | 'hbox' | 'frame' | 'text' | 'image' | 'textbutton' | 'button' | 'imagebutton' | 'bar' | 'input' | 'null'`)
 - **ScreenLayoutComposition**: Screen name, game dimensions, modal flag, zorder, widgets array. Persisted in `ProjectSettings.screenLayoutCompositions`.
 - **LLMProvider**: `'google' | 'openai' | 'anthropic' | 'other'`; **LLMModel**: provider, modelId, label, requiresAuth
+- **CreateProjectOptions**: Options for creating a new Ren'Py project from template (projectDir, projectName, width, height, accentColor, isLight, sdkPath). Used by `dialog:createProjectFromTemplate` IPC channel.
 
 ### Ren'Py Analysis Engine (hooks/useRenpyAnalysis.ts)
 
@@ -160,13 +161,46 @@ All `preload.js` channels follow a `namespace:action` naming pattern:
 |--------|--------|
 | `fs:` | File I/O (`readFile`, `writeFile`, `createDirectory`, `removeEntry`, `moveFile`, `copyEntry`, `scanDirectory`) |
 | `project:` | Project operations (`load`, `refresh-tree`, `search`) |
-| `dialog:` | OS dialogs (`openDirectory`, `createProject`, `selectRenpy`, `showSaveDialog`) |
+| `dialog:` | OS dialogs (`openDirectory`, `createProject`, `createProjectFromTemplate`, `selectRenpy`, `showSaveDialog`) |
 | `game:` / `renpy:` | Game process (`run`, `stop`, `check-path`) |
 | `app:` | Settings & encrypted API keys |
 
 Exit flow uses a multi-step handshake: `check-unsaved-changes-before-exit` → `show-exit-modal` → `save-ide-state-before-quit` → `ide-state-saved-for-quit` → `force-quit`.
 
 API keys are stored encrypted via Electron's `safeStorage` at `userData/api-keys.enc`. App settings live at `userData/app-settings.json`.
+
+### New Project Wizard
+
+The "Create New Project" flow (invoked from Welcome Screen or File → New Project) uses a 3-step wizard modal that generates SDK-compatible Ren'Py projects with custom colors and resolution:
+
+**IPC Channel:** `dialog:createProjectFromTemplate` — accepts `CreateProjectOptions` (projectDir, projectName, width, height, accentColor, isLight, sdkPath)
+
+**Implementation files:**
+- **`components/NewProjectWizardModal.tsx`** — 3-step wizard UI:
+  - Step 1: Project name + location picker (browse button)
+  - Step 2: Resolution presets (720p/1080p/2K/4K) + custom W×H inputs
+  - Step 3: Theme toggle (dark/light) + 20 SDK color swatches (5×4 grid) + custom color picker with preview
+- **`lib/colorUtils.js`** (ES module) — `RenpyColor` class with tint/shade/HSV manipulation + `deriveGuiColors()` function that ports Ren'Py SDK's color derivation logic
+- **`lib/guiImageGenerator.js`** (ES module) — Generates 8 essential GUI image sets using Sharp (buttons, bars, scrollbars, sliders, textbox, namebox, overlays)
+- **`lib/templateProcessor.js`** (ES module) — `updateGuiRpy()`, `updateOptionsRpy()` helpers with regex replacements + `slugify()` utilities
+
+**Template handling:**
+- SDK template preferred: `{sdkPath}/gui/game/` (if SDK path configured and template exists)
+- Bundled fallback: `resources/renpy-template/` (requires manual population with SDK template files)
+- Template files copied to `{projectDir}/game/`, then `gui.rpy` and `options.rpy` are updated with user choices
+
+**Image generation (Sharp):**
+- Lazy-loaded on first project creation to avoid blocking app startup if Sharp fails
+- If Sharp loads successfully → generates custom accent-tinted GUI images
+- If Sharp fails → logs warning and falls back to template default images (non-critical failure)
+- **Known issue (macOS arm64 build):** Sharp's native dependencies (libvips) fail to load in packaged app. See `NEW_PROJECT_PLAN.md` for debugging steps.
+
+**Color derivation:** Replicates Ren'Py SDK's exact color math:
+- Derived colors: `hover_color`, `muted_color`, `hover_muted_color`, `menu_color`, `title_color`
+- Fixed theme colors: `selected_color`, `idle_color`, `idle_small_color`, `text_color`, `insensitive_color`
+- Light vs. dark theme affects which fixed colors are used and how accent colors are transformed
+
+**20 SDK swatches:** Top 2 rows = dark theme colors, bottom 2 rows = light theme colors (matches Ren'Py launcher)
 
 ## Key Conventions
 

@@ -33,6 +33,7 @@ import StatusBar from './components/StatusBar';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import AboutModal from './components/AboutModal';
 import UserSnippetModal from './components/UserSnippetModal';
+import NewProjectWizardModal from './components/NewProjectWizardModal';
 import { SearchProvider } from './contexts/SearchContext';
 import AIGeneratorView from './components/AIGeneratorView';
 import StatsView from './components/StatsView';
@@ -231,6 +232,7 @@ const App: React.FC = () => {
 
   // --- State: Application and Project Settings ---
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [wizardModalOpen, setWizardModalOpen] = useState(false);
   const [appSettingsLoaded, setAppSettingsLoaded] = useState(false);
   const [characterProfiles, setCharacterProfiles] = useImmer<Record<string, string>>({});
   const [appSettings, updateAppSettings] = useImmer<AppSettings>({
@@ -1933,19 +1935,19 @@ const App: React.FC = () => {
     }
   }, [handleOpenWithRenpyCheck, addToast]);
 
-  const handleCreateProject = useCallback(async () => {
+  const handleCreateProject = useCallback(() => {
+      // Open the new project wizard modal
+      setWizardModalOpen(true);
+  }, []);
+
+  const handleWizardComplete = useCallback(async (projectPath: string) => {
+      setWizardModalOpen(false);
       try {
-          if (window.electronAPI?.createProject) {
-              const path = await window.electronAPI.createProject();
-              if (path) {
-                  await loadProject(path);
-              }
-          } else {
-              addToast('Project creation is only supported in the Electron app.', 'warning');
-          }
+          await loadProject(projectPath);
+          addToast('Project created successfully', 'success');
       } catch (err) {
           console.error(err);
-          addToast('Failed to create project', 'error');
+          addToast('Failed to load the newly created project', 'error');
       }
   }, [loadProject, addToast]);
 
@@ -4109,6 +4111,13 @@ const App: React.FC = () => {
         onClose={() => setUserSnippetModalOpen(false)}
         onSave={handleSaveSnippet}
         existingSnippet={editingSnippet}
+      />
+
+      <NewProjectWizardModal
+        isOpen={wizardModalOpen}
+        onClose={() => setWizardModalOpen(false)}
+        onComplete={handleWizardComplete}
+        sdkPath={appSettings.renpyPath}
       />
 
       <AboutModal

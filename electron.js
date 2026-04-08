@@ -8,9 +8,15 @@ import { createReadStream } from 'fs';
 import { Readable } from 'stream';
 import { spawn } from 'child_process';
 import { Worker } from 'worker_threads';
+import { deriveGuiColors } from './lib/colorUtils.js';
+import { updateGuiRpy, updateOptionsRpy, generateSaveDirectory } from './lib/templateProcessor.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Lazy-load image generator to avoid blocking app startup if Sharp fails
+let generateGuiImages = null;
+let sharpLoadError = null;
 
 // Register custom protocol privileges BEFORE app is ready
 protocol.registerSchemesAsPrivileged([
@@ -731,6 +737,112 @@ app.whenReady().then(() => {
         console.error('Failed to create project directory:', error);
         dialog.showErrorBox('Project Creation Failed', `Could not create project directory: ${error.message}`);
         return null;
+    }
+  });
+
+  /**
+   * Helper: Resolve template source directory
+   * Tries SDK path first, falls back to bundled template
+   */
+  function getTemplateSource(sdkPath) {
+    if (sdkPath) {
+      const sdkTemplate = path.join(sdkPath, 'gui', 'game');
+      try {
+        // Check if SDK template exists synchronously
+        require('fs').accessSync(sdkTemplate, require('fs').constants.R_OK);
+        console.log('Using SDK template:', sdkTemplate);
+        return sdkTemplate;
+      } catch (err) {
+        console.log('SDK template not found, falling back to bundled template');
+      }
+    }
+    // Fallback to bundled template
+    const bundledTemplate = path.join(__dirname, 'resources', 'renpy-template');
+    console.log('Using bundled template:', bundledTemplate);
+    return bundledTemplate;
+  }
+
+  ipcMain.handle('dialog:createProjectFromTemplate', async (event, options) => {
+    const { projectDir, projectName, width, height, accentColor, isLight, sdkPath } = options;
+
+    try {
+      console.log('Creating project from template:', { projectDir, projectName, width, height, accentColor, isLight });
+
+      // 1. Resolve template source (SDK or bundled)
+      const templateSource = getTemplateSource(sdkPath);
+
+      // 2. Create project directory if it doesn't exist
+      await fs.mkdir(projectDir, { recursive: true });
+
+      // 3. Copy template to project/game directory
+      const gameDir = path.join(projectDir, 'game');
+      try {
+        await fs.cp(templateSource, gameDir, { recursive: true });
+        console.log('Template copied successfully');
+      } catch (copyError) {
+        console.error('Failed to copy template:', copyError);
+        throw new Error(`Failed to copy template: ${copyError.message}`);
+      }
+
+      // 4. Derive GUI colors from accent + theme
+      const colors = deriveGuiColors(accentColor, isLight);
+      console.log('Derived colors:', colors);
+
+      // 5. Update gui.rpy (gui.init + all color defines)
+      const guiRpyPath = path.join(gameDir, 'gui.rpy');
+      try {
+        await updateGuiRpy(guiRpyPath, width, height, colors);
+      } catch (guiError) {
+        console.error('Failed to update gui.rpy:', guiError);
+        throw new Error(`Failed to update gui.rpy: ${guiError.message}`);
+      }
+
+      // 6. Update options.rpy (project name, save dir, build name)
+      const optionsRpyPath = path.join(gameDir, 'options.rpy');
+      const saveDir = generateSaveDirectory(projectName);
+      try {
+        await updateOptionsRpy(optionsRpyPath, projectName, saveDir);
+      } catch (optionsError) {
+        console.error('Failed to update options.rpy:', optionsError);
+        throw new Error(`Failed to update options.rpy: ${optionsError.message}`);
+      }
+
+      // 7. Generate GUI images (optional - lazy load Sharp)
+      try {
+        // Lazy-load the image generator on first use
+        if (!generateGuiImages && !sharpLoadError) {
+          try {
+            const imageGenModule = await import('./lib/guiImageGenerator.js');
+            generateGuiImages = imageGenModule.generateGuiImages;
+            console.log('Successfully loaded Sharp for GUI image generation');
+          } catch (loadError) {
+            sharpLoadError = loadError;
+            console.warn('Failed to load Sharp module:', loadError.message);
+            console.warn('GUI images will use template defaults. This is not critical.');
+          }
+        }
+
+        if (generateGuiImages) {
+          await generateGuiImages(projectDir, colors, width, height);
+          console.log('Custom GUI images generated successfully');
+        } else {
+          console.log('Skipping GUI image generation - using template defaults');
+        }
+      } catch (imageError) {
+        console.error('Failed to generate GUI images:', imageError);
+        // Don't fail the entire operation - images are optional
+        console.log('Continuing with template default images');
+      }
+
+      // 8. Ensure images/ and audio/ directories exist
+      await fs.mkdir(path.join(gameDir, 'images'), { recursive: true });
+      await fs.mkdir(path.join(gameDir, 'audio'), { recursive: true });
+
+      console.log('Project created successfully');
+      return { success: true, path: projectDir };
+    } catch (error) {
+      console.error('Failed to create project from template:', error);
+      return { success: false, error: error.message };
     }
   });
 

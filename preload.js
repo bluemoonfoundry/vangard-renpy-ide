@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
   createProject: () => ipcRenderer.invoke('dialog:createProject'),
+  createProjectFromTemplate: (options) => ipcRenderer.invoke('dialog:createProjectFromTemplate', options),
   checkRenpyProject: (rootPath) => ipcRenderer.invoke('dialog:checkRenpyProject', rootPath),
   cancelProjectLoad: () => ipcRenderer.send('project:cancel-load'),
   onLoadProgress: (callback) => {
