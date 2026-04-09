@@ -77,10 +77,13 @@ The right sidebar analyzes your entire project continuously.
 
 | Tab | What it shows | What it looks like |
 |-----|---------------|-------------------------|
-| **Characters** | All `define Character(...)` definitions — name, tag, color, dialogue count. Add, edit, find usages. | <img width="512" height="768" alt="Screenshot 2026-04-09 140008" src="https://github.com/user-attachments/assets/ecac46bd-3f93-4b63-acc0-e3cff0a92387" /> |
+| **Characters** | All `define Character(...)` definitions — name, tag, color, dialogue count. Add, edit, find usages. | <img width="305" height="681" alt="Screenshot 2026-04-09 135939" src="https://github.com/user-attachments/assets/5e27ab7c-8f81-4bbd-a473-d8577871aedb" /> |
 | **Variables** | All `define`/`default` globals. Find usages. | <img width="512" height="768" alt="Screenshot 2026-04-09 135947" src="https://github.com/user-attachments/assets/227b841d-b304-416c-833c-c0a9516deaaa" /> |
+| **Images**  | Image asset manager | <img width="307" height="917" alt="Screenshot 2026-04-09 135958" src="https://github.com/user-attachments/assets/2fd850d7-f78b-447e-897a-582d1e50be41" /> |
+| **Snd** | Audio asset manager | |
 | **Screens** | All `screen` definitions. Jump to definition. Add with boilerplate. |<img width="512" height="768" alt="Screenshot 2026-04-09 140234" src="https://github.com/user-attachments/assets/42e5511e-c9c1-47aa-afd2-fb9aa8d6dd6d" />|
 | **Composers** | Scene, Imagemap, and Screen Layout and Composition | <img width="512" height="768" alt="Screenshot 2026-04-09 140008" src="https://github.com/user-attachments/assets/91501699-4634-4770-aef8-b6814471c59b" />|
+| **Menus** | Visual menu and choice designer | <img width="313" height="1104" alt="Screenshot 2026-04-09 140034" src="https://github.com/user-attachments/assets/10184a6b-a276-4562-a759-97ff73cc6954" /> |
 | **Snippets** | Library of Ren'Py code patterns. User snippets with custom trigger prefixes. |<img width="512" height="768" alt="Screenshot 2026-04-09 140025" src="https://github.com/user-attachments/assets/1af69546-e868-44de-829c-5e3f4d4626f8" />|
 
 ### Asset Managers
