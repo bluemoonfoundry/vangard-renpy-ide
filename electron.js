@@ -690,14 +690,21 @@ app.whenReady().then(() => {
     }
   });
 
-   ipcMain.handle('dialog:selectRenpy', async () => {
+  /**
+   * Resolve the Ren'Py executable from an SDK directory.
+   * Returns the full path to renpy.exe (Windows) or renpy.sh (macOS/Linux).
+   */
+  function getRenpyExecutable(sdkDir) {
+    if (!sdkDir) return null;
+    const exe = process.platform === 'win32' ? 'renpy.exe' : 'renpy.sh';
+    return path.join(sdkDir, exe);
+  }
+
+  ipcMain.handle('dialog:selectRenpy', async () => {
     try {
       const { canceled, filePaths } = await dialog.showOpenDialog({
-          title: 'Select Ren\'Py Executable',
-          properties: ['openFile'],
-          filters: [
-              { name: 'Ren\'Py Launcher', extensions: process.platform === 'win32' ? ['exe'] : ['sh'] },
-          ]
+          title: 'Select Ren\'Py SDK Directory',
+          properties: ['openDirectory'],
       });
       if (canceled) {
           return null;
@@ -705,15 +712,17 @@ app.whenReady().then(() => {
           return filePaths[0];
       }
     } catch (error) {
-      console.error('Failed to open Ren\'Py selection dialog:', error);
+      console.error('Failed to open Ren\'Py SDK selection dialog:', error);
       return null;
     }
   });
 
-  ipcMain.handle('renpy:check-path', async (event, renpyPath) => {
-    if (!renpyPath) return false;
+  ipcMain.handle('renpy:check-path', async (event, sdkDir) => {
+    if (!sdkDir) return false;
     try {
-      await fs.access(renpyPath, fs.constants.F_OK | fs.constants.X_OK);
+      const execPath = getRenpyExecutable(sdkDir);
+      if (!execPath) return false;
+      await fs.access(execPath, fs.constants.F_OK | fs.constants.X_OK);
       return true;
     } catch {
       return false;
@@ -756,8 +765,10 @@ app.whenReady().then(() => {
         console.log('SDK template not found, falling back to bundled template');
       }
     }
-    // Fallback to bundled template
-    const bundledTemplate = path.join(__dirname, 'resources', 'renpy-template');
+    // Fallback to bundled template (extraResources places it at resourcesPath in packaged builds)
+    const bundledTemplate = app.isPackaged
+      ? path.join(process.resourcesPath, 'renpy-template')
+      : path.join(__dirname, 'resources', 'renpy-template');
     console.log('Using bundled template:', bundledTemplate);
     return bundledTemplate;
   }
@@ -989,7 +1000,9 @@ app.whenReady().then(() => {
     }
 
     try {
-      gameProcess = spawn(renpyPath, [projectPath]);
+      // renpyPath may be an SDK directory or a direct executable path (legacy)
+      const executable = getRenpyExecutable(renpyPath) || renpyPath;
+      gameProcess = spawn(executable, [projectPath]);
       event.sender.send('game-started');
       setGameRunningMenuState(true);
 

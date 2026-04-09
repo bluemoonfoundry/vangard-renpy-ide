@@ -16,7 +16,6 @@ import ConfigureRenpyModal from './components/ConfigureRenpyModal';
 import Toast from './components/Toast';
 import LoadingOverlay from './components/LoadingOverlay';
 import AnalysisOverlay from './components/AnalysisOverlay';
-import WelcomeScreen from './components/WelcomeScreen';
 import ImageEditorView from './components/ImageEditorView';
 import AudioEditorView from './components/AudioEditorView';
 import CharacterEditorView from './components/CharacterEditorView';
@@ -118,9 +117,6 @@ const AVAILABLE_MODELS = [
 ];
 
 const App: React.FC = () => {
-  // --- State: Welcome Screen ---
-  const [showWelcome, setShowWelcome] = useState(true);
-
   // --- State: Blocks & Groups (Undo/Redo) ---
   const { state: blocks, setState: setBlocks, undo, redo, canUndo, canRedo } = useHistory<Block[]>([]);
   const [groups, setGroups] = useImmer<BlockGroup[]>([]);
@@ -246,6 +242,7 @@ const App: React.FC = () => {
     editorFontFamily: "'Consolas', 'Courier New', monospace",
     editorFontSize: 14,
     mouseGestures: { canvasPanGesture: 'shift-drag', middleMouseAlwaysPans: false, zoomScrollDirection: 'normal', zoomScrollSensitivity: 1.0 },
+    lastProjectDir: '',
   });
   const [isRenpyPathValid, setIsRenpyPathValid] = useState(false);
   const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'punchlistMetadata' | 'diagnosticsTasks' | 'ignoredDiagnostics' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>>({
@@ -1869,7 +1866,6 @@ const App: React.FC = () => {
           setLoadingMessage('Done');
           setIsInitialAnalysisPending(true);
           setHasUnsavedSettings(false);
-          setShowWelcome(false);
           addToast('Project loaded successfully', 'success');
           setStatusBarMessage('Project loaded.');
           setTimeout(() => setStatusBarMessage(''), 3000);
@@ -3688,59 +3684,113 @@ const App: React.FC = () => {
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col min-w-0 bg-gray-50 dark:bg-gray-900 relative">
-          {/* Panes container — flex-row for right split, flex-col for bottom split */}
-          <div className={`flex-grow flex ${splitLayout === 'bottom' ? 'flex-col' : 'flex-row'} overflow-hidden min-h-0`}>
 
-            {/* PRIMARY PANE */}
-            <div
-              className="flex flex-col min-w-0 min-h-0"
-              style={splitLayout === 'right' ? { width: splitPrimarySize, flexShrink: 0 } : splitLayout === 'bottom' ? { height: splitPrimarySize, flexShrink: 0 } : { flex: 1 }}
-              onClick={() => activePaneId !== 'primary' && setActivePaneId('primary')}
-            >
-              {renderTabBar(openTabs, activeTabId, 'primary', primaryTabBarRef)}
-              <div className="flex-grow relative overflow-hidden">
-                {openTabs.map(tab => {
-                    const isActive = tab.id === activeTabId;
-                    if (isActive) primaryMountedTabsRef.current.add(tab.id);
-                    return (
-                        <div key={tab.id} className="w-full h-full absolute" style={{ visibility: isActive ? 'visible' : 'hidden' }}>
-                            {primaryMountedTabsRef.current.has(tab.id) ? renderTabContent(tab) : null}
-                        </div>
-                    );
-                })}
+          {!projectRootPath ? (
+            /* No-project empty state */
+            <div className="flex-grow flex items-center justify-center p-8">
+              <div className="w-full max-w-md space-y-8 text-center">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">No Project Open</h2>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">Use the File menu or the buttons below to get started.</p>
+                </div>
+                {window.electronAPI && (
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <button
+                      onClick={handleCreateProject}
+                      className="flex items-center justify-center gap-2 px-5 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                      New Project
+                    </button>
+                    <button
+                      onClick={handleOpenProjectFolder}
+                      className="flex items-center justify-center gap-2 px-5 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" /></svg>
+                      Open Project
+                    </button>
+                  </div>
+                )}
+                {appSettings.recentProjects.length > 0 && (
+                  <div className="pt-6 border-t border-gray-200 dark:border-gray-700 text-left">
+                    <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Recent Projects</h3>
+                    <div className="space-y-1 max-h-64 overflow-y-auto">
+                      {appSettings.recentProjects.map((p, i) => {
+                        const folderName = p.replace(/[/\\]$/, '').split(/[/\\]/).pop();
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => handleOpenWithRenpyCheck(p)}
+                            className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group flex items-center gap-3"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0 text-gray-400 group-hover:text-indigo-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1H8a3 3 0 00-3 3v1.5a1.5 1.5 0 01-3 0V6z" clipRule="evenodd" /><path d="M6 12a2 2 0 012-2h8a2 2 0 012 2v2a2 2 0 01-2 2H2h2a2 2 0 002-2v-2z" /></svg>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{folderName}</p>
+                              <p className="text-xs text-gray-500 truncate">{p}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
+          ) : (
+            /* Panes container — flex-row for right split, flex-col for bottom split */
+            <div className={`flex-grow flex ${splitLayout === 'bottom' ? 'flex-col' : 'flex-row'} overflow-hidden min-h-0`}>
 
-            {/* SASH between panes */}
-            {splitLayout !== 'none' && (
-              <Sash
-                direction={splitLayout === 'right' ? 'horizontal' : 'vertical'}
-                onDrag={(delta) => setSplitPrimarySize(prev => Math.max(200, prev + delta))}
-              />
-            )}
-
-            {/* SECONDARY PANE */}
-            {splitLayout !== 'none' && (
+              {/* PRIMARY PANE */}
               <div
-                className="flex-1 flex flex-col min-w-0 min-h-0"
-                onClick={() => activePaneId !== 'secondary' && setActivePaneId('secondary')}
+                className="flex flex-col min-w-0 min-h-0"
+                style={splitLayout === 'right' ? { width: splitPrimarySize, flexShrink: 0 } : splitLayout === 'bottom' ? { height: splitPrimarySize, flexShrink: 0 } : { flex: 1 }}
+                onClick={() => activePaneId !== 'primary' && setActivePaneId('primary')}
               >
-                {renderTabBar(secondaryOpenTabs, secondaryActiveTabId, 'secondary', secondaryTabBarRef)}
+                {renderTabBar(openTabs, activeTabId, 'primary', primaryTabBarRef)}
                 <div className="flex-grow relative overflow-hidden">
-                  {secondaryOpenTabs.map(tab => {
-                    const isActive = tab.id === secondaryActiveTabId;
-                    if (isActive) secondaryMountedTabsRef.current.add(tab.id);
-                    return (
-                        <div key={tab.id} className="w-full h-full absolute" style={{ visibility: isActive ? 'visible' : 'hidden' }}>
-                            {secondaryMountedTabsRef.current.has(tab.id) ? renderTabContent(tab) : null}
-                        </div>
-                    );
+                  {openTabs.map(tab => {
+                      const isActive = tab.id === activeTabId;
+                      if (isActive) primaryMountedTabsRef.current.add(tab.id);
+                      return (
+                          <div key={tab.id} className="w-full h-full absolute" style={{ visibility: isActive ? 'visible' : 'hidden' }}>
+                              {primaryMountedTabsRef.current.has(tab.id) ? renderTabContent(tab) : null}
+                          </div>
+                      );
                   })}
                 </div>
               </div>
-            )}
 
-          </div>{/* end panes container */}
+              {/* SASH between panes */}
+              {splitLayout !== 'none' && (
+                <Sash
+                  direction={splitLayout === 'right' ? 'horizontal' : 'vertical'}
+                  onDrag={(delta) => setSplitPrimarySize(prev => Math.max(200, prev + delta))}
+                />
+              )}
+
+              {/* SECONDARY PANE */}
+              {splitLayout !== 'none' && (
+                <div
+                  className="flex-1 flex flex-col min-w-0 min-h-0"
+                  onClick={() => activePaneId !== 'secondary' && setActivePaneId('secondary')}
+                >
+                  {renderTabBar(secondaryOpenTabs, secondaryActiveTabId, 'secondary', secondaryTabBarRef)}
+                  <div className="flex-grow relative overflow-hidden">
+                    {secondaryOpenTabs.map(tab => {
+                      const isActive = tab.id === secondaryActiveTabId;
+                      if (isActive) secondaryMountedTabsRef.current.add(tab.id);
+                      return (
+                          <div key={tab.id} className="w-full h-full absolute" style={{ visibility: isActive ? 'visible' : 'hidden' }}>
+                              {secondaryMountedTabsRef.current.has(tab.id) ? renderTabContent(tab) : null}
+                          </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}{/* end panes container / empty state */}
 
           <StatusBar
               isAnalysisPending={isAnalysisPending}
@@ -3968,16 +4018,6 @@ const App: React.FC = () => {
       </div>
 
       {/* Modals and Overlays */}
-      {showWelcome && !isLoading && (
-        <WelcomeScreen
-            onOpenProject={handleOpenProjectFolder}
-            onCreateProject={handleCreateProject}
-            isElectron={!!window.electronAPI}
-            recentProjects={appSettings.recentProjects}
-            onOpenRecent={handleOpenWithRenpyCheck}
-        />
-      )}
-
       {nonRenpyWarningPath && (
         <ConfirmModal
           title="Folder may not be a Ren'Py project"
@@ -4118,6 +4158,8 @@ const App: React.FC = () => {
         onClose={() => setWizardModalOpen(false)}
         onComplete={handleWizardComplete}
         sdkPath={appSettings.renpyPath}
+        lastProjectDir={appSettings.lastProjectDir || ''}
+        onProjectDirSaved={(dir) => updateAppSettings(draft => { draft.lastProjectDir = dir; })}
       />
 
       <AboutModal

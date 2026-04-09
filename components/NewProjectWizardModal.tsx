@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { CreateProjectOptions } from '../types';
 import { useModalAccessibility } from '../hooks/useModalAccessibility';
@@ -8,6 +8,8 @@ interface NewProjectWizardModalProps {
   onClose: () => void;
   onComplete: (projectPath: string) => void;
   sdkPath: string;
+  lastProjectDir?: string;
+  onProjectDirSaved?: (dir: string) => void;
 }
 
 // SDK color swatches (10 dark + 10 light)
@@ -33,7 +35,9 @@ const NewProjectWizardModal: React.FC<NewProjectWizardModalProps> = ({
   isOpen,
   onClose,
   onComplete,
-  sdkPath
+  sdkPath,
+  lastProjectDir,
+  onProjectDirSaved
 }) => {
   const [step, setStep] = useState(1);
   const [projectName, setProjectName] = useState('');
@@ -46,6 +50,22 @@ const NewProjectWizardModal: React.FC<NewProjectWizardModalProps> = ({
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Reset all state when the modal opens so a second open always starts fresh at step 1
+  useEffect(() => {
+    if (isOpen) {
+      setStep(1);
+      setProjectName('');
+      setProjectDir('');
+      setSelectedResolution(1);
+      setCustomWidth(1920);
+      setCustomHeight(1080);
+      setIsLight(false);
+      setAccentColor('#0099cc');
+      setIsCreating(false);
+      setError(null);
+    }
+  }, [isOpen]);
+
   const { modalProps, contentRef } = useModalAccessibility({
     isOpen,
     onClose,
@@ -55,22 +75,33 @@ const NewProjectWizardModal: React.FC<NewProjectWizardModalProps> = ({
   const handleBrowseDirectory = useCallback(async () => {
     if (!window.electronAPI?.showSaveDialog) return;
 
+    // Pre-fill with last used parent dir + current project name so the dialog
+    // opens in a familiar location rather than the OS default.
+    const defaultName = projectName.trim() || 'NewRenPyProject';
+    const defaultPath = lastProjectDir
+      ? `${lastProjectDir.replace(/\\/g, '/')}/${defaultName}`
+      : defaultName;
+
     const selectedPath = await window.electronAPI.showSaveDialog({
       title: 'Select Project Location',
       buttonLabel: 'Select',
-      defaultPath: projectName || 'NewRenPyProject'
+      defaultPath
     });
 
     if (selectedPath) {
       setProjectDir(selectedPath);
+      // Save the parent directory so next time the dialog opens there
+      const parent = selectedPath.replace(/[/\\][^/\\]*$/, '');
+      if (parent && parent !== selectedPath) {
+        onProjectDirSaved?.(parent);
+      }
     }
-  }, [projectName]);
+  }, [projectName, lastProjectDir, onProjectDirSaved]);
 
   const handleNext = useCallback(() => {
     setError(null);
 
     if (step === 1) {
-      // Validate step 1
       if (!projectName.trim()) {
         setError('Please enter a project name');
         return;
@@ -118,6 +149,8 @@ const NewProjectWizardModal: React.FC<NewProjectWizardModalProps> = ({
 
         if (result.success && result.path) {
           onComplete(result.path);
+          // Note: do NOT reset state here — the modal closes and the reset
+          // useEffect will run on next open.
         } else {
           setError(result.error || 'Failed to create project');
           setIsCreating(false);
@@ -227,9 +260,9 @@ const NewProjectWizardModal: React.FC<NewProjectWizardModalProps> = ({
                   </div>
 
                   {!sdkPath && (
-                    <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
                       <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                        Ren'Py SDK path not configured. Using bundled template. For the latest template, configure the SDK path in Settings.
+                        Ren'Py SDK not configured — the project will use the bundled fallback template. To use the latest SDK template, set the <strong>Ren'Py SDK Directory</strong> in Settings.
                       </p>
                     </div>
                   )}

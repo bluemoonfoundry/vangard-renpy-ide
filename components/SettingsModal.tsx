@@ -202,7 +202,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                 <div className="border-t border-primary"></div>
                 <div>
                     <label className="block text-sm font-medium text-primary mb-1">
-                        Ren'Py Launcher Path
+                        Ren'Py SDK Directory
                     </label>
                     <div className="flex items-center space-x-2">
                          <input
@@ -211,14 +211,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                             value={settings.renpyPath || 'Not set'}
                             className="w-full mt-1 p-2 rounded bg-tertiary border border-primary font-mono text-xs text-secondary"
                         />
-                        <button 
+                        <button
                             onClick={handleSelectRenpyPath}
                             className="mt-1 px-4 py-2 rounded bg-tertiary hover:bg-tertiary-hover text-sm font-bold text-primary border border-primary"
                         >
                             Change...
                         </button>
                     </div>
-                    <p className="text-xs text-secondary mt-1">Select your `renpy.exe` (Windows) or `renpy.sh` (macOS/Linux) file.</p>
+                    <p className="text-xs text-secondary mt-1">Select the Ren'Py SDK root directory (contains renpy.exe or renpy.sh). Used to launch your game and for new project templates.</p>
                 </div>
               </>
             )}

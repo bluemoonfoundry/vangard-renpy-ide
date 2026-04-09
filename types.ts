@@ -644,8 +644,9 @@ export type Theme = 'system' | 'light' | 'dark' | 'solarized-light' | 'solarized
  * @property {number} leftSidebarWidth - Width of left sidebar (pixels)
  * @property {boolean} isRightSidebarOpen - Whether right sidebar is visible
  * @property {number} rightSidebarWidth - Width of right sidebar (pixels)
- * @property {string} renpyPath - Path to Ren'Py runtime directory
+ * @property {string} renpyPath - Path to Ren'Py SDK directory (executable derived per-OS: renpy.exe / renpy.sh)
  * @property {string[]} recentProjects - List of recently opened project paths
+ * @property {string} [lastProjectDir] - Parent directory last used when creating a new project (for dialog pre-fill)
  * @property {string} editorFontFamily - Font family for code editor
  * @property {number} editorFontSize - Font size for code editor (pixels)
  * @property {Record<string, boolean>} [snippetCategoriesState] - Collapsed/expanded state of snippet categories
@@ -663,6 +664,7 @@ export interface AppSettings {
   snippetCategoriesState?: Record<string, boolean>;
   mouseGestures?: MouseGestureSettings;
   userSnippets?: UserSnippet[];
+  lastProjectDir?: string;
 }
 
 /**
