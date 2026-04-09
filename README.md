@@ -3,7 +3,7 @@
 ![Version](https://img.shields.io/badge/version-0.7.0_Public_Beta_4-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows_%7C_macOS_%7C_Linux-lightgrey)
 
-# Vangard Ren'Py IDE
+# Ren'IDE : The Ren'Py Visual Desiger
 
 > **The IDE that lets you see your story.**
 
@@ -18,7 +18,7 @@ Windows (installer) · macOS (DMG) · Linux (AppImage) · **Free**
 
 ---
 
-## Why Vangard?
+## Why Ren'IDE?
 
 Managing a Ren'Py project in a plain text editor means juggling dozens of `.rpy` files with no way to see the whole picture. You lose track of where jumps lead, which characters appear in which scenes, and whether your branching structure even makes sense.
 
