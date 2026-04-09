@@ -37,7 +37,7 @@ Vangard gives you that picture — and keeps it in sync as you write.
 
 #### Story Canvas
 
-Your `.rpy` files as draggable blocks. `jump` and `call` connections auto-draw as arrows. Drag blocks to organize, click "Tidy Up" to auto-layout, or filter by character to focus on a single storyline. Role tinting colors blocks by which characters appear in them. A legend overlay explains arrow types and colors.
+Your `.rpy` files as draggable blocks. `jump` and `call` connections auto-draw as arrows. Drag blocks to organize, click "Redraw" to auto-layout, or filter by character to focus on a single storyline. Role tinting colors blocks by which characters appear in them. A legend overlay explains arrow types and colors.
 
 
 <img width="2002" height="1281" alt="Screenshot 2026-04-09 134418" src="https://github.com/user-attachments/assets/1db35b01-858f-40e8-afb0-64407a03565c" />
