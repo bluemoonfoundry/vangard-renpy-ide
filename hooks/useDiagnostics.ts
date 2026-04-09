@@ -334,7 +334,7 @@ export function useDiagnostics(
     if (defineVarNames.size > 0) {
       // Matches inline Python assignment: `$ varname =` / `$ varname +=` etc.
       // The `=(?!=)` negative lookahead excludes `==` (equality comparisons).
-      const RE_INLINE_ASSIGN = /^\s*\$\s*([a-zA-Z_][a-zA-Z0-9_.]*)\s*(?:[+\-*\/%]=|=(?!=))/;
+      const RE_INLINE_ASSIGN = /^\s*\$\s*([a-zA-Z_][a-zA-Z0-9_.]*)\s*(?:[+\-*/%]=|=(?!=))/;
       for (const block of blocks) {
         if (!block.content) continue;
         const lines = block.content.split('\n');

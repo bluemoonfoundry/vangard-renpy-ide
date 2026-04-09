@@ -761,7 +761,7 @@ app.whenReady().then(() => {
         require('fs').accessSync(sdkTemplate, require('fs').constants.R_OK);
         console.log('Using SDK template:', sdkTemplate);
         return sdkTemplate;
-      } catch (err) {
+      } catch {
         console.log('SDK template not found, falling back to bundled template');
       }
     }

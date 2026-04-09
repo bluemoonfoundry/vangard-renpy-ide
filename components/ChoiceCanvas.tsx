@@ -390,7 +390,7 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
         });
 
         // Ideal X: centre of pill column aligns with target centre
-        let colXs = sortedGroups.map(([tgtId]) => {
+        const colXs = sortedGroups.map(([tgtId]) => {
           const tgt = nodeMap.get(tgtId);
           return tgt
             ? tgt.position.x + tgt.width / 2 - CHOICE_PILL_W / 2
