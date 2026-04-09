@@ -252,7 +252,8 @@ Output goes to `release/`. On Windows: run the `.exe` installer. On Mac: open th
 
 ## Toolbar Reference
 
-<img width="1574" height="88" alt="Toolbar" src="https://github.com/user-attachments/assets/ab97e8ce-9030-4068-9698-942316db6b86" />
+<img width="1839" height="83" alt="Screenshot 2026-04-09 135204" src="https://github.com/user-attachments/assets/0d04dc9b-b9b6-42ed-b205-0b31536b6a03" />
+
 
 | Button | Function | Shortcut |
 |--------|----------|----------|
