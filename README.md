@@ -260,14 +260,14 @@ Output goes to `release/`. On Windows: run the `.exe` installer. On Mac: open th
 | **Undo / Redo** | Revert or re-apply canvas and editor changes | `Ctrl+Z` / `Ctrl+Y` |
 | **Add Block** | Create a new blank `.rpy` file on the canvas | `N` |
 | **Add Note** | Add a sticky note to the canvas | — |
-| **Tidy Up** | Auto-layout blocks by story flow | — |
-| **Analyze Routes** | Open the Route Canvas tab | — |
+| **Redraw** | Auto-layout blocks by story flow | — |
+| **Diagnostics** | Table of errors, warnings, info, and tasks | - |
+| **Stats** | Project statistics visualization | - |
+| **Story** | Present story canvas tab | - |
+| **Route** | Present route canvas tab | - |
 | **Drafting Mode** | Add placeholders for missing assets | — |
 | **Run** | Launch Ren'Py game (requires SDK path in Settings) | — |
 | **Save All** | Save all unsaved changes to disk | `Ctrl+S` |
-| **Toggle Left** | Show/hide the Project Explorer sidebar | — |
-| **Search** | Open project-wide search panel | — |
-| **Toggle Right** | Show/hide the Story Elements sidebar | — |
 | **Settings** | Theme, editor, SDK path, AI, mouse preferences | — |
 
 ---
