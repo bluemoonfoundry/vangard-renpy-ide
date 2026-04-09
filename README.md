@@ -75,8 +75,8 @@ A full Monaco editor (the VS Code engine) built right in. Split panes let you ed
 
 The right sidebar analyzes your entire project continuously.
 
-| Tab | What it shows |
-|-----|---------------|
+| Tab | What it shows | What it looks like |
+|-----|---------------|-------------------------|
 | **Characters** | All `define Character(...)` definitions — name, tag, color, dialogue count. Add, edit, find usages. | <img width="512" height="768" alt="Screenshot 2026-04-09 140008" src="https://github.com/user-attachments/assets/ecac46bd-3f93-4b63-acc0-e3cff0a92387" /> |
 | **Variables** | All `define`/`default` globals. Find usages. | <img width="512" height="768" alt="Screenshot 2026-04-09 135947" src="https://github.com/user-attachments/assets/227b841d-b304-416c-833c-c0a9516deaaa" /> |
 | **Screens** | All `screen` definitions. Jump to definition. Add with boilerplate. |<img width="512" height="768" alt="Screenshot 2026-04-09 140234" src="https://github.com/user-attachments/assets/42e5511e-c9c1-47aa-afd2-fb9aa8d6dd6d" />|
