@@ -54,8 +54,11 @@ export default defineConfig(({ mode }) => {
     // Strip console.log and console.warn from production builds.
     // console.error is kept — those indicate real problems.
     ...(!isDevelopment && {
-      esbuild: {
-        pure: ['console.log', 'console.warn'],
+      oxc: {
+        minify: {
+          // Treat these as side-effect-free so they can be tree-shaken
+          pureFunctions: ['console.log', 'console.warn'],
+        },
       },
     }),
     // Build optimization settings
