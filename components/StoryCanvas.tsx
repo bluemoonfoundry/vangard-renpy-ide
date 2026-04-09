@@ -832,6 +832,24 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
     onTransformChange({ x: tx, y: ty, scale });
   }, [visibleBlocks, onTransformChange]);
 
+  const startBlock = useMemo(() => {
+    const startNode = analysisResult.labelNodes.find(n => n.label === 'start');
+    if (!startNode) return null;
+    return blocks.find(b => b.id === startNode.blockId) ?? null;
+  }, [analysisResult.labelNodes, blocks]);
+
+  const centerOnStartBlock = useCallback(() => {
+    if (!startBlock || !canvasRef.current) return;
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const cx = startBlock.position.x + startBlock.width / 2;
+    const cy = startBlock.position.y + startBlock.height / 2;
+    onTransformChange(t => ({
+      ...t,
+      x: canvasRect.width / 2 - cx * t.scale,
+      y: canvasRect.height / 2 - cy * t.scale,
+    }));
+  }, [startBlock, onTransformChange]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
@@ -925,7 +943,37 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
         className="absolute top-4 left-4"
       />
 
-      <div className="filter-panel absolute top-4 right-4 z-20 bg-secondary p-2 rounded-lg shadow-lg border border-primary flex flex-col space-y-2">
+      <div
+        className="absolute top-4 right-4 z-20 flex max-w-[calc(100%-2rem)] flex-col gap-3 xl:flex-row xl:items-start"
+        onPointerDown={e => e.stopPropagation()}
+      >
+        {/* Flag + Fit buttons */}
+        <div className="flex items-center gap-1.5">
+          {startBlock && (
+            <button
+              onClick={centerOnStartBlock}
+              title="Go to start label"
+              aria-label="Go to start label"
+              className="h-9 w-9 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center shadow"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 6a3 3 0 013-3h10a1 1 0 01.8 1.6L14.25 7l2.55 2.4A1 1 0 0116 11H6a1 1 0 00-1 1v3a1 1 0 11-2 0V6z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
+          <button
+            onClick={fitToScreen}
+            title="Fit all blocks to screen (F)"
+            aria-label="Fit all blocks to screen"
+            className="h-9 w-9 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center shadow"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 01-1.414-1.414L13.586 5H12zm-9 7a1 1 0 012 0v1.586l2.293-2.293a1 1 0 011.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13-1a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 011.414-1.414L15 13.586V12a1 1 0 011-1z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+        {/* View Filters panel */}
+        <div className="filter-panel bg-secondary p-2 rounded-lg shadow-lg border border-primary flex flex-col space-y-2">
             <h4 className="text-sm font-semibold text-center px-2 text-primary">View Filters</h4>
             <label className="flex items-center space-x-2 cursor-pointer text-sm text-secondary">
                 <input type="checkbox" checked={canvasFilters.story} onChange={e => setCanvasFilters(f => ({ ...f, story: e.target.checked }))} className="h-4 w-4 rounded focus:ring-indigo-500" style={{ accentColor: 'rgb(79 70 229)' }} />
@@ -968,6 +1016,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
               </>
             )}
         </div>
+      </div>
 
       <div
         className="absolute top-0 left-0"
@@ -1113,18 +1162,6 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
       )}
 
       <div className="absolute bottom-4 left-4 z-20 flex flex-col items-start gap-2" onPointerDown={e => e.stopPropagation()}>
-        <button
-          onClick={fitToScreen}
-          title="Fit all blocks to screen (F)"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-xs font-medium text-gray-700 dark:text-gray-200 shadow hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 01-1.414-1.414L13.586 5H12zm-9 7a1 1 0 012 0v1.586l2.293-2.293a1 1 0 011.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13-1a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 011.414-1.414L15 13.586V12a1 1 0 011-1z" clipRule="evenodd" />
-          </svg>
-          Fit
-        </button>
-
-
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow overflow-hidden">
           <button
             onClick={() => setShowLegend(v => !v)}

@@ -489,7 +489,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             code += `# No background selected\n`;
         }
 
-        scene.sprites.forEach((sprite, _index) => {
+        scene.sprites.forEach((sprite, index) => {
             const tag = getRenpyTag(sprite.image);
             const x = sprite.x.toFixed(2);
             const y = sprite.y.toFixed(2);

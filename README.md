@@ -1,303 +1,261 @@
 [![Build/Release](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/build.yml/badge.svg)](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/build.yml)
 [![CodeQL](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/github-code-scanning/codeql)
+![Version](https://img.shields.io/badge/version-0.7.0_Public_Beta_4-blue)
+![Platform](https://img.shields.io/badge/platform-Windows_%7C_macOS_%7C_Linux-lightgrey)
 
-# Ren'IDE: The Ren'Py Visual Novel Editor
+# Vangard Ren'Py IDE
 
-Ren'IDE is a desktop application designed to streamline and enhance the development process for Ren'Py projects. It provides a dynamic canvas where your Ren'Py script files (`.rpy`) are represented as draggable blocks. The editor automatically analyzes your code to draw connections for `jump` and `call` statements, helping you visualize your story's flow and structure at a glance. It is intended to be a one-stop shop for editing Ren'Py projects, but still allow flexibility to use whatever tools are necessary outside the application. In other words, using this application won't prevent you from editing your project outside of it. You're not locked in. 
+> **The IDE that lets you see your story.**
 
-This tool is perfect for writers, designers, and programmers who want a more intuitive and organized way to manage complex branching narratives.
+Vangard is a desktop IDE for Ren'Py visual novel development. Your `.rpy` files appear as draggable blocks on a visual canvas — `jump` and `call` connections auto-draw as arrows. Three canvases let you see your project from every angle: file structure, control flow, and the player's choice experience. A full Monaco code editor, three visual composers, asset managers, diagnostics, and AI generation are all built in.
 
-<details>
-  <summary>4/4/2026 Latest Build Highlights:</summary>
+It works **alongside** the Ren'Py SDK. Your `.rpy` files stay as `.rpy` files. No lock-in.
 
-  #### ImageMap Composer
-- **Visual imagemap editor** — draw, resize, and manage clickable hotspot rectangles over a ground image with optional hover overlay. Each hotspot has a configurable action type (`jump` or `call`) and target label.
-- **Drag-and-drop images** — ground and hover images are set by dragging from the Image Assets panel.
-- **Ren'Py code generation** — generates `imagebutton`/`imagemap` screen code ready to copy into your project.
-- Compositions are persisted in `project.ide.json` and managed from the "Composers" tab in Story Elements.
+**[Download the latest release →](https://github.com/bluemoonfoundry/vangard-renpy-ide/releases/latest)**  
+Windows (installer) · macOS (DMG) · Linux (AppImage) · **Free**
 
-#### Screen Layout Composer
-- **Visual screen builder** — lay out Ren'Py screen widgets (vbox, hbox, text, imagebutton, etc.) with a drag-and-drop interface and live preview.
-- **Asset drag-and-drop** — drag images from the Image Assets panel directly onto screen widgets.
-- **Locked-screen workflow** — existing screens can be viewed in read-only mode; duplicate to create an editable copy.
-- **Code generation** — generates Ren'Py `screen` code with copy-to-clipboard support.
-
-#### Story Canvas Enhancements
-- **Fit-to-screen** — a button to automatically zoom and pan so all blocks fit within the viewport.
-- **Call arrows** — `call` connections are now visually distinct from `jump` arrows.
-- **Character filter** — hide blocks that don't involve a selected character for focused story review.
-- **Role tinting** — blocks are color-tinted based on character roles for quick visual identification.
-- **Legend overlay** — a floating legend explains the arrow types and role colors on the canvas.
-- **Route Canvas button** — quick-access button to open the Route Canvas directly from the Story Canvas.
-
-#### Route Canvas Enhancements
-- **Unreachable label detection** — labels not reachable from the start are highlighted as warnings.
-- **Call vs. jump distinction** — call arrows are rendered differently from jump arrows for clearer flow analysis.
-- **Menu decision inspector** — hover over menu nodes to see a popover with all choices and their targets.
-- **Route names & node roles** — routes display descriptive names; nodes show their role (start, end, choice, etc.).
-- **Collapsible panel** — the route list panel can be collapsed for more canvas space.
-- **Hover-to-expand** — route list entries expand on hover to show full details.
-
-#### TextMate Syntax Highlighting
-- **Proper Ren'Py grammar** — replaced basic keyword highlighting with a full TextMate grammar (`renpy.tmLanguage.json`) for accurate, context-aware syntax coloring of Ren'Py code.
-- **Semantic tokens** — additional semantic token provider for enhanced highlighting of labels, variables, and screen references.
-
-#### Diagnostics Panel
-- **Code diagnostics tab** — a new panel showing errors, warnings, and info issues across your project files. Click an issue to jump directly to the relevant file and line.
-- **Task tracking** — integrated task list within the diagnostics panel for managing code-related TODOs.
-- **Severity filtering** — filter diagnostics by severity level (error, warning, info).
-
-</details>
-
-<img width="1973" height="1118" alt="Main View" src="https://github.com/user-attachments/assets/cf387ed7-2d2c-444b-9c40-3c1bea90c799" />
-
-
-# Quick Startup
-
-If you just want to install the application on your desktop and run it, you can simply do this:
-
-1. Go to the [release page](https://github.com/bluemoonfoundry/vangard-renpy-ide/releases/latest) and find the release zip for your operating system (Windows, Mac, Linux)
-2. Download the zip file to a loction on your machine and unzip it
-3. For Windows, double-click the installer file found in the zip and follow the installtion instructions
-4. For Mac, open the DMG file found in the zip and copy the application to a location on your machine
-5. Double-click the installed application and you're all set to go!
+<img width="1973" height="1118" alt="Vangard Ren'Py IDE — Main View" src="https://github.com/user-attachments/assets/cf387ed7-2d2c-444b-9c40-3c1bea90c799" />
 
 ---
 
-## Key Features
+## Why Vangard?
 
-- **Visual Story Canvas**: Drag, resize, and arrange blocks representing your `.rpy` files. Arrows are automatically drawn between blocks to show `jump` and `call` relationships. Fit-to-screen zoom, character filtering, role-based color tinting, and a legend overlay help you navigate complex projects at a glance.
+Managing a Ren'Py project in a plain text editor means juggling dozens of `.rpy` files with no way to see the whole picture. You lose track of where jumps lead, which characters appear in which scenes, and whether your branching structure even makes sense.
+
+Vangard gives you that picture — and keeps it in sync as you write.
+
+- **See your story's structure** at a glance, without opening a single file
+- **Navigate instantly** from a canvas node to the code behind it
+- **Catch problems early** — broken jumps, missing assets, and unreachable labels flagged automatically
+- **Compose visually** — build scenes, imagemaps, and screens with drag-and-drop, then copy the generated code
+
+---
+
+## Features
+
+### Three Canvases
+
+#### Story Canvas
+
+Your `.rpy` files as draggable blocks. `jump` and `call` connections auto-draw as arrows. Drag blocks to organize, click "Tidy Up" to auto-layout, or filter by character to focus on a single storyline. Role tinting colors blocks by which characters appear in them. A legend overlay explains arrow types and colors.
 
 <img width="1103" height="389" alt="Story Canvas" src="https://github.com/user-attachments/assets/b594803d-7909-4ff1-9d90-227d7e906596" />
 
+#### Route Canvas
 
-- **On-Demand Route Canvas**: Generate a detailed, label-by-label graph of your story's control flow to understand complex branching. This is an opt-in feature to maintain performance on large projects. The Route Canvas automatically identifies all unique paths from start to finish. A floating panel allows you to highlight specific routes with distinct colors. Features include unreachable label detection, distinct call vs. jump arrows, menu decision point inspection, and collapsible route panels.
+A label-by-label control flow graph. Every `label` becomes a node; every `jump`, `call`, and implicit fall-through becomes an edge. Highlight specific routes with distinct colors. Unreachable labels are flagged. Hover over menu nodes to inspect all choices and their destinations.
 
 <img width="1964" height="1114" alt="Route Canvas" src="https://github.com/user-attachments/assets/62da186a-7505-406d-b66c-b4d7f9ed8d7e" />
 
+#### Choice Canvas
 
-- **Integrated Code Editor**: A full-featured Monaco editor (the engine behind VS Code) is built-in for editing your script files directly within the app. The editor supports a **split-pane layout** (side-by-side or top/bottom) so you can view two files at once. Tabs can be dragged between panes. **Context-aware IntelliSense** provides autocomplete suggestions for labels, screens, images, characters, variables, and 28+ built-in Ren'Py code snippets. **TextMate syntax highlighting** provides accurate, context-aware coloring of Ren'Py code with semantic token support.
-
-<img width="1233" height="1007" alt="Code Editor" src="https://github.com/user-attachments/assets/1aa05b75-7a9a-4356-b6a4-5a4589491a4e" />
-
-- **Comprehensive Project Management**: A built-in file explorer allows you to create, rename, move, and delete files and folders in your project.
-
-<img width="261" height="1019" alt="Project Explorer" src="https://github.com/user-attachments/assets/c3abdbb8-9606-4353-9e93-3239608b1249" />
-
-- **Story Element Management**: A dedicated panel to view and manage Characters, Variables, Images, Audio, Screens, and Scenes. Scan external directories for images and audio, and easily copy them into your project.
-
-  <img width="299" height="998" alt="Story Elements - Characters" src="https://github.com/user-attachments/assets/3c87ba26-3da0-478f-a251-954d226ee703" />
-  <img width="309" height="1006" alt="Story Elements - Variables" src="https://github.com/user-attachments/assets/fa470bb0-b783-46de-a608-b7298483db57" />
-  <img width="308" height="1011" alt="Story Elements - Images" src="https://github.com/user-attachments/assets/ab645f13-d21a-4a26-aeb2-b91367fb9a13" />
-  <img width="311" height="1011" alt="Story Elements - Audio" src="https://github.com/user-attachments/assets/90623b20-6a20-4386-85e7-a49db27c2947" />
-  <img width="306" height="1011" alt="Story Elements - Screens" src="https://github.com/user-attachments/assets/40e83b54-44b0-4207-888b-c9ebd11286da" />
-  <img width="310" height="1008" alt="Story Elements - Scenes" src="https://github.com/user-attachments/assets/5a45c071-9ca0-4fe7-94c1-8e92a1dfeec0" />
-
-  Composers Tab (Scene Composer + ImageMap Composer):
-
-  Scene Composer: Visually build scenes by layering backgrounds and sprites. Scale, zoom, orient them as you like. The application generates the Ren'Py code that can be copy/pasted. 
-  <img width="1718" height="1001" alt="Story Elements - Scene Editor Tab" src="https://github.com/user-attachments/assets/3dd84ee3-7eb6-4664-b93d-ada3690d039a" />
-
-  ImageMap Composer: Draw clickable hotspot regions over a ground image to create `imagebutton`/`imagemap` screens. Each hotspot has a configurable action (`jump` or `call`) and target label. Ground and hover images are set by dragging from the Image Assets panel.
-
-  Screen Layout Composer: Build Ren'Py screens visually by arranging widgets (vbox, hbox, text, imagebutton, etc.) with drag-and-drop. Generates screen code with copy-to-clipboard support.
-
-  Image Viewer:
-  <img width="1229" height="1001" alt="Image Viewer" src="https://github.com/user-attachments/assets/7c3360fb-484f-4be2-9d61-12c382ca6ef8" />
-
-  Audio Viewer/Player:
-  <img width="1537" height="1007" alt="Story Elements - Audio Viewer" src="https://github.com/user-attachments/assets/893ff1a3-72c7-48c7-ad5d-db547a6885b6" />
-
-- **Markdown Preview**: Double-click any `.md` file in the Project Explorer to open it in a tab with GitHub-style rendered preview. Toggle to edit mode for a full Monaco editor with Ctrl+S save support.
-- **File System Integration**: Works directly with your local project folders for a seamless development experience.
-- **Theme Support**: Personalize your workspace with multiple themes, including Light, Dark, Solarized, and Colorful variants.
-- **UI State Persistence**: The editor remembers your theme, sidebar layout, and open tabs between sessions for a consistent workflow.
-- **Customizable Layout**: Sidebars are resizable, allowing you to tailor the interface to your needs.
-- **AI Integration**: Optional feature to generate AI content using Google Gemini, OpenAI, and Anthropic models. Generated content can be copy/pasted wherever you want.
-- **Diagnostics Panel**: A dedicated panel showing errors, warnings, and info-level issues across your project files. Click any issue to jump directly to the source. Includes severity filtering and an integrated task list.
-- **Project Statistics**: A Stats dashboard provides word count, estimated play time, per-character dialogue breakdowns, and branching complexity scores.
+The writer's view. Where the Route Canvas shows code structure, the Choice Canvas shows the player experience. Menu nodes fan out to destinations via color-coded choice pills. Each pill shows the player-visible choice text and any `if` condition guard as a badge — so you can trace exactly what the player sees and where each choice leads, even when paths cross.
 
 ---
 
-## Usage Guide
+### Code Editor
 
-### Getting Started
+A full Monaco editor (the VS Code engine) built right in. Split panes let you edit two files side by side. Drag tabs between panes.
 
-On first launch, you'll see a welcome screen with an option to create a new project or a open an existing Ren'Py project folder. The latter option is recommended. The application maintains a list of recently opened projects, which you can open by clicking on them.
+- **TextMate syntax highlighting** — accurate, context-aware Ren'Py coloring with semantic token support for labels, variables, and screen references
+- **Context-aware IntelliSense** — autocomplete for `jump`/`call` targets, `show`/`scene` images, character tags, screen names, and variables
+- **28+ built-in Ren'Py snippets** with tab-stop placeholders
+- **User-defined snippets** — create custom snippets with trigger prefixes that integrate with IntelliSense
+- Cursor position (Ln/Col) in status bar
 
-### The Main Interface
+<img width="1233" height="1007" alt="Code Editor — Split Pane" src="https://github.com/user-attachments/assets/1aa05b75-7a9a-4356-b6a4-5a4589491a4e" />
 
-The application is divided into three main sections: the Project Explorer on the left, the main view (Canvas/Editor) in the center, and the Story Elements panel on the right. The left and right sidebars can be resized by dragging the handles on their inner edges.
+---
 
-#### Toolbar
+### Asset Managers
 
-The top toolbar provides access to global actions and tools.
+#### Image Assets
 
-<img width="1574" height="88" alt="Toolbar" src="https://github.com/user-attachments/assets/ab97e8ce-9030-4068-9698-942316db6b86" />
+Browse all project images organized by folder, with visual thumbnails. Scan external directories without copying files in. Right-click any image to copy a `scene` or `show` statement directly to your clipboard. Drag images onto the Scene Composer stage or Screen Layout Composer. Double-click to manage Ren'Py tags and metadata.
 
-| Button/Icon         | Function                                                                                                 | Shortcut           |
-| ------------------- | -------------------------------------------------------------------------------------------------------- | ------------------ |
-| **Undo/Redo**       | Reverts or re-applies changes like moving blocks, creating blocks, etc.                                  | `Ctrl+Z` / `Ctrl+Y`|
-| **Add Block**       | Creates a new, blank `.rpy` file and adds it to the canvas.                                              | `N`                |
-| **Add Note**        | Add a sticky note to the canvas board. Notes are not included as Ren'Py code.                            |                    |
-| **Tidy Up**         | Automatically arranges the blocks on the canvas based on the story flow to reduce clutter.               |                    |
-| **Analyze Routes**  | Generates and opens the Route Canvas tab, showing label-to-label connections.                            |                    |
-| **Drafting Mode**   | Toggle drafting mode, which adds placeholders for all images and sound files that are not yet created.   |                    |    
-| **Run**             | Launch Ren'Py and run your game as a child of the application (requires Ren'Py Launcher Path to be set in Settings|                                           |                    |
-| **Save All**        | Saves all unsaved changes to your local files. Only enabled when a project folder is open.               | `Ctrl+S`           |
-| **Toggle Left**     | Hide/unhide the left sidebar with the Project Explorer and Search Tabs                                   |                    |
-| **Search**          | Open search tab on the left sidebar                                                                      |                    |
-| **Toggle Right**    | Hide/unhide the right sidebar with the Story Elements tabs                                               |                    |
-| **Settings**        | Set specific user settings, including Color Theme, Editor Appearance, Ren'Py Launcher Path, and Enabling AI||
+<img width="308" height="1011" alt="Image Assets Panel" src="https://github.com/user-attachments/assets/ab645f13-d21a-4a26-aeb2-b91367fb9a13" />
 
-#### The Canvases
+<img width="1229" height="1001" alt="Image Viewer" src="https://github.com/user-attachments/assets/7c3360fb-484f-4be2-9d61-12c382ca6ef8" />
 
-The central area is your main workspace for visualizing the story. It can contain multiple tabs, including two special canvas types.
+#### Audio Assets
 
-##### Story Canvas
+Same workflow for audio. Browse, scan external directories, and right-click to copy `play music`, `play sound`, or `queue audio` statements. Built-in audio player.
 
-This is the default high-level view of your project.
+<img width="311" height="1011" alt="Audio Assets Panel" src="https://github.com/user-attachments/assets/90623b20-6a20-4386-85e7-a49db27c2947" />
 
-- **Blocks**: Each block represents a single `.rpy` file. The title displays the file's name or the first label found within it. Blocks show summary information like labels, characters, and content types (dialogue, menus, Python code).
-- **Arrows**: These lines connect blocks, representing `jump` and `call` statements, giving you an immediate sense of your story's structure.
-- **Interactions**:
-  - **Pan**: Hold `Shift` and drag the canvas background.
-  - **Zoom**: Use your mouse scroll wheel.
-  - **Select Blocks**: Click a block. Hold `Shift` or `Ctrl`/`Cmd` to select multiple. Drag a selection box (rubber-band) to select multiple blocks.
-  - **Move Blocks**: Click and drag a block's header.
-  - **Resize Blocks**: Drag the handle in the bottom-right corner.
-  - **Group/Ungroup**: Select multiple blocks and press `G` to group them. Select a group and press `Shift+G` to ungroup.
-  - **Open Editor**: Double-click a block to open its file in a new editor tab.
+<img width="1537" height="1007" alt="Audio Viewer / Player" src="https://github.com/user-attachments/assets/893ff1a3-72c7-48c7-ad5d-db547a6885b6" />
 
-##### Route Canvas
+---
 
-The Route Canvas provides a much more granular view of your story's control flow. It is generated on-demand by clicking the "Analyze Routes" button in the toolbar.
+### Visual Composers
 
-- **Label Blocks**: Each `label` in your project is represented as a small, distinct block.
-- **Connections**: Arrows show not only explicit `jump` and `call` statements (solid lines) but also implicit "fall-through" flow where one label follows another in a file (dotted lines).
-- **Route Highlighting**: A floating 'View Routes' panel lists all unique paths the analysis could find. Check a box next to a route to highlight its specific path on the canvas with a unique color.
+#### Scene Composer
 
-#### Project Explorer (Left Sidebar)
+Layer backgrounds and sprites on a stage. Per-sprite controls: zoom, flip, rotate, alpha, blur. Reorder layers by dragging. Configurable stage resolution (presets: 1920×1080, 1280×720, 1024×768, 800×600, or custom). Copy the generated `scene`/`show` Ren'Py code or export the composition as a PNG.
 
-This panel shows a tree view of your project's file system.
+<img width="1718" height="1001" alt="Scene Composer" src="https://github.com/user-attachments/assets/3dd84ee3-7eb6-4664-b93d-ada3690d039a" />
 
-- **File Operations**: Right-click on a file or folder to open the context menu, which allows you to:
-  - **Create** new files (`.rpy`) or folders.
-  - **Rename** existing files or folders.
-  - **Delete** items (this will delete them from your disk if you have a project folder open!).
-  - **Cut, Copy, and Paste** files and folders to reorganize your project.
-- **Navigation**:
-  - Double-click an `.rpy` file to open it in the editor, or a `.md` file to open the Markdown preview.
-  - Right-click an `.rpy` file and select "Center on Canvas" to locate its block in the visual editor.
+#### ImageMap Composer
 
+Draw clickable hotspot rectangles over a ground image (with optional hover overlay). Each hotspot has a configurable action type (`jump` or `call`) and target label. Generates `imagebutton`/`imagemap` screen code ready to copy into your project. Ground and hover images are set by dragging from the Image Assets panel.
 
-#### Search Panel (Left Sidebar)
+#### Screen Layout Composer
 
-- **Search & Replace**: Search all files in the project for a keyword or regular expression. Results show file and line context. You can replace matches individually or all at once, with a confirmation step before bulk replacements are applied.
+Build Ren'Py screens visually. Drag widgets (`vbox`, `hbox`, `frame`, `text`, `image`, `textbutton`, `button`, `imagebutton`, `bar`, `input`, `null`) onto the stage and nest them. Configure properties per widget. Generates ready-to-use `screen` code with copy-to-clipboard support. Existing screens can be viewed in read-only mode; duplicate to create an editable copy.
 
-#### Story Elements (Right Sidebar)
+---
 
-This powerful panel analyzes your entire project to give you an overview of all its core components.
+### Story Elements
 
-- **Characters Tab**:
-  - Lists all characters defined with `define e = Character(...)`.
-  - Shows their display name, code tag, color, and how many lines of dialogue they have.
-  - You can **Add** a new character, **Find Usages** to highlight all blocks where a character speaks, or **Edit** an existing character's properties in a dedicated view.
+The right sidebar analyzes your entire project continuously.
 
-- **Variables Tab**:
-  - Lists all global variables defined with `define` or `default`.
-  - You can **Add** new variables and **Find Usages** to see where they are used in your code.
+| Tab | What it shows |
+|-----|---------------|
+| **Characters** | All `define Character(...)` definitions — name, tag, color, dialogue count. Add, edit, find usages. |
+| **Variables** | All `define`/`default` globals. Find usages. |
+| **Screens** | All `screen` definitions. Jump to definition. Add with boilerplate. |
+| **Scenes** | Saved Scene Composer compositions. |
+| **Composers** | All ImageMap + Screen Layout compositions. |
+| **Snippets** | Library of Ren'Py code patterns. User snippets with custom trigger prefixes. |
 
-- **Images Tab**:
-  - Manages all your project's visual assets.
-  - It automatically finds images in `game/images/`.
-  - You can **Add Directory to Scan** to include images from other folders on your computer without copying them first.
-  - Images not yet in your project are marked with a red border. Select them and click **Copy to Project**.
-  - Right-click an image to copy a `scene` or `show` statement to your clipboard.
-  - Double-click an image to open the Image Editor to manage its Ren'Py tags and subfolder location.
+<img width="299" height="998" alt="Characters" src="https://github.com/user-attachments/assets/3c87ba26-3da0-478f-a251-954d226ee703" />
+<img width="309" height="1006" alt="Variables" src="https://github.com/user-attachments/assets/fa470bb0-b783-46de-a608-b7298483db57" />
+<img width="306" height="1011" alt="Screens" src="https://github.com/user-attachments/assets/40e83b54-44b0-4207-888b-c9ebd11286da" />
+<img width="310" height="1008" alt="Composers Tab" src="https://github.com/user-attachments/assets/5a45c071-9ca0-4fe7-94c1-8e92a1dfeec0" />
 
-- **Audio Tab**:
-  - Works just like the Images tab, but for your audio files (`.ogg`, `.mp3`, etc.).
-  - Manages files in `game/audio/` and other scanned directories.
-  - Right-click an audio file to copy a `play audio` or `queue audio` statement.
+---
 
-- **Screens Tab**:
-  - Lists all screens defined with the `screen` statement.
-  - You can **Add** a new screen, which will create a new `.rpy` file with boilerplate code.
-  - You can also quickly **Find Definition** to jump to the code where a screen is defined.
- 
-- **Composers Tab** (formerly "Scenes"):
-  - **Scene Composer**: Create a scene image by layering images and sprites and arranging them to suit. Copy/paste generated code directly into Ren'Py code file.
-  - **ImageMap Composer**: Visually create clickable imagemap screens by drawing hotspot regions over a ground image. Assign `jump` or `call` actions to each hotspot. Generates Ren'Py `imagebutton`/`imagemap` screen code.
-  - **Screen Layout Composer**: Build Ren'Py screens by arranging widgets visually with drag-and-drop and live preview. Supports locked-screen viewing and duplication.
+### Diagnostics
 
-- **Snippets Tab**:
-  - A library of common Ren'Py code patterns for dialogue, logic, visual effects, and more. Find the snippet you need and click **Copy** to paste it into your code.
-  - **User Snippets**: Create your own reusable code snippets with custom trigger prefixes. User snippets integrate with IntelliSense — type the prefix in the editor to expand them. Supports VS Code-style tab-stop placeholders for interactive expansion.
+A dedicated panel surfaces issues across every file in the project.
 
- #### Diagnostics (View Menu -> Diagnostics)
- - Shows code errors, warnings, and informational issues across all project files
- - Click an issue to jump to the source file and line
- - Filter by severity level (error, warning, info)
- - Includes an integrated task checklist for tracking code-related TODOs
- - A list of generated tasks is added to a list that is maintained with the project
- - Includes images and audio files that are referenced in the code but don't exist in the project yet
- - Project notes are included in the diagonistics automatically
+- **Invalid jumps** — `jump` or `call` to a label that doesn't exist
+- **Missing images / audio** — assets referenced in code but not found in the project
+- **Undefined characters / screens** — used but never defined
+- **Unused characters** — defined but never spoken
+- **Unreachable labels** — labels no path leads to
+- **Syntax errors** — parse failures with file and line
 
- #### AI Generator (View Menu -> AI Generator)
- - Opens a tab in which the user can generate AI content using Google Gemini, OpenAI, or Anthropic
- - Requires an API key to be entered for each provider (Google, OpenAI, Anthropic) the first time it is used in the project
- - Generated content can be copied and then pasted wherever the user wants
+Click any issue to jump directly to the source. Filter by severity (error / warning / info). Convert issues to task checklist items tracked with your project.
 
- #### Stats (View Menu -> Stats)
- - Displays project-wide statistics: total word count, estimated play time, lines of dialogue, and per-character breakdowns
- - Shows branching complexity score and a bar chart of character dialogue distribution
+---
 
-# Details for Developers
+### Project Statistics
 
-## Local Development Setup
+Word counts, estimated play time, lines of dialogue, per-character dialogue breakdown (bar chart), scene and route counts, and branching complexity scores.
 
-This project uses a standard Node.js-based toolchain with Vite for a fast and modern development experience.
+---
+
+### More
+
+- **Project Explorer** — file tree with create, rename, delete, cut/copy/paste, and drag-drop. Right-click an `.rpy` file → "Center on Canvas" to locate its block.
+- **Project-wide Search & Replace** — full-text search with regex. Replace individually or bulk with confirmation.
+- **New Project Wizard** — 3-step flow: name + location, resolution presets, theme + color picker. Generates a complete SDK-compatible Ren'Py project.
+- **Markdown Preview** — double-click any `.md` file for GitHub-style rendered preview with toggle to Monaco edit mode.
+- **AI Story Generator** — generate content with Google Gemini, OpenAI, or Anthropic. API keys stored encrypted via Electron's `safeStorage`.
+- **Undo/Redo** — full history for canvas moves, block creation/deletion, and composition edits (`Ctrl+Z` / `Ctrl+Y`).
+- **Drafting Mode** — adds placeholders for missing images and audio so the game runs during development.
+- **Run Game** — launch Ren'Py as a child process directly from the toolbar.
+- **10 Themes** — system, light, dark, solarized light/dark, colorful light/dark, neon dark, ocean dark, candy light, forest light.
+- **Auto-updater** — checks for new releases on launch and prompts to install.
+- **Cross-platform** — Windows (NSIS installer), macOS (DMG), Linux (AppImage).
+
+---
+
+## Keyboard Shortcuts
+
+| Action | Shortcut |
+|--------|----------|
+| Save All | `Ctrl+S` |
+| Undo / Redo | `Ctrl+Z` / `Ctrl+Y` |
+| New Block | `N` |
+| Group selected blocks | `G` |
+| Pan canvas | `Shift+Drag` (configurable) |
+| Zoom canvas | Mouse scroll |
+| Select multiple blocks | `Ctrl+Click` or rubber-band drag |
+| Delete selected | `Delete` |
+
+---
+
+## Getting Started
+
+### Install (Recommended)
+
+1. Go to the **[releases page](https://github.com/bluemoonfoundry/vangard-renpy-ide/releases/latest)**
+2. Download the zip for your OS and unzip it
+3. **Windows**: run the `.exe` installer
+4. **macOS**: open the `.dmg` and move the app to your Applications folder
+5. **Linux**: make the `.AppImage` executable and run it
+
+On first launch, open an existing Ren'Py project folder or create a new project with the wizard.
+
+---
+
+## Building from Source
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (version 18.x or newer recommended)
-- npm (which comes bundled with Node.js)
+- [Node.js](https://nodejs.org/) 18.x or newer
+- npm (bundled with Node.js)
 
-### Running Locally
+### Setup
 
-1.  **Clone the Repository** (if you haven't already):
-    ```bash
-    git clone https://github.com/bluemoonfoundry/vangard-renpy-ide.git
-    cd vangard-renpy-ide
-    ```
+```bash
+git clone https://github.com/bluemoonfoundry/vangard-renpy-ide.git
+cd vangard-renpy-ide
+npm install
+```
 
-2.  **Install Dependencies**:
-    Navigate to the project's root directory in your terminal and run `npm install` to download all the necessary packages defined in `package.json`.
-    ```bash
-    npm install
-    ```
+### Run
 
-3.  **Start the development environment** (recommended for active development):
-    ```bash
-    npm run electron:start   # Build and launch Electron app
-    ```
-    Or to use the Vite dev server only (no Electron):
-    ```bash
-    npm run dev              # http://localhost:5173
-    ```
+```bash
+npm run electron:start   # Build + launch Electron app
+npm run dev              # Vite dev server only (http://localhost:5173)
+```
 
-4.  **Run tests**:
-    ```bash
-    npx vitest run           # Run all tests once
-    npx vitest               # Watch mode
-    ```
+### Test
 
-5.  **Build a distributable installer**:
-    ```bash
-    npm run dist
-    ```
-    The output is in the `release/` directory. On Windows, run the `.exe` installer. On Mac, open the `.dmg`. On Linux, run the `.AppImage`.
+```bash
+npm test                              # Run all tests once
+npm run test:watch                    # Watch mode
+npx vitest run path/to/file.test.ts   # Single file
+```
 
-    Mac users: To run your built application without installing, use `open -a /path/to/xyz.app`.
+### Build Distributable
+
+```bash
+npm run dist
+```
+
+Output goes to `release/`. On Windows: run the `.exe` installer. On Mac: open the `.dmg`. On Linux: run the `.AppImage`.
+
 ---
+
+## Project Explorer
+
+<img width="261" height="1019" alt="Project Explorer" src="https://github.com/user-attachments/assets/c3abdbb8-9606-4353-9e93-3239608b1249" />
+
+---
+
+## Toolbar Reference
+
+<img width="1574" height="88" alt="Toolbar" src="https://github.com/user-attachments/assets/ab97e8ce-9030-4068-9698-942316db6b86" />
+
+| Button | Function | Shortcut |
+|--------|----------|----------|
+| **Undo / Redo** | Revert or re-apply canvas and editor changes | `Ctrl+Z` / `Ctrl+Y` |
+| **Add Block** | Create a new blank `.rpy` file on the canvas | `N` |
+| **Add Note** | Add a sticky note to the canvas | — |
+| **Tidy Up** | Auto-layout blocks by story flow | — |
+| **Analyze Routes** | Open the Route Canvas tab | — |
+| **Drafting Mode** | Add placeholders for missing assets | — |
+| **Run** | Launch Ren'Py game (requires SDK path in Settings) | — |
+| **Save All** | Save all unsaved changes to disk | `Ctrl+S` |
+| **Toggle Left** | Show/hide the Project Explorer sidebar | — |
+| **Search** | Open project-wide search panel | — |
+| **Toggle Right** | Show/hide the Story Elements sidebar | — |
+| **Settings** | Theme, editor, SDK path, AI, mouse preferences | — |
+
+---
+
+*Vangard Ren'Py IDE — v0.7.0 Public Beta 4*
