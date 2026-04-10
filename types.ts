@@ -694,8 +694,9 @@ export interface MenuChoice {
   id: string;
   text: string;
   condition?: string;
-  action: 'jump' | 'call' | 'pass' | 'return';
+  action: 'jump' | 'call' | 'pass' | 'return' | 'code';
   target?: string;
+  codeBlock?: string;
 }
 
 /**

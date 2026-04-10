@@ -5,11 +5,80 @@
  * Can be used for creating new menus or editing existing templates.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { MenuChoice, MenuTemplate } from '@/types';
 import { useModalAccessibility } from '@/hooks/useModalAccessibility';
 import { createId } from '@/lib/createId';
+import * as monaco from 'monaco-editor';
+
+interface CodeBlockEditorProps {
+  value: string;
+  onChange: (value: string) => void;
+  hasError: boolean;
+}
+
+function CodeBlockEditor({ value, onChange, hasError }: CodeBlockEditorProps) {
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const onChangeRef = useRef(onChange);
+
+  // Keep onChange ref up to date
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    // Create Monaco editor instance
+    const editor = monaco.editor.create(containerRef.current, {
+      value: value,
+      language: 'python', // Use Python for Ren'Py syntax highlighting
+      theme: 'vs-dark',
+      minimap: { enabled: false },
+      lineNumbers: 'on',
+      fontSize: 12,
+      scrollBeyondLastLine: false,
+      automaticLayout: true,
+      wordWrap: 'on',
+      folding: false,
+      lineDecorationsWidth: 0,
+      lineNumbersMinChars: 3,
+      renderLineHighlight: 'none',
+      overviewRulerBorder: false,
+      hideCursorInOverviewRuler: true,
+      overviewRulerLanes: 0,
+    });
+
+    editorRef.current = editor;
+
+    // Listen for content changes
+    const disposable = editor.onDidChangeModelContent(() => {
+      onChangeRef.current(editor.getValue());
+    });
+
+    return () => {
+      disposable.dispose();
+      editor.dispose();
+    };
+  }, []);
+
+  // Update editor value when prop changes (but not from editor itself)
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.getValue() !== value) {
+      editorRef.current.setValue(value);
+    }
+  }, [value]);
+
+  return (
+    <div
+      ref={containerRef}
+      className={`border rounded ${hasError ? 'border-red-500' : 'border-primary'}`}
+      style={{ height: '120px' }}
+    />
+  );
+}
 
 interface MenuConstructorModalProps {
   isOpen: boolean;
@@ -113,23 +182,34 @@ export function MenuConstructorModal({
 
       line += ':\n';
 
-      switch (choice.action) {
-        case 'jump':
-          if (choice.target?.trim()) {
-            line += `        jump ${choice.target.trim()}\n`;
-          }
-          break;
-        case 'call':
-          if (choice.target?.trim()) {
-            line += `        call ${choice.target.trim()}\n`;
-          }
-          break;
-        case 'pass':
-          line += '        pass\n';
-          break;
-        case 'return':
-          line += '        return\n';
-          break;
+      // Use code block if action is 'code' and codeBlock is provided
+      if (choice.action === 'code' && choice.codeBlock?.trim()) {
+        // Indent each line of the code block by 8 spaces (2 levels)
+        const indentedCode = choice.codeBlock
+          .split('\n')
+          .map(codeLine => codeLine.trim() ? `        ${codeLine}` : '')
+          .join('\n');
+        line += indentedCode + '\n';
+      } else {
+        // Use simple action
+        switch (choice.action) {
+          case 'jump':
+            if (choice.target?.trim()) {
+              line += `        jump ${choice.target.trim()}\n`;
+            }
+            break;
+          case 'call':
+            if (choice.target?.trim()) {
+              line += `        call ${choice.target.trim()}\n`;
+            }
+            break;
+          case 'pass':
+            line += '        pass\n';
+            break;
+          case 'return':
+            line += '        return\n';
+            break;
+        }
       }
 
       code += line;
@@ -147,16 +227,23 @@ export function MenuConstructorModal({
       errors.push(`${choice.action} action requires a target label`);
     }
 
+    if (choice.action === 'code' && !choice.codeBlock?.trim()) {
+      errors.push('Custom code action requires code to be entered');
+    }
+
     return errors;
   };
 
   const isValid = (): boolean => {
     if (choices.filter(c => c.text.trim()).length === 0) return false;
 
-    // Check that jump/call actions have targets
+    // Check that jump/call actions have targets, and code actions have code blocks
     for (const choice of choices) {
       if (!choice.text.trim()) continue;
       if ((choice.action === 'jump' || choice.action === 'call') && !choice.target?.trim()) {
+        return false;
+      }
+      if (choice.action === 'code' && !choice.codeBlock?.trim()) {
         return false;
       }
     }
@@ -328,6 +415,7 @@ export function MenuConstructorModal({
                             <option value="call">call</option>
                             <option value="pass">pass</option>
                             <option value="return">return</option>
+                            <option value="code">custom code</option>
                           </select>
 
                           {(choice.action === 'jump' || choice.action === 'call') && (
@@ -353,6 +441,20 @@ export function MenuConstructorModal({
                         )}
                       </div>
                     </div>
+
+                    {/* Code Block Editor - shown when action is 'code' */}
+                    {choice.action === 'code' && (
+                      <div className="ml-6 mt-2">
+                        <label className="block text-xs font-medium mb-1.5 text-secondary">
+                          Custom Code Block
+                        </label>
+                        <CodeBlockEditor
+                          value={choice.codeBlock || ''}
+                          onChange={(value) => updateChoice(choice.id, { codeBlock: value })}
+                          hasError={hasError}
+                        />
+                      </div>
+                    )}
 
                     {/* Datalists for autocomplete */}
                     <datalist id={`labels-datalist-${choice.id}`}>

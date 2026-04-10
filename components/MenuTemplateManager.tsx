@@ -43,23 +43,34 @@ export function MenuTemplateManager({
 
       line += ':\n';
 
-      switch (choice.action) {
-        case 'jump':
-          if (choice.target?.trim()) {
-            line += `        jump ${choice.target.trim()}\n`;
-          }
-          break;
-        case 'call':
-          if (choice.target?.trim()) {
-            line += `        call ${choice.target.trim()}\n`;
-          }
-          break;
-        case 'pass':
-          line += '        pass\n';
-          break;
-        case 'return':
-          line += '        return\n';
-          break;
+      // Use code block if action is 'code' and codeBlock is provided
+      if (choice.action === 'code' && choice.codeBlock?.trim()) {
+        // Indent each line of the code block by 8 spaces (2 levels)
+        const indentedCode = choice.codeBlock
+          .split('\n')
+          .map(codeLine => codeLine.trim() ? `        ${codeLine}` : '')
+          .join('\n');
+        line += indentedCode + '\n';
+      } else {
+        // Use simple action
+        switch (choice.action) {
+          case 'jump':
+            if (choice.target?.trim()) {
+              line += `        jump ${choice.target.trim()}\n`;
+            }
+            break;
+          case 'call':
+            if (choice.target?.trim()) {
+              line += `        call ${choice.target.trim()}\n`;
+            }
+            break;
+          case 'pass':
+            line += '        pass\n';
+            break;
+          case 'return':
+            line += '        return\n';
+            break;
+        }
       }
 
       code += line;
