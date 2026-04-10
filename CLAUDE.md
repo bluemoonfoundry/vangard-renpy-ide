@@ -4,7 +4,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Vangard Ren'Py IDE is a desktop application (Electron + React/TypeScript) for visual novel development with Ren'Py. It represents `.rpy` files as draggable blocks on a canvas, auto-draws `jump`/`call` connection arrows, and provides an integrated Monaco code editor alongside asset and story management tools.
+Vangard Ren'Py IDE (v0.7.0 - Public Beta 4) is a desktop application (Electron + React/TypeScript) for visual novel development with Ren'Py. It represents `.rpy` files as draggable blocks on a canvas, auto-draws `jump`/`call` connection arrows, and provides an integrated Monaco code editor alongside asset and story management tools.
+
+**Key technologies**: Electron 41.2, React 18.2, TypeScript 5.6, Monaco Editor 0.45, Vite 8.0, Tailwind CSS 3.4, Vitest 4.0, use-immer for state.
+
+## Project Structure
+
+**IMPORTANT**: This project uses a **flat directory structure** with NO `src/` folder. All source files are at the project root level:
+
+```
+bmf-vangard-renpy-ide/
+├── App.tsx (4,174 lines)         # Central state hub
+├── types.ts (1,160 lines)        # Type definitions (91+ types)
+├── electron.js (1,136 lines)     # Main process
+├── preload.js (115 lines)        # IPC bridge
+├── index.tsx                      # React entry point
+├── index.html                     # HTML shell
+├── index.css                      # Global styles + Markdown CSS
+├── components/ (65 files)         # All React components
+├── contexts/ (4 files)            # Context providers
+├── hooks/ (14 files)              # Custom React hooks
+├── lib/ (23 files)                # Utilities and pure functions
+├── workers/ (1 file)              # Web worker for analysis
+├── test/ (21 test files)          # Test infrastructure + specs
+├── public/                        # Static assets (onig.wasm)
+├── resources/                     # Bundled Ren'Py template
+└── DemoProject/                   # Example project
+```
+
+Path alias: `@/*` maps to project root in tsconfig.
 
 ## Build & Run Commands
 
@@ -19,8 +47,31 @@ npm run dist             # Create distributable installer (electron-builder)
 Version management:
 ```bash
 npm run version:patch    # Increment patch version
+npm run version:minor    # Increment minor version
+npm run version:major    # Increment major version
 npm run release:patch    # Increment version + build
 ```
+
+## Key Dependencies
+
+**Runtime:**
+- **Electron 41.2** — Desktop app framework with IPC, safeStorage, auto-updater
+- **React 18.2** — UI framework
+- **use-immer 0.10** — Immutable state updates with draft API
+- **Monaco Editor 0.45** — Code editor with TextMate grammar support
+- **Sharp 0.33.5** — Image processing (lazy-loaded for GUI generation)
+- **graphology** — Graph data structures and algorithms for layout engines
+- **marked** — GitHub-Flavored Markdown rendering
+- **recharts** — Statistics chart rendering
+- **@google/genai** — Google Gemini AI integration
+
+**Development:**
+- **Vite 8.0** — Build tool with React plugin
+- **Vitest 4.0** — Unit testing framework with jsdom + coverage
+- **TypeScript 5.6** — Type checking
+- **ESLint 9.0** — Linting with TypeScript + React Hooks rules
+- **electron-builder 26.8** — Multi-platform packaging
+- **Tailwind CSS 3.4** — Utility-first styling
 
 **Testing** (Vitest):
 ```bash
@@ -31,11 +82,16 @@ npx vitest run path/to/file.test.ts  # Run a single test file
 ```
 Coverage is configured for `components/`, `hooks/`, `contexts/`, and `App.tsx` using jsdom environment.
 
-Test infrastructure:
-- **Setup**: `test/setup.ts` — imports `@testing-library/jest-dom` matchers
+**Test infrastructure** (21 test files, ~260 tests):
+- **Setup**: `test/setup.ts` — imports `@testing-library/jest-dom` matchers, global mocks
 - **Electron mock**: `test/mocks/electronAPI.ts` — mock `window.electronAPI` for renderer tests
 - **Sample data**: `test/mocks/sampleData.ts` — reusable test fixtures (blocks, characters, etc.)
 - Component tests use `@testing-library/react` with `@testing-library/user-event`
+- **Tested components**: ConfirmModal, CreateBlockModal, DiagnosticsPanel, SearchPanel, SnippetManager, Toast, Toolbar, UserSnippetModal
+- **Tested hooks**: useDebounce, useDiagnostics, useFileSystemManager, useHistory, useModalAccessibility, useRenpyAnalysis
+- **Tested lib utilities**: graphLayout, renpyCompletionProvider, renpyValidator, routeCanvasLayout, storyCanvasLayout
+- **Integration tests**: renpyAnalysis.test.ts, smoke.test.ts
+- CI gating: All tests + lint must pass before merge
 
 **Linting** (ESLint):
 ```bash
@@ -48,9 +104,9 @@ Key rules: `react-hooks/rules-of-hooks` (error), `react-hooks/exhaustive-deps` (
 
 ### Dual-Process Electron App
 
-- **Main process** (`electron.js`, ~1K lines): Window management, IPC handlers, file system operations, API key encryption (safeStorage), Ren'Py game execution as child process, custom `media://` protocol for assets.
-- **Renderer process** (React app): All UI, state management, and Ren'Py analysis.
-- **Preload bridge** (`preload.js`): Exposes `electronAPI` via contextBridge for secure IPC between processes.
+- **Main process** (`electron.js`, 1,136 lines): Window management, IPC handlers (40+ channels), file system operations, API key encryption (safeStorage), Ren'Py game execution as child process, custom `media://` protocol for assets, auto-updater integration.
+- **Renderer process** (React app): All UI, state management, and Ren'Py analysis. Uses web worker for background analysis.
+- **Preload bridge** (`preload.js`, 115 lines): Exposes `electronAPI` via contextBridge for secure IPC between processes. All channels follow `namespace:action` pattern.
 
 ### Core Application State (App.tsx)
 
@@ -58,13 +114,13 @@ Key rules: `react-hooks/rules-of-hooks` (error), `react-hooks/exhaustive-deps` (
 
 ### Key Data Model (types.ts)
 
-`types.ts` (~1,137 lines) is the single source of truth for TypeScript types. Key types:
+`types.ts` (~1,160 lines) is the single source of truth for TypeScript types. Exports **91+ types** covering all data structures. Key types:
 
 - **Block**: Represents a `.rpy` file with position, size, content, and filePath
 - **BlockGroup**: Groups blocks visually on the canvas
 - **Link**: Connection between blocks (from `jump`/`call` statements)
 - **StickyNote**: Canvas annotation with text, position, size, and `NoteColor` (`'yellow' | 'blue' | 'green' | 'pink' | 'purple' | 'red'`)
-- **EditorTab**: Open tab in the editor pane; `type` union: `'canvas' | 'route-canvas' | 'punchlist' | 'diagnostics' | 'editor' | 'image' | 'audio' | 'character' | 'scene-composer' | 'imagemap-composer' | 'screen-layout-composer' | 'ai-generator' | 'stats' | 'markdown'`. Tabs with `imagemap-composer` carry `imagemapId`; tabs with `screen-layout-composer` carry `layoutId`.
+- **EditorTab**: Open tab in the editor pane; `type` union: `'canvas' | 'route-canvas' | 'choice-canvas' | 'menu-constructor' | 'punchlist' | 'diagnostics' | 'editor' | 'image' | 'audio' | 'character' | 'scene-composer' | 'imagemap-composer' | 'screen-layout-composer' | 'ai-generator' | 'stats' | 'markdown'`. Tabs with `imagemap-composer` carry `imagemapId`; tabs with `screen-layout-composer` carry `layoutId`; tabs with `menu-constructor` carry `blockId`.
 - **StoryCanvasLayoutMode**: `'flow-lr' | 'flow-td' | 'connected-components' | 'clustered-flow'` — auto-layout algorithm for both canvases
 - **StoryCanvasGroupingMode**: `'none' | 'connected-component' | 'filename-prefix'` — cluster grouping strategy applied within `clustered-flow` mode
 - **SavedStoryBlockLayout**: Persisted per-block position/size/color keyed by `filePath` in `ProjectSettings.storyBlockLayouts`
@@ -89,14 +145,92 @@ Key rules: `react-hooks/rules-of-hooks` (error), `react-hooks/exhaustive-deps` (
 - **LLMProvider**: `'google' | 'openai' | 'anthropic' | 'other'`; **LLMModel**: provider, modelId, label, requiresAuth
 - **CreateProjectOptions**: Options for creating a new Ren'Py project from template (projectDir, projectName, width, height, accentColor, isLight, sdkPath). Used by `dialog:createProjectFromTemplate` IPC channel.
 
+### Component Architecture
+
+**65 React components** organized in `/components/` directory. All functional components using hooks (no class components). Key components:
+
+**Canvas/Visualization** (7 components):
+- **StoryCanvas.tsx** — File-level flow visualization with blocks, groups, sticky notes
+- **RouteCanvas.tsx** (1,500+ lines) — Label-level control flow graph
+- **ChoiceCanvas.tsx** (1,386 lines, NEW v0.7.0) — Player-facing choice tree
+- **Minimap.tsx** — Visual overview with click-to-pan
+- **LabelBlock.tsx** (155 lines) — Visual node component for RouteCanvas/ChoiceCanvas
+- **ViewRoutesPanel.tsx** (72 lines) — Route list sidebar with visibility toggles
+- **CanvasLayoutControls.tsx** — Shared layout mode selector for all canvases
+
+**Editors/Composers** (4 components):
+- **EditorView.tsx** — Monaco editor with Ren'Py language support
+- **SceneComposer.tsx** (1,200+ lines) — Visual sprite positioning editor
+- **ImageMapComposer.tsx** (1,100+ lines) — Clickable hotspot editor
+- **ScreenLayoutComposer.tsx** (1,121 lines) — Screen widget drag-and-drop builder
+
+**Tools** (5 components):
+- **MenuConstructor.tsx** (467 lines, NEW v0.7.0) — Visual menu builder with validation
+- **DialoguePreview.tsx** (257 lines, NEW v0.7.0) — Live player view panel
+- **DiagnosticsPanel.tsx** — Project-wide diagnostics with task tracking
+- **SearchPanel.tsx** — Project-wide search/replace UI
+- **StatsView.tsx** — Analytics dashboard with charts
+
+**Panels** (6 components):
+- **FileExplorerPanel.tsx** — File tree with drag-drop, cut/copy/paste
+- **StoryElementsPanel.tsx** — Tabbed panel for characters/variables/screens/composers
+- **ImageManager.tsx** — Image asset browser with metadata
+- **AudioManager.tsx** — Audio asset browser with playback
+- **CharacterEditorView.tsx** — Character definition editor
+- **ScreenEditorView.tsx** — Screen definition editor
+
+**Modals** (15+ components):
+- **NewProjectWizardModal.tsx** — 3-step project creation with color derivation
+- **SettingsModal.tsx** — Global app preferences
+- **UserSnippetModal.tsx** — Create/edit custom code snippets
+- **CreateBlockModal.tsx** — New .rpy file creation
+- **ConfirmModal.tsx** — Generic confirmation dialog
+- **AboutModal.tsx**, **KeyboardShortcutsModal.tsx**, and more
+
+**UI Primitives** (10+ components):
+- **Toolbar.tsx** — Top toolbar with actions
+- **StatusBar.tsx** — Bottom status bar
+- **Toast.tsx** — Toast notification system
+- **CopyButton.tsx** — Standardized copy-to-clipboard button (3 sizes: xs/sm/md)
+- **Sash.tsx** — Resizable split pane divider
+- **TabContextMenu.tsx** — Right-click menu for editor tabs
+- **LoadingOverlay.tsx**, **ErrorBoundary.tsx**
+
+**Other** (15+ components):
+- **SnippetManager.tsx** — User snippet CRUD UI
+- **MarkdownPreviewView.tsx** — Dual-mode Markdown viewer/editor
+- **AIGeneratorView.tsx** — AI story generation UI
+- **WelcomeScreen.tsx** — Initial project picker screen
+
 ### Ren'Py Analysis Engine (hooks/useRenpyAnalysis.ts)
 
 ~769 lines. Regex-based parser that extracts labels, jumps, calls, characters, variables, screens, images, and audio references from `.rpy` files. Generates flow visualization data. Called via `performRenpyAnalysis()` when files change.
 
+**Web Worker offloading** (`workers/renpyAnalysis.worker.ts`, 88 lines):
+- Runs analysis in background thread to prevent UI blocking on large projects
+- Content-hash caching (djb2 hash) — skips re-parsing unchanged files
+- Progress reporting with 3 phases: file reading, analysis, result compilation
+- Integrated in `useRenpyAnalysis` hook with automatic worker management
+
+**Additional Ren'Py parsing utilities** (all in `lib/`):
+- **`renpyValidator.ts`** — 21 validation rules with inline Monaco diagnostics (syntax errors, undefined references, unreachable code)
+- **`renpySemanticTokens.ts`** — Semantic token provider for Monaco editor (label/variable/screen/character highlighting)
+- **`textmateGrammar.ts`** — TextMate grammar bridge for syntax highlighting (uses `renpy.tmLanguage.json`)
+- **`renpyLabelGuards.ts`** — Detects `renpy.has_label()` guard scope to suppress invalid-jump warnings
+- **`renpyLogicalLines.ts`** — Multi-line statement parser (handles backslash continuations and triple-quoted strings)
+- **`renpyTripleQuotes.ts`** — Triple-quoted string detection for accurate parsing
+- **`renpyNames.ts`** — Reserved Ren'Py name checking (prevents naming collisions)
+
 ### Visual Canvas System
 
-- **StoryCanvas**: Main view — blocks as draggable rectangles with auto-drawn `jump`/`call` flow arrows. Features: fit-to-screen button, character filter (hide non-player characters), role tinting (visual styling by character role), legend overlay, canvas filter toggles (story elements, screens, config, notes, minimap), sticky notes, and an in-canvas layout control panel (top-left).
-- **RouteCanvas**: Label-by-label control flow graph with route highlighting, unreachable label detection, call vs. jump arrow distinction, collapsible panel layout, route names/node roles display, hover-to-expand, fit-to-screen, a menu inspector for route metadata, and an in-canvas layout control panel (top-left).
+Three canvas views for different visualization needs:
+
+- **StoryCanvas** (file-level flow): Main view — blocks as draggable rectangles with auto-drawn `jump`/`call` flow arrows. Features: fit-to-screen button, character filter (hide non-player characters), role tinting (visual styling by character role), legend overlay, canvas filter toggles (story elements, screens, config, notes, minimap), sticky notes, and an in-canvas layout control panel (top-left).
+
+- **RouteCanvas** (label-level flow): Label-by-label control flow graph with route highlighting, unreachable label detection, call vs. jump arrow distinction, route names/node roles display, hover-to-expand, fit-to-screen, menu decision inspector, and an in-canvas layout control panel (top-left). Uses **`LabelBlock.tsx`** (155 lines) as the visual node component — displays overlay badges for hub/branch/menu-heavy/call-heavy roles, color-coded borders for entry/unreachable/dead-end states, and optional container names. Route management via **`ViewRoutesPanel.tsx`** (72 lines) — collapsible sidebar with checkboxes to toggle route visibility, shows route start → end with color indicators.
+
+- **ChoiceCanvas** (player-facing choice tree, **NEW in v0.7.0**): Visualization focused on player decisions and branching paths. Shows only menu choices with visual color-coding per destination label. Features: pill-style choice buttons with arrow connections, displays choice text/conditions/menu prompts, unreachable choice detection, uses same layout engine as RouteCanvas with configurable layout modes and grouping. Implemented in **`components/ChoiceCanvas.tsx`** (1,386 lines).
+
 - Canvas coordinates use a transform system (pan configurable via `MouseGestureSettings`, zoom via scroll)
 
 ### Canvas Auto-Layout System
@@ -146,12 +280,17 @@ Two modes:
 
 Managed by `hooks/useFileSystemManager.ts` and `contexts/FileSystemContext.ts`.
 
-### Context Providers
+### Context Providers (4 files in /contexts/)
 
-- **AssetContext** (`contexts/AssetContext.ts` + `hooks/useAssetManager.ts`): Image/audio scanning, copy-to-project pipeline, metadata; persists scan directory paths in IDE settings
-- **FileSystemContext** (`contexts/FileSystemContext.ts` + `hooks/useFileSystemManager.ts`): Directory/file handle state, clipboard (cut/copy/paste), tree node CRUD and drag-drop
-- **SearchContext** (`contexts/SearchContext.tsx`): Project-wide search/replace state and execution. SearchPanel consumes this context directly (no prop drilling). Extracted from App.tsx.
-- **ToastContext** (`contexts/ToastContext.tsx`): User notification system
+All context providers use React Context API to avoid prop drilling and reduce component coupling:
+
+- **AssetContext.ts** + `hooks/useAssetManager.ts` — Image/audio scanning, copy-to-project pipeline, metadata management. Persists scan directory paths in IDE settings. Provides `images` and `audio` Maps to all components.
+
+- **FileSystemContext.ts** + `hooks/useFileSystemManager.ts` — Directory/file handle state, clipboard (cut/copy/paste), tree node CRUD and drag-drop. Abstracts Electron vs browser file system modes. Provides `fileTree`, `directoryHandle`, and file operation methods.
+
+- **SearchContext.tsx** (NEW v0.7.0) — Project-wide search/replace state and execution. Extracted from App.tsx to reduce coupling. SearchPanel consumes this context directly (no prop drilling). Provides `searchQuery`, `searchResults`, `replaceText`, and search/replace methods.
+
+- **ToastContext.tsx** — User notification system. Provides `showToast()` method and toast queue. Used for success messages, error alerts, and informational notifications throughout the app.
 
 ### IPC Channel Conventions
 
@@ -213,16 +352,57 @@ The "Create New Project" flow (invoked from Welcome Screen or File → New Proje
 - **Block = file**: Each `.rpy` file maps 1:1 to a Block on the canvas; the first label becomes the block title
 - **Accessibility**: Icon-only buttons must have `aria-label`; modals must have `role="dialog"`, `aria-modal`, and `aria-labelledby`
 
-## Key Hooks
+## Custom Hooks (14 files in /hooks/)
 
-- **useHistory<T>**: Generic undo/redo — maintains `past[]`, `present`, `future[]`; exposes `undo()`, `redo()`, `setState()`, `canUndo`, `canRedo`. Guards against undoing past the initial loaded state.
-- **useRenpyAnalysis**: Returns `RenpyAnalysisResult` with links, characters, variables, screens, dialogue, and route graphs. Call `performRenpyAnalysis()` after any file change.
-- **useDiagnostics**: Consumes `RenpyAnalysisResult` and block content to produce `DiagnosticsResult` — checks for invalid jumps, missing images/audio, undefined characters/screens, unused characters, unreachable labels, and syntax errors. Exposes `ignoredDiagnostics` suppression.
-- **useFileSystemManager**: File system abstraction with clipboard state (`Set<string>` of paths for cut/copy).
-- **useAssetManager**: Manages `ProjectImage` and `RenpyAudio` Maps with metadata; handles scanning external directories and copying assets into the project.
-- **useModalAccessibility**: Reusable hook for dialog accessibility — focus trap (Tab/Shift+Tab cycling), Escape key close, auto-focus first element, focus restore on unmount. Used by all modals.
-- **useVirtualList**: Virtualizes long lists for performance.
-- **useDebounce**: Generic value debounce hook.
+**Core Analysis:**
+- **useRenpyAnalysis.ts** (769 lines) — Returns `RenpyAnalysisResult` with links, characters, variables, screens, dialogue, and route graphs. Call `performRenpyAnalysis()` after any file change. Manages web worker for background analysis.
+- **useDiagnostics.ts** — Consumes `RenpyAnalysisResult` and block content to produce `DiagnosticsResult`. Checks for invalid jumps, missing images/audio, undefined characters/screens, unused characters, unreachable labels, and syntax errors. Exposes `ignoredDiagnostics` suppression.
+
+**File System:**
+- **useFileSystemManager.ts** — File system abstraction with clipboard state (`Set<string>` of paths for cut/copy). Supports both Electron and browser modes.
+- **useAssetManager.ts** — Manages `ProjectImage` and `RenpyAudio` Maps with metadata. Handles scanning external directories and copying assets into the project. Persists scan directory paths.
+
+**State Management:**
+- **useHistory.ts** — Generic undo/redo hook. Maintains `past[]`, `present`, `future[]`; exposes `undo()`, `redo()`, `setState()`, `canUndo`, `canRedo`. Guards against undoing past the initial loaded state.
+
+**UI Utilities:**
+- **useModalAccessibility.ts** — Reusable hook for dialog accessibility. Focus trap (Tab/Shift+Tab cycling), Escape key close, auto-focus first element, focus restore on unmount. Used by all modals.
+- **useVirtualList.ts** — Virtualizes long lists for performance. Returns visible slice of data + scroll handlers.
+- **useDebounce.ts** (NEW v0.7.0) — Generic value debounce hook with configurable delay.
+
+All hooks have corresponding `.test.ts` files with comprehensive test coverage.
+
+## Library Utilities (23 files in /lib/)
+
+**Auto-Layout Engines** (pure functions, no external graph library):
+- **graphLayout.ts** — Shared Sugiyama-style DAG layout algorithm (layering, crossing reduction, coordinate assignment)
+- **storyCanvasLayout.ts** (600+ lines) — Block layout engine. Exports: `computeStoryLayout()`, `computeStoryLayoutFingerprint()`, `buildSavedStoryBlockLayouts()`, `getStoryLayoutVersion()`
+- **routeCanvasLayout.ts** (600+ lines) — Label node layout engine. Exports: `computeRouteCanvasLayout()`, `computeRouteCanvasLayoutFingerprint()`, `getRouteCanvasLayoutVersion()`
+
+**Ren'Py Language Support:**
+- **renpyCompletionProvider.ts** — Context-aware autocomplete for Monaco (28 built-in snippets + user snippets)
+- **renpyValidator.ts** (NEW v0.7.0) — 21 validation rules with inline Monaco diagnostics
+- **renpySemanticTokens.ts** (NEW v0.7.0) — Semantic token provider for enhanced highlighting
+- **textmateGrammar.ts** (NEW v0.7.0) — TextMate grammar bridge
+- **renpy.tmLanguage.json** (NEW v0.7.0) — Complete TextMate grammar definition (40+ scopes)
+
+**Ren'Py Parsing Utilities:**
+- **renpyLabelGuards.ts** (NEW v0.7.0) — Detects `renpy.has_label()` guard scope
+- **renpyLogicalLines.ts** (NEW v0.7.0) — Multi-line statement parser (backslash continuations)
+- **renpyTripleQuotes.ts** (NEW v0.7.0) — Triple-quoted string detection
+- **renpyNames.ts** (NEW v0.7.0) — Reserved Ren'Py name checking
+
+**Code Generation:**
+- **screenCodeGenerator.ts** — Generates Ren'Py screen code from `ScreenLayoutComposition`
+
+**New Project Wizard** (ES modules):
+- **colorUtils.js** — `RenpyColor` class with HSV manipulation + `deriveGuiColors()` (replicates SDK color math)
+- **guiImageGenerator.js** — Generates 8 GUI image sets using Sharp (buttons, bars, scrollbars, sliders, textbox, namebox, overlays)
+- **templateProcessor.js** — Updates `gui.rpy` and `options.rpy` with regex replacements + `slugify()` utilities
+
+**Other:**
+- **diagnosticIgnores.ts** — Suppression rule utilities for diagnostics
+- **createId.ts** — UUID generation with prefix support
 
 ## Keyboard Shortcuts
 
@@ -232,14 +412,35 @@ The "Create New Project" flow (invoked from Welcome Screen or File → New Proje
 - `Shift+drag` — Pan canvas (default; configurable via `MouseGestureSettings` to `drag` or `middle-drag`)
 - `Scroll` — Zoom canvas
 
-## IntelliSense / Autocomplete
+## Monaco Editor Integration
 
-`lib/renpyCompletionProvider.ts` provides context-aware autocomplete for the Monaco editor:
-- **`detectContext(lineContent, column)`**: Determines completion context from cursor position (jump, call, call-screen, show, hide, scene, variable, character, general)
-- **`getRenpyCompletions(context, data, range)`**: Returns Monaco `CompletionItem[]` with appropriate kinds, sort ordering, and snippet placeholders (`$1/$2/$0`)
-- Registered once in `EditorView.tsx` via `monacoInstance.languages.registerCompletionItemProvider('renpy', ...)`
-- Uses `analysisResultRef` (a React ref) so the closure always reads the latest analysis data without re-registration
-- Includes 28 built-in keyword snippets plus user-defined snippets from `AppSettings.userSnippets`
+`components/EditorView.tsx` integrates Monaco Editor with comprehensive Ren'Py language support:
+
+### Syntax Highlighting (TextMate Grammar)
+- **`lib/textmateGrammar.ts`** — Loads and registers TextMate grammar for Ren'Py language
+- **`lib/renpy.tmLanguage.json`** — Complete TextMate grammar definition with 40+ scopes (strings, comments, keywords, labels, characters, control flow, etc.)
+- Provides accurate syntax coloring that respects theme colors
+
+### Semantic Tokens
+- **`lib/renpySemanticTokens.ts`** — Semantic token provider for enhanced highlighting
+- Highlights: labels (declaration + references), variables, screens, characters, image/audio assets
+- Updates based on `RenpyAnalysisResult` for accurate real-time highlighting
+
+### IntelliSense / Autocomplete
+- **`lib/renpyCompletionProvider.ts`** — Context-aware autocomplete:
+  - **`detectContext(lineContent, column)`**: Determines completion context from cursor position (jump, call, call-screen, show, hide, scene, variable, character, general)
+  - **`getRenpyCompletions(context, data, range)`**: Returns Monaco `CompletionItem[]` with appropriate kinds, sort ordering, and snippet placeholders (`$1/$2/$0`)
+  - Registered once in `EditorView.tsx` via `monacoInstance.languages.registerCompletionItemProvider('renpy', ...)`
+  - Uses `analysisResultRef` (a React ref) so the closure always reads the latest analysis data without re-registration
+  - Includes 28 built-in keyword snippets plus user-defined snippets from `AppSettings.userSnippets`
+
+### Validation / Diagnostics
+- **`lib/renpyValidator.ts`** — 21 validation rules with inline Monaco diagnostics:
+  - Syntax errors (malformed statements, invalid indentation)
+  - Undefined references (labels, characters, screens, images, audio)
+  - Unreachable code detection
+  - Invalid jump targets (with `renpy.has_label()` guard support)
+  - Shows squiggly underlines in editor with error/warning/info severity
 
 ## User Code Snippets
 
@@ -261,6 +462,28 @@ Users can create custom code snippets (persisted in `AppSettings.userSnippets`):
 ## AI Story Generator
 
 The app integrates AI APIs (Google Gemini via `@google/genai`, with optional OpenAI and Anthropic support via dynamic imports) for generating story content. API keys are encrypted at rest using Electron's `safeStorage`. The generator UI lives in `components/AIGeneratorView.tsx`.
+
+## Menu Constructor (NEW in v0.7.0)
+
+**`components/MenuConstructor.tsx`** (467 lines) provides a visual menu builder with real-time validation:
+- Visual editor for creating Ren'Py menu blocks (choice menus)
+- Add/remove/reorder menu choices with drag-and-drop
+- Configure choice text, conditions, and actions (jump/call to label)
+- Real-time Ren'Py code generation with syntax highlighting preview
+- **Validation**: Checks jump targets (must be valid labels), variable references (must be defined), and syntax correctness
+- Integrated with `RenpyAnalysisResult` for autocomplete of labels and variables
+- Opened as a `menu-constructor` editor tab with `blockId` property (edits existing menu block)
+
+## Dialogue Preview (NEW in v0.7.0)
+
+**`components/DialoguePreview.tsx`** (257 lines) provides a live "Player View" panel in the editor:
+- Shows mock Ren'Py textbox rendering for dialogue lines at cursor position
+- Parses and renders Ren'Py text tags (`{b}`, `{i}`, `{color}`, `{size}`, etc.) with accurate formatting
+- Displays character name + sprite thumbnail for character dialogue
+- Renders menu choices for menu blocks with proper formatting
+- Updates in real-time as cursor moves through the file
+- Expandable/collapsible panel (toggle via button in editor toolbar)
+- Helps writers visualize how dialogue will appear in-game without launching Ren'Py
 
 ## Scene Composer
 
@@ -306,6 +529,64 @@ The app integrates AI APIs (Google Gemini via `@google/genai`, with optional Ope
 - Compositions stored in App.tsx as `screenLayoutCompositions: Record<string, ScreenLayoutComposition>` and persisted in `ProjectSettings`
 - Opened as a `screen-layout-composer` editor tab with `layoutId` property
 
+## Version History
+
+**Current version: 0.7.0 (Public Beta 4)**
+
+### Major Features in v0.7.0:
+
+1. **ChoiceCanvas** (1,386 lines) — Player-facing choice tree visualization with color-coding per destination
+2. **MenuConstructor** (467 lines) — Visual menu builder with real-time validation
+3. **DialoguePreview** (257 lines) — Live player view panel showing mock textbox rendering
+4. **TextMate Syntax Highlighting** — Proper Ren'Py grammar with 40+ scopes
+5. **Semantic Tokens** — Label/variable/screen/character/asset highlighting
+6. **Diagnostics Panel** — Project-wide code diagnostics with 21 validation rules
+7. **ImageMap Composer** — Clickable hotspot editor for imagemap screens
+8. **Screen Layout Composer** — Visual screen widget builder
+9. **Web Worker Analysis** — Background thread for Ren'Py parsing (prevents UI blocking)
+
+### Architecture Improvements in v0.7.0:
+
+- **SearchContext extraction** — Reduced App.tsx coupling (extracted search state to dedicated context)
+- **Web worker offloading** — Improved UI responsiveness during analysis
+- **Virtual list rendering** — Better performance for large datasets (`useVirtualList` hook)
+- **Memoization** — Reduced unnecessary re-renders across components
+- **Debounced updates** — Prevent redundant analysis passes (`useDebounce` hook)
+- **Content-hash caching** — Skip re-parsing unchanged files (djb2 hash in worker)
+
+### New Utility Files in v0.7.0:
+
+- `renpyValidator.ts` — 21 validation rules
+- `renpySemanticTokens.ts` — Semantic token provider
+- `textmateGrammar.ts` — TextMate grammar integration
+- `renpyLabelGuards.ts` — Guard scope detection
+- `renpyLogicalLines.ts` — Multi-line statement parser
+- `renpyTripleQuotes.ts` — Triple-quote detection
+- `useDebounce.ts` — Generic debounce hook
+- `workers/renpyAnalysis.worker.ts` — Web worker for analysis
+
 ## CI/CD
 
-GitHub Actions (`.github/workflows/build.yml`) builds on push/PR to main across Windows, macOS (ARM + Intel), and Linux using Node.js 20. Produces platform-specific installers via electron-builder.
+GitHub Actions (`.github/workflows/build.yml`) provides multi-platform builds:
+
+**Test & Lint Job** (runs on ubuntu-latest):
+- Runs `npm test` (all 260 tests across 21 test files)
+- Runs `npm run lint` (ESLint with TypeScript rules)
+- Gates all merges — must pass before build job runs
+
+**Build Job** (runs on 4 platforms):
+- **Windows**: windows-latest → produces `.exe` installer (NSIS)
+- **macOS ARM**: macos-latest → produces `.dmg` installer
+- **macOS Intel**: macos-15-intel → produces `.dmg` installer
+- **Linux**: ubuntu-latest → produces `.AppImage` + `.zip`
+- Uses Node.js 20 with `--legacy-peer-deps` flag
+- Builds with electron-builder (config in package.json)
+- Uploads artifacts for each platform
+
+**electron-builder configuration**:
+- Output directory: `release/`
+- ASAR enabled with unpack patterns for native modules (Sharp)
+- Bundled resources: `resources/renpy-template/` (Ren'Py project template)
+- Auto-updater integration via electron-updater
+
+**Known build issue**: Sharp's native dependencies (libvips) fail to load in macOS arm64 packaged builds. See `NEW_PROJECT_PLAN.md` for debugging steps. Sharp is lazy-loaded and falls back gracefully if unavailable.
