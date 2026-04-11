@@ -14,7 +14,7 @@ It works **alongside** the Ren'Py SDK. Your `.rpy` files stay as `.rpy` files. N
 **[Download the latest release →](https://github.com/bluemoonfoundry/vangard-renpy-ide/releases/latest)**  
 Windows (installer) · macOS (DMG) · Linux (AppImage) · **Free**
 
-<img width="1973" height="1118" alt="Vangard Ren'Py IDE — Main View" src="https://github.com/user-attachments/assets/cf387ed7-2d2c-444b-9c40-3c1bea90c799" />
+<img width="2558" height="1384" alt="Screenshot 2026-04-10 074606" src="https://github.com/user-attachments/assets/93c02126-18a2-45eb-8e7c-952d969827c9" />
 
 ---
 

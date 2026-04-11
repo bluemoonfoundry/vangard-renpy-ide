@@ -33,6 +33,7 @@ import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import AboutModal from './components/AboutModal';
 import UserSnippetModal from './components/UserSnippetModal';
 import NewProjectWizardModal from './components/NewProjectWizardModal';
+import { MenuConstructorModal } from './components/MenuConstructorModal';
 import { SearchProvider } from './contexts/SearchContext';
 import AIGeneratorView from './components/AIGeneratorView';
 import StatsView from './components/StatsView';
@@ -55,7 +56,7 @@ import type {
   ToastMessage, Theme, ProjectImage, RenpyAudio,
   ClipboardState, ImageMetadata, AudioMetadata, Character,
   AppSettings, ProjectSettings, StickyNote, SceneComposition, SceneSprite, ImageMapComposition, ScreenLayoutComposition, PunchlistMetadata, DiagnosticsTask, IgnoredDiagnosticRule,
-  SerializedSprite, SerializedSceneComposition, StoryCanvasGroupingMode, StoryCanvasLayoutMode, UserSnippet
+  SerializedSprite, SerializedSceneComposition, StoryCanvasGroupingMode, StoryCanvasLayoutMode, UserSnippet, MenuTemplate, MenuChoice
 } from './types';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
@@ -225,6 +226,10 @@ const App: React.FC = () => {
   // --- State: User Snippet Modal ---
   const [userSnippetModalOpen, setUserSnippetModalOpen] = useState(false);
   const [editingSnippet, setEditingSnippet] = useState<UserSnippet | null>(null);
+
+  // --- State: Menu Constructor Modal ---
+  const [menuConstructorModalOpen, setMenuConstructorModalOpen] = useState(false);
+  const [editingMenuTemplate, setEditingMenuTemplate] = useState<MenuTemplate | null>(null);
 
   // --- State: Application and Project Settings ---
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
@@ -3156,6 +3161,29 @@ const App: React.FC = () => {
       setHasUnsavedSettings(true);
   };
 
+  // --- Menu Template CRUD ---
+  const handleSaveMenuTemplate = (template: MenuTemplate) => {
+      updateAppSettings(draft => {
+          if (!draft.menuTemplates) draft.menuTemplates = [];
+          const idx = draft.menuTemplates.findIndex(t => t.id === template.id);
+          if (idx >= 0) {
+              draft.menuTemplates[idx] = { ...template, updatedAt: Date.now() };
+          } else {
+              draft.menuTemplates.push(template);
+          }
+      });
+      setHasUnsavedSettings(true);
+  };
+
+  const handleDeleteMenuTemplate = (templateId: string) => {
+      updateAppSettings(draft => {
+          if (draft.menuTemplates) {
+              draft.menuTemplates = draft.menuTemplates.filter(t => t.id !== templateId);
+          }
+      });
+      setHasUnsavedSettings(true);
+  };
+
   // --- Menu Command Handling ---
   useEffect(() => {
         if (!window.electronAPI) return;
@@ -3384,6 +3412,8 @@ const App: React.FC = () => {
         onCursorPositionChange={setEditorCursorPosition}
         draftingMode={projectSettings.draftingMode} existingImageTags={existingImageTags} existingAudioPaths={existingAudioPaths}
         userSnippets={appSettings.userSnippets}
+        menuTemplates={appSettings.menuTemplates}
+        onSaveMenuTemplate={handleSaveMenuTemplate}
       />;
     }
     if (tab.type === 'image' && tab.filePath) {
@@ -4001,6 +4031,15 @@ const App: React.FC = () => {
                 onCreateSnippet={() => { setEditingSnippet(null); setUserSnippetModalOpen(true); }}
                 onEditSnippet={(snippet) => { setEditingSnippet(snippet); setUserSnippetModalOpen(true); }}
                 onDeleteSnippet={handleDeleteSnippet}
+                // Menu Template Props
+                menuTemplates={appSettings.menuTemplates || []}
+                onCreateMenuTemplate={() => { setEditingMenuTemplate(null); setMenuConstructorModalOpen(true); }}
+                onEditMenuTemplate={(template) => { setEditingMenuTemplate(template); setMenuConstructorModalOpen(true); }}
+                onDeleteMenuTemplate={handleDeleteMenuTemplate}
+                // Accordion State Props
+                projectSettings={projectSettings}
+                onUpdateProjectSettings={updateProjectSettings}
+                hasProject={!!projectRootPath}
             />
           </div>
         )}
@@ -4151,6 +4190,31 @@ const App: React.FC = () => {
         onClose={() => setUserSnippetModalOpen(false)}
         onSave={handleSaveSnippet}
         existingSnippet={editingSnippet}
+      />
+
+      <MenuConstructorModal
+        isOpen={menuConstructorModalOpen}
+        onClose={() => setMenuConstructorModalOpen(false)}
+        onInsert={(code, templateData) => {
+          if (templateData) {
+            const now = Date.now();
+            const template: MenuTemplate = {
+              id: editingMenuTemplate?.id || `template-${now}`,
+              name: templateData.name,
+              description: templateData.description,
+              menuStatement: templateData.menuStatement,
+              choices: templateData.choices,
+              createdAt: editingMenuTemplate?.createdAt || now,
+              updatedAt: now,
+            };
+            handleSaveMenuTemplate(template);
+          }
+          setMenuConstructorModalOpen(false);
+        }}
+        initialTemplate={editingMenuTemplate || undefined}
+        labels={new Set(Object.keys(analysisResult.labels))}
+        variables={new Set(analysisResult.variables.keys())}
+        mode="edit-template"
       />
 
       <NewProjectWizardModal

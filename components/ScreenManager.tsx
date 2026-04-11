@@ -20,11 +20,7 @@ const ScreenManager: React.FC<ScreenManagerProps> = ({ screens, onFindDefinition
     const { containerRef, handleScroll, virtualItems, totalHeight } = useVirtualList(screenList, SCREEN_ITEM_HEIGHT);
 
     return (
-        <div className="h-full flex flex-col p-4">
-            <div className="flex justify-between items-center flex-none mb-4">
-                <h3 className="font-semibold">Screens ({screenList.length})</h3>
-            </div>
-
+        <div className="h-full flex flex-col">
             <div
                 ref={containerRef}
                 className="flex-grow overflow-y-auto overscroll-contain"

@@ -224,10 +224,6 @@ interface SnippetManagerProps {
 const SnippetManager: React.FC<SnippetManagerProps> = ({ categoriesState = {}, onToggleCategory, userSnippets, onCreateSnippet, onEditSnippet, onDeleteSnippet }) => {
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <h3 className="font-semibold">Code Snippets</h3>
-            </div>
-
             {/* User Snippets Section */}
             {(userSnippets && userSnippets.length > 0 || onCreateSnippet) && (
                 <details open className="group">

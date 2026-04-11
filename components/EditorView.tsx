@@ -8,7 +8,7 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
-import type { Block, RenpyAnalysisResult, ToastMessage, UserSnippet } from '../types';
+import type { Block, RenpyAnalysisResult, ToastMessage, UserSnippet, MenuTemplate, MenuChoice as MenuChoiceType } from '../types';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import { detectContext, getRenpyCompletions } from '../lib/renpyCompletionProvider';
 import type { RenpyCompletionData } from '../lib/renpyCompletionProvider';
@@ -25,6 +25,9 @@ import {
 } from '../lib/renpySemanticTokens';
 import DialoguePreview from './DialoguePreview';
 import type { DialoguePreviewData, MenuChoice } from './DialoguePreview';
+import { MenuConstructorModal } from './MenuConstructorModal';
+import { MenuTemplatePickerModal } from './MenuTemplatePickerModal';
+import { createId } from '@/lib/createId';
 
 interface EditorViewProps {
   block: Block;
@@ -50,6 +53,8 @@ interface EditorViewProps {
   existingImageTags: Set<string>;
   existingAudioPaths: Set<string>;
   userSnippets?: UserSnippet[];
+  menuTemplates?: MenuTemplate[];
+  onSaveMenuTemplate?: (template: MenuTemplate) => void;
 }
 
 const LABEL_REGEX = /^\s*label\s+([a-zA-Z0-9_]+):/;
@@ -256,6 +261,11 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const [isDialoguePreviewExpanded, setIsDialoguePreviewExpanded] = useState(true);
   const setDialoguePreviewRef = useRef(setDialoguePreview);
 
+  // Menu constructor modal state
+  const [showMenuConstructor, setShowMenuConstructor] = useState(false);
+  const [showMenuTemplatePicker, setShowMenuTemplatePicker] = useState(false);
+  const [insertionPosition, setInsertionPosition] = useState<monaco.Position | null>(null);
+
   // Track dirty state internally to prevent redundant updates
   const isDirtyRef = useRef(false);
 
@@ -276,6 +286,8 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const onContentChangeRef = useRef(onContentChange);
   const contentChangeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userSnippetsRef = useRef(props.userSnippets);
+  const menuTemplatesRef = useRef(props.menuTemplates);
+  const onSaveMenuTemplateRef = useRef(props.onSaveMenuTemplate);
 
   useEffect(() => {
     onDirtyChangeRef.current = onDirtyChange;
@@ -289,7 +301,9 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     onCursorPositionChangeRef.current = onCursorPositionChange;
     onContentChangeRef.current = onContentChange;
     userSnippetsRef.current = props.userSnippets;
-  }, [onDirtyChange, onTriggerSave, block, onSwitchFocusBlock, analysisResult, onEditorUnmount, onCursorPositionChange, onContentChange, props.userSnippets]);
+    menuTemplatesRef.current = props.menuTemplates;
+    onSaveMenuTemplateRef.current = props.onSaveMenuTemplate;
+  }, [onDirtyChange, onTriggerSave, block, onSwitchFocusBlock, analysisResult, onEditorUnmount, onCursorPositionChange, onContentChange, props.userSnippets, props.menuTemplates, props.onSaveMenuTemplate]);
 
   // This effect syncs the Monaco model when block.content is updated externally
   // (e.g. the character editor rewrites a define statement, or a file is reloaded).
@@ -785,6 +799,30 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         }
     });
 
+    // Menu constructor context menu actions
+    editor.addAction({
+        id: 'create-menu',
+        label: 'Create Menu...',
+        contextMenuGroupId: 'renpy',
+        contextMenuOrder: 1,
+        run: (ed) => {
+            setInsertionPosition(ed.getPosition());
+            setShowMenuConstructor(true);
+        },
+    });
+
+    editor.addAction({
+        id: 'insert-menu-template',
+        label: 'Insert Menu Template...',
+        contextMenuGroupId: 'renpy',
+        contextMenuOrder: 2,
+        precondition: (menuTemplatesRef.current && menuTemplatesRef.current.length > 0) ? undefined : 'false',
+        run: (ed) => {
+            setInsertionPosition(ed.getPosition());
+            setShowMenuTemplatePicker(true);
+        },
+    });
+
     editor.onMouseDown((e) => {
       if (e.target.type !== monacoInstance.editor.MouseTargetType.CONTENT_TEXT || !e.target.position) return;
       if (!e.event.ctrlKey && !e.event.metaKey) return;
@@ -1080,7 +1118,114 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       decorationIds.current = editor.deltaDecorations(decorationIds.current, newDecorations);
       draftingDecorationIds.current = editor.deltaDecorations(draftingDecorationIds.current, newDraftingDecorations);
   
-  }, [analysisResult, block.id, isMounted, block.content, draftingMode, existingImageTags, existingAudioPaths]); 
+  }, [analysisResult, block.id, isMounted, block.content, draftingMode, existingImageTags, existingAudioPaths]);
+
+  // Menu insertion handlers
+  const handleInsertMenu = (code: string, templateData?: { name: string; description?: string; menuStatement?: string; choices: MenuChoiceType[] }) => {
+    if (!editorRef.current || !insertionPosition) return;
+
+    const editor = editorRef.current;
+    const model = editor.getModel();
+    if (!model) return;
+
+    // Insert the code at the stored position
+    const range = new monaco.Range(
+      insertionPosition.lineNumber,
+      insertionPosition.column,
+      insertionPosition.lineNumber,
+      insertionPosition.column
+    );
+
+    editor.executeEdits('', [{
+      range,
+      text: code,
+    }]);
+
+    // If saving as template, call the callback
+    if (templateData && onSaveMenuTemplateRef.current) {
+      const template: MenuTemplate = {
+        id: createId('menu-template'),
+        name: templateData.name,
+        description: templateData.description,
+        menuStatement: templateData.menuStatement,
+        choices: templateData.choices,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      onSaveMenuTemplateRef.current(template);
+    }
+
+    setShowMenuConstructor(false);
+    setInsertionPosition(null);
+    editor.focus();
+  };
+
+  const handleInsertTemplate = (template: MenuTemplate) => {
+    if (!editorRef.current || !insertionPosition) return;
+
+    const editor = editorRef.current;
+    const model = editor.getModel();
+    if (!model) return;
+
+    // Generate code from template
+    let code = 'menu';
+    if (template.menuStatement?.trim()) {
+      code += ` "${template.menuStatement.trim().replace(/"/g, '\\"')}"`;
+    }
+    code += ':\n';
+
+    template.choices.forEach(choice => {
+      if (!choice.text.trim()) return;
+
+      let line = '    "';
+      line += choice.text.replace(/"/g, '\\"');
+      line += '"';
+
+      if (choice.condition?.trim()) {
+        line += ` if ${choice.condition.trim()}`;
+      }
+
+      line += ':\n';
+
+      switch (choice.action) {
+        case 'jump':
+          if (choice.target?.trim()) {
+            line += `        jump ${choice.target.trim()}\n`;
+          }
+          break;
+        case 'call':
+          if (choice.target?.trim()) {
+            line += `        call ${choice.target.trim()}\n`;
+          }
+          break;
+        case 'pass':
+          line += '        pass\n';
+          break;
+        case 'return':
+          line += '        return\n';
+          break;
+      }
+
+      code += line;
+    });
+
+    // Insert at stored position
+    const range = new monaco.Range(
+      insertionPosition.lineNumber,
+      insertionPosition.column,
+      insertionPosition.lineNumber,
+      insertionPosition.column
+    );
+
+    editor.executeEdits('', [{
+      range,
+      text: code,
+    }]);
+
+    setShowMenuTemplatePicker(false);
+    setInsertionPosition(null);
+    editor.focus();
+  };
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -1123,6 +1268,30 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         data={dialoguePreview}
         isExpanded={isDialoguePreviewExpanded}
         onToggleExpand={() => setIsDialoguePreviewExpanded(prev => !prev)}
+      />
+
+      {/* Menu Constructor Modal */}
+      <MenuConstructorModal
+        isOpen={showMenuConstructor}
+        onClose={() => {
+          setShowMenuConstructor(false);
+          setInsertionPosition(null);
+        }}
+        onInsert={handleInsertMenu}
+        labels={new Set(Object.keys(analysisResult.labels))}
+        variables={new Set(Array.from(analysisResult.variables.keys()))}
+        mode="create"
+      />
+
+      {/* Menu Template Picker Modal */}
+      <MenuTemplatePickerModal
+        isOpen={showMenuTemplatePicker}
+        onClose={() => {
+          setShowMenuTemplatePicker(false);
+          setInsertionPosition(null);
+        }}
+        templates={props.menuTemplates || []}
+        onSelect={handleInsertTemplate}
       />
     </div>
   );

@@ -664,6 +664,7 @@ export interface AppSettings {
   snippetCategoriesState?: Record<string, boolean>;
   mouseGestures?: MouseGestureSettings;
   userSnippets?: UserSnippet[];
+  menuTemplates?: MenuTemplate[];
   lastProjectDir?: string;
 }
 
@@ -678,6 +679,45 @@ export interface UserSnippet {
   description: string;
   code: string;
   monacoBody?: string;
+}
+
+/**
+ * Represents a single choice in a menu template.
+ * @interface MenuChoice
+ * @property {string} id - Unique identifier for the choice
+ * @property {string} text - Display text for the choice
+ * @property {string} [condition] - Optional condition (e.g., "points > 10")
+ * @property {'jump' | 'call' | 'pass' | 'return'} action - Action to take when selected
+ * @property {string} [target] - Target label for jump/call actions
+ */
+export interface MenuChoice {
+  id: string;
+  text: string;
+  condition?: string;
+  action: 'jump' | 'call' | 'pass' | 'return' | 'code';
+  target?: string;
+  codeBlock?: string;
+}
+
+/**
+ * Represents a saved menu template for reuse.
+ * @interface MenuTemplate
+ * @property {string} id - Unique identifier for the template
+ * @property {string} name - Display name for the template
+ * @property {string} [description] - Optional description
+ * @property {string} [menuStatement] - Optional menu prompt text
+ * @property {MenuChoice[]} choices - Array of menu choices
+ * @property {number} createdAt - Timestamp when created
+ * @property {number} updatedAt - Timestamp when last updated
+ */
+export interface MenuTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  menuStatement?: string;
+  choices: MenuChoice[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 export type CanvasPanGesture = 'shift-drag' | 'drag' | 'middle-drag';
@@ -879,6 +919,26 @@ export interface ProjectSettings {
   screenLayoutCompositions?: Record<string, ScreenLayoutComposition>;
   scannedImagePaths?: string[];
   scannedAudioPaths?: string[];
+  storyElementsAccordionState?: {
+    expandedSections: {
+      storyElements: boolean;
+      assets: boolean;
+      composers: boolean;
+      tools: boolean;
+    };
+    collapsedSubsections: {
+      characters: boolean;
+      variables: boolean;
+      screens: boolean;
+      images: boolean;
+      audio: boolean;
+      scenes: boolean;
+      imagemaps: boolean;
+      screenLayouts: boolean;
+      snippets: boolean;
+      menuTemplates: boolean;
+    };
+  };
 }
 
 /**

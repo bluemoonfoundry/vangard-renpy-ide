@@ -222,26 +222,24 @@ const VariableManager: React.FC<VariableManagerProps> = ({ analysisResult, onAdd
         <>
             {mode === 'list' && (
                 <>
-                    <div className="flex justify-between items-center">
-                        <h3 className="font-semibold">Variables ({filteredVariables.length})</h3>
-                        <button onClick={() => setMode('add')} className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold">+ Add</button>
+                    <div className="flex items-center justify-between mb-4">
+                        <label htmlFor="variable-filter-toggle" className="flex items-center gap-3 cursor-pointer">
+                            <span className="text-sm text-gray-600 dark:text-gray-400 select-none">
+                                Show story variables only
+                            </span>
+                            <div className="relative inline-flex items-center">
+                                <input
+                                    type="checkbox"
+                                    id="variable-filter-toggle"
+                                    className="sr-only peer"
+                                    checked={filterStoryVars}
+                                    onChange={() => setFilterStoryVars(!filterStoryVars)}
+                                />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                            </div>
+                        </label>
+                        <button onClick={() => setMode('add')} className="px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold">+ Add</button>
                     </div>
-
-                    <label htmlFor="variable-filter-toggle" className="flex items-center justify-between mt-4 cursor-pointer">
-                        <span className="text-sm text-gray-600 dark:text-gray-400 select-none">
-                            Show story variables only
-                        </span>
-                        <div className="relative inline-flex items-center">
-                            <input
-                                type="checkbox"
-                                id="variable-filter-toggle"
-                                className="sr-only peer"
-                                checked={filterStoryVars}
-                                onChange={() => setFilterStoryVars(!filterStoryVars)}
-                            />
-                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                        </div>
-                    </label>
 
                     <div>
                         <VariableList title="Persistent" kind="persistent" vars={persistent} />

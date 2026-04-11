@@ -7,7 +7,6 @@ import type { UserSnippet } from '../types';
 describe('SnippetManager', () => {
   it('renders built-in snippet categories', () => {
     render(<SnippetManager />);
-    expect(screen.getByText('Code Snippets')).toBeInTheDocument();
     expect(screen.getByText('Dialogue & Narration')).toBeInTheDocument();
     expect(screen.getByText('Logic & Control Flow')).toBeInTheDocument();
   });
