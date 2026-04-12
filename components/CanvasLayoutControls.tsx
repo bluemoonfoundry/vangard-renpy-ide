@@ -107,24 +107,24 @@ const CanvasLayoutControls: React.FC<CanvasLayoutControlsProps> = ({
             {allowedLayoutModes.includes('flow-td') && (
               <LayoutIconButton
                 active={layoutMode === 'flow-td'}
-                title="Flow left to right"
+                title="Flow top to bottom"
                 onClick={() => onChangeLayoutMode('flow-td')}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className={iconClass} viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M3 6.5A1.5 1.5 0 014.5 5h3A1.5 1.5 0 019 6.5v1A1.5 1.5 0 017.5 9h-3A1.5 1.5 0 013 7.5v-1zM11 12.5A1.5 1.5 0 0112.5 11h3a1.5 1.5 0 011.5 1.5v1a1.5 1.5 0 01-1.5 1.5h-3a1.5 1.5 0 01-1.5-1.5v-1z" />
-                  <path d="M8.5 7h4.793l-1.147-1.146a1 1 0 111.414-1.414l2.853 2.853a1 1 0 010 1.414l-2.853 2.853a1 1 0 11-1.414-1.414L13.293 9H8.5a1 1 0 110-2z" />
+                  <path d="M5 4.5A1.5 1.5 0 016.5 3h1A1.5 1.5 0 019 4.5v3A1.5 1.5 0 017.5 9h-1A1.5 1.5 0 015 7.5v-3zM11 12.5a1.5 1.5 0 011.5-1.5h1a1.5 1.5 0 011.5 1.5v3a1.5 1.5 0 01-1.5 1.5h-1a1.5 1.5 0 01-1.5-1.5v-3z" />
+                  <path d="M9 8.5v4.793l1.146-1.147a1 1 0 011.414 1.414l-2.853 2.853a1 1 0 01-1.414 0L4.44 13.56a1 1 0 011.414-1.414L7 13.293V8.5a1 1 0 112 0z" />
                 </svg>
               </LayoutIconButton>
             )}
             {allowedLayoutModes.includes('flow-lr') && (
               <LayoutIconButton
                 active={layoutMode === 'flow-lr'}
-                title="Flow top to bottom"
+                title="Flow left to right"
                 onClick={() => onChangeLayoutMode('flow-lr')}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className={iconClass} viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M5 4.5A1.5 1.5 0 016.5 3h1A1.5 1.5 0 019 4.5v3A1.5 1.5 0 017.5 9h-1A1.5 1.5 0 015 7.5v-3zM11 12.5a1.5 1.5 0 011.5-1.5h1a1.5 1.5 0 011.5 1.5v3a1.5 1.5 0 01-1.5 1.5h-1a1.5 1.5 0 01-1.5-1.5v-3z" />
-                  <path d="M9 8.5v4.793l1.146-1.147a1 1 0 011.414 1.414l-2.853 2.853a1 1 0 01-1.414 0L4.44 13.56a1 1 0 011.414-1.414L7 13.293V8.5a1 1 0 112 0z" />
+                  <path d="M3 6.5A1.5 1.5 0 014.5 5h3A1.5 1.5 0 019 6.5v1A1.5 1.5 0 017.5 9h-3A1.5 1.5 0 013 7.5v-1zM11 12.5A1.5 1.5 0 0112.5 11h3a1.5 1.5 0 011.5 1.5v1a1.5 1.5 0 01-1.5 1.5h-3a1.5 1.5 0 01-1.5-1.5v-1z" />
+                  <path d="M8.5 7h4.793l-1.147-1.146a1 1 0 111.414-1.414l2.853 2.853a1 1 0 010 1.414l-2.853 2.853a1 1 0 11-1.414-1.414L13.293 9H8.5a1 1 0 110-2z" />
                 </svg>
               </LayoutIconButton>
             )}

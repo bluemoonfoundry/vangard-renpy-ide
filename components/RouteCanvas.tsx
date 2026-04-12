@@ -715,25 +715,19 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
 
   // Group visible choice links by (sourceId, menuLine) for per-menu pills (label view only)
   const menuGroups = useMemo(() => {
-    if (viewLevel !== 'label') return new Map<string, { links: RouteLink[]; sourcePos: Position }[]>();
-    const groups = new Map<string, { links: RouteLink[]; sourcePos: Position }[]>();
+    if (viewLevel !== 'label') return new Map<string, { links: RouteLink[] }[]>();
+    const groups = new Map<string, { links: RouteLink[] }[]>();
     routeLinks.forEach(link => {
       if (!link.choiceText || link.menuLine === undefined) return;
       if (linkColors && !linkColors.has(link.id)) return; // only show when route is highlighted
       const sourceNode = nodeMap.get(link.sourceId);
-      const targetNode = nodeMap.get(link.targetId);
-      if (!sourceNode || !targetNode) return;
-      const [srcPos] = getOptimalPath(sourceNode, targetNode);
+      if (!sourceNode) return;
       const key = `${link.sourceId}::${link.menuLine}`;
       const existing = groups.get(key);
       if (existing) {
         existing[0].links.push(link);
-        existing[0].sourcePos = {
-          x: (existing[0].sourcePos.x * (existing[0].links.length - 1) + srcPos.x) / existing[0].links.length,
-          y: (existing[0].sourcePos.y * (existing[0].links.length - 1) + srcPos.y) / existing[0].links.length,
-        };
       } else {
-        groups.set(key, [{ links: [link], sourcePos: srcPos }]);
+        groups.set(key, [{ links: [link] }]);
       }
     });
     return groups;
@@ -1729,39 +1723,6 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
                 />
               );
             })}
-            {/* One pill per menu group — offset outward from the node boundary (label view only) */}
-            {viewLevel === 'label' && Array.from(menuGroups.entries()).map(([key, group]) => {
-              const { links, sourcePos } = group[0];
-              const firstLink = links[0];
-              const color = linkColors?.get(firstLink.id) ?? '#4f46e5';
-
-              // Push the pill outward past the node edge so it isn't obscured
-              const sourceNode = nodeMap.get(firstLink.sourceId);
-              let cx = sourcePos.x;
-              let cy = sourcePos.y;
-              if (sourceNode) {
-                const ncx = sourceNode.position.x + sourceNode.width / 2;
-                const ncy = sourceNode.position.y + sourceNode.height / 2;
-                const dx = sourcePos.x - ncx;
-                const dy = sourcePos.y - ncy;
-                const dist = Math.hypot(dx, dy) || 1;
-                const offset = 11 + 10; // pill radius + gap
-                cx = sourcePos.x + (dx / dist) * offset;
-                cy = sourcePos.y + (dy / dist) * offset;
-              }
-
-              return (
-                <MenuPill
-                  key={key}
-                  cx={cx}
-                  cy={cy}
-                  count={links.length}
-                  color={color}
-                  isActive={selectedMenu?.groupKey === key}
-                  onClick={(e) => handleMenuPillClick(e, key)}
-                />
-              );
-            })}
           </g>
         </svg>
 
@@ -1841,6 +1802,53 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
               );
             })
         }
+
+        {/* Menu pill overlay — rendered after node elements so pills are always on top */}
+        {viewLevel === 'label' && (
+          <svg
+            className="absolute pointer-events-none"
+            style={{ left: svgBounds.left, top: svgBounds.top, width: svgBounds.width, height: svgBounds.height, zIndex: 20 }}
+          >
+            <g transform={`translate(${-svgBounds.left}, ${-svgBounds.top})`}>
+              {Array.from(menuGroups.entries()).map(([key, group]) => {
+                const { links } = group[0];
+                const firstLink = links[0];
+                const color = linkColors?.get(firstLink.id) ?? '#4f46e5';
+
+                // Place the pill on the node's primary exit face for the current layout.
+                // Using a fixed face (not averaged link endpoints) avoids the pill drifting
+                // to the wrong side when backward links or mixed-direction links are present.
+                const sourceNode = nodeMap.get(firstLink.sourceId);
+                let cx = 0;
+                let cy = 0;
+                if (sourceNode) {
+                  const side = layoutMode === 'flow-td' ? 'bottom' : 'right';
+                  const anchor = getAttachmentPoint(sourceNode, side);
+                  const ncx = sourceNode.position.x + sourceNode.width / 2;
+                  const ncy = sourceNode.position.y + sourceNode.height / 2;
+                  const dx = anchor.x - ncx;
+                  const dy = anchor.y - ncy;
+                  const dist = Math.hypot(dx, dy) || 1;
+                  const offset = 11 + 10; // pill radius + gap
+                  cx = anchor.x + (dx / dist) * offset;
+                  cy = anchor.y + (dy / dist) * offset;
+                }
+
+                return (
+                  <MenuPill
+                    key={key}
+                    cx={cx}
+                    cy={cy}
+                    count={links.length}
+                    color={color}
+                    isActive={selectedMenu?.groupKey === key}
+                    onClick={(e) => handleMenuPillClick(e, key)}
+                  />
+                );
+              })}
+            </g>
+          </svg>
+        )}
       </div>
       {edgeContextMenu && (
         <div
