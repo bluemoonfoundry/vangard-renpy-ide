@@ -10,8 +10,16 @@ import AudioManager from './AudioManager';
 import SnippetManager from './SnippetManager';
 import ScreenManager from './ScreenManager';
 import { MenuTemplateManager } from './MenuTemplateManager';
-import { AccordionSection } from './AccordionSection';
 import { SubsectionHeader } from './SubsectionHeader';
+
+type TabId = 'storyData' | 'assets' | 'composers' | 'tools';
+
+const TABS: { id: TabId; label: string }[] = [
+    { id: 'storyData', label: 'Story' },
+    { id: 'assets', label: 'Assets' },
+    { id: 'composers', label: 'Compose' },
+    { id: 'tools', label: 'Tools' },
+];
 
 interface StoryElementsPanelProps {
     analysisResult: RenpyAnalysisResult;
@@ -83,7 +91,7 @@ interface StoryElementsPanelProps {
     onEditMenuTemplate: (template: MenuTemplate) => void;
     onDeleteMenuTemplate: (templateId: string) => void;
 
-    // Accordion State Props
+    // Tab/Subsection State Props
     projectSettings: ProjectSettings;
     onUpdateProjectSettings: (updater: (draft: ProjectSettings) => void) => void;
     hasProject: boolean;
@@ -106,19 +114,12 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     menuTemplates, onCreateMenuTemplate, onEditMenuTemplate, onDeleteMenuTemplate,
     projectSettings, onUpdateProjectSettings, hasProject,
 }) => {
-    // Accordion expansion state - initialize from projectSettings, default all collapsed
-    const [expandedSections, setExpandedSections] = useState(
-        projectSettings.storyElementsAccordionState?.expandedSections || {
-            storyElements: false,
-            assets: false,
-            composers: false,
-            tools: false,
-        }
+    const [activeTab, setActiveTab] = useState<TabId>(
+        projectSettings.storyElementsTabState?.activeTab ?? 'storyData'
     );
 
-    // Subsection collapse state - initialize from projectSettings, default all collapsed
     const [collapsedSubsections, setCollapsedSubsections] = useState(
-        projectSettings.storyElementsAccordionState?.collapsedSubsections || {
+        projectSettings.storyElementsTabState?.collapsedSubsections ?? {
             characters: false,
             variables: false,
             screens: false,
@@ -132,32 +133,16 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
         }
     );
 
-    // Save accordion state to projectSettings whenever it changes
     useEffect(() => {
         onUpdateProjectSettings(draft => {
-            draft.storyElementsAccordionState = {
-                expandedSections,
-                collapsedSubsections,
-            };
+            draft.storyElementsTabState = { activeTab, collapsedSubsections };
         });
-    }, [expandedSections, collapsedSubsections, onUpdateProjectSettings]);
-
-    const toggleSection = (section: keyof typeof expandedSections) => {
-        setExpandedSections(prev => ({
-            ...prev,
-            [section]: !prev[section],
-        }));
-    };
+    }, [activeTab, collapsedSubsections, onUpdateProjectSettings]);
 
     const toggleSubsection = (subsection: keyof typeof collapsedSubsections) => {
-        setCollapsedSubsections(prev => ({
-            ...prev,
-            [subsection]: !prev[subsection],
-        }));
+        setCollapsedSubsections(prev => ({ ...prev, [subsection]: !prev[subsection] }));
     };
 
-    // Memoize Map→Array conversions so child components don't see a new reference
-    // on every parent re-render (which would blow their own useMemo caches).
     const imagesArray = useMemo(() => Array.from(projectImages.values()), [projectImages]);
     const audiosArray = useMemo(() => Array.from(projectAudios.values()), [projectAudios]);
 
@@ -169,31 +154,42 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     const { containerRef: charContainerRef, handleScroll: charHandleScroll, virtualItems: charVirtualItems, totalHeight: charTotalHeight } = useVirtualList(characterList, CHAR_ITEM_HEIGHT);
 
     const handleCharacterDragStart = (e: React.DragEvent, char: Character) => {
-        e.dataTransfer.setData('application/renpy-dnd', JSON.stringify({
-            text: `${char.tag} "..."`
-        }));
+        e.dataTransfer.setData('application/renpy-dnd', JSON.stringify({ text: `${char.tag} "..."` }));
         e.dataTransfer.setData('text/plain', `${char.tag} "..."`);
         e.dataTransfer.effectAllowed = 'copy';
     };
 
-    const storyElementsCount = characterList.length + analysisResult.variables.size + analysisResult.screens.size;
-    const composersCount = scenes.length + imagemaps.length + screenLayouts.length;
-
     return (
         <div className="h-full bg-secondary text-primary flex flex-col min-h-0">
-            <header className="flex-none p-4 border-b border-primary">
-                <h2 className="text-xl font-bold">Story Elements</h2>
-            </header>
-            <main className="flex-grow overflow-y-auto overscroll-contain">
-                {/* Story Data Accordion */}
-                <AccordionSection
-                    title="Story Data"
-                    isExpanded={hasProject && expandedSections.storyElements}
-                    onToggle={() => hasProject && toggleSection('storyElements')}
-                    itemCount={storyElementsCount}
-                    disabled={!hasProject}
-                >
-                    <div className="divide-y divide-primary">
+            {/* Tab bar */}
+            <div className="flex-none border-b border-primary flex" role="tablist" aria-label="Story Elements sections">
+                {TABS.map(tab => (
+                    <button
+                        key={tab.id}
+                        role="tab"
+                        aria-selected={activeTab === tab.id}
+                        aria-controls={`story-tab-panel-${tab.id}`}
+                        disabled={!hasProject}
+                        onClick={() => hasProject && setActiveTab(tab.id)}
+                        className={`flex-1 py-2 text-xs font-medium border-b-2 transition-colors ${
+                            !hasProject
+                                ? 'opacity-40 cursor-not-allowed border-transparent text-secondary'
+                                : activeTab === tab.id
+                                    ? 'border-accent text-accent'
+                                    : 'border-transparent text-secondary hover:text-primary hover:border-primary'
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Tab content — full remaining height, scrollable */}
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+
+                {/* Story Data */}
+                {activeTab === 'storyData' && (
+                    <div id="story-tab-panel-storyData" role="tabpanel" className="divide-y divide-primary">
                         {/* Characters */}
                         <div className="p-4">
                             <SubsectionHeader
@@ -251,7 +247,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                         </div>
 
                         {/* Variables */}
-                        <div className={collapsedSubsections.variables ? 'p-4' : 'max-h-[600px] p-4 flex flex-col overflow-hidden'}>
+                        <div className="p-4">
                             <SubsectionHeader
                                 title="Variables"
                                 count={analysisResult.variables.size}
@@ -259,7 +255,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                                 onToggle={() => toggleSubsection('variables')}
                             />
                             {!collapsedSubsections.variables && (
-                                <div className="mt-2 overflow-y-auto flex-1">
+                                <div className="mt-2">
                                     <VariableManager
                                         analysisResult={analysisResult}
                                         onAddVariable={onAddVariable}
@@ -272,7 +268,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                         </div>
 
                         {/* Screens */}
-                        <div className={collapsedSubsections.screens ? 'p-4' : 'h-64 p-4'}>
+                        <div className="p-4">
                             <SubsectionHeader
                                 title="Screens"
                                 count={analysisResult.screens.size}
@@ -280,7 +276,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                                 onToggle={() => toggleSubsection('screens')}
                             />
                             {!collapsedSubsections.screens && (
-                                <div className="h-full">
+                                <div className="mt-2">
                                     <ScreenManager
                                         screens={analysisResult.screens}
                                         onFindDefinition={onFindScreenDefinition}
@@ -289,19 +285,13 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                             )}
                         </div>
                     </div>
-                </AccordionSection>
+                )}
 
-                {/* Assets Accordion */}
-                <AccordionSection
-                    title="Assets"
-                    isExpanded={hasProject && expandedSections.assets}
-                    onToggle={() => hasProject && toggleSection('assets')}
-                    itemCount={projectImages.size + projectAudios.size}
-                    disabled={!hasProject}
-                >
-                    <div className="divide-y divide-primary">
+                {/* Assets */}
+                {activeTab === 'assets' && (
+                    <div id="story-tab-panel-assets" role="tabpanel" className="divide-y divide-primary">
                         {/* Images */}
-                        <div className={collapsedSubsections.images ? 'p-4' : 'h-96 p-4 flex flex-col'}>
+                        <div className="p-4">
                             <SubsectionHeader
                                 title="Images"
                                 count={projectImages.size}
@@ -309,7 +299,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                                 onToggle={() => toggleSubsection('images')}
                             />
                             {!collapsedSubsections.images && (
-                                <div className="flex-1 overflow-hidden">
+                                <div className="mt-2">
                                     <ImageManager
                                         images={imagesArray}
                                         metadata={imageMetadata}
@@ -328,7 +318,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                         </div>
 
                         {/* Audio */}
-                        <div className={collapsedSubsections.audio ? 'p-4' : 'h-96 p-4 flex flex-col'}>
+                        <div className="p-4">
                             <SubsectionHeader
                                 title="Audio"
                                 count={projectAudios.size}
@@ -336,7 +326,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                                 onToggle={() => toggleSubsection('audio')}
                             />
                             {!collapsedSubsections.audio && (
-                                <div className="flex-1 overflow-hidden">
+                                <div className="mt-2">
                                     <AudioManager
                                         audios={audiosArray}
                                         metadata={audioMetadata}
@@ -354,17 +344,11 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                             )}
                         </div>
                     </div>
-                </AccordionSection>
+                )}
 
-                {/* Composers Accordion */}
-                <AccordionSection
-                    title="Composers"
-                    isExpanded={hasProject && expandedSections.composers}
-                    onToggle={() => hasProject && toggleSection('composers')}
-                    itemCount={composersCount}
-                    disabled={!hasProject}
-                >
-                    <div className="divide-y divide-primary">
+                {/* Composers */}
+                {activeTab === 'composers' && (
+                    <div id="story-tab-panel-composers" role="tabpanel" className="divide-y divide-primary">
                         {/* Scene Compositions */}
                         <div className="p-4">
                             <SubsectionHeader
@@ -447,48 +431,48 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                                     {screenLayouts.map(layout => {
                                         const isInCode = analysisResult.screens.has(layout.name);
                                         return (
-                                        <li key={layout.id} className="p-2 rounded-md bg-secondary border border-primary flex items-center justify-between group hover:shadow-md transition-shadow">
-                                            <div className="flex-grow cursor-pointer min-w-0" onClick={() => onOpenScreenLayout(layout.id)}>
-                                                <div className="flex items-center gap-1.5">
-                                                    <p className="font-semibold text-xs truncate">{layout.name}</p>
-                                                    {isInCode && (
-                                                        <span className="flex-shrink-0 text-[9px] font-semibold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/40 px-1 py-0.5 rounded">
-                                                            in code
-                                                        </span>
-                                                    )}
+                                            <li key={layout.id} className="p-2 rounded-md bg-secondary border border-primary flex items-center justify-between group hover:shadow-md transition-shadow">
+                                                <div className="flex-grow cursor-pointer min-w-0" onClick={() => onOpenScreenLayout(layout.id)}>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <p className="font-semibold text-xs truncate">{layout.name}</p>
+                                                        {isInCode && (
+                                                            <span className="flex-shrink-0 text-[9px] font-semibold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/40 px-1 py-0.5 rounded">
+                                                                in code
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div className="flex items-center space-x-1 flex-shrink-0 pl-2">
-                                                {isInCode && (
+                                                <div className="flex items-center space-x-1 flex-shrink-0 pl-2">
+                                                    {isInCode && (
+                                                        <button
+                                                            onClick={() => onFindScreenDefinition(layout.name)}
+                                                            title="Go to definition"
+                                                            className="p-1 text-secondary hover:text-indigo-600 dark:hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity rounded"
+                                                            aria-label="Go to definition"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                                        </button>
+                                                    )}
                                                     <button
-                                                        onClick={() => onFindScreenDefinition(layout.name)}
-                                                        title="Go to definition"
-                                                        className="p-1 text-secondary hover:text-indigo-600 dark:hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity rounded"
-                                                        aria-label="Go to definition"
+                                                        onClick={() => onDuplicateScreenLayout(layout.id)}
+                                                        title="Duplicate"
+                                                        className="p-1 text-secondary hover:text-accent opacity-0 group-hover:opacity-100 transition-opacity rounded"
+                                                        aria-label="Duplicate screen layout"
                                                     >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                                        <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                                                            <rect x="5" y="1" width="9" height="11" rx="1.5"/><rect x="1" y="4" width="9" height="11" rx="1.5"/>
+                                                        </svg>
                                                     </button>
-                                                )}
-                                                <button
-                                                    onClick={() => onDuplicateScreenLayout(layout.id)}
-                                                    title="Duplicate"
-                                                    className="p-1 text-secondary hover:text-accent opacity-0 group-hover:opacity-100 transition-opacity rounded"
-                                                    aria-label="Duplicate screen layout"
-                                                >
-                                                    <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                                                        <rect x="5" y="1" width="9" height="11" rx="1.5"/><rect x="1" y="4" width="9" height="11" rx="1.5"/>
-                                                    </svg>
-                                                </button>
-                                                <button
-                                                    onClick={() => onDeleteScreenLayout(layout.id)}
-                                                    className="p-1 text-secondary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity rounded"
-                                                    title="Delete Screen Layout"
-                                                    aria-label="Delete screen layout"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                </button>
-                                            </div>
-                                        </li>
+                                                    <button
+                                                        onClick={() => onDeleteScreenLayout(layout.id)}
+                                                        className="p-1 text-secondary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity rounded"
+                                                        title="Delete Screen Layout"
+                                                        aria-label="Delete screen layout"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                    </button>
+                                                </div>
+                                            </li>
                                         );
                                     })}
                                     {screenLayouts.length === 0 && <p className="text-xs text-secondary italic">No screen layouts created yet.</p>}
@@ -496,16 +480,11 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                             )}
                         </div>
                     </div>
-                </AccordionSection>
+                )}
 
-                {/* Tools Accordion */}
-                <AccordionSection
-                    title="Tools"
-                    isExpanded={hasProject && expandedSections.tools}
-                    onToggle={() => hasProject && toggleSection('tools')}
-                    disabled={!hasProject}
-                >
-                    <div className="divide-y divide-primary">
+                {/* Tools */}
+                {activeTab === 'tools' && (
+                    <div id="story-tab-panel-tools" role="tabpanel" className="divide-y divide-primary">
                         {/* Code Snippets */}
                         <div className="p-4">
                             <SubsectionHeader
@@ -551,8 +530,8 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                             )}
                         </div>
                     </div>
-                </AccordionSection>
-            </main>
+                )}
+            </div>
         </div>
     );
 };

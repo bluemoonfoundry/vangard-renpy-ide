@@ -919,13 +919,8 @@ export interface ProjectSettings {
   screenLayoutCompositions?: Record<string, ScreenLayoutComposition>;
   scannedImagePaths?: string[];
   scannedAudioPaths?: string[];
-  storyElementsAccordionState?: {
-    expandedSections: {
-      storyElements: boolean;
-      assets: boolean;
-      composers: boolean;
-      tools: boolean;
-    };
+  storyElementsTabState?: {
+    activeTab: 'storyData' | 'assets' | 'composers' | 'tools';
     collapsedSubsections: {
       characters: boolean;
       variables: boolean;
