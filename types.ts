@@ -921,18 +921,7 @@ export interface ProjectSettings {
   scannedAudioPaths?: string[];
   storyElementsTabState?: {
     activeTab: 'storyData' | 'assets' | 'composers' | 'tools';
-    collapsedSubsections: {
-      characters: boolean;
-      variables: boolean;
-      screens: boolean;
-      images: boolean;
-      audio: boolean;
-      scenes: boolean;
-      imagemaps: boolean;
-      screenLayouts: boolean;
-      snippets: boolean;
-      menuTemplates: boolean;
-    };
+    activeSubTab?: 'characters' | 'variables' | 'screens' | 'images' | 'audio' | 'scenes' | 'imagemaps' | 'screenLayouts' | 'snippets' | 'menuTemplates';
   };
 }
 

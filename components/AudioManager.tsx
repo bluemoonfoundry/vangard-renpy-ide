@@ -218,8 +218,8 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
   };
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <div className="flex-none space-y-4 mb-4">
+    <>
+      <div className="space-y-4 mb-4">
         <div className="flex justify-between items-center">
             <span className="text-xs text-gray-500 dark:text-gray-400">
                 {lastScanned ? `Last scanned: ${new Date(lastScanned).toLocaleTimeString()}` : 'Not scanned.'}
@@ -289,7 +289,7 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
       </div>
       <div
         ref={containerRef}
-        className="flex-grow overflow-y-auto -mr-4 pr-4 overscroll-contain"
+        className="relative"
         onScroll={handleScroll}
       >
         <div style={{ height: totalHeight, position: 'relative' }}>
@@ -320,7 +320,7 @@ const AudioManager: React.FC<AudioManagerProps> = ({ audios, metadata, scanDirec
           onClose={() => setContextMenu(null)}
         />
       )}
-    </div>
+    </>
   );
 };
 

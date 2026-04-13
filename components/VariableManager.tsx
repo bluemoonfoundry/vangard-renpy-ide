@@ -145,7 +145,6 @@ const VariableManager: React.FC<VariableManagerProps> = ({ analysisResult, onAdd
             collapsed ? [] : vars,
             VAR_ITEM_HEIGHT,
         );
-        const listHeight = Math.min(vars.length * VAR_ITEM_HEIGHT, 400);
         return (
             <div className="mt-4">
                 <button
@@ -164,8 +163,7 @@ const VariableManager: React.FC<VariableManagerProps> = ({ analysisResult, onAdd
                         : (
                             <div
                                 ref={containerRef}
-                                className="overflow-y-auto overscroll-contain"
-                                style={{ height: listHeight }}
+                                className="relative"
                                 onScroll={handleScroll}
                             >
                                 <div style={{ height: totalHeight, position: 'relative' }}>
