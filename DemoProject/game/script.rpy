@@ -38,5 +38,6 @@ label start:
 
     #call screen screen_1
 
-    # Jump to the very first scene file.
-    jump scene_01_start
+    # Jump to the new comprehensive branching narrative
+    # "The Vanishing Artifact" - 8 stages, ~70 files, deep branching
+    jump stage1_arrival
