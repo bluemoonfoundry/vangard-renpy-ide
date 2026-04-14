@@ -42,6 +42,7 @@ interface RouteCanvasProps {
   onChangeLayoutMode: (mode: StoryCanvasLayoutMode) => void;
   onChangeGroupingMode: (mode: StoryCanvasGroupingMode) => void;
   centerOnStartRequest?: { key: number } | null;
+  centerOnNodeRequest?: { nodeId: string; key: number } | null;
 }
 
 interface Rect { x: number; y: number; width: number; height: number; }
@@ -294,6 +295,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
   onChangeLayoutMode,
   onChangeGroupingMode,
   centerOnStartRequest,
+  centerOnNodeRequest,
 }) => {
   const [rubberBandRect, setRubberBandRect] = useState<Rect | null>(null);
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
@@ -659,6 +661,14 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
     const startNode = labelNodes.find(n => n.label === 'start');
     if (startNode) centerOnNode(startNode.id, { recordHistory: false });
   }, [centerOnStartRequest, labelNodes, centerOnNode]);
+
+  const lastHandledNodeRequestKeyRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!centerOnNodeRequest) return;
+    if (centerOnNodeRequest.key === lastHandledNodeRequestKeyRef.current) return;
+    lastHandledNodeRequestKeyRef.current = centerOnNodeRequest.key;
+    centerOnNode(centerOnNodeRequest.nodeId, { recordHistory: true });
+  }, [centerOnNodeRequest, centerOnNode]);
 
   const applyHistoryEntry = useCallback((index: number) => {
     const entry = navHistory[index];

@@ -181,6 +181,7 @@ export interface ChoiceCanvasProps {
   onChangeLayoutMode: (mode: StoryCanvasLayoutMode) => void;
   onChangeGroupingMode: (mode: StoryCanvasGroupingMode) => void;
   centerOnStartRequest?: { key: number } | null;
+  centerOnNodeRequest?: { nodeId: string; key: number } | null;
 }
 
 const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
@@ -201,6 +202,7 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
   onChangeLayoutMode,
   onChangeGroupingMode,
   centerOnStartRequest,
+  centerOnNodeRequest,
 }) => {
   const [showSnippets, setShowSnippets] = useState(true);
   const [showImplicit, setShowImplicit] = useState(false);
@@ -535,14 +537,27 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
     const node = layoutedNodes.find(n => n.id === nodeId);
     if (!node || !canvasAreaRef.current) return;
     const { width, height } = canvasAreaRef.current.getBoundingClientRect();
-    onTransformChange(t => ({
-      x: (width / 2) - ((node.position.x + node.width / 2) * t.scale),
-      y: (height / 2) - ((node.position.y + node.height / 2) * t.scale),
-      scale: t.scale,
-    }));
+    onTransformChange(t => {
+      // Snap up to a readable zoom level if the canvas is very zoomed out,
+      // but never zoom out from a zoom the user has already set.
+      const scale = Math.max(t.scale, 1.0);
+      return {
+        x: (width / 2) - ((node.position.x + node.width / 2) * scale),
+        y: (height / 2) - ((node.position.y + node.height / 2) * scale),
+        scale,
+      };
+    });
     setShowLabelSearchResults(false);
     setLabelSearchQuery('');
   }, [layoutedNodes, onTransformChange]);
+
+  const lastHandledNodeRequestKeyRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!centerOnNodeRequest) return;
+    if (centerOnNodeRequest.key === lastHandledNodeRequestKeyRef.current) return;
+    lastHandledNodeRequestKeyRef.current = centerOnNodeRequest.key;
+    centerOnChoiceNode(centerOnNodeRequest.nodeId);
+  }, [centerOnNodeRequest, centerOnChoiceNode]);
 
   // ── Wheel zoom ──
   // Attach to the always-rendered container div, not the SVG, so the listener

@@ -37,6 +37,7 @@ import { MenuConstructorModal } from './components/MenuConstructorModal';
 import { SearchProvider } from './contexts/SearchContext';
 import AIGeneratorView from './components/AIGeneratorView';
 import StatsView from './components/StatsView';
+import GoToLabelModal, { GoToLabelItem } from './components/GoToLabelModal';
 import { useRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis';
 import { useHistory } from './hooks/useHistory';
 import { createId } from './lib/createId';
@@ -270,6 +271,9 @@ const App: React.FC = () => {
   const [centerOnBlockRequest, setCenterOnBlockRequest] = useState<{ blockId: string, key: number } | null>(null);
   const [centerOnRouteStartRequest, setCenterOnRouteStartRequest] = useState<{ key: number } | null>(null);
   const [centerOnChoiceStartRequest, setCenterOnChoiceStartRequest] = useState<{ key: number } | null>(null);
+  const [centerOnRouteNodeRequest, setCenterOnRouteNodeRequest] = useState<{ nodeId: string; key: number } | null>(null);
+  const [centerOnChoiceNodeRequest, setCenterOnChoiceNodeRequest] = useState<{ nodeId: string; key: number } | null>(null);
+  const [isGoToLabelOpen, setIsGoToLabelOpen] = useState(false);
   const [flashBlockRequest, setFlashBlockRequest] = useState<{ blockId: string, key: number } | null>(null);
   const [canvasFilters, setCanvasFilters] = useState({ story: true, screens: true, config: false, notes: true, minimap: true });
   const [_editorCursorPosition, setEditorCursorPosition] = useState<{ line: number; column: number } | null>(null);
@@ -2830,6 +2834,54 @@ const App: React.FC = () => {
       }
   }, [blocks, analysisResult, addToast, stickyNotes, canvasFilters.notes]);
 
+  // ── Go-to-label (Ctrl+G) ─────────────────────────────────────────────────────
+
+  const activeCanvasTabId = activeTabId === 'canvas' || activeTabId === 'route-canvas' || activeTabId === 'choice-canvas'
+    ? activeTabId : null;
+
+  const goToLabelItems = useMemo<GoToLabelItem[]>(() => {
+    if (activeCanvasTabId === 'canvas') {
+      return analysisResult.labelNodes.map(n => ({ label: n.label, id: n.blockId }));
+    }
+    if (activeCanvasTabId === 'route-canvas' || activeCanvasTabId === 'choice-canvas') {
+      return routeAnalysisResult.labelNodes.map(n => ({ label: n.label, id: n.id }));
+    }
+    return [];
+  }, [activeCanvasTabId, analysisResult.labelNodes, routeAnalysisResult.labelNodes]);
+
+  const goToLabelCanvasName = activeCanvasTabId === 'canvas' ? 'Story'
+    : activeCanvasTabId === 'route-canvas' ? 'Route'
+    : activeCanvasTabId === 'choice-canvas' ? 'Choice'
+    : '';
+
+  const handleGoToLabel = useCallback((id: string) => {
+    setIsGoToLabelOpen(false);
+    if (activeCanvasTabId === 'canvas') {
+      setCenterOnBlockRequest({ blockId: id, key: Date.now() });
+    } else if (activeCanvasTabId === 'route-canvas') {
+      setCenterOnRouteNodeRequest({ nodeId: id, key: Date.now() });
+    } else if (activeCanvasTabId === 'choice-canvas') {
+      setCenterOnChoiceNodeRequest({ nodeId: id, key: Date.now() });
+    }
+  }, [activeCanvasTabId]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'g') {
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        if (!activeCanvasTabId) return;
+        e.preventDefault();
+        setIsGoToLabelOpen(prev => !prev);
+      }
+      if (e.key === 'Escape') {
+        setIsGoToLabelOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [activeCanvasTabId]);
+
   // DnD Handlers for Tabs
   const handleTabDragStart = (e: React.DragEvent<HTMLDivElement>, tabId: string, paneId: 'primary' | 'secondary' = 'primary') => {
     setDraggedTabId(tabId);
@@ -3411,6 +3463,7 @@ const App: React.FC = () => {
         onChangeLayoutMode={handleChangeRouteCanvasLayoutMode}
         onChangeGroupingMode={handleChangeRouteCanvasGroupingMode}
         centerOnStartRequest={centerOnRouteStartRequest}
+        centerOnNodeRequest={centerOnRouteNodeRequest}
       />;
     }
     if (tab.type === 'choice-canvas') {
@@ -3430,6 +3483,7 @@ const App: React.FC = () => {
         onChangeLayoutMode={handleChangeChoiceCanvasLayoutMode}
         onChangeGroupingMode={handleChangeChoiceCanvasGroupingMode}
         centerOnStartRequest={centerOnChoiceStartRequest}
+        centerOnNodeRequest={centerOnChoiceNodeRequest}
       />;
     }
     if (tab.type === 'diagnostics' || tab.type === 'punchlist') {
@@ -4294,6 +4348,13 @@ const App: React.FC = () => {
       <AboutModal
         isOpen={aboutModalOpen}
         onClose={() => setAboutModalOpen(false)}
+      />
+      <GoToLabelModal
+        isOpen={isGoToLabelOpen}
+        items={goToLabelItems}
+        canvasName={goToLabelCanvasName}
+        onSelect={handleGoToLabel}
+        onClose={() => setIsGoToLabelOpen(false)}
       />
     </div>
     </SearchProvider>
