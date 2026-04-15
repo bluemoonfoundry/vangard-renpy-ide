@@ -22,7 +22,7 @@ export function MenuTemplatePickerModal({
   templates,
   onSelect,
 }: MenuTemplatePickerModalProps) {
-  const modalRef = useModalAccessibility(isOpen, onClose);
+  const { contentRef: modalRef } = useModalAccessibility({ isOpen, onClose });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 

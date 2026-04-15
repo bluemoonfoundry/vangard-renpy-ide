@@ -8,7 +8,7 @@
 
 import { useState, useCallback } from 'react';
 import type { FileSystemTreeNode, Block, BlockGroup, ProjectImage, RenpyAudio, ImageMetadata, AudioMetadata, ClipboardState, Link } from '../types';
-import { produce } from 'https://aistudiocdn.com/immer@^10.1.1';
+import { produce } from 'immer';
 import { useToasts } from '../contexts/ToastContext';
 import { createId } from '../lib/createId';
 

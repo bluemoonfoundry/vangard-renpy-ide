@@ -22,6 +22,7 @@ export interface AnalysisBlock {
   id: string;
   content: string;
   filePath?: string;
+  title?: string;
 }
 
 const LABEL_REGEX = /^\s*label\s+([a-zA-Z0-9_]+):/;

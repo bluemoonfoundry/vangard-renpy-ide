@@ -15,7 +15,7 @@
  *   const api = installElectronAPI();
  */
 
-import { vi } from 'vitest';
+import { vi, type Mock } from 'vitest';
 import type { AppSettings, SearchResult } from '../../types';
 
 interface MockLoadedProject {
@@ -48,64 +48,67 @@ interface SaveDialogOptions {
   filters?: Array<{ name: string; extensions: string[] }>;
 }
 
+type Unsubscribe = () => void;
+
 /** The shape of window.electronAPI as exposed by preload.js. */
 export interface MockElectronAPI {
   // Directory / project
-  openDirectory: ReturnType<typeof vi.fn<[], Promise<string | null>>>;
-  createProject: ReturnType<typeof vi.fn<[], Promise<string | null>>>;
-  loadProject: ReturnType<typeof vi.fn<[string], Promise<MockLoadedProject>>>;
-  refreshProjectTree: ReturnType<typeof vi.fn<[string], Promise<MockRefreshProjectTree>>>;
+  openDirectory: Mock<() => Promise<string | null>>;
+  createProject: Mock<() => Promise<string | null>>;
+  loadProject: Mock<(path: string) => Promise<MockLoadedProject>>;
+  refreshProjectTree: Mock<(path: string) => Promise<MockRefreshProjectTree>>;
 
   // File system
-  writeFile: ReturnType<typeof vi.fn<[string, string, string?], Promise<{ success: boolean; error?: string }>>>;
-  createDirectory: ReturnType<typeof vi.fn<[string], Promise<{ success: boolean; error?: string }>>>;
-  removeEntry: ReturnType<typeof vi.fn<[string], Promise<{ success: boolean; error?: string }>>>;
-  moveFile: ReturnType<typeof vi.fn<[string, string], Promise<{ success: boolean; error?: string }>>>;
-  copyEntry: ReturnType<typeof vi.fn<[string, string], Promise<{ success: boolean; error?: string }>>>;
-  scanDirectory: ReturnType<typeof vi.fn<[string], Promise<MockScannedDirectory>>>;
+  readFile: Mock<(path: string) => Promise<string>>;
+  writeFile: Mock<(path: string, content: string, encoding?: string) => Promise<{ success: boolean; error?: string }>>;
+  createDirectory: Mock<(path: string) => Promise<{ success: boolean; error?: string }>>;
+  removeEntry: Mock<(path: string) => Promise<{ success: boolean; error?: string }>>;
+  moveFile: Mock<(oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>>;
+  copyEntry: Mock<(sourcePath: string, destPath: string) => Promise<{ success: boolean; error?: string }>>;
+  scanDirectory: Mock<(path: string) => Promise<MockScannedDirectory>>;
 
   // Menu commands
-  onMenuCommand: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
+  onMenuCommand: Mock<(callback: (...args: unknown[]) => unknown) => Unsubscribe>;
 
   // Exit flow
-  onCheckUnsavedChangesBeforeExit: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
-  replyUnsavedChangesBeforeExit: ReturnType<typeof vi.fn<[boolean], void>>;
-  onShowExitModal: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
-  onSaveIdeStateBeforeQuit: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
-  ideStateSavedForQuit: ReturnType<typeof vi.fn<[], void>>;
-  forceQuit: ReturnType<typeof vi.fn<[], void>>;
+  onCheckUnsavedChangesBeforeExit: Mock<(callback: (...args: unknown[]) => unknown) => Unsubscribe>;
+  replyUnsavedChangesBeforeExit: Mock<(hasUnsaved: boolean) => void>;
+  onShowExitModal: Mock<(callback: (...args: unknown[]) => unknown) => Unsubscribe>;
+  onSaveIdeStateBeforeQuit: Mock<(callback: (...args: unknown[]) => unknown) => Unsubscribe>;
+  ideStateSavedForQuit: Mock<() => void>;
+  forceQuit: Mock<() => void>;
 
   // Game execution
-  selectRenpy: ReturnType<typeof vi.fn<[], Promise<string | null>>>;
-  runGame: ReturnType<typeof vi.fn<[string, string], void>>;
-  stopGame: ReturnType<typeof vi.fn<[], void>>;
-  checkRenpyPath: ReturnType<typeof vi.fn<[string], Promise<boolean>>>;
-  onGameStarted: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
-  onGameStopped: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
-  onGameError: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
+  selectRenpy: Mock<() => Promise<string | null>>;
+  runGame: Mock<(renpyPath: string, projectPath: string) => void>;
+  stopGame: Mock<() => void>;
+  checkRenpyPath: Mock<(path: string) => Promise<boolean>>;
+  onGameStarted: Mock<(callback: (...args: unknown[]) => unknown) => Unsubscribe>;
+  onGameStopped: Mock<(callback: (...args: unknown[]) => unknown) => Unsubscribe>;
+  onGameError: Mock<(callback: (...args: unknown[]) => unknown) => Unsubscribe>;
 
   // Settings & API keys
-  getAppSettings: ReturnType<typeof vi.fn<[], Promise<Partial<AppSettings> | null>>>;
-  saveAppSettings: ReturnType<typeof vi.fn<[AppSettings], Promise<{ success: boolean; error?: string }>>>;
-  loadApiKeys: ReturnType<typeof vi.fn<[], Promise<Record<string, string>>>>;
-  saveApiKey: ReturnType<typeof vi.fn<[string, string], Promise<{ success: boolean; error?: string }>>>;
-  getApiKey: ReturnType<typeof vi.fn<[string], Promise<string | null>>>;
+  getAppSettings: Mock<() => Promise<Partial<AppSettings> | null>>;
+  saveAppSettings: Mock<(settings: AppSettings) => Promise<{ success: boolean; error?: string }>>;
+  loadApiKeys: Mock<() => Promise<Record<string, string>>>;
+  saveApiKey: Mock<(provider: string, key: string) => Promise<{ success: boolean; error?: string }>>;
+  getApiKey: Mock<(provider: string) => Promise<string | null>>;
 
   // Auto-updater
-  onUpdateAvailable: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
-  onUpdateNotAvailable: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
-  onUpdateError: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
-  onUpdateDownloaded: ReturnType<typeof vi.fn<[(...args: unknown[]) => unknown], () => void>>;
-  installUpdate: ReturnType<typeof vi.fn<[], void>>;
+  onUpdateAvailable: Mock<(callback: (...args: unknown[]) => unknown) => Unsubscribe>;
+  onUpdateNotAvailable: Mock<(callback: (...args: unknown[]) => unknown) => Unsubscribe>;
+  onUpdateError: Mock<(callback: (...args: unknown[]) => unknown) => Unsubscribe>;
+  onUpdateDownloaded: Mock<(callback: (...args: unknown[]) => unknown) => Unsubscribe>;
+  installUpdate: Mock<() => void>;
 
   // Shell
-  openExternal: ReturnType<typeof vi.fn<[string], Promise<void>>>;
+  openExternal: Mock<(url: string) => Promise<void>>;
 
   // Search & dialogs
-  searchInProject: ReturnType<typeof vi.fn<[SearchInProjectArgs], Promise<SearchResult[]>>>;
-  showSaveDialog: ReturnType<typeof vi.fn<[SaveDialogOptions], Promise<string | null>>>;
+  searchInProject: Mock<(args: SearchInProjectArgs) => Promise<SearchResult[]>>;
+  showSaveDialog: Mock<(options: SaveDialogOptions) => Promise<string | null>>;
   path: {
-    join: ReturnType<typeof vi.fn<[...string[]], Promise<string>>>;
+    join: Mock<(...paths: string[]) => Promise<string>>;
   };
 }
 
@@ -124,6 +127,7 @@ export function createMockElectronAPI(): MockElectronAPI {
     refreshProjectTree: vi.fn().mockResolvedValue({ name: 'game', path: '/project', children: [] }),
 
     // File system
+    readFile: vi.fn().mockResolvedValue(''),
     writeFile: vi.fn().mockResolvedValue({ success: true }),
     createDirectory: vi.fn().mockResolvedValue({ success: true }),
     removeEntry: vi.fn().mockResolvedValue({ success: true }),
@@ -185,7 +189,9 @@ export function createMockElectronAPI(): MockElectronAPI {
  */
 export function installElectronAPI(api?: MockElectronAPI): MockElectronAPI {
   const mock = api ?? createMockElectronAPI();
-  (window as typeof window & { electronAPI?: MockElectronAPI }).electronAPI = mock;
+  // Cast through unknown so simplified mock types don't conflict with the
+  // full window.electronAPI interface (which requires the real ProjectLoadResult, etc.)
+  (window as { electronAPI?: unknown }).electronAPI = mock;
   return mock;
 }
 
@@ -193,5 +199,5 @@ export function installElectronAPI(api?: MockElectronAPI): MockElectronAPI {
  * Removes the electronAPI mock from window, restoring the default state.
  */
 export function uninstallElectronAPI(): void {
-  (window as typeof window & { electronAPI?: MockElectronAPI }).electronAPI = undefined;
+  (window as { electronAPI?: unknown }).electronAPI = undefined;
 }

@@ -4,7 +4,7 @@ const { autoUpdater } = electronUpdaterPkg;
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import fs from 'fs/promises';
-import { createReadStream } from 'fs';
+import { createReadStream, watch } from 'fs';
 import { Readable } from 'stream';
 import { spawn } from 'child_process';
 import { Worker } from 'worker_threads';
@@ -38,6 +38,48 @@ let gameProcess = null;
 
 // --- Main Window Reference (for auto-updater callbacks) ---
 let mainWindowRef = null;
+
+// --- External File Change Watcher ---
+let projectWatcher = null;
+const recentSelfWrites = new Map(); // normalizedAbsPath -> write timestamp ms
+const watchDebounceTimers = new Map(); // normalizedAbsPath -> timeout id
+const SELF_WRITE_SUPPRESS_MS = 3000;
+const WATCH_DEBOUNCE_MS = 400;
+
+function startProjectWatcher(rootPath) {
+    if (projectWatcher) {
+        try { projectWatcher.close(); } catch {}
+        projectWatcher = null;
+    }
+    watchDebounceTimers.forEach(t => clearTimeout(t));
+    watchDebounceTimers.clear();
+
+    try {
+        projectWatcher = watch(rootPath, { recursive: true }, (eventType, filename) => {
+            if (!filename) return;
+            if (!/\.rpy$/i.test(filename)) return;
+
+            const absolutePath = path.join(rootPath, filename);
+            const normalizedAbs = absolutePath.replace(/\\/g, '/');
+
+            const existing = watchDebounceTimers.get(normalizedAbs);
+            if (existing) clearTimeout(existing);
+            watchDebounceTimers.set(normalizedAbs, setTimeout(() => {
+                watchDebounceTimers.delete(normalizedAbs);
+
+                const lastWrite = recentSelfWrites.get(normalizedAbs);
+                if (lastWrite && Date.now() - lastWrite < SELF_WRITE_SUPPRESS_MS) return;
+
+                const relativePath = path.relative(rootPath, absolutePath).replace(/\\/g, '/');
+                if (mainWindowRef && !mainWindowRef.isDestroyed()) {
+                    mainWindowRef.webContents.send('fs:file-changed-externally', { relativePath, absolutePath: normalizedAbs });
+                }
+            }, WATCH_DEBOUNCE_MS));
+        });
+    } catch (err) {
+        console.error('Failed to start file watcher:', err);
+    }
+}
 
 // --- Window State Management ---
 const windowStatePath = path.join(app.getPath('userData'), 'window-state.json');
@@ -906,11 +948,14 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('project:load', async (event, rootPath) => {
-    return await readProjectFiles(rootPath, { readContent: true }, (value, message) => {
+    const result = await readProjectFiles(rootPath, { readContent: true }, (value, message) => {
       if (!event.sender.isDestroyed()) {
         event.sender.send('project:load-progress', value, message);
       }
     });
+    // Start watching the project for external file changes
+    startProjectWatcher(rootPath);
+    return result;
   });
 
   ipcMain.handle('project:refresh-tree', async (event, rootPath) => {
@@ -920,6 +965,9 @@ app.whenReady().then(() => {
   ipcMain.handle('fs:writeFile', async (event, filePath, content, encoding) => {
     try {
       await fs.mkdir(path.dirname(filePath), { recursive: true });
+      // Record self-write so the watcher ignores this change
+      const normalizedPath = filePath.replace(/\\/g, '/');
+      recentSelfWrites.set(normalizedPath, Date.now());
       await fs.writeFile(filePath, content, encoding);
       return { success: true };
     } catch (error) {

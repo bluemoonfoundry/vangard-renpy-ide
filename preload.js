@@ -114,4 +114,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateExplorerMenuState: (state) => ipcRenderer.send('explorer:update-menu-state', state),
   // --- Shell ---
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+  // --- External file change notifications ---
+  onFileChangedExternally: (callback) => {
+    const subscription = (_event, data) => callback(data);
+    ipcRenderer.on('fs:file-changed-externally', subscription);
+    return () => ipcRenderer.removeListener('fs:file-changed-externally', subscription);
+  },
 });

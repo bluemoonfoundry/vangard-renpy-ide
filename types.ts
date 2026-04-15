@@ -1203,6 +1203,7 @@ declare global {
           installUpdate?: () => void;
           openExternal?: (url: string) => Promise<void>;
           updateExplorerMenuState?: (state: { canNewFile: boolean; canNewFolder: boolean; canRename: boolean; canDelete: boolean }) => void;
+          onFileChangedExternally?: (callback: (data: { relativePath: string; absolutePath: string }) => void) => () => void;
       }
   }
 }

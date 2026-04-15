@@ -17,10 +17,10 @@ type GlobalFsTypes = typeof globalThis & {
 // FileSystemFileHandle and FileSystemDirectoryHandle are not available in jsdom.
 // Provide minimal stubs so type references don't throw at runtime.
 if (typeof globalThis.FileSystemFileHandle === 'undefined') {
-  (globalThis as GlobalFsTypes).FileSystemFileHandle = class FileSystemFileHandle {};
+  (globalThis as GlobalFsTypes).FileSystemFileHandle = class FileSystemFileHandle {} as unknown as typeof FileSystemFileHandle;
 }
 if (typeof globalThis.FileSystemDirectoryHandle === 'undefined') {
-  (globalThis as GlobalFsTypes).FileSystemDirectoryHandle = class FileSystemDirectoryHandle {};
+  (globalThis as GlobalFsTypes).FileSystemDirectoryHandle = class FileSystemDirectoryHandle {} as unknown as typeof FileSystemDirectoryHandle;
 }
 
 // window.electronAPI is undefined by default in tests (browser/jsdom mode).

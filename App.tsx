@@ -215,6 +215,7 @@ const App: React.FC = () => {
   const [contextMenuInfo, setContextMenuInfo] = useState<{ x: number; y: number; tabId: string; paneId: 'primary' | 'secondary' } | null>(null);
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false);
   const [aboutModalOpen, setAboutModalOpen] = useState(false);
+  const [externallyChangedFiles, setExternallyChangedFiles] = useState<Array<{ relativePath: string; absolutePath: string }>>([]);
   
   // --- State: View Transforms ---
   const [storyCanvasTransform, setStoryCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
@@ -2355,7 +2356,7 @@ const App: React.FC = () => {
         ignoredDiagnostics,
         sceneCompositions: serializableScenes as unknown as Record<string, SceneComposition>,
         sceneNames,
-        imagemapCompositions: serializableImagemaps,
+        imagemapCompositions: serializableImagemaps as unknown as Record<string, ImageMapComposition>,
         screenLayoutCompositions,
         scannedImagePaths: Array.from(imageScanDirectories.keys()),
         scannedAudioPaths: Array.from(audioScanDirectories.keys()),
@@ -2443,6 +2444,30 @@ const App: React.FC = () => {
     }
   }, [blocks, dirtyEditors, dirtyBlockIds, projectRootPath, directoryHandle, addToast, setBlocks, handleSaveProjectSettings, projectSettings.draftingMode]);
   
+  const handleReloadFromDisk = useCallback(async (item: { relativePath: string; absolutePath: string }) => {
+      const block = blocks.find(b => b.filePath === item.relativePath);
+      if (!block || !window.electronAPI) return;
+      try {
+          const content = await window.electronAPI.readFile(item.absolutePath);
+          setBlocks(prev => prev.map(b => b.id === block.id ? { ...b, content } : b));
+          setDirtyBlockIds(prev => { const next = new Set(prev); next.delete(block.id); return next; });
+          setDirtyEditors(prev => { const next = new Set(prev); next.delete(block.id); return next; });
+          const editor = editorInstances.current.get(block.id);
+          if (editor) {
+              const model = editor.getModel();
+              if (model) model.setValue(content);
+          }
+          setExternallyChangedFiles(prev => prev.filter(f => f.relativePath !== item.relativePath));
+      } catch (err) {
+          console.error(err);
+          addToast(`Failed to reload ${item.relativePath}`, 'error');
+      }
+  }, [blocks, setBlocks, addToast]);
+
+  const handleKeepCurrentFile = useCallback((relativePath: string) => {
+      setExternallyChangedFiles(prev => prev.filter(f => f.relativePath !== relativePath));
+  }, []);
+
   const handleNewProjectRequest = useCallback(() => {
     const hasUnsaved = dirtyBlockIds.size > 0 || dirtyEditors.size > 0 || hasUnsavedSettings;
     
@@ -3384,6 +3409,37 @@ const App: React.FC = () => {
       };
   }, [addToast]);
 
+  // --- External File Change Detection ---
+  useEffect(() => {
+      if (!window.electronAPI?.onFileChangedExternally || !projectRootPath) return;
+      const unsub = window.electronAPI.onFileChangedExternally((data) => {
+          const block = blocksRef.current.find(b => b.filePath === data.relativePath);
+          if (!block) return;
+
+          const isDirty = dirtyBlockIdsRef.current.has(block.id) || dirtyEditorsRef.current.has(block.id);
+          if (!isDirty) {
+              // Not dirty — silently reload from disk
+              window.electronAPI!.readFile(data.absolutePath).then((content: string) => {
+                  setBlocks(prev => prev.map(b => b.id === block.id ? { ...b, content } : b));
+                  const editor = editorInstances.current.get(block.id);
+                  if (editor) {
+                      const model = editor.getModel();
+                      if (model && model.getValue() !== content) {
+                          model.setValue(content);
+                      }
+                  }
+              }).catch(console.error);
+          } else {
+              // Has unsaved edits — queue for user decision
+              setExternallyChangedFiles(prev =>
+                  prev.some(f => f.relativePath === data.relativePath) ? prev : [...prev, data]
+              );
+          }
+      });
+      return unsub;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectRootPath, setBlocks]);
+
   // --- Exit Handling ---
   const dirtyBlockIdsRef = useRef(dirtyBlockIds);
   const dirtyEditorsRef = useRef(dirtyEditors);
@@ -3921,7 +3977,35 @@ const App: React.FC = () => {
               </div>
             </div>
           ) : (
-            /* Panes container — flex-row for right split, flex-col for bottom split */
+            <>
+            {/* External file change notifications */}
+            {externallyChangedFiles.length > 0 && (
+              <div className="flex-none border-b border-yellow-300 dark:border-yellow-600 bg-yellow-50 dark:bg-yellow-900/30">
+                {externallyChangedFiles.map(item => {
+                  const fileName = item.relativePath.split('/').pop() ?? item.relativePath;
+                  return (
+                    <div key={item.relativePath} className="flex items-center gap-2 px-3 py-1.5 text-sm text-yellow-800 dark:text-yellow-200">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0 text-yellow-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM10 13a1 1 0 110-2 1 1 0 010 2zm-1-8a1 1 0 00-1 1v3a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                      <span className="font-medium truncate max-w-xs" title={item.relativePath}>{fileName}</span>
+                      <span className="text-yellow-700 dark:text-yellow-300">was modified outside the editor.</span>
+                      <button
+                        onClick={() => handleReloadFromDisk(item)}
+                        className="ml-1 px-2 py-0.5 rounded text-xs font-medium bg-yellow-200 hover:bg-yellow-300 dark:bg-yellow-700 dark:hover:bg-yellow-600 text-yellow-900 dark:text-yellow-100 transition-colors"
+                      >
+                        Reload
+                      </button>
+                      <button
+                        onClick={() => handleKeepCurrentFile(item.relativePath)}
+                        className="px-2 py-0.5 rounded text-xs font-medium text-yellow-700 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-800/50 transition-colors"
+                      >
+                        Keep current
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {/* Panes container — flex-row for right split, flex-col for bottom split */}
             <div className={`flex-grow flex ${splitLayout === 'bottom' ? 'flex-col' : 'flex-row'} overflow-hidden min-h-0`}>
 
               {/* PRIMARY PANE */}
@@ -3974,6 +4058,7 @@ const App: React.FC = () => {
               )}
 
             </div>
+            </>
           )}{/* end panes container / empty state */}
 
           <StatusBar
@@ -4191,7 +4276,7 @@ const App: React.FC = () => {
                 onEditMenuTemplate={(template) => { setEditingMenuTemplate(template); setMenuConstructorModalOpen(true); }}
                 onDeleteMenuTemplate={handleDeleteMenuTemplate}
                 // Accordion State Props
-                projectSettings={projectSettings}
+                projectSettings={projectSettings as ProjectSettings}
                 onUpdateProjectSettings={updateProjectSettings}
                 hasProject={!!projectRootPath}
             />

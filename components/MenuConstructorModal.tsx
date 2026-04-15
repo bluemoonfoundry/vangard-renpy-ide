@@ -99,7 +99,7 @@ export function MenuConstructorModal({
   variables,
   mode,
 }: MenuConstructorModalProps) {
-  const modalRef = useModalAccessibility(isOpen, onClose);
+  const { contentRef: modalRef } = useModalAccessibility({ isOpen, onClose });
 
   const [menuStatement, setMenuStatement] = useState('');
   const [choices, setChoices] = useState<MenuChoice[]>([]);
