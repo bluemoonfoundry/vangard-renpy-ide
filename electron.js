@@ -409,6 +409,31 @@ async function updateApplicationMenu() {
                 click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'save-all' }); }
             },
             { type: 'separator' },
+            {
+                id: 'explorer-new-file',
+                label: 'New File',
+                enabled: false,
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'explorer-new-file' }); }
+            },
+            {
+                id: 'explorer-new-folder',
+                label: 'New Folder',
+                enabled: false,
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'explorer-new-folder' }); }
+            },
+            {
+                id: 'explorer-rename',
+                label: 'Rename',
+                enabled: false,
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'explorer-rename' }); }
+            },
+            {
+                id: 'explorer-delete',
+                label: 'Delete',
+                enabled: false,
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'explorer-delete' }); }
+            },
+            { type: 'separator' },
             ...(process.platform !== 'darwin' ? [{
                 label: 'Settings',
                 accelerator: 'CmdOrCtrl+,',
@@ -993,6 +1018,20 @@ app.whenReady().then(() => {
     if (runItem) runItem.enabled = !running;
     if (stopItem) stopItem.enabled = running;
   }
+
+  function setExplorerMenuState({ canNewFile, canNewFolder, canRename, canDelete }) {
+    const menu = Menu.getApplicationMenu();
+    if (!menu) return;
+    const ids = { 'explorer-new-file': canNewFile, 'explorer-new-folder': canNewFolder, 'explorer-rename': canRename, 'explorer-delete': canDelete };
+    for (const [id, enabled] of Object.entries(ids)) {
+      const item = menu.getMenuItemById(id);
+      if (item) item.enabled = enabled;
+    }
+  }
+
+  ipcMain.on('explorer:update-menu-state', (event, state) => {
+    setExplorerMenuState(state);
+  });
 
   ipcMain.on('game:run', (event, renpyPath, projectPath) => {
     if (gameProcess) {

@@ -1202,6 +1202,7 @@ declare global {
           onUpdateDownloaded?: (callback: (version: string) => void) => () => void;
           installUpdate?: () => void;
           openExternal?: (url: string) => Promise<void>;
+          updateExplorerMenuState?: (state: { canNewFile: boolean; canNewFolder: boolean; canRename: boolean; canDelete: boolean }) => void;
       }
   }
 }

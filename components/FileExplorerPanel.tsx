@@ -208,13 +208,16 @@ interface FileExplorerPanelProps {
   // Expansion (Lifted State)
   expandedPaths: Set<string>;
   onToggleExpand: (path: string) => void;
+  // External action triggered from menu bar
+  externalAction?: { type: 'new-file' | 'new-folder' | 'rename'; key: number } | null;
 }
 
-const FileExplorerPanel: React.FC<FileExplorerPanelProps> = ({ 
-    tree, onFileOpen, onCreateNode, onRenameNode, onDeleteNode, onMoveNode, 
+const FileExplorerPanel: React.FC<FileExplorerPanelProps> = ({
+    tree, onFileOpen, onCreateNode, onRenameNode, onDeleteNode, onMoveNode,
     clipboard, onCut, onCopy, onPaste, onCenterOnBlock,
     selectedPaths, setSelectedPaths, lastClickedPath, setLastClickedPath,
-    expandedPaths, onToggleExpand
+    expandedPaths, onToggleExpand,
+    externalAction,
 }) => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: FileSystemTreeNode } | null>(null);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
@@ -248,10 +251,10 @@ const FileExplorerPanel: React.FC<FileExplorerPanelProps> = ({
     setContextMenu({ x: event.clientX, y: event.clientY, node });
   };
   
-  const handleStartRename = (path: string) => {
+  const handleStartRename = useCallback((path: string) => {
     setRenamingPath(path);
     setContextMenu(null);
-  };
+  }, []);
   
   const handleRename = (oldPath: string, newName: string) => {
     if (renamingPath === oldPath && oldPath.split('/').pop() !== newName) {
@@ -267,14 +270,28 @@ const FileExplorerPanel: React.FC<FileExplorerPanelProps> = ({
       setCreatingIn(null);
   };
 
-  const handleStartCreate = (parentPath: string, type: 'file' | 'folder') => {
+  const handleStartCreate = useCallback((parentPath: string, type: 'file' | 'folder') => {
       setCreatingIn({ path: parentPath, type });
       setContextMenu(null);
       // Force expand parent
       if(!expandedPaths.has(parentPath)) {
           onToggleExpand(parentPath);
       }
-  };
+  }, [expandedPaths, onToggleExpand]);
+
+  // --- External action from menu bar ---
+  const lastHandledExternalActionKeyRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!externalAction) return;
+    if (externalAction.key === lastHandledExternalActionKeyRef.current) return;
+    lastHandledExternalActionKeyRef.current = externalAction.key;
+    const selectedArr = Array.from(selectedPaths);
+    if (selectedArr.length === 0) return;
+    const targetPath = selectedArr[0];
+    if (externalAction.type === 'new-file') handleStartCreate(targetPath, 'file');
+    else if (externalAction.type === 'new-folder') handleStartCreate(targetPath, 'folder');
+    else if (externalAction.type === 'rename') handleStartRename(targetPath);
+  }, [externalAction, selectedPaths, handleStartCreate, handleStartRename]);
 
   // Flat list with optional "new node" input entry injected after its parent
   type FlatEntry = FlatNode | { type: 'new-node-input'; depth: number; parentPath: string; nodeType: 'file' | 'folder' };

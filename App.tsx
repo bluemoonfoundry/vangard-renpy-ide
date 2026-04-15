@@ -155,6 +155,7 @@ const App: React.FC = () => {
   const [explorerSelectedPaths, setExplorerSelectedPaths] = useState<Set<string>>(new Set());
   const [explorerLastClickedPath, setExplorerLastClickedPath] = useState<string | null>(null);
   const [explorerExpandedPaths, setExplorerExpandedPaths] = useState<Set<string>>(new Set());
+  const [explorerExternalAction, setExplorerExternalAction] = useState<{ type: 'new-file' | 'new-folder' | 'rename'; key: number } | null>(null);
 
   // --- State: Scanning ---
   const [imageScanDirectories, setImageScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
@@ -3298,6 +3299,35 @@ const App: React.FC = () => {
       setHasUnsavedSettings(true);
   };
 
+  // --- Explorer Selection → File Menu State Sync ---
+  useEffect(() => {
+    if (!window.electronAPI?.updateExplorerMenuState) return;
+    const selectedArr = Array.from(explorerSelectedPaths);
+    const hasAnySelection = selectedArr.length > 0;
+    const hasSingleSelection = selectedArr.length === 1;
+    let hasFolderSelected = false;
+    if (hasSingleSelection && fileSystemTree) {
+      const findNode = (node: FileSystemTreeNode, path: string): FileSystemTreeNode | null => {
+        if (node.path === path) return node;
+        if (node.children) {
+          for (const child of node.children) {
+            const found = findNode(child, path);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      const node = findNode(fileSystemTree, selectedArr[0]);
+      hasFolderSelected = node !== null && node.children !== undefined;
+    }
+    window.electronAPI.updateExplorerMenuState({
+      canNewFile: hasFolderSelected,
+      canNewFolder: hasFolderSelected,
+      canRename: hasSingleSelection,
+      canDelete: hasAnySelection,
+    });
+  }, [explorerSelectedPaths, fileSystemTree]);
+
   // --- Menu Command Handling ---
   useEffect(() => {
         if (!window.electronAPI) return;
@@ -3315,9 +3345,13 @@ const App: React.FC = () => {
             if (data.command === 'open-about') setAboutModalOpen(true);
             if (data.command === 'toggle-left-sidebar') updateAppSettings(draft => { draft.isLeftSidebarOpen = !draft.isLeftSidebarOpen; });
             if (data.command === 'toggle-right-sidebar') updateAppSettings(draft => { draft.isRightSidebarOpen = !draft.isRightSidebarOpen; });
+            if (data.command === 'explorer-new-file') setExplorerExternalAction({ type: 'new-file', key: Date.now() });
+            if (data.command === 'explorer-new-folder') setExplorerExternalAction({ type: 'new-folder', key: Date.now() });
+            if (data.command === 'explorer-rename') setExplorerExternalAction({ type: 'rename', key: Date.now() });
+            if (data.command === 'explorer-delete') handleDeleteNode(Array.from(explorerSelectedPaths));
         });
         return removeListener;
-  }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenWithRenpyCheck, loadProject, handleSaveAll, projectRootPath, appSettings.renpyPath, handleOpenStaticTab, handleToggleSearch, updateAppSettings]);
+  }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenWithRenpyCheck, loadProject, handleSaveAll, projectRootPath, appSettings.renpyPath, handleOpenStaticTab, handleToggleSearch, updateAppSettings, handleDeleteNode, explorerSelectedPaths]);
 
   // --- Game Running State ---
   useEffect(() => {
@@ -3820,6 +3854,7 @@ const App: React.FC = () => {
                     setLastClickedPath={setExplorerLastClickedPath}
                     expandedPaths={explorerExpandedPaths}
                     onToggleExpand={handleToggleExpandExplorer}
+                    externalAction={explorerExternalAction}
                 />
              ) : (
                 <SearchPanel />
