@@ -1,3 +1,9 @@
+/**
+ * @file AudioContextMenu.tsx
+ * @description Right-click context menu for audio files in the Asset Manager (~50 lines).
+ * Key features: Play and Queue actions; dismisses on outside click via mousedown listener.
+ * Integration: rendered by `AudioManager` at pointer coordinates; calls `onSelect` with action type.
+ */
 
 import React, { useEffect, useRef } from 'react';
 

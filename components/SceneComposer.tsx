@@ -1,6 +1,11 @@
-
-
-
+/**
+ * @file SceneComposer.tsx
+ * @description Visual drag-and-drop scene layout tool (~600 lines).
+ * Key features: positions background and sprite images on a scaled canvas preview, supports
+ * per-sprite x/y/scale editing, generates // Ren'Py code, exports as PNG.
+ * Integration: opened as a tab in ; reads images from  props; generates
+ * code via ; updates composition state via .
+ */
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import type { ProjectImage, ImageMetadata, SceneComposition, SceneSprite } from '../types';
 import CopyButton from './CopyButton';

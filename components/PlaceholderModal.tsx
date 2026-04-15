@@ -1,3 +1,11 @@
+/**
+ * @file PlaceholderModal.tsx
+ * @description Modal for generating placeholder PNG images in-browser (~150 lines).
+ * Key features: configurable dimensions, fill colour, and label text; live canvas preview;
+ * exports as a data URL via `onGenerate`; uses `useModalAccessibility` for focus management.
+ * Integration: opened from `ImageManager`; the generated data URL is passed to `AssetContext`
+ * which writes the file to disk.
+ */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useModalAccessibility } from '../hooks/useModalAccessibility';

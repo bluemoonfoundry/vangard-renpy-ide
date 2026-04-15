@@ -1,3 +1,10 @@
+/**
+ * @file LabelBlock.tsx
+ * @description Canvas node representing a single Ren'Py label in `RouteCanvas` (~120 lines).
+ * Key features: entry/unreachable/dead-end status badges, structural role overlay highlights
+ * (hub/branch/menu-heavy/call-heavy) with count badges, click-to-open editor, memoised.
+ * Integration: rendered by `RouteCanvas` for each `LabelNode` from `useRenpyAnalysis`.
+ */
 import React from 'react';
 import type { LabelNode } from '../types';
 

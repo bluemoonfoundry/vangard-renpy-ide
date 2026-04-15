@@ -1,3 +1,11 @@
+/**
+ * @file ScreenLayoutComposer.tsx
+ * @description Visual DSL builder for Ren'Py `screen` layouts using widget trees (~500 lines).
+ * Key features: drag-and-drop widget tree (vbox/hbox/text/textbutton/imagebutton/image/bar/null),
+ * per-widget property editor, live code generation via `lib/screenCodeGenerator`, `CopyButton`.
+ * Integration: opened as a tab in `EditorView` for screen composition; state managed externally
+ * via `composition` prop and `onCompositionChange` callback persisted in `ProjectSettings`.
+ */
 import React, { useState, useCallback } from 'react';
 import type { ScreenLayoutComposition, ScreenWidget, ScreenWidgetType } from '../types';
 import { generateScreenCode } from '../lib/screenCodeGenerator';
@@ -255,6 +263,20 @@ function moveWidget(widgets: ScreenWidget[], dragId: string, target: DropTarget)
     return insertAt(without, dragged, target.id, target.position);
 }
 
+function flatWidgetIds(widgets: ScreenWidget[]): string[] {
+    return widgets.flatMap(w => [w.id, ...(w.children ? flatWidgetIds(w.children) : [])]);
+}
+
+function isTopLevel(widgets: ScreenWidget[], id: string): boolean {
+    return widgets.some(w => w.id === id);
+}
+
+function deepCloneWithNewIds(widget: ScreenWidget): ScreenWidget {
+    const clone: ScreenWidget = { ...widget, id: createId('widget') };
+    if (clone.children) clone.children = clone.children.map(deepCloneWithNewIds);
+    return clone;
+}
+
 // ---------------------------------------------------------------------------
 // Widget Tree node
 // ---------------------------------------------------------------------------
@@ -367,17 +389,17 @@ const TreeNode: React.FC<{
                             <svg viewBox="0 0 12 12" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 2v8M2 6h8"/></svg>
                         </button>
                     )}
-                    <button aria-label="Move up" disabled={isFirst}
+                    <button aria-label="Move up" title="Move up" disabled={isFirst}
                         onClick={() => onMoveUp(widget.id)}
                         className="p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10 disabled:opacity-20 text-secondary hover:text-primary">
                         <svg viewBox="0 0 12 12" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 8l4-4 4 4"/></svg>
                     </button>
-                    <button aria-label="Move down" disabled={isLast}
+                    <button aria-label="Move down" title="Move down" disabled={isLast}
                         onClick={() => onMoveDown(widget.id)}
                         className="p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10 disabled:opacity-20 text-secondary hover:text-primary">
                         <svg viewBox="0 0 12 12" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 4l4 4 4-4"/></svg>
                     </button>
-                    <button aria-label="Delete widget"
+                    <button aria-label="Delete widget" title="Delete widget (Del)"
                         onClick={() => onDelete(widget.id)}
                         className="p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-secondary hover:text-red-500">
                         <svg viewBox="0 0 12 12" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg>
@@ -804,6 +826,8 @@ const ScreenLayoutComposer: React.FC<ScreenLayoutComposerProps> = ({
 }) => {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [codeOpen, setCodeOpen] = useState(false);
+    const [clipboardWidget, setClipboardWidget] = useState<ScreenWidget | null>(null);
+    const [legendOpen, setLegendOpen] = useState(false);
 
     const [dragState, setDragState] = useState<TreeDragState>({ draggingId: null, dropTarget: null });
     const [collapseGen, setCollapseGen] = useState(0);
@@ -840,16 +864,77 @@ const ScreenLayoutComposer: React.FC<ScreenLayoutComposerProps> = ({
 
     React.useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-            if (!selectedId) return;
             const tag = (e.target as HTMLElement).tagName;
-            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-            e.preventDefault();
-            handleDeleteWidget(selectedId);
+            const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+            if (e.key === 'Escape') { setSelectedId(null); return; }
+
+            if (e.key === 'Tab' && !inInput) {
+                e.preventDefault();
+                const ids = flatWidgetIds(composition.widgets);
+                if (ids.length === 0) return;
+                const idx = selectedId ? ids.indexOf(selectedId) : -1;
+                setSelectedId(ids[e.shiftKey ? (idx - 1 + ids.length) % ids.length : (idx + 1) % ids.length]);
+                return;
+            }
+
+            // Ctrl+C/V work even when a property input is focused — the widget
+            // selection takes priority so the user can copy/paste without having
+            // to manually blur the input first.
+            if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedWidget) {
+                setClipboardWidget(selectedWidget);
+                return;
+            }
+
+            if ((e.ctrlKey || e.metaKey) && e.key === 'v' && clipboardWidget) {
+                e.preventDefault();
+                const pasted = deepCloneWithNewIds(clipboardWidget);
+                onCompositionChange(c => ({ ...c, widgets: [...c.widgets, pasted] }));
+                setSelectedId(pasted.id);
+                return;
+            }
+
+            if (inInput) return;
+
+            if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+                e.preventDefault();
+                handleDeleteWidget(selectedId);
+                return;
+            }
+
+            if (selectedId && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+                e.preventDefault();
+                // Nudging only makes visual sense for top-level widgets — children of
+                // containers are flow-positioned by the container and their xpos/ypos
+                // props have no effect in the preview.
+                if (!isTopLevel(composition.widgets, selectedId)) return;
+                const amount = e.shiftKey ? 10 : 1;
+                const dx = e.key === 'ArrowLeft' ? -amount : e.key === 'ArrowRight' ? amount : 0;
+                const dy = e.key === 'ArrowUp' ? -amount : e.key === 'ArrowDown' ? amount : 0;
+                handleUpdateWidget(selectedId, w => {
+                    if (isContainer(w)) {
+                        // Top-level containers use xalign/yalign (0–1 percentage).
+                        const step = e.shiftKey ? 0.1 : 0.01;
+                        return {
+                            ...w,
+                            ...(dx !== 0 && { xalign: Math.max(0, Math.min(1, (w.xalign ?? 0.5) + (dx > 0 ? step : -step))) }),
+                            ...(dy !== 0 && { yalign: Math.max(0, Math.min(1, (w.yalign ?? 0.5) + (dy > 0 ? step : -step))) }),
+                        };
+                    }
+                    // Leaf widgets use xpos/ypos (pixels). Only update the axis that
+                    // moved — avoids forcing the other axis to 0 on the first nudge.
+                    return {
+                        ...w,
+                        ...(dx !== 0 && { xpos: (w.xpos ?? 0) + dx }),
+                        ...(dy !== 0 && { ypos: (w.ypos ?? 0) + dy }),
+                    };
+                });
+                return;
+            }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedId, handleDeleteWidget]);
+    }, [selectedId, selectedWidget, clipboardWidget, handleDeleteWidget, handleUpdateWidget, onCompositionChange, composition.widgets]);
 
     const dragCbs: TreeDragCallbacks = {
         onDragStart: id => setDragState({ draggingId: id, dropTarget: null }),
@@ -893,6 +978,19 @@ const ScreenLayoutComposer: React.FC<ScreenLayoutComposerProps> = ({
                     <span className="ml-2 font-mono text-sm font-bold text-primary">{screenName}</span>
                 </div>
                 <div className="flex-grow" />
+                <button onClick={() => setLegendOpen(o => !o)}
+                    title="Keyboard shortcuts (?)"
+                    aria-label="Toggle keyboard shortcut legend"
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors
+                        ${legendOpen
+                            ? 'bg-accent text-white hover:bg-accent-hover'
+                            : 'bg-tertiary text-secondary hover:bg-tertiary-hover hover:text-primary border border-primary'}`}>
+                    <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="1" y="4" width="14" height="8" rx="1.5"/>
+                        <path d="M4 7.5h1.5M7.5 7.5h1M10.5 7.5h1M4 10.5h8" strokeWidth="1.3" opacity="0.7"/>
+                    </svg>
+                    Shortcuts
+                </button>
                 <button onClick={() => setCodeOpen(o => !o)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors
                         ${codeOpen
@@ -932,6 +1030,45 @@ const ScreenLayoutComposer: React.FC<ScreenLayoutComposerProps> = ({
                                 Duplicate to Edit
                             </button>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* ── Keyboard shortcut legend ── */}
+            {legendOpen && (
+                <div className="flex-none border-b border-primary bg-secondary px-4 py-3">
+                    <div className="flex items-center justify-between mb-2.5">
+                        <span className="text-[10px] font-bold text-secondary uppercase tracking-widest">Keyboard Shortcuts</span>
+                        <button onClick={() => setLegendOpen(false)}
+                            className="text-secondary hover:text-primary transition-colors rounded p-0.5 hover:bg-tertiary-hover"
+                            aria-label="Close shortcuts legend">
+                            <svg viewBox="0 0 12 12" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg>
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-x-4 gap-y-1.5">
+                        {([
+                            { keys: ['Tab'], desc: 'Next widget' },
+                            { keys: ['Shift', 'Tab'], desc: 'Previous widget' },
+                            { keys: ['Esc'], desc: 'Deselect' },
+                            { keys: ['Del'], desc: 'Delete widget' },
+                            { keys: ['↑↓←→'], desc: 'Nudge top-level widget' },
+                            { keys: ['Shift', '↑↓←→'], desc: 'Nudge ×10' },
+                            { keys: ['Ctrl', 'C'], desc: 'Copy widget' },
+                            { keys: ['Ctrl', 'V'], desc: 'Paste widget' },
+                            { keys: ['Ctrl', 'Z / Y'], desc: 'Undo / Redo' },
+                        ] as { keys: string[]; desc: string }[]).map(({ keys, desc }) => (
+                            <div key={desc} className="flex items-center gap-1.5 min-w-0">
+                                <div className="flex items-center gap-0.5 flex-shrink-0">
+                                    {keys.map((k, i) => (
+                                        <React.Fragment key={i}>
+                                            {i > 0 && <span className="text-[9px] text-secondary mx-0.5">+</span>}
+                                            <kbd className="px-1.5 py-0.5 text-[9px] font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 whitespace-nowrap leading-none">{k}</kbd>
+                                        </React.Fragment>
+                                    ))}
+                                </div>
+                                <span className="text-[10px] text-secondary truncate">{desc}</span>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
@@ -988,9 +1125,16 @@ const ScreenLayoutComposer: React.FC<ScreenLayoutComposerProps> = ({
                         <span className="text-[10px] text-secondary uppercase tracking-wide font-semibold">
                             Preview — click to select
                         </span>
-                        {selectedWidget && (
-                            <span className="ml-1 text-[10px] text-secondary bg-tertiary border border-primary px-1.5 py-0.5 rounded-md">
-                                <kbd className="font-mono text-[9px]">Del</kbd> to remove
+                        {selectedWidget ? (
+                            <span className="ml-1 flex items-center gap-1">
+                                {(['Del', '↑↓←→', 'Ctrl+C', 'Esc'] as const).map(k => (
+                                    <kbd key={k} className="text-[9px] font-mono text-secondary bg-tertiary border border-primary px-1 py-0.5 rounded">{k}</kbd>
+                                ))}
+                            </span>
+                        ) : (
+                            <span className="ml-1 flex items-center gap-1 text-[10px] text-secondary">
+                                <kbd className="font-mono text-[9px] bg-tertiary border border-primary px-1 py-0.5 rounded">Tab</kbd>
+                                <span>cycle widgets</span>
                             </span>
                         )}
                     </div>

@@ -1,3 +1,11 @@
+/**
+ * @file StatsView.tsx
+ * @description Project-wide statistics dashboard with multiple analysis tabs (~600 lines).
+ * Key features: Story tab (word count, label/menu counts, branching metrics), Asset Coverage tab
+ * (image/audio referenced/missing/orphaned table), Charts tab (label word-count bar chart).
+ * Integration: opened as a static tab from `Toolbar`; reads `blocks`, `analysisResult`, route
+ * analysis, image/audio metadata, and diagnostic counts from `App.tsx` props.
+ */
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid,

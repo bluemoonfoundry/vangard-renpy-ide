@@ -1,3 +1,11 @@
+/**
+ * @file ConfirmModal.tsx
+ * @description Generic confirmation dialog with Cancel, optional secondary action, and Confirm buttons (~70 lines).
+ * Key features: customisable button labels, styles, and body content via `children`; optional
+ * secondary action slot (e.g. "Don't Save").
+ * Integration: uses `useModalAccessibility` for focus trapping; consumed throughout the app
+ * wherever a destructive action requires user confirmation.
+ */
 import React from 'react';
 import { useModalAccessibility } from '../hooks/useModalAccessibility';
 

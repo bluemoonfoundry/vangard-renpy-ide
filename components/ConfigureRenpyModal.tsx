@@ -1,3 +1,11 @@
+/**
+ * @file ConfigureRenpyModal.tsx
+ * @description Modal for locating the Ren'Py SDK executable (~80 lines).
+ * Key features: Browse button triggers an Electron file-picker dialog, selected path display,
+ * validation feedback, saves path via `onSave`.
+ * Integration: uses `useModalAccessibility`; opened from `Toolbar` when `isRenpyPathValid` is
+ * false or from Settings; calls `window.electronAPI.selectRenpy()`.
+ */
 import React, { useState } from 'react';
 import { useModalAccessibility } from '../hooks/useModalAccessibility';
 

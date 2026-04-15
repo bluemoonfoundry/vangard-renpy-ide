@@ -1,3 +1,11 @@
+/**
+ * @file AnalysisOverlay.tsx
+ * @description Full-screen overlay displayed while `useRenpyAnalysis` is running (~50 lines).
+ * Key features: animated spinner, phase label (Parsing/Building graph/…), percent progress bar,
+ * block count context message.
+ * Integration: rendered by `App.tsx` when `isAnalysisPending` is true; progress data comes from
+ * `AnalysisProgress` emitted by `useRenpyAnalysis`.
+ */
 import React from 'react';
 import type { AnalysisProgress } from '../hooks/useRenpyAnalysis';
 

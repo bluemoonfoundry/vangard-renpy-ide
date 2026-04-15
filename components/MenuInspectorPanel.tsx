@@ -1,3 +1,11 @@
+/**
+ * @file MenuInspectorPanel.tsx
+ * @description Collapsed/expanded inspector for the selected `menu` node on `RouteCanvas` (~130 lines).
+ * Key features: shows all choices with their conditions, target labels, and route colour indicators;
+ * click-to-navigate to source line in editor; `embedded` prop for borderless rendering in
+ * `CanvasToolbox`; exports `SelectedMenu` and `MenuPopoverChoice` interfaces.
+ * Integration: rendered by `RouteCanvas`; selected menu set when the user clicks a menu edge group.
+ */
 import React from 'react';
 
 export interface MenuPopoverChoice {

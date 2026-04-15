@@ -1,3 +1,11 @@
+/**
+ * @file ImageManager.tsx
+ * @description Asset panel for browsing and importing images (~400 lines).
+ * Key features: virtualised grid view (custom scroll), source filter (Project/All),
+ * GUI-asset toggle, scan-directory management, multi-select, drag-and-drop to canvas.
+ * Integration: reads image list from `AssetContext`; triggers imports via `onCopyImagesToProject`;
+ * context menu (scene/show) rendered via `ImageContextMenu`; tiles rendered via `ImageThumbnail`.
+ */
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { ProjectImage, ImageMetadata } from '../types';

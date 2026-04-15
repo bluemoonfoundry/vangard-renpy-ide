@@ -1,3 +1,11 @@
+/**
+ * @file FileBlock.tsx
+ * @description Canvas node representing a `.rpy` file in the `StoryCanvas` file-level view (~60 lines).
+ * Key features: shows file name and label count, drill-down button to open `RouteCanvas`,
+ * selection/dimmed visual states, memoised for canvas performance.
+ * Integration: rendered by `StoryCanvas` when `viewLevel === 'file'`; receives `LabelNode` data
+ * from `useRenpyAnalysis`.
+ */
 import React from 'react';
 import type { LabelNode } from '../types';
 

@@ -1,3 +1,10 @@
+/**
+ * @file ImageThumbnail.tsx
+ * @description Single image tile in the `ImageManager` grid view (~60 lines).
+ * Key features: lazy-loaded image preview, green border for project-resident images,
+ * selection ring on click, drag-and-drop initiation, context menu trigger.
+ * Integration: rendered by `ImageManager` in a virtualised grid; memoised for scroll performance.
+ */
 
 import React from 'react';
 import type { ProjectImage } from '../types';

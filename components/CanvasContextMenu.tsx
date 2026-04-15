@@ -1,3 +1,11 @@
+/**
+ * @file CanvasContextMenu.tsx
+ * @description Right-click context menu for empty canvas space (~70 lines).
+ * Key features: create new story/screen/config blocks, add sticky notes; uses `createPortal`
+ * for correct z-ordering above canvas elements; dismisses on outside mousedown.
+ * Integration: rendered by `StoryCanvas`; delegates block creation to `onCreateBlock` and note
+ * creation to `onAddStickyNote`.
+ */
 
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';

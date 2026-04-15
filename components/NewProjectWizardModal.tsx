@@ -1,3 +1,12 @@
+/**
+ * @file NewProjectWizardModal.tsx
+ * @description Multi-step wizard for creating a new Ren'Py project via the SDK launcher (~450 lines).
+ * Key features: collects project name, directory, resolution preset, and colour scheme (10 dark +
+ * 10 light swatches); invokes `window.electronAPI.createRenpyProject`; uses `createPortal` and
+ * `useModalAccessibility`.
+ * Integration: opened from `WelcomeScreen`; on completion opens the newly-created project via
+ * `onComplete(projectPath)`.
+ */
 import React, { useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { CreateProjectOptions } from '../types';

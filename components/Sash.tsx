@@ -1,3 +1,11 @@
+/**
+ * @file Sash.tsx
+ * @description Thin draggable divider for resizable split-pane layouts (~60 lines).
+ * Key features: horizontal (left-right) and vertical (top-bottom) drag directions, pointer
+ * capture for smooth out-of-bounds dragging.
+ * Integration: used inside `EditorView` split-pane layout to resize primary and secondary panes;
+ * calls `onDrag(delta)` so the parent manages pane size state.
+ */
 import React from 'react';
 
 interface SashProps {

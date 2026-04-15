@@ -1,3 +1,11 @@
+/**
+ * @file UserSnippetModal.tsx
+ * @description Modal for creating and editing custom Ren'Py code snippets (~110 lines).
+ * Key features: title, description, and multi-line code body fields; generates a unique ID for
+ * new snippets via `createId`; pre-fills fields when editing an existing snippet.
+ * Integration: uses `useModalAccessibility`; opened from `SnippetManager`; passes saved snippet
+ * back via `onSave` for storage in `ProjectSettings`.
+ */
 import React, { useState, useEffect, useRef } from 'react';
 import { useModalAccessibility } from '../hooks/useModalAccessibility';
 import type { UserSnippet } from '../types';

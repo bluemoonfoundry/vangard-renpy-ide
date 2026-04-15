@@ -1,3 +1,10 @@
+/**
+ * @file TabContextMenu.tsx
+ * @description Right-click context menu for editor tabs (~100 lines).
+ * Key features: close (tab/others/left/right/all) operations, split-right/split-bottom, and
+ * move-to-other-pane actions; actions are conditionally shown based on split layout state.
+ * Integration: rendered by `EditorView` tab bar; delegates all actions to `EditorView` callbacks.
+ */
 
 import React, { useEffect, useRef } from 'react';
 

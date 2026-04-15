@@ -1,3 +1,11 @@
+/**
+ * @file StickyNote.tsx
+ * @description Draggable sticky-note canvas element rendered on `StoryCanvas` (~100 lines).
+ * Key features: six colour themes (yellow/blue/green/pink/purple/red), inline text editing on
+ * double-click, colour picker popover, delete button, forwards ref for canvas drag handling.
+ * Integration: rendered by `StoryCanvas` for each `StickyNote` in project state; updates
+ * propagate via `updateNote` callback to `useImmer` state in `App.tsx`.
+ */
 
 import React, { useState, forwardRef } from 'react';
 import type { StickyNote as StickyNoteType, NoteColor } from '../types';

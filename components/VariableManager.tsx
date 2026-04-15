@@ -1,3 +1,11 @@
+/**
+ * @file VariableManager.tsx
+ * @description Virtualised list of `default`/`define`/`persistent` variables from project scripts (~200 lines).
+ * Key features: persistence-type colour badges with tooltips, initial-value display, hover
+ * highlight integration, find-usages action, add-variable form.
+ * Integration: rendered as a sidebar panel; variable data comes from `useRenpyAnalysis`;
+ * hover highlights propagate to `StoryCanvas` via `onHoverHighlightStart`/`End`.
+ */
 import React, { useState, useMemo } from 'react';
 import type { Variable, RenpyAnalysisResult } from '../types';
 import { useVirtualList } from '../hooks/useVirtualList';

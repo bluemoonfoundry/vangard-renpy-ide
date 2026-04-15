@@ -1,3 +1,11 @@
+/**
+ * @file MarkdownPreviewView.tsx
+ * @description Split preview/edit view for `.md` files (~200 lines).
+ * Key features: rendered HTML preview via `marked`, Monaco source editor, save-on-blur,
+ * unsaved-changes dirty indicator, error display for missing files.
+ * Integration: opened as a tab in `EditorView` for `.md` files; reads/writes via
+ * `window.electronAPI.readFile` / `writeFile` IPC calls.
+ */
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { marked } from 'marked';
 import Editor from '@monaco-editor/react';

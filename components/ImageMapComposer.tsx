@@ -1,3 +1,11 @@
+/**
+ * @file ImageMapComposer.tsx
+ * @description Visual hotspot editor for Ren'Py `imagemap` compositions (~500 lines).
+ * Key features: draw/resize/drag rectangular hotspots on a background image, assign labels/actions
+ * per hotspot, rename composition, generate Ren'Py `imagemap` screen code.
+ * Integration: opened as a tab in `EditorView`; reads images from `AssetContext`; generates code
+ * via `CopyButton`; updates composition state via `onImageMapChange`.
+ */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { ProjectImage, ImageMapComposition, ImageMapHotspot, ImageMapActionType } from '../types';
 import CopyButton from './CopyButton';

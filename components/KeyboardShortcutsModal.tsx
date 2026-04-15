@@ -1,3 +1,10 @@
+/**
+ * @file KeyboardShortcutsModal.tsx
+ * @description Modal reference card listing all keyboard shortcuts and mouse gestures (~200 lines).
+ * Key features: reads `MouseGestureSettings` to show the current pan combination, groups shortcuts
+ * by category, links to Settings to change mouse gesture configuration.
+ * Integration: uses `useModalAccessibility`; opened from `Toolbar` help menu.
+ */
 import React from 'react';
 import { useModalAccessibility } from '../hooks/useModalAccessibility';
 import type { MouseGestureSettings, CanvasPanGesture } from '../types';

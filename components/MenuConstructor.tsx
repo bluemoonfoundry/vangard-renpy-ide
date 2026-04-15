@@ -1,3 +1,11 @@
+/**
+ * @file MenuConstructor.tsx
+ * @description Live Ren'Py `menu` block code builder with bidirectional form ↔ code sync (~350 lines).
+ * Key features: add/remove/reorder choices with text, conditions, and body logic; live validation
+ * against known labels; code preview with `CopyButton`.
+ * Integration: receives `RenpyAnalysisResult` for label autocomplete; opened as a tab in
+ * `EditorView`; standalone — does not mutate project state directly.
+ */
 
 import React, { useState, useEffect } from 'react';
 import type { RenpyAnalysisResult } from '../types';

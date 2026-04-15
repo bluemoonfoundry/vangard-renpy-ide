@@ -1,3 +1,11 @@
+/**
+ * @file GoToLabelModal.tsx
+ * @description Fuzzy-search jump dialog for quickly navigating to a label or block (~150 lines).
+ * Key features: real-time fuzzy scoring (exact > prefix > substring), keyboard navigation
+ * (↑/↓/Enter/Escape), max 10 results, uses `createPortal` for modal overlay.
+ * Integration: opened via Cmd/Ctrl+G shortcut in any canvas; `items` list is provided by the
+ * parent canvas (labels for RouteCanvas, blocks for StoryCanvas).
+ */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 

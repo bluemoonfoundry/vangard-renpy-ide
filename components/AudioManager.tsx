@@ -1,3 +1,11 @@
+/**
+ * @file AudioManager.tsx
+ * @description Asset panel for browsing and importing audio files (~400 lines).
+ * Key features: virtualised list (useVirtualList), search/filter, drag-and-drop to canvas,
+ * playback queue via HTML audio element, scan-directory management, AudioEditorView launch.
+ * Integration: reads audio list from `AssetContext`; triggers imports via `onCopyAudiosToProject`;
+ * context menu (play/queue) rendered via `AudioContextMenu`.
+ */
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { RenpyAudio, AudioMetadata } from '../types';

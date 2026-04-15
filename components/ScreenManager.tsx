@@ -1,3 +1,11 @@
+/**
+ * @file ScreenManager.tsx
+ * @description Virtualised list of all Ren'Py `screen` definitions parsed from project scripts (~70 lines).
+ * Key features: alphabetically sorted, shows screen name and parameter list, click navigates to
+ * the definition in the Monaco editor.
+ * Integration: rendered as a sidebar panel; screen data comes from `useRenpyAnalysis`;
+ * navigates via `onFindDefinition` which opens the file and scrolls to the line.
+ */
 
 import React, { useMemo } from 'react';
 import type { RenpyScreen } from '../types';

@@ -1,3 +1,11 @@
+/**
+ * @file ImageEditorView.tsx
+ * @description Detail editor and zoomable previewer for a single image asset (~350 lines).
+ * Key features: pan/zoom canvas preview (scroll to zoom, drag to pan), file metadata display
+ * (dimensions, file size, format), editable Ren'Py alias/tags/subfolder, copy-to-project action.
+ * Integration: opened as a tab in `EditorView`; persists metadata via `onUpdateMetadata`;
+ * copies files via `onCopyToProject` from `AssetContext`.
+ */
 
 import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import type { ProjectImage, ImageMetadata } from '../types';

@@ -1,3 +1,11 @@
+/**
+ * @file ScreenEditorView.tsx
+ * @description Tree-based visual editor for building Ren'Py `ScreenModel` component trees (~300 lines).
+ * Key features: add/remove/reorder node types (vbox, hbox, frame, text, textbutton, imagebutton,
+ * image, null spacer), edit per-node props, generate code via `CopyButton`.
+ * Integration: opened as a tab in `EditorView` for screen blocks; updates model via `onChange`;
+ * reads project images from `AssetContext` for imagebutton configuration.
+ */
 import React, { useState } from 'react';
 import { ScreenModel, ScreenComponent, ProjectImage } from '../types';
 import CopyButton from './CopyButton';

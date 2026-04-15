@@ -1,3 +1,11 @@
+/**
+ * @file LoadingOverlay.tsx
+ * @description Full-screen progress overlay used during file and asset scanning (~70 lines).
+ * Key features: animated progress bar, phase message display, optional Cancel button with a
+ * "Cancelling…" spinner state.
+ * Integration: rendered by `App.tsx` when `isScanningAssets` is true; progress props come from
+ * `AssetContext`'s scan pipeline.
+ */
 import React, { useState } from 'react';
 
 interface LoadingOverlayProps {

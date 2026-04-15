@@ -1,3 +1,12 @@
+/**
+ * @file ViewRoutesPanel.tsx
+ * @description Route-highlighting toggle list for `RouteCanvas` (~120 lines).
+ * Key features: colour-coded route rows (start → end label), per-route checkbox toggle,
+ * truncation warning when route count exceeds the analysis limit, `embedded` prop for
+ * borderless rendering inside `CanvasToolbox`.
+ * Integration: rendered by `RouteCanvas` (or via `CanvasToolbox`); receives `IdentifiedRoute[]`
+ * from `useRenpyAnalysis` route analysis.
+ */
 import React, { useState } from 'react';
 import type { IdentifiedRoute } from '../types';
 

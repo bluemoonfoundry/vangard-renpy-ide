@@ -1,3 +1,11 @@
+/**
+ * @file CanvasNavControls.tsx
+ * @description Fit-to-screen and go-to-start navigation buttons for canvas views (~50 lines).
+ * Key features: "Fit all to screen" button (F shortcut hint), conditional "Go to start label"
+ * button; shared across `StoryCanvas`, `RouteCanvas`, and `ChoiceCanvas`.
+ * Integration: rendered inside the bottom-right control cluster of each canvas component;
+ * calls `onFit` and `onGoToStart` callbacks provided by the parent canvas.
+ */
 import React from 'react';
 
 interface CanvasNavControlsProps {

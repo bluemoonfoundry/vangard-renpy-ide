@@ -1,3 +1,10 @@
+/**
+ * @file CharacterEditorView.tsx
+ * @description Form-based editor for creating and modifying Ren'Py characters (~250 lines).
+ * Key features: tag/name/color/image assignment, dialogue color overrides, image search picker.
+ * Integration: used inside a character manager panel; persists via `onSave`; reads available
+ * images from `AssetContext` passed as props.
+ */
 import React, { useState, useEffect, useMemo, memo } from 'react';
 import type { Character, ProjectImage, ImageMetadata } from '../types';
 

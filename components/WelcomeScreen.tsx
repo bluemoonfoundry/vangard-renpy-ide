@@ -1,3 +1,11 @@
+/**
+ * @file WelcomeScreen.tsx
+ * @description Full-screen landing page shown when no project is open (~100 lines).
+ * Key features: hero branding panel, Open Project / Create New Project buttons, recent projects
+ * list with one-click re-open, version display.
+ * Integration: rendered by `App.tsx` when `projectRootPath` is null; `isElectron` flag hides
+ * actions unsupported in the web fallback.
+ */
 
 import React from 'react';
 import packageJson from '../package.json';

@@ -1,3 +1,11 @@
+/**
+ * @file CodeBlock.tsx
+ * @description Primary canvas node representing a `.rpy` file block on `StoryCanvas` (~250 lines).
+ * Key features: content-type icon badges (labels/dialogue/menus/jumps/Python), dirty-state
+ * indicator, diagnostic severity ring, selection/drag/dim/flash visual states, memoised.
+ * Integration: rendered by `StoryCanvas` for each `Block`; opens Monaco editor via `onOpenEditor`;
+ * forwards ref for canvas drag-event handling.
+ */
 import React, { useState, useRef, useEffect, useMemo, forwardRef } from 'react';
 import type { Block, RenpyAnalysisResult, LabelLocation } from '../types';
 

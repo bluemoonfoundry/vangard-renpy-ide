@@ -1,3 +1,11 @@
+/**
+ * @file DiagnosticsPanel.tsx
+ * @description Split panel showing Issues and Tasks tabs for project health (~400 lines).
+ * Key features: severity filter, per-rule ignore/unignore, click-to-navigate to source line,
+ * manual punchlist tasks with completion toggling.
+ * Integration: receives `DiagnosticsResult` from `useDiagnostics`; navigates blocks via
+ * `onOpenBlock`/`onHighlightBlock`; persists tasks and ignored rules back to `ProjectSettings`.
+ */
 import React, { useState, useMemo } from 'react';
 import type {
   Block,

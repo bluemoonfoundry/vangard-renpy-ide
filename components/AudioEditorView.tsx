@@ -1,3 +1,11 @@
+/**
+ * @file AudioEditorView.tsx
+ * @description Detail editor for a single audio asset (~130 lines).
+ * Key features: inline playback via HTML audio element, editable Ren'Py alias/tags/subfolder
+ * metadata, and copy-to-project action.
+ * Integration: opened as a tab in `EditorView`; persists metadata via `onUpdateMetadata` and
+ * copies files via `onCopyToProject` callbacks provided by `AssetContext`.
+ */
 
 import React, { useState, useEffect, memo } from 'react';
 import type { RenpyAudio, AudioMetadata } from '../types';

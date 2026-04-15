@@ -1,3 +1,10 @@
+/**
+ * @file ErrorBoundary.tsx
+ * @description React class-based error boundary that wraps the entire application (~60 lines).
+ * Key features: catches unhandled render errors via `getDerivedStateFromError`/`componentDidCatch`,
+ * displays a user-friendly recovery UI with a reload button instead of a blank screen.
+ * Integration: wraps the root `<App>` in `main.tsx`; logs errors to the console.
+ */
 import React from 'react';
 
 interface ErrorBoundaryState {

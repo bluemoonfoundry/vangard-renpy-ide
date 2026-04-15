@@ -1,4 +1,11 @@
-
+/**
+ * @file FileExplorerContextMenu.tsx
+ * @description Right-click context menu for nodes in the `FileExplorerPanel` (~110 lines).
+ * Key features: new file/folder, rename, delete, cut/copy/paste, multi-selection support,
+ * "center on canvas" navigation to the corresponding block.
+ * Integration: rendered by `FileExplorerPanel`; reads `ClipboardState` from `FileSystemContext`;
+ * all actions delegate to callbacks from `FileSystemContext`.
+ */
 
 import React, { useEffect, useRef } from 'react';
 import type { FileSystemTreeNode } from '../types';

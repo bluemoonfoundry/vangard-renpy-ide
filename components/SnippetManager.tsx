@@ -1,3 +1,11 @@
+/**
+ * @file SnippetManager.tsx
+ * @description Two-tab snippet browser with built-in and user-defined Ren'Py code snippets (~400 lines).
+ * Key features: categorised built-in snippets (dialogue, menus, logic, images, audio, screens,
+ * persistence), custom user snippet CRUD via `UserSnippetModal`, `CopyButton` on each snippet.
+ * Integration: rendered as a sidebar panel; persists user snippets to `ProjectSettings` via
+ * `onUpdateUserSnippets`; launches `UserSnippetModal` for add/edit/delete.
+ */
 
 import React from 'react';
 import type { UserSnippet } from '../types';

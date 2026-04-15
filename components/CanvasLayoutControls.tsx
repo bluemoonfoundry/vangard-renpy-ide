@@ -1,3 +1,11 @@
+/**
+ * @file CanvasLayoutControls.tsx
+ * @description Toolbar widget for switching canvas layout, grouping mode, and view level (~150 lines).
+ * Key features: layout mode (auto/manual/force/grid), grouping mode, file/label view level toggle;
+ * `allowedLayoutModes` filter; `embedded` prop for borderless rendering inside `CanvasToolbox`.
+ * Integration: used in `StoryCanvas` and `ChoiceCanvas` toolboxes; state managed by the parent
+ * canvas via `ProjectSettings` persisted in `App.tsx`.
+ */
 import React from 'react';
 import type { StoryCanvasGroupingMode, StoryCanvasLayoutMode } from '../types';
 

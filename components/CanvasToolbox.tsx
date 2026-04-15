@@ -1,3 +1,11 @@
+/**
+ * @file CanvasToolbox.tsx
+ * @description Collapsible floating panel grouping canvas configuration controls (~60 lines).
+ * Key features: chevron-toggle header with configurable label, scrollable child area, children
+ * use `embedded={true}` to suppress their own container styling.
+ * Integration: used in `StoryCanvas`, `RouteCanvas`, and `ChoiceCanvas` to host
+ * `CanvasLayoutControls`, `ViewRoutesPanel`, and `MenuInspectorPanel`.
+ */
 import React, { useState } from 'react';
 
 interface CanvasToolboxProps {

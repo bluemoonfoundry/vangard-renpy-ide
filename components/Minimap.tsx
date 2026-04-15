@@ -1,3 +1,11 @@
+/**
+ * @file Minimap.tsx
+ * @description Thumbnail-scale overview of all canvas items with interactive viewport panning (~150 lines).
+ * Key features: renders blocks, groups, notes, labels, screens, and config nodes as coloured
+ * rectangles; dragging the viewport rectangle pans the main canvas transform.
+ * Integration: rendered anchored at the bottom-right of `StoryCanvas`, `RouteCanvas`, and
+ * `ChoiceCanvas`; reads `MinimapItem[]` and canvas `transform` from the parent canvas.
+ */
 import React, { useRef, useMemo, useCallback } from 'react';
 import type { NoteColor } from '../types';
 

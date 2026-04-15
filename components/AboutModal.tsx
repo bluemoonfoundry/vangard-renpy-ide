@@ -1,3 +1,9 @@
+/**
+ * @file AboutModal.tsx
+ * @description Modal dialog displaying app version, build info, credits, and external links (~80 lines).
+ * Key features: version string from package.json, BUILD_NUMBER env var, logo display.
+ * Integration: uses `useModalAccessibility` for focus trapping; rendered via App.tsx portal.
+ */
 
 import React from 'react';
 import { useModalAccessibility } from '../hooks/useModalAccessibility';

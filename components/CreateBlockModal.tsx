@@ -1,3 +1,11 @@
+/**
+ * @file CreateBlockModal.tsx
+ * @description Modal for creating a new `.rpy` file block (~80 lines).
+ * Key features: name input with validation, block type selector (story/screen/config),
+ * auto-focus on open, default path display.
+ * Integration: uses `useModalAccessibility`; called from `StoryCanvas` toolbar and
+ * `CanvasContextMenu`; exports the `BlockType` union type used by context menus.
+ */
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useModalAccessibility } from '../hooks/useModalAccessibility';

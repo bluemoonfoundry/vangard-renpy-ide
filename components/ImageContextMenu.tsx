@@ -1,3 +1,10 @@
+/**
+ * @file ImageContextMenu.tsx
+ * @description Right-click context menu for images in the Asset Manager (~50 lines).
+ * Key features: "Insert as scene" and "Insert as show" actions; dismisses on outside click.
+ * Integration: rendered by `ImageManager` at pointer coordinates; calls `onSelect` with
+ * `'scene' | 'show'` to trigger code insertion in the active editor.
+ */
 import React, { useEffect, useRef } from 'react';
 
 interface ImageContextMenuProps {

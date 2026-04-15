@@ -1,3 +1,11 @@
+/**
+ * @file GroupContainer.tsx
+ * @description Draggable group container overlay rendered on the `StoryCanvas` (~100 lines).
+ * Key features: colour-coded title bar, double-click-to-rename title, selection/dragging/dimmed
+ * visual states, forwards ref for canvas drag-event handling.
+ * Integration: rendered by `StoryCanvas` for each `BlockGroup` in project state; updates
+ * propagate via `updateGroup` callback to `useImmer` state in `App.tsx`.
+ */
 import React, { useState, useRef, useEffect, forwardRef } from 'react';
 import type { BlockGroup } from '../types';
 

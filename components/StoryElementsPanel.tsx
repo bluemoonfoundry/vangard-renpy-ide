@@ -1,3 +1,11 @@
+/**
+ * @file StoryElementsPanel.tsx
+ * @description Tabbed sidebar panel aggregating all story element managers (~700 lines).
+ * Key features: tabs for Characters, Variables, Images, Audio, Screens, Snippets, and Menu
+ * Templates; each tab hosts the corresponding manager component with virtualised lists.
+ * Integration: rendered in the right sidebar of `App.tsx`; receives all asset and analysis data
+ * as props; actions (add/edit/delete/import) propagate back to `App.tsx` `useImmer` state.
+ */
 import React, { useState, useMemo, useEffect } from 'react';
 import type { Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, RenpyAnalysisResult, UserSnippet, MenuTemplate, ProjectSettings } from '../types';
 import { useVirtualList } from '../hooks/useVirtualList';

@@ -1,3 +1,11 @@
+/**
+ * @file AIGeneratorView.tsx
+ * @description AI assistant panel for generating Ren'Py script content from a prompt (~220 lines).
+ * Key features: multi-provider model support (OpenAI, Anthropic, Google), streaming responses via
+ * Electron IPC, project context injection, and copy-to-clipboard output.
+ * Integration: receives `blocks` and a `getCurrentContext` callback from the parent editor tab;
+ * uses `CopyButton` for output; calls `window.electronAPI.generateAIContent`.
+ */
 import React, { useState, useCallback, useEffect } from 'react';
 import type { Block } from '../types';
 import CopyButton from './CopyButton';

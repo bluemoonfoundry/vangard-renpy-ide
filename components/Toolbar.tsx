@@ -1,3 +1,11 @@
+/**
+ * @file Toolbar.tsx
+ * @description Main application toolbar (~250 lines).
+ * Key features: file operations (save), undo/redo, canvas controls (tidy, sticky note),
+ * run/stop Ren'Py game, diagnostics error count badge, drafting-mode toggle, settings access.
+ * Integration: sits at the top of `App.tsx`; receives save status, dirty-state sets, canvas type,
+ * and all action callbacks directly from `App.tsx` state.
+ */
 import React, { useMemo } from 'react';
 import logo from '../vangard-renide-512x512.png';
 type SaveStatus = 'saving' | 'saved' | 'error';

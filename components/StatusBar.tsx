@@ -1,3 +1,10 @@
+/**
+ * @file StatusBar.tsx
+ * @description Bottom status strip showing project health and activity indicators (~80 lines).
+ * Key features: prioritised activity messages (save error > saving > scanning > analysis > idle),
+ * block count, diagnostics error/warning counts with colour coding.
+ * Integration: rendered at the bottom of `App.tsx`; all props are derived from top-level app state.
+ */
 import React from 'react';
 
 interface StatusBarProps {
