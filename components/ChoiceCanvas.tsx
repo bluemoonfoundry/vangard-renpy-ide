@@ -478,14 +478,6 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
     });
   }, [layoutedNodes, onTransformChange]);
 
-  // Auto-fit once when layout is first populated
-  useEffect(() => {
-    if (!hasFitted.current && layoutedNodes.length > 0) {
-      hasFitted.current = true;
-      setTimeout(fitToScreen, 60);
-    }
-  }, [layoutedNodes, fitToScreen]);
-
   // ── Track canvas dimensions for minimap ──
   useEffect(() => {
     const el = canvasAreaRef.current;
@@ -516,6 +508,23 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
   }, [layoutedNodes, onTransformChange]);
 
   const hasStartNode = useMemo(() => layoutedNodes.some(n => n.label === 'start'), [layoutedNodes]);
+
+  // Auto-fit once when layout is first populated.
+  // If an auto-center-on-start request is already pending (e.g. initial project
+  // open), skip fitToScreen so the centerOnStartRequest handler owns the viewport
+  // and isn't overwritten 60 ms later by the fit.
+  useEffect(() => {
+    if (!hasFitted.current && layoutedNodes.length > 0) {
+      hasFitted.current = true;
+      if (centerOnStartRequest) {
+        // Give the DOM the same 60 ms head-start it needs to be fully sized,
+        // matching the delay used by fitToScreen below.
+        setTimeout(centerOnStart, 60);
+      } else {
+        setTimeout(fitToScreen, 60);
+      }
+    }
+  }, [layoutedNodes, fitToScreen, centerOnStart, centerOnStartRequest]);
 
   const lastHandledAutoCenterKeyRef = useRef<number | null>(null);
   useEffect(() => {
