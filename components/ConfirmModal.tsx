@@ -46,28 +46,28 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
     >
       <div
         ref={contentRef}
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md m-4 flex flex-col"
+        className="bg-secondary rounded-lg shadow-2xl w-full max-w-md m-4 flex flex-col border border-primary text-primary"
         onClick={e => e.stopPropagation()}
       >
-        <header className="p-4 border-b border-gray-200 dark:border-gray-700">
+        <header className="px-6 py-5 border-b border-primary">
           <h2 id="confirm-modal-title" className="text-xl font-bold">{title}</h2>
         </header>
-        <main className="p-6">
-          <p className="text-gray-600 dark:text-gray-300">
+        <main className="px-6 py-6">
+          <p className="text-secondary leading-relaxed">
             {children}
           </p>
         </main>
-        <footer className="bg-gray-50 dark:bg-gray-700 p-4 rounded-b-lg flex justify-end items-center space-x-4">
+        <footer className="bg-header px-6 py-4 rounded-b-lg flex justify-end items-center space-x-4 border-t border-primary">
           <button
             onClick={onClose}
-            className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 font-bold py-2 px-4 rounded transition duration-200"
+            className="bg-tertiary hover:bg-tertiary-hover text-primary font-bold py-2 px-4 rounded transition duration-200 border border-primary"
           >
             Cancel
           </button>
           {secondaryAction && (
             <button
               onClick={secondaryAction.onClick}
-              className={`${secondaryAction.className || 'bg-gray-300 hover:bg-gray-400'} text-white font-bold py-2 px-4 rounded transition duration-200`}
+              className={`${secondaryAction.className || 'bg-tertiary hover:bg-tertiary-hover border border-primary'} text-primary font-bold py-2 px-4 rounded transition duration-200`}
             >
               {secondaryAction.label}
             </button>

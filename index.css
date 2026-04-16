@@ -10,6 +10,9 @@ html, body, #root {
   margin: 0;
   padding: 0;
 }
+body {
+  line-height: 1.6;
+}
 
 /* --- Custom Styles --- */
 .renpy-jump-link {
@@ -276,6 +279,25 @@ html.dark .heatmap-highlight {
 
   .bg-accent-light { background-color: var(--accent-primary); opacity: 0.15; }
   .dark .bg-accent-light { background-color: var(--accent-primary); opacity: 0.2; }
+}
+
+/* --- Primary Action Button (gradient + glow) --- */
+/* Defined outside @layer so it takes precedence over bg-tertiary and text-primary utilities. */
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-primary-hover) 100%);
+  color: var(--text-on-accent);
+  box-shadow: 0 2px 8px var(--accent-border-hover-pulse);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 4px 12px var(--accent-border-hover-pulse);
+  transform: translateY(-1px);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* Special case overrides for themes to adjust feel */

@@ -71,7 +71,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
         className="bg-secondary rounded-lg shadow-2xl w-full max-w-lg m-4 flex flex-col max-h-[90vh] overflow-hidden border border-primary text-primary"
         onClick={e => e.stopPropagation()}
       >
-        <header className="p-4 border-b border-primary">
+        <header className="px-6 py-5 border-b border-primary">
           <h2 id="settings-modal-title" className="text-xl font-bold">Settings</h2>
         </header>
         <main className="p-6 space-y-6 overflow-y-auto">
@@ -226,7 +226,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                     Application settings (like theme, font, and mouse gestures) are saved globally. Project settings (like drafting mode) are saved in `project.ide.json`.
                 </p>
         </main>
-        <footer className="bg-header p-4 rounded-b-lg flex justify-end items-center space-x-4 border-t border-primary">
+        <footer className="bg-header px-6 py-4 rounded-b-lg flex justify-end items-center space-x-4 border-t border-primary">
           <button
             onClick={onClose}
             className="bg-tertiary hover:bg-tertiary-hover text-primary font-bold py-2 px-4 rounded transition duration-200 border border-primary"

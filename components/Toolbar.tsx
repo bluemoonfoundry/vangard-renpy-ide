@@ -37,14 +37,20 @@ interface ToolbarProps {
   onToggleDraftingMode: (enabled: boolean) => void;
 }
 
-const ToolbarButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { children: React.ReactNode; }> = ({ children, ...props }) => {
+const ToolbarButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  children: React.ReactNode;
+  variant?: 'default' | 'primary';
+}> = ({ children, variant = 'default', ...props }) => {
   const childrenArray = React.Children.toArray(children);
   const hasText = childrenArray.some(child => typeof child === 'string' || (React.isValidElement(child) && child.type === 'span'));
-  const layoutClass = hasText ? 'px-3 py-1.5 space-x-2' : 'p-2';
+  const layoutClass = hasText ? 'px-3 py-2 space-x-2' : 'p-2';
+  const variantClass = variant === 'primary'
+    ? 'btn-primary'
+    : 'bg-tertiary hover:bg-tertiary-hover text-primary disabled:opacity-50 disabled:cursor-not-allowed';
   return (
     <button
       {...props}
-      className={`flex items-center justify-center rounded-md text-sm font-medium bg-tertiary hover:bg-tertiary-hover text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${layoutClass} ${props.className || ''}`}
+      className={`flex items-center justify-center rounded-md text-sm font-medium transition-colors ${variantClass} ${layoutClass} ${props.className || ''}`}
     >
       {children}
     </button>
@@ -121,14 +127,14 @@ const Toolbar: React.FC<ToolbarProps> = ({
     }`;
 
   return (
-    <header className="flex-shrink-0 h-16 bg-header border-b border-primary relative flex items-center px-4 z-30">
+    <header className="flex-shrink-0 h-16 bg-header border-b border-primary relative flex items-center px-6 z-30">
 
       {/* ── Far left: logo ── */}
       <img src={logo} alt="Ren'IDE Logo" className="h-12 w-auto shrink-0" />
       <div className="h-6 w-px bg-primary shrink-0 ml-3" />
 
       {/* ── Absolutely centered: editing tools + canvas switcher ── */}
-      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
+      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3">
         <ToolbarButton onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" /></svg>
         </ToolbarButton>
@@ -137,7 +143,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
         </ToolbarButton>
         <div className="h-6 w-px bg-primary shrink-0" />
 
-        <ToolbarButton onClick={addBlock} title="New Scene (N)">
+        <ToolbarButton onClick={addBlock} title="New Scene (N)" variant="primary">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
           <span>New Scene</span>
         </ToolbarButton>
@@ -227,7 +233,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
       </div>
 
       {/* ── Right section: mode toggles + run + save ── */}
-      <div className="ml-auto flex items-center space-x-2">
+      <div className="ml-auto flex items-center space-x-3">
         {/* Drafting Mode Toggle */}
         <div className="flex items-center space-x-2 mr-2">
           <span className={`text-xs font-bold ${draftingMode ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>Drafting Mode</span>
@@ -257,7 +263,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
         <ToolbarButton
           onClick={handleSave}
           disabled={!hasUnsavedChanges}
-          className={hasUnsavedChanges ? 'bg-red-600 hover:bg-red-700 !text-white' : ''}
+          variant={hasUnsavedChanges ? 'primary' : 'default'}
           title={
             !hasUnsavedChanges
               ? 'No changes to save'
