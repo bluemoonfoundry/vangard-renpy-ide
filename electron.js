@@ -33,6 +33,14 @@ protocol.registerSchemesAsPrivileged([
   }
 ]);
 
+// --- CLI startup flags ---
+// Supports: electron . --project /path/to/project
+// Used by the Playwright screenshot capture script and power users.
+const _projectArgIdx = process.argv.indexOf('--project');
+const startupProjectPath = (_projectArgIdx !== -1 && _projectArgIdx + 1 < process.argv.length)
+    ? process.argv[_projectArgIdx + 1]
+    : null;
+
 // --- Game Process Management ---
 let gameProcess = null;
 
@@ -754,6 +762,8 @@ app.whenReady().then(() => {
         return new Response('Not Found', { status: 404 });
     }
   });
+
+  ipcMain.handle('app:get-startup-args', () => ({ projectPath: startupProjectPath }));
 
   ipcMain.handle('dialog:openDirectory', async () => {
     try {

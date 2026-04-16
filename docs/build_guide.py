@@ -7,6 +7,7 @@ Requirements:
     pip install markdown jinja2
 """
 
+import base64
 import re
 import sys
 from pathlib import Path
@@ -167,6 +168,42 @@ def parse_sections(md_text: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Screenshot embedding
+# ---------------------------------------------------------------------------
+
+IMAGES_DIR = DOCS_DIR / "images"
+
+def embed_images(html: str) -> str:
+    """
+    Replace <img src="images/FILENAME"> tags with inline base64 data URIs
+    when the corresponding file exists in docs/images/.
+    Images that haven't been captured yet are left as relative src paths
+    so the HTML degrades gracefully.
+    """
+    def replace_src(m: re.Match) -> str:
+        before, src, after = m.group(1), m.group(2), m.group(3)
+        # Only process relative images/ paths
+        if not src.startswith("images/"):
+            return m.group(0)
+        img_path = DOCS_DIR / src
+        if not img_path.exists():
+            return m.group(0)  # leave as-is; file not yet captured
+        ext = img_path.suffix.lower().lstrip(".")
+        mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+                "gif": "image/gif", "webp": "image/webp"}.get(ext, "image/png")
+        b64 = base64.b64encode(img_path.read_bytes()).decode("ascii")
+        return f'{before}data:{mime};base64,{b64}{after}'
+
+    # Match src="..." or src='...' inside <img ...> tags
+    return re.sub(
+        r'(<img\s[^>]*src=")([^"]+)(")',
+        replace_src,
+        html,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -187,8 +224,17 @@ def main() -> None:
         sections=sections,
     )
 
+    html_output = embed_images(html_output)
+
+    embedded = len(re.findall(r'src="data:image/', html_output))
+    placeholders = len(re.findall(r'src="images/', html_output))
+
     OUTPUT_HTML.write_text(html_output, encoding="utf-8")
     print(f"HTML generated: {OUTPUT_HTML}")
+    if embedded:
+        print(f"  {embedded} screenshot(s) embedded inline as base64.")
+    if placeholders:
+        print(f"  {placeholders} screenshot placeholder(s) not yet captured (run 'make screenshots' first).")
 
 
 if __name__ == "__main__":

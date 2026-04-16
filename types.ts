@@ -1124,6 +1124,7 @@ export interface CreateProjectOptions {
 declare global {
   interface Window {
     electronAPI?: {
+          getStartupArgs?: () => Promise<{ projectPath: string | null }>;
           openDirectory: () => Promise<string | null>;
           createProject?: () => Promise<string | null>;
           createProjectFromTemplate?: (options: CreateProjectOptions) => Promise<{ success: boolean; path?: string; error?: string }>;

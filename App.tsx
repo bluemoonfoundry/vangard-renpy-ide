@@ -726,6 +726,15 @@ const App: React.FC = () => {
     }
   }, [updateAppSettings]);
 
+  // --- CLI --project flag: auto-open a project on startup ---
+  // Runs once after app settings have loaded to avoid racing the settings fetch.
+  useEffect(() => {
+    if (!appSettingsLoaded || !window.electronAPI?.getStartupArgs) return;
+    window.electronAPI.getStartupArgs().then(({ projectPath }) => {
+      if (projectPath) loadProject(projectPath);
+    }).catch(err => console.error('Failed to read startup args:', err));
+  }, [appSettingsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!appSettingsLoaded) return;
 

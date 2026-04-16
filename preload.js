@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  getStartupArgs: () => ipcRenderer.invoke('app:get-startup-args'),
   openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
   createProject: () => ipcRenderer.invoke('dialog:createProject'),
   createProjectFromTemplate: (options) => ipcRenderer.invoke('dialog:createProjectFromTemplate', options),

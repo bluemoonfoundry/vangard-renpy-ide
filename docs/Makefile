@@ -28,7 +28,7 @@ HTML_OPTIONS=--toc \
   --css=user-guide.css \
   --template=template.html
 
-.PHONY: all clean pdf draft test html help
+.PHONY: all clean pdf draft test html screenshots full help
 
 all: pdf html
 
@@ -40,6 +40,13 @@ pdf:
 html:
 	@echo "Generating HTML user guide..."
 	python build_guide.py
+
+screenshots:
+	@echo "Capturing screenshots via Playwright..."
+	node capture_screenshots.js
+	@echo "Screenshots saved to images/"
+
+full: screenshots html
 
 draft:
 	@echo "Generating draft PDF (no title page)..."
@@ -55,19 +62,28 @@ clean:
 	@echo "Cleaning generated files..."
 	rm -f $(OUTPUT) $(HTML_OUTPUT) Ren-IDE_User_Guide_DRAFT.pdf test.pdf
 	rm -f *.aux *.log *.out *.tex *.toc
-	@echo "✓ Clean complete"
+	@echo "Clean complete"
+
+clean-screenshots:
+	@echo "Removing captured screenshots..."
+	rm -rf images/
+	@echo "Done"
 
 help:
 	@echo "Ren'IDE User Guide - Makefile targets:"
 	@echo ""
-	@echo "  make all    - Generate PDF and HTML (default)"
-	@echo "  make pdf    - Generate final PDF with title page"
-	@echo "  make html   - Generate HTML user guide for bundling with app"
-	@echo "  make draft  - Generate draft PDF (no title page, basic formatting)"
-	@echo "  make test   - Generate test PDF (minimal options for quick testing)"
-	@echo "  make clean  - Remove all generated files"
-	@echo "  make help   - Show this help message"
+	@echo "  make all          - Generate PDF and HTML (default)"
+	@echo "  make html         - Generate HTML (embeds any captured screenshots)"
+	@echo "  make screenshots  - Capture screenshots via Playwright + Electron"
+	@echo "  make full         - Capture screenshots then build HTML"
+	@echo "  make pdf          - Generate final PDF with title page"
+	@echo "  make draft        - Generate draft PDF (no title page)"
+	@echo "  make test         - Generate test PDF (minimal options)"
+	@echo "  make clean        - Remove generated HTML/PDF files"
+	@echo "  make clean-screenshots - Remove captured screenshot images"
+	@echo "  make help         - Show this help"
 	@echo ""
 	@echo "Generated files:"
-	@echo "  PDF: $(OUTPUT)"
 	@echo "  HTML: $(HTML_OUTPUT)"
+	@echo "  PDF:  $(OUTPUT)"
+	@echo "  Screenshots: images/*.png"
