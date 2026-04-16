@@ -38,6 +38,7 @@ Ren'IDE addresses these challenges by providing:
 Your `.rpy` files appear as draggable blocks on a canvas. Jump and call connections automatically draw as arrows between blocks. You can see the entire narrative flow, reorganize your structure by dragging blocks, and understand your branching complexity at a glance.
 
 **Three Different Views**
+
 - **Story Canvas** shows your project at the file level—one block per `.rpy` file
 - **Route Canvas** shows your project at the label level—one node per label, with every jump and call visualized
 - **Choice Canvas** shows your project from the player's perspective—what choices will they see, where do they lead, and what conditions guard them?
@@ -201,6 +202,7 @@ The most immediate benefit of Ren'IDE is visualization. Instead of mentally reco
 - **Player-facing view (Choice Canvas):** Menu nodes show the actual choice text the player will see. Colored pills lead to destination labels. Conditional badges indicate when choices are guarded by `if` statements.
 
 With these three views, you can answer questions that are nearly impossible to answer in a text editor:
+
 - "Where does this jump go?"
 - "What are all the ways to reach this ending?"
 - "Which story branches are never visited?"
@@ -234,6 +236,7 @@ Ren'IDE's diagnostics system continuously analyzes your project and flags issues
 - **Syntax errors:** Code that Ren'Py won't be able to parse.
 
 Each diagnostic includes:
+
 - Severity (error, warning, info)
 - Description of the issue
 - File path and line number
@@ -257,6 +260,7 @@ Build Ren'Py screen layouts by dragging widgets (containers like `vbox` and `hbo
 ### Unified Environment
 
 Before Ren'IDE, a typical Ren'Py workflow might involve:
+
 - A text editor (Atom, Sublime, VSCode) for code
 - A file browser or asset management tool for images and audio
 - A spreadsheet or document for tracking characters and variables
@@ -264,6 +268,7 @@ Before Ren'IDE, a typical Ren'Py workflow might involve:
 - Separate tools for testing, debugging, and analyzing the project
 
 With Ren'IDE, all of these functions are integrated into a single application:
+
 - Code editor with Ren'Py-specific features
 - Image and audio asset browsers with thumbnails and playback
 - Character and variable databases with usage tracking
@@ -283,17 +288,20 @@ Ren'IDE is a desktop application built with Electron and React. It runs on Windo
 ### Minimum Requirements
 
 **Operating System:**
+
 - **Windows:** Windows 10 (64-bit) or later
 - **macOS:** macOS 10.15 (Catalina) or later (Intel and Apple Silicon supported)
 - **Linux:** Recent distribution (Ubuntu 20.04+, Fedora 35+, or equivalent) with AppImage support
 
 **Hardware:**
+
 - **Processor:** 64-bit CPU (Intel or AMD; Apple Silicon on macOS)
 - **RAM:** 4 GB minimum
 - **Storage:** 500 MB for the application, plus space for your project files
 - **Display:** 1280×720 resolution minimum
 
 **Software:**
+
 - **Ren'Py SDK** (if you want to run your game from Ren'IDE; not required for editing)
 
 ### Recommended Requirements
@@ -301,28 +309,34 @@ Ren'IDE is a desktop application built with Electron and React. It runs on Windo
 For a smoother experience, especially with larger projects:
 
 **Hardware:**
+
 - **RAM:** 8 GB or more
 - **Storage:** SSD recommended for faster project loading
 - **Display:** 1920×1080 resolution or higher (more screen real estate for split pane editing and side panels)
 
 **Software:**
+
 - **Ren'Py SDK 8.0 or later** for full compatibility with modern Ren'Py features
 
 ### Platform-Specific Notes
 
 **Windows:**
+
 - Windows SmartScreen may show a warning when you first run the installer. This is normal for unsigned applications. Click "More info" and "Run anyway" to proceed.
 - The application is installed by default in `C:\Program Files\Ren'IDE` but you can choose a custom location during installation.
 
 **macOS:**
+
 - On first launch, macOS Gatekeeper may block the application with a message like "Ren'IDE cannot be opened because it is from an unidentified developer." To bypass this:
   1. Right-click (or Control-click) the application in Finder
   2. Select "Open" from the context menu
   3. Click "Open" in the confirmation dialog
+
 - Ren'IDE requires permissions to access your file system. macOS will prompt you to grant access to the project directory when you open a project for the first time.
 - Both Intel and Apple Silicon (M1/M2/M3) Macs are supported. The application runs natively on Apple Silicon.
 
 **Linux:**
+
 - Ren'IDE is distributed as an AppImage, which is a self-contained executable that runs on most modern Linux distributions without installation.
 - Make the AppImage executable: `chmod +x Vangard-RenPy-renide-*.AppImage`
 - Some distributions require FUSE to run AppImages. If the AppImage doesn't run, install FUSE: `sudo apt install fuse` (Ubuntu/Debian) or `sudo dnf install fuse` (Fedora).
@@ -333,6 +347,7 @@ For a smoother experience, especially with larger projects:
 Ren'IDE does not require an internet connection for core functionality. All editing, visualization, and project management features work offline.
 
 An internet connection is required for:
+
 - **Auto-updater:** Checking for and downloading new versions of Ren'IDE
 - **AI Story Generator:** Using the AI content generation feature (requires API keys for Google Gemini, OpenAI, or Anthropic)
 
@@ -351,6 +366,7 @@ For most projects (up to several hundred `.rpy` files and a few thousand labels)
 - **Many assets (1000+ images/audio):** Asset thumbnails are generated asynchronously, but initial loading may be slower on HDDs. An SSD significantly improves asset browsing performance.
 
 If you experience performance issues with a large project, consider:
+
 - Closing unused editor tabs and panes
 - Filtering the canvas to show fewer blocks (e.g., use the character filter)
 - Using the Minimap for navigation instead of scrolling the full canvas
@@ -695,6 +711,7 @@ npm run dist
 ```
 
 This uses electron-builder to create:
+
 - **Windows:** `.exe` installer in `release/`
 - **macOS:** `.dmg` disk image in `release/`
 - **Linux:** `.AppImage` in `release/`
@@ -740,6 +757,7 @@ If you already have a Ren'Py project (a folder containing `.rpy` files):
 4. Select the folder and click "Open" or "Select Folder"
 
 Ren'IDE will:
+
 - Scan the `game/` directory for `.rpy` files
 - Parse and analyze all Ren'Py code
 - Build the file tree, canvas, and story elements
@@ -767,13 +785,16 @@ After you open or create a project, the Welcome Screen will close and you'll see
 Depending on your operating system, you may be prompted for permissions on first launch:
 
 **Windows:**
+
 - Windows Defender Firewall may ask if you want to allow Ren'IDE to access the network. This is optional; Ren'IDE works fine without network access (except for the auto-updater and AI features).
 
 **macOS:**
+
 - macOS will ask for permission to access files in your project directory. Click "OK" to grant access.
 - If you deny access, Ren'IDE won't be able to read or write project files. You can grant access later in System Preferences → Security & Privacy → Files and Folders → Ren'IDE.
 
 **Linux:**
+
 - No special permissions are required. If you placed the AppImage in a location without execute permissions, you may need to `chmod +x` the file (see Section 2.1.3).
 
 ---
@@ -802,6 +823,7 @@ your-project/
 ```
 
 Specifically:
+
 - A `game/` subdirectory containing `.rpy` files
 - Optionally, `game/images/` and `game/audio/` directories for assets
 
@@ -970,6 +992,7 @@ Ren'IDE will:
 4. Open the new project in Ren'IDE
 
 You'll see:
+
 - A single block on the Story Canvas labeled `script.rpy`
 - An empty Project Explorer tree (just the `game/` folder and its subdirectories)
 - Empty Story Elements tabs (no characters, variables, or assets yet)
@@ -995,11 +1018,13 @@ Ren'IDE is a development environment, not a game engine. To actually run and tes
 ### Why You Need the Ren'Py SDK
 
 The Ren'Py SDK:
+
 - Runs your game for testing
 - Builds distributable packages (Windows .exe, macOS .app, Linux, Android, iOS, web)
 - Provides the Ren'Py launcher for project management
 
 Ren'IDE complements the SDK by providing:
+
 - Visual story structure and navigation
 - Advanced code editing with IntelliSense and snippets
 - Asset management
@@ -1040,6 +1065,7 @@ Once you have the SDK installed:
 - This should be the directory that contains `renpy.exe` (Windows), `renpy.app` (macOS), or `renpy.sh` (Linux)
 
 **Examples:**
+
 - **Windows:** `C:\RenpySDK\renpy-8.1.0-sdk`
 - **macOS:** `/Users/yourname/RenpySDK/renpy-8.1.0-sdk`
 - **Linux:** `/home/yourname/RenpySDK/renpy-8.1.0-sdk`
@@ -1151,6 +1177,7 @@ Contains action buttons for common operations (save, undo/redo, add block, run g
 
 **Canvas Area (Center):**
 The main workspace. Displays one of three canvas views:
+
 - Story Canvas (file-level blocks with jump/call arrows)
 - Route Canvas (label-level control flow graph)
 - Choice Canvas (player-facing choice view)
@@ -1196,6 +1223,7 @@ The toolbar at the top of the window provides quick access to frequently used ac
 ### Undo/Redo Group
 
 **Undo (Ctrl+Z / Cmd+Z)**
+
 - Icon: Curved arrow pointing left
 - Reverts the most recent change
 - Works for:
@@ -1203,9 +1231,11 @@ The toolbar at the top of the window provides quick access to frequently used ac
   - Block creation/deletion
   - Composition edits (Scene/ImageMap/Screen Composer)
   - Code changes in the editor
+
 - Grayed out when there's nothing to undo
 
 **Redo (Ctrl+Y / Cmd+Y / Ctrl+Shift+Z)**
+
 - Icon: Curved arrow pointing right
 - Re-applies a change that was undone
 - Only available after using Undo
@@ -1216,24 +1246,29 @@ The toolbar at the top of the window provides quick access to frequently used ac
 ### Canvas Actions Group
 
 **Add Block (N)**
+
 - Icon: Plus sign or document with a plus
 - Creates a new `.rpy` file on the canvas
 - Opens a dialog where you specify:
   - File name
   - Block type (story, screen, other)
   - Initial content (empty or boilerplate)
+
 - The new block appears at the canvas center or near your current viewport
 
 **Add Note**
+
 - Icon: Sticky note or comment icon
 - Adds a sticky note annotation to the canvas
 - Use notes to:
   - Leave reminders for yourself or teammates
   - Mark sections of the story for revision
   - Document narrative structure directly on the canvas
+
 - Notes don't affect your code; they're saved in `project.ide.json`
 
 **Redraw**
+
 - Icon: Circular arrows or layout grid
 - Triggers automatic layout of canvas blocks
 - Analyzes jump/call connections and arranges blocks hierarchically
@@ -1241,21 +1276,25 @@ The toolbar at the top of the window provides quick access to frequently used ac
   - Blocks are overlapping or cluttered
   - You've added many new blocks
   - You want to reset the layout to a clean state
+
 - **Note:** This replaces manual block positioning. Use with caution if you've carefully arranged blocks.
 
 ### Panels Group
 
 **Diagnostics**
+
 - Icon: Exclamation mark in a circle or alert icon
 - Opens the Diagnostics panel
 - Shows:
   - Errors (red): broken jumps, missing assets, syntax errors
   - Warnings (amber): unused characters, unreachable labels
   - Info (blue): suggestions and best practices
+
 - Click any diagnostic to jump to the source file and line
 - Badge shows total issue count (e.g., "3" for 3 diagnostics)
 
 **Stats**
+
 - Icon: Bar chart or analytics icon
 - Opens the Project Statistics panel
 - Displays metrics:
@@ -1264,11 +1303,13 @@ The toolbar at the top of the window provides quick access to frequently used ac
   - Scene and route counts
   - Branching complexity scores
   - Asset coverage
+
 - Metrics compute asynchronously (you'll see spinners while calculations run)
 
 ### Canvas Tabs
 
 **Story / Route / Choice**
+
 - Three tabs to switch between canvas views
 - **Story:** File-level view (blocks for .rpy files)
 - **Route:** Label-level view (nodes for labels, edges for jumps/calls)
@@ -1279,17 +1320,21 @@ The toolbar at the top of the window provides quick access to frequently used ac
 ### Run Group
 
 **Drafting Mode (Toggle)**
+
 - Icon: Construction cone or draft icon
 - Enables/disables placeholder assets
 - When ON (highlighted):
   - Ren'Py placeholders are added for missing images and audio
   - Your game can run even if some assets haven't been created yet
   - Visual indicator (badge or highlight) shows mode is active
+
 - When OFF (default):
   - Missing assets cause runtime errors (normal Ren'Py behavior)
+
 - Useful during early development or when collaborating with artists
 
 **Run (Play icon)**
+
 - Launches your game in the Ren'Py SDK
 - Requires SDK path to be configured (see Section 2.5)
 - Process:
@@ -1297,23 +1342,28 @@ The toolbar at the top of the window provides quick access to frequently used ac
   2. Invokes the Ren'Py executable with your project path
   3. Game window opens; Ren'IDE waits in the background
   4. When you close the game, control returns to Ren'IDE
+
 - If SDK path isn't configured, clicking this button opens Settings
 
 ### File Actions Group
 
 **Save All (Ctrl+S / Cmd+S)**
+
 - Icon: Floppy disk
 - Saves all unsaved changes across:
   - Open editor tabs (code files)
   - Canvas block positions
   - Compositions (Scene/ImageMap/Screen)
   - Project settings (project.ide.json)
+
 - Unsaved changes are indicated by:
   - Modified indicator (dot or asterisk) on editor tabs
   - "Unsaved changes" message in status bar
+
 - Ren'IDE does NOT auto-save by default; save frequently!
 
 **Settings (Gear icon)**
+
 - Opens the Settings modal
 - Sections:
   - General: Theme, auto-save, undo history depth
@@ -1322,16 +1372,19 @@ The toolbar at the top of the window provides quick access to frequently used ac
   - Ren'Py SDK: SDK path configuration
   - AI: API provider and key management
   - Mouse: Preferences for canvas interaction
+
 - Changes take effect immediately or on "Apply"
 - Some settings are project-specific, others are global
 
 ### Additional Toolbar Features
 
 **Application Logo (Top-Left)**
+
 - Clicking the Ren'IDE logo returns you to the Welcome Screen
 - Use this to switch projects or create a new project
 
 **Window Controls (Top-Right, platform-dependent)**
+
 - Minimize, Maximize/Restore, Close (standard window controls)
 - On macOS, these are in the native window title bar
 
@@ -1344,6 +1397,7 @@ The Project Explorer displays your project's file tree and provides tools for fi
 ### File Tree Structure
 
 The tree shows:
+
 - **Root node:** Your project name (folder name)
 - **game/ subdirectory:** Contains all `.rpy` files and asset folders
 - **images/ subdirectory (if exists):** Image assets
@@ -1351,6 +1405,7 @@ The tree shows:
 - **Other files and folders:** Any other directories or files in your project
 
 **File Type Icons:**
+
 - `.rpy` files: Script icon
 - `.py` files: Python icon
 - Folders: Folder icon (open or closed state)
@@ -1359,17 +1414,20 @@ The tree shows:
 - Other: Generic file icon
 
 **Expand/Collapse:**
+
 - Click the arrow next to a folder to expand or collapse it
 - Double-click a folder to expand/collapse
 
 ### Opening Files
 
 **To open a file in the code editor:**
+
 - Double-click a `.rpy` or `.py` file in the tree
 - The file opens in the split pane editor at the bottom
 - If the editor pane is hidden, it appears automatically
 
 **To open an image or audio file:**
+
 - Double-click to open in the respective editor view (Image Editor or Audio Editor)
 - For images: shows thumbnail, metadata, and Ren'Py name
 - For audio: shows playback controls and metadata
@@ -1441,6 +1499,7 @@ You can also reorganize files by dragging:
 3. Drop it on a folder to move it inside that folder
 
 **Visual feedback:**
+
 - A highlight or line indicates where the item will be dropped
 - If the drop location is invalid (e.g., trying to move a folder inside itself), the cursor changes to "not allowed"
 
@@ -1449,6 +1508,7 @@ You can also reorganize files by dragging:
 Right-click any file or folder to access these actions (depending on file type):
 
 **For .rpy files:**
+
 - Open in Editor
 - Rename
 - Delete
@@ -1456,12 +1516,14 @@ Right-click any file or folder to access these actions (depending on file type):
 - **Center on Canvas:** Locates the corresponding block on the Story Canvas and zooms to it
 
 **For image files:**
+
 - Open in Image Editor
 - Copy `scene` statement
 - Copy `show` statement
 - Rename / Delete / Cut / Copy / Paste
 
 **For audio files:**
+
 - Open in Audio Editor
 - Copy `play music` statement
 - Copy `play sound` statement
@@ -1469,6 +1531,7 @@ Right-click any file or folder to access these actions (depending on file type):
 - Rename / Delete / Cut / Copy / Paste
 
 **For folders:**
+
 - New File / New Folder
 - Rename / Delete
 - Cut / Copy / Paste
@@ -1505,6 +1568,7 @@ The Story Elements panel is a multi-tab interface that displays project data ext
 ### Tab Navigation
 
 **Primary tabs (always visible):**
+
 - Characters
 - Variables
 - Images (Img)
@@ -1521,12 +1585,14 @@ Click a tab to switch to that section. The active tab is highlighted. Content sc
 Displays all character definitions found in your project (defined with `define [tag] = Character(...)`).
 
 **Information shown:**
+
 - **Character tag** (e.g., `e` for Eileen)
 - **Display name** (e.g., "Eileen")
 - **Color** (color swatch showing the character's dialogue color)
 - **Dialogue count** (number of lines spoken by this character)
 
 **Actions:**
+
 - **Add New Character:** Click the "+ New Character" button to define a new character. A dialog opens where you specify the tag, name, color, and other Ren'Py parameters.
 - **Edit Character:** Click a character entry to open the Character Editor, where you can modify all properties.
 - **Find Usages:** Right-click a character and select "Find Usages" to see every location where this character speaks or is referenced.
@@ -1540,11 +1606,13 @@ Characters that are defined but never speak in your project are marked with a wa
 Displays all global variables defined with `define` or `default`.
 
 **Information shown:**
+
 - **Variable name** (e.g., `player_name`)
 - **Type** (`define` or `default`)
 - **Initial value** (e.g., `"Player"` or `0`)
 
 **Actions:**
+
 - **Find Usages:** Right-click a variable to see everywhere it's read or written.
 - **Jump to Definition:** Navigate to the file and line where the variable is defined.
 
@@ -1555,20 +1623,24 @@ Displays all global variables defined with `define` or `default`.
 Browses and manages all image assets in your project.
 
 **Organization:**
+
 - Images are grouped by folder (e.g., `game/images/characters/`, `game/images/backgrounds/`)
 - Each image shows a thumbnail preview
 - Click a folder to expand/collapse its contents
 
 **Actions:**
+
 - **Scan External Directory:** Click to add an external directory to the image list without copying files into your project. Useful for referencing shared asset libraries.
 - **Import Images:** Drag images from your OS file browser into the Images tab, or click "Import" to open a file picker. Images are copied to `game/images/` (or a subfolder you specify).
 - **Edit Metadata:** Double-click an image to open the Image Editor, where you can set:
   - **Ren'Py name** (e.g., `"eileen happy"` for `images/eileen_happy.png`)
   - **Tags** (custom tags for organization and filtering)
   - **Subfolder** (move the image to a subfolder)
+
 - **Copy Code:** Right-click an image and select:
   - **Copy `scene` statement** → `scene bg_office` is copied to clipboard
   - **Copy `show` statement** → `show eileen happy` is copied to clipboard
+
 - **Drag to Composer:** Drag an image thumbnail onto the Scene Composer stage or Screen Layout Composer to add it to a composition.
 
 **Thumbnails:**
@@ -1582,6 +1654,7 @@ Some versions include a search/filter box at the top of the Images tab to quickl
 Browses and manages all audio assets (music and sound effects).
 
 **Organization:**
+
 - Audio files grouped by folder (e.g., `game/audio/music/`, `game/audio/sfx/`)
 - Each audio file shows:
   - File name
@@ -1589,6 +1662,7 @@ Browses and manages all audio assets (music and sound effects).
   - Duration (if available)
 
 **Actions:**
+
 - **Scan External Directory:** Add external audio directories without copying files.
 - **Import Audio:** Drag audio files into the tab or click "Import."
 - **Built-in Player:** Click an audio file to load it in the built-in player. Controls include:
@@ -1596,6 +1670,7 @@ Browses and manages all audio assets (music and sound effects).
   - Volume slider
   - Seek bar
   - Loop toggle
+
 - **Edit Metadata:** Double-click to set Ren'Py name, tags, and subfolder.
 - **Copy Code:** Right-click and select:
   - **Copy `play music` statement** → `play music "audio/music/theme.mp3"`
@@ -1607,11 +1682,13 @@ Browses and manages all audio assets (music and sound effects).
 Lists all `screen` definitions found in your project (typically in `screens.rpy` or custom screen files).
 
 **Information shown:**
+
 - **Screen name** (e.g., `say`, `choice`, `main_menu`)
 - **File location** (which `.rpy` file defines it)
 - **Parameters** (if the screen takes arguments)
 
 **Actions:**
+
 - **Jump to Definition:** Click a screen to open the file and scroll to the screen definition.
 - **Add Screen Boilerplate:** Click "+ New Screen" to create a new screen with basic boilerplate code. A dialog prompts for the screen name.
 
@@ -1624,11 +1701,13 @@ Manages saved compositions from the three visual composers: Scene Composer, Imag
 
 **Saved Compositions:**
 Each composition entry shows:
+
 - **Name** (e.g., "Office Scene", "Main Menu")
 - **Type** (Scene, ImageMap, or Screen)
 - **Thumbnail** (preview image)
 
 **Actions:**
+
 - **Load Composition:** Click a composition to open it in the respective composer.
 - **Delete Composition:** Right-click and select "Delete" to remove it from the library.
 - **Create New Composition:** Click "+ New Scene", "+ New ImageMap", or "+ New Screen" to start a fresh composition.
@@ -1641,6 +1720,7 @@ Compositions are saved in `project.ide.json`. Commit this file to version contro
 The Menus tab provides a visual interface for designing Ren'Py menu structures.
 
 **Features:**
+
 - **See all menus in your project:** Extracted from your code
 - **Create new menus:** Click "+ New Menu" to design a menu structure
 - **Configure choices:**
@@ -1665,6 +1745,7 @@ The Snippets tab is your code snippet library.
 
 **Built-in Snippets:**
 Ren'IDE includes 28+ built-in Ren'Py snippets for common patterns:
+
 - `label` — create a new label
 - `jump` — jump to a label
 - `call` — call a label
@@ -1697,6 +1778,7 @@ $0
 Typing `mychar` + Tab in the editor inserts the template with placeholders for the character tag, name, and color.
 
 **Snippet Management:**
+
 - Edit snippets by clicking them
 - Delete snippets with the trash icon
 - Export/import snippet libraries (if supported)
@@ -1710,6 +1792,7 @@ The split pane editor is a flexible code editing area powered by the **Monaco Ed
 ### Opening Files
 
 Files open in the editor when you:
+
 - Double-click a block on the canvas
 - Double-click a file in the Project Explorer
 - Click a diagnostic in the Diagnostics panel (opens at the specific line)
@@ -1720,41 +1803,49 @@ Files open in the editor when you:
 The editor supports **split pane editing**:
 
 **Single Pane (default):**
+
 - One file visible at a time
 - Tabs at the top show open files
 - Click a tab to switch files
 
 **Side-by-Side Panes:**
+
 - Two files visible horizontally
 - Drag a tab from one pane to the other to open it side by side
 - Useful for comparing files or editing two related files simultaneously
 
 **Bottom Split (not yet implemented in all versions):**
+
 - Two files visible vertically (one above the other)
 - Drag a tab to the bottom edge to create a bottom split
 
 **Resizing Panes:**
+
 - Drag the divider (sash) between panes to resize
 - Double-click the sash to reset to 50/50 split
 
 **Closing Panes:**
+
 - Close all tabs in a pane to hide that pane
 - Or click the X icon to close the pane (if present)
 
 ### Tab Management
 
 **Tab Bar:**
+
 - Shows all open files as tabs
 - Active tab is highlighted
 - Modified files show an indicator (dot or asterisk)
 
 **Closing Tabs:**
+
 - Click the X icon on a tab
 - Middle-click a tab (if supported)
 - Right-click and select "Close"
 
 **Tab Context Menu:**
 Right-click a tab for options:
+
 - Close
 - Close Others
 - Close All
@@ -1762,6 +1853,7 @@ Right-click a tab for options:
 - Reveal in File Explorer (highlight in Project Explorer)
 
 **Dragging Tabs:**
+
 - Drag a tab within the same pane to reorder
 - Drag a tab to another pane to move it
 - Drag a tab outside the editor area to undock (if supported)
@@ -1769,14 +1861,17 @@ Right-click a tab for options:
 ### Monaco Editor Features
 
 **Syntax Highlighting:**
+
 - Ren'Py code is highlighted with a custom TextMate grammar
 - Labels, variables, character tags, and screen references are semantically colored
 
 **Line Numbers:**
+
 - Displayed on the left
 - Click a line number to set the cursor to that line
 
 **IntelliSense (Autocomplete):**
+
 - Press `Ctrl+Space` to manually trigger suggestions
 - Autocomplete appears automatically as you type:
   - After `jump` or `call`: suggests label names
@@ -1785,23 +1880,28 @@ Right-click a tab for options:
   - For variable names
 
 **Snippets:**
+
 - Type a snippet trigger prefix (e.g., `label`, `menu`) and press Tab
 - Tab-stop placeholders let you jump between fields with Tab
 
 **Code Folding:**
+
 - Fold/unfold blocks of code (labels, menus, etc.)
 - Click the arrow icon in the gutter next to line numbers
 
 **Find and Replace:**
+
 - **Find:** Press `Ctrl+F` to open the find bar
 - **Replace:** Press `Ctrl+H` to open the find/replace bar
 - Supports regex and case-sensitive matching
 
 **Multi-Cursor Editing:**
+
 - Hold `Ctrl` (Windows/Linux) or `Cmd` (macOS) and click multiple locations to create multiple cursors
 - Hold `Alt` and drag to create a column selection
 
 **Cursor Position Display:**
+
 - Current line and column are shown in the status bar (e.g., `Ln 42, Col 15`)
 
 ### Saving Changes
@@ -1819,16 +1919,19 @@ The status bar at the bottom of the window displays contextual information and a
 ### Left Side
 
 **Current File Name:**
+
 - Shows the name of the file open in the active editor pane
 - Example: `script.rpy`
 
 **Cursor Position:**
+
 - Format: `Ln [line], Col [column]`
 - Example: `Ln 42, Col 15` means the cursor is on line 42, column 15
 
 ### Center
 
 **Project Analysis Status:**
+
 - Shows messages like:
   - "Analyzing project..." (with spinner) during initial load
   - "Project analysis complete" after loading
@@ -1838,11 +1941,13 @@ The status bar at the bottom of the window displays contextual information and a
 ### Right Side
 
 **Application Version:**
+
 - Example: `v0.7.1`
 - If a build number is present: `v0.7.1 (Build 1234)`
 - Always visible so you know which version you're running
 
 **Additional Indicators (if present):**
+
 - SDK connection status (green = connected, red = not configured)
 - Drafting mode indicator (icon if enabled)
 - Network status (for auto-updater)
@@ -1915,6 +2020,7 @@ Ren'IDE offers 10 themes to personalize your workspace.
 ### Available Themes
 
 **Light Themes:**
+
 - **System Light:** Follows your OS theme (light variant)
 - **Colorful Light:** Vibrant colors on a light background
 - **Candy Light:** Soft pastels on light background
@@ -1922,6 +2028,7 @@ Ren'IDE offers 10 themes to personalize your workspace.
 - **Solarized Light:** Classic Solarized light palette
 
 **Dark Themes:**
+
 - **System Dark:** Follows your OS theme (dark variant)
 - **Colorful Dark:** Vibrant colors on a dark background
 - **Neon Dark:** Bright neon colors on dark background
@@ -1941,17 +2048,20 @@ Ren'IDE offers 10 themes to personalize your workspace.
 Themes are saved per project in `project.ide.json`. If you switch projects, each project remembers its theme.
 
 **To set a global default theme:**
+
 - Some versions allow setting a default in global settings (affects new projects)
 - Check Settings → General → Default Theme
 
 ### Dark Mode vs. Light Mode
 
 **Why choose dark mode:**
+
 - Reduces eye strain in low-light environments
 - Saves battery on OLED/AMOLED displays
 - Preferred by many developers
 
 **Why choose light mode:**
+
 - Better readability in bright environments
 - Preferred for printouts or screenshots for documentation
 - Less contrast can be easier on the eyes for some users
@@ -1979,6 +2089,7 @@ The Story Canvas is the default view when you open a project. It represents your
 #### What the Story Canvas Shows
 
 **Blocks:**
+
 - Each block represents one `.rpy` file (e.g., `script.rpy`, `chapter1.rpy`, `screens.rpy`)
 - Block size reflects the number of lines in the file (larger blocks = more code)
 - Block color can indicate:
@@ -1986,38 +2097,45 @@ The Story Canvas is the default view when you open a project. It represents your
   - **File type:** Story blocks vs. screen blocks vs. config blocks
 
 **Arrows:**
+
 - **Solid arrows:** Represent `jump` statements (transfer control to another file)
 - **Dashed arrows:** Represent `call` statements (call a label and return)
 - Arrows are color-coded (consistent with the legend overlay)
 - Arrow thickness may reflect the number of connections
 
 **Diagnostic Glow:**
+
 - Blocks with errors show a **red outer glow**
 - Blocks with warnings show an **amber outer glow**
 - This makes problem areas visible even when zoomed out
 
 **Block Labels:**
+
 - Each block displays its file name
 - Hover to see additional info (number of labels, characters, etc.)
 
 #### Interacting with Blocks
 
 **Selecting Blocks:**
+
 - Click a block to select it (highlights with a border)
 - Multi-select: Hold `Ctrl` (Windows/Linux) or `Cmd` (macOS) and click multiple blocks
 - Rubber-band selection: Click and drag on empty canvas to draw a selection box around multiple blocks
 
 **Moving Blocks:**
+
 - Click and drag a block to reposition it
 - Selected blocks move together
 - Block positions are saved in `project.ide.json`
 
 **Opening Files:**
+
 - Double-click a block to open its file in the code editor
 - The editor pane appears (if hidden) and the file loads with syntax highlighting
 
 **Block Context Menu:**
 Right-click a block for options:
+
 - Open in Editor
 - Find Label in Block (if block contains multiple labels)
 - Delete Block (moves the file to trash/recycle bin)
@@ -2027,26 +2145,31 @@ Right-click a block for options:
 #### Canvas Navigation
 
 **Panning:**
+
 - Hold `Shift` and drag to pan the canvas (configurable in Settings)
 - Alternatively, drag with the middle mouse button (if supported)
 - Touch devices: Two-finger drag
 
 **Zooming:**
+
 - Scroll the mouse wheel to zoom in/out
 - Pinch to zoom on touch devices
 - Zoom focuses on the cursor position
 
 **Minimap:**
+
 - A small overview of the entire canvas appears in the corner (if enabled)
 - Shows all blocks as small rectangles
 - Current viewport is indicated by a rectangle
 - Click anywhere on the minimap to jump to that area
 
 **Fit-to-Screen:**
+
 - Click the "Fit" button in the canvas controls (bottom-right)
 - Automatically zooms and pans so all blocks are visible
 
 **Go-to-Start:**
+
 - Click the "Start" button in the canvas controls
 - Centers on the block containing the `start` label and zooms in
 
@@ -2064,6 +2187,7 @@ Right-click a block for options:
 5. The canvas zooms in to at least scale 1.0 and centers on the target label
 
 **Toolbox Label Search:**
+
 - A "Go to Label" search box appears in the Story Canvas toolbox (top-left)
 - Type to filter labels
 - Click a result to navigate
@@ -2072,16 +2196,19 @@ Right-click a block for options:
 #### Filtering and Grouping
 
 **Character Filter:**
+
 - In the toolbox, select a character from the dropdown
 - Blocks that don't involve that character are dimmed or hidden
 - Useful for tracing a single character's arc through the story
 
 **Role Tinting:**
+
 - When enabled, blocks are tinted based on which characters appear in them
 - Example: Blocks with Eileen are tinted blue, blocks with Lucy are tinted pink
 - Helps visualize character distribution across the project
 
 **Grouping Modes:**
+
 - **None:** No grouping (default)
 - **Connected Components:** Groups blocks that are connected by jumps/calls
 - **File Prefix:** Groups blocks by common file name prefix (e.g., `chapter1_*.rpy`)
@@ -2093,6 +2220,7 @@ To apply grouping:
 4. Blocks are visually grouped in colored containers
 
 **Layout Modes:**
+
 - **Flow:** Hierarchical layout based on jumps/calls (default)
 - **Hierarchical:** Tree-like layout with root blocks at the top
 - **Circular:** Blocks arranged in a circle
@@ -2103,6 +2231,7 @@ Change layout in the toolbox dropdown.
 #### Auto-Layout (Redraw)
 
 Click the **Redraw** button in the toolbar to trigger automatic layout:
+
 - Analyzes jump/call connections
 - Arranges blocks hierarchically (root blocks at the top, leaf blocks at the bottom)
 - Minimizes arrow crossings
@@ -2113,6 +2242,7 @@ Click the **Redraw** button in the toolbar to trigger automatic layout:
 #### Canvas Legend
 
 Click the **Legend** button (if available) in the toolbox to show an overlay explaining:
+
 - Arrow types (solid = jump, dashed = call)
 - Block colors (role tinting, file type)
 - Diagnostic indicators (red glow = error, amber = warning)
@@ -2135,6 +2265,7 @@ The Route Canvas visualizes your project at the **label level**: every `label` b
 #### What the Route Canvas Shows
 
 **Nodes (Labels):**
+
 - Each node represents a label (e.g., `start`, `chapter1`, `ending_happy`)
 - Node size may reflect the label's importance (e.g., `start` is larger)
 - Node color indicates:
@@ -2142,16 +2273,19 @@ The Route Canvas visualizes your project at the **label level**: every `label` b
   - **Route membership:** Nodes on the same route share a color
 
 **Edges (Jumps/Calls):**
+
 - **Solid arrows:** `jump` statements
 - **Dashed arrows:** `call` statements
 - **Dotted lines:** Implicit fall-through (control passes from one label to the next without an explicit jump)
 - Arrow colors match the source node's route color
 
 **Unreachable Labels:**
+
 - Labels that no path from `start` leads to are highlighted in red or marked with a warning icon
 - These are "dead code"—players will never see them
 
 **Menu Nodes:**
+
 - Labels that contain `menu` statements are specially marked (e.g., with a branching icon)
 - Hover over a menu node to see a popover with:
   - All choice texts
@@ -2163,17 +2297,20 @@ The Route Canvas visualizes your project at the **label level**: every `label` b
 The Route Canvas uses a graph layout algorithm to position nodes:
 
 **BFS Layered Layout (default):**
+
 - Nodes are arranged in horizontal layers
 - `start` is at the leftmost layer
 - Each layer contains nodes at a certain "distance" from `start`
 - Edges generally flow left-to-right
 
 **Handling Cycles:**
+
 - If your story has loops (e.g., a repeating scene), the algorithm detects cycles
 - Back-edges (edges that point "backward" to earlier layers) are drawn with a distinct style
 - The layout tries to minimize back-edge crossings
 
 **Force-Directed Layout (if available):**
+
 - Nodes repel each other; edges act like springs
 - Produces organic-looking layouts
 - Good for projects with lots of cyclic structures
@@ -2196,11 +2333,13 @@ A route is a complete path from the `start` label to an ending label (a label wi
    - Edges on the route are highlighted
 
 **Multiple Route Highlighting:**
+
 - Select multiple routes (hold `Ctrl` and click) to highlight them simultaneously
 - Each route gets a distinct color
 - Overlapping nodes (nodes that appear in multiple routes) show multiple colors (striped or blended)
 
 **Route List Panel:**
+
 - Collapsible sidebar on the left (separate from Project Explorer)
 - Shows all discovered routes
 - Hover over a route entry to expand it and see the full list of labels in that route
@@ -2212,6 +2351,7 @@ A route is a complete path from the `start` label to an ending label (a label wi
 #### Go-to-Label on Route Canvas
 
 The Route Canvas also supports:
+
 - **Ctrl+G command palette** (same as Story Canvas)
 - **Toolbox label search** (filter and jump to labels)
 - Both zoom-on-navigate to at least scale 1.0
@@ -2231,6 +2371,7 @@ This is invaluable for understanding complex branching without opening the code.
 #### Node Roles
 
 Each node is classified by role:
+
 - **Start:** The `start` label (usually green)
 - **End:** Labels with no outgoing edges or `return` statements (usually red)
 - **Choice:** Labels that contain `menu` statements (usually blue)
@@ -2255,25 +2396,31 @@ The Choice Canvas shows your project from the **player's perspective**: what cho
 #### What the Choice Canvas Shows
 
 **Menu Nodes:**
+
 - Each node represents a menu the player will encounter
 - The node displays the menu prompt (if any)
 
 **Choice Pills:**
+
 - Branching from each menu node are **choice pills**: colored, labeled rectangles representing each choice
 - Each pill shows:
   - **Choice text** (what the player reads)
   - **Conditional badge** (if the choice is guarded by an `if` statement)
+
 - Pills are color-coded to indicate their destination
 
 **Destination Labels:**
+
 - Each pill connects to a destination label (where the choice leads)
 - Following a choice shows you where the player ends up
 
 **Color Coding:**
+
 - Choices leading to the same destination share a color
 - This makes it easy to see when multiple paths converge
 
 **Conditional Badges:**
+
 - Choices with conditions display a badge like `if player_name == "Alice"`
 - Helps you understand when choices are available vs. hidden
 
@@ -2292,6 +2439,7 @@ This lets you "play" your game visually without launching Ren'Py.
 #### Understanding Branching Complexity
 
 The Choice Canvas makes branching structure obvious:
+
 - **Linear sections:** Few or no menu nodes (straight line through the story)
 - **Dense branching:** Many menu nodes with many choices (complex decision trees)
 - **Convergent paths:** Multiple choices leading back to a common label (paths merging)
@@ -2301,6 +2449,7 @@ Visualizing this helps you balance player agency with manageable development com
 #### Go-to-Label on Choice Canvas
 
 The Choice Canvas supports:
+
 - **Ctrl+G command palette** for instant label navigation
 - **Toolbox label search** to filter and jump
 - Zoom-on-navigate to ensure the target is visible
@@ -2324,29 +2473,35 @@ The Choice Canvas supports:
 These navigation features work on **all three canvases**:
 
 **Go-to-Label Command Palette (Ctrl+G / Cmd+G):**
+
 - Press the shortcut from any canvas
 - Type a label name
 - Press Enter to navigate
 - Canvas zooms in to at least scale 1.0
 
 **Toolbox Label Search:**
+
 - Each canvas has a "Go to Label" search box in the toolbox
 - Type to filter labels
 - Click a result to navigate
 
 **Fit-to-Screen:**
+
 - Button in canvas controls (bottom-right)
 - Zooms and pans to fit all nodes/blocks within the viewport
 
 **Go-to-Start:**
+
 - Button in canvas controls
 - Centers on the `start` label and zooms in
 
 **Auto-Center on First Open:**
+
 - When you first open a project, each canvas auto-centers on `start`
 - This behavior is persisted (won't repeat when you reopen the project)
 
 **Zoom-on-Navigate:**
+
 - All "go to" actions snap zoom to at least 1.0× if currently zoomed out
 - Prevents navigating to a label that's too small to see
 
@@ -2359,15 +2514,18 @@ Ren'IDE includes a full-featured code editor powered by **Monaco** (the same eng
 ### 4.2.1 Monaco Editor Basics
 
 **Opening Files:**
+
 - Double-click a block on the canvas
 - Double-click a file in the Project Explorer
 - Click a diagnostic to jump to the line with the issue
 
 **Multi-File Editing:**
+
 - Open multiple files as tabs
 - Drag tabs to split panes for side-by-side editing
 
 **Saving:**
+
 - Press `Ctrl+S` to save all open files
 - Modified files show an indicator on their tab
 
@@ -2376,6 +2534,7 @@ Ren'IDE includes a full-featured code editor powered by **Monaco** (the same eng
 Ren'IDE uses a **TextMate grammar** specifically designed for Ren'Py:
 
 **Highlighted Elements:**
+
 - **Keywords:** `label`, `jump`, `call`, `menu`, `if`, `else`, `define`, `default`, `return`, `scene`, `show`, `play`, etc.
 - **Strings:** Dialogue text in quotes
 - **Comments:** Lines starting with `#`
@@ -2386,6 +2545,7 @@ Ren'IDE uses a **TextMate grammar** specifically designed for Ren'Py:
 
 **Semantic Token Provider:**
 In addition to syntax highlighting, Ren'IDE adds **semantic coloring**:
+
 - Labels in scope are colored distinctly
 - Variables in scope are highlighted
 - Screen references use a special color
@@ -2396,30 +2556,37 @@ In addition to syntax highlighting, Ren'IDE adds **semantic coloring**:
 IntelliSense provides context-aware suggestions as you type:
 
 **Jump/Call Targets:**
+
 - Type `jump` and a space
 - IntelliSense shows a list of all labels in your project
 - Select one with arrow keys and press Enter (or click)
 
 **Show/Scene Images:**
+
 - Type `show` or `scene` and a space
 - IntelliSense suggests image names from your assets
 
 **Character Tags:**
+
 - When writing dialogue, start typing a character tag
 - IntelliSense suggests defined characters
 
 **Screen Names:**
+
 - Type `call screen` or `show screen` and a space
 - IntelliSense suggests screen names
 
 **Variables:**
+
 - Type a variable name
 - IntelliSense suggests globally defined variables
 
 **Manual Triggering:**
+
 - Press `Ctrl+Space` at any time to manually trigger IntelliSense
 
 **Accepting Suggestions:**
+
 - Press `Enter` or `Tab` to accept the selected suggestion
 - Press `Escape` to dismiss the suggestion list
 
@@ -2428,6 +2595,7 @@ IntelliSense provides context-aware suggestions as you type:
 Snippets are templates for common Ren'Py patterns:
 
 **Built-in Snippets (28+):**
+
 - `label` → Creates a new label with placeholder
 - `jump` → Jump statement
 - `call` → Call statement
@@ -2465,44 +2633,54 @@ Create custom snippets in the Snippets tab (see Section 3.4.8).
 ### 4.2.5 Advanced Editor Features
 
 **Code Folding:**
+
 - Click the arrow icons in the gutter (left of line numbers) to fold/unfold blocks
 - Useful for collapsing large labels or menus to focus on specific sections
 
 **Find and Replace:**
+
 - **Find:** Press `Ctrl+F` to open the find bar at the top of the editor
   - Enter search text
   - Use regex by clicking the `.*` icon
   - Toggle case-sensitive with the `Aa` icon
   - Navigate matches with up/down arrows
+
 - **Replace:** Press `Ctrl+H` to open find/replace
   - Enter replacement text
   - Click "Replace" to replace current match
   - Click "Replace All" to replace all matches in the file
 
 **Multi-Cursor Editing:**
+
 - Hold `Ctrl` (Windows/Linux) or `Cmd` (macOS) and click multiple locations to create multiple cursors
 - Type to edit all locations simultaneously
 - Useful for renaming multiple instances of a variable in one go
 
 **Column Selection:**
+
 - Hold `Alt` and drag to create a column selection (rectangular selection)
 - Useful for editing tabular data or aligning code
 
 **Move Line Up/Down:**
+
 - Press `Alt+Up` to move the current line (or selected lines) up
 - Press `Alt+Down` to move them down
 
 **Delete Line:**
+
 - Press `Ctrl+Shift+K` to delete the current line
 
 **Toggle Line Comment:**
+
 - Press `Ctrl+/` to comment or uncomment the current line (adds or removes `#`)
 
 **Bracket Matching:**
+
 - Place the cursor next to a bracket, parenthesis, or brace
 - The matching pair is highlighted
 
 **Auto-Indentation:**
+
 - Press `Enter` after a line ending with `:` (e.g., after a label or if statement)
 - The next line is automatically indented
 
@@ -2522,9 +2700,11 @@ The Search Panel replaces the Project Explorer in the left sidebar.
 ### Performing a Search
 
 **Search Box:**
+
 - Enter your search query (text or regex)
 
 **Options:**
+
 - **Match Case:** Toggle to make the search case-sensitive
 - **Whole Word:** Toggle to match whole words only
 - **Regex:** Toggle to use regular expressions
@@ -2534,6 +2714,7 @@ The Search Panel replaces the Project Explorer in the left sidebar.
 ### Search Results
 
 Results are displayed as a list:
+
 - **File name** (grouped)
 - **Line number** and **matched text** (highlighted)
 
@@ -2547,6 +2728,7 @@ chapter1.rpy
 ```
 
 **Clicking a result:**
+
 - Opens the file in the editor
 - Scrolls to the line with the match
 - Highlights the matched text
@@ -2554,20 +2736,24 @@ chapter1.rpy
 ### Replace
 
 **Replace Box:**
+
 - Enter replacement text
 
 **Replace Options:**
+
 - **Replace:** Replaces the currently selected match (in the editor)
 - **Replace All in File:** Replaces all matches in the current file
 - **Replace All:** Replaces all matches in all files
 
 **Bulk Replace with Confirmation:**
 If you click "Replace All," Ren'IDE may prompt:
+
 - Show a confirmation dialog listing all files that will be modified
 - You can review the list and confirm or cancel
 
 **Regex Replace:**
 If regex mode is enabled, you can use capture groups in the replacement:
+
 - Search: `label (\w+):`
 - Replace: `label new_$1:`
 - This renames all labels by prepending "new_"
@@ -2598,23 +2784,27 @@ The Diagnostics panel opens as a modal or bottom panel.
 ### Diagnostic Categories
 
 **Errors (Red):**
+
 - **Invalid Jumps:** `jump` or `call` to a label that doesn't exist
 - **Syntax Errors:** Code that Ren'Py can't parse
 - **Missing Assets:** References to images or audio files not found in the project
 
 **Warnings (Amber):**
+
 - **Undefined Characters:** Character tags used in dialogue but never defined with `define`
 - **Undefined Screens:** Screens called or shown but never defined
 - **Unused Characters:** Characters defined but never used in dialogue
 - **Unreachable Labels:** Labels no path from `start` leads to
 
 **Info (Blue):**
+
 - **Suggestions:** Best practices, code style recommendations
 - **Usage Notes:** Informational messages about your project
 
 ### Diagnostic Details
 
 Each diagnostic entry shows:
+
 - **Severity icon** (red X, amber warning, blue info)
 - **Description** (e.g., "Jump to undefined label 'chapter2'")
 - **File path** (e.g., `script.rpy`)
@@ -2623,6 +2813,7 @@ Each diagnostic entry shows:
 ### Jumping to Source
 
 Click any diagnostic to:
+
 - Open the file in the editor
 - Scroll to the line with the issue
 - Highlight the problematic code
@@ -2632,17 +2823,20 @@ This makes fixing errors fast and easy.
 ### Filtering Diagnostics
 
 **Severity Filter:**
+
 - Toggle checkboxes at the top of the panel:
   - **Errors** (show/hide)
   - **Warnings** (show/hide)
   - **Info** (show/hide)
 
 **File Filter:**
+
 - If available, filter diagnostics by file name
 
 ### Converting Diagnostics to Tasks
 
 Some diagnostics can be converted to tasks:
+
 - Right-click a diagnostic
 - Select "Convert to Task"
 - The issue is added to a task list (tracked with your project)
@@ -2681,6 +2875,7 @@ The Stats panel opens as a modal or side panel.
 ### Deferred Loading
 
 For large projects, statistics computation can be expensive. Ren'IDE uses **deferred loading**:
+
 - The Stats panel opens immediately
 - Each metric shows an inline spinner while it calculates
 - Metrics become visible as they complete (usually within a few seconds)
@@ -2690,41 +2885,51 @@ This prevents the app from freezing when you open Stats.
 ### Metrics Displayed
 
 **Word Count:**
+
 - Total word count across all dialogue and narration
 - Excludes code (labels, jumps, etc.)
 
 **Estimated Play Time:**
+
 - Based on average reading speed (e.g., 200 words per minute)
 - Formula: `total_words / reading_speed`
 - Shown in minutes or hours
 
 **Lines of Dialogue:**
+
 - Total number of dialogue lines spoken by characters
 - Excludes narration
 
 **Per-Character Dialogue Breakdown:**
+
 - Bar chart showing dialogue count for each character
 - Sorted by count (character with most lines at the top)
 - Hover over a bar to see exact count
 - Useful for identifying characters who need more/less screen time
 
 **Scene Count:**
+
 - Number of distinct scenes (files or labels, depending on how scenes are organized)
 
 **Label Count:**
+
 - Total number of labels in the project
 
 **Route Count:**
+
 - Number of discovered narrative routes (paths from `start` to an ending)
 
 **Branching Complexity Scores:**
+
 - Metrics like:
   - Average choices per menu
   - Maximum path depth (longest route)
   - Cyclomatic complexity (measure of decision points)
+
 - Helps you understand how complex your branching structure is
 
 **Asset Coverage:**
+
 - **Images:** Number of images defined vs. number used in code
 - **Audio:** Number of audio files defined vs. number used
 - Identifies unused assets (clutter) and missing assets (errors)
@@ -2732,23 +2937,28 @@ This prevents the app from freezing when you open Stats.
 ### Interpreting Stats
 
 **High word count but short play time estimate:**
+
 - May indicate fast-paced dialogue or minimal narration
 
 **Uneven character dialogue breakdown:**
+
 - Some characters dominate; others are underutilized
 - Consider whether this is intentional
 
 **High branching complexity:**
+
 - Your story has many choices and paths
 - Be aware of testing burden (you need to test all paths)
 
 **Low asset coverage:**
+
 - Many defined assets aren't used (consider cleaning up)
 - Or many used assets aren't defined (errors—check Diagnostics)
 
 ### Exporting Stats
 
 Some versions of Ren'IDE allow exporting stats as a report:
+
 - Click "Export" or "Save Report"
 - Choose format (CSV, JSON, PDF)
 - Save to disk
@@ -2764,6 +2974,7 @@ Ren'IDE maintains a history of your actions so you can undo mistakes and redo ch
 ### What Can Be Undone
 
 The undo/redo system tracks:
+
 - **Canvas block moves:** Dragging blocks to new positions
 - **Block creation/deletion:** Adding or removing blocks
 - **Composition edits:** Changes in Scene Composer, ImageMap Composer, Screen Layout Composer
@@ -2801,6 +3012,7 @@ When the history limit is reached, the oldest action is removed.
 ### Limitations
 
 Undo/Redo does NOT track:
+
 - File system operations (rename, delete files outside the canvas)
 - Settings changes
 - Asset imports
@@ -2834,14 +3046,17 @@ The Story Canvas shows your project at the file level, making it ideal for under
 **Use Cases for Writers:**
 
 **Organizing Story Arcs:**
+
 - Create one `.rpy` file per chapter or arc (e.g., `chapter1.rpy`, `chapter2.rpy`, `epilogue.rpy`)
 - Arrange blocks spatially on the canvas to reflect narrative flow:
   - Main story arc in the center
   - Side quests or optional content off to the sides
   - Endings clustered together at the bottom/right
+
 - This spatial organization helps you understand story structure without opening files
 
 **Tracking Character Arcs:**
+
 - Enable **role tinting** in the canvas toolbox
 - Blocks are colored based on which characters appear in them
 - Blocks with Eileen might be blue, blocks with Lucy might be pink
@@ -2851,12 +3066,14 @@ The Story Canvas shows your project at the file level, making it ideal for under
   - Imbalances (e.g., one character dominates the early chapters but disappears later)
 
 **Character Filter for Focus:**
+
 - Select a character from the Character Filter dropdown
 - Blocks that don't involve that character are dimmed
 - Trace that character's journey through your story
 - Ensure every major character has a satisfying arc
 
 **Identifying Isolated Content:**
+
 - Use **grouping by connected components**
 - Files that aren't connected to the main story graph appear in separate groups
 - These might be:
@@ -2865,6 +3082,7 @@ The Story Canvas shows your project at the file level, making it ideal for under
   - Bonus content intentionally separate from the main story
 
 **Creating a Visual Story Outline:**
+
 - Before writing, create placeholder `.rpy` files for each major scene or chapter
 - Arrange them on the canvas in narrative order
 - Draw arrows (by adding temporary `jump` statements) to indicate flow
@@ -2885,12 +3103,14 @@ The Route Canvas shows **label-level control flow**, perfect for understanding h
 **Use Cases for Writers:**
 
 **Tracing Player Paths:**
+
 - Open the Route Canvas
 - Visually follow the path from the `start` label
 - See every decision point (menu nodes) and where choices lead
 - Ensure every path reaches a satisfying conclusion
 
 **Verifying Branching Logic:**
+
 - Menu nodes show all choices
 - Hover over a menu node to inspect choice text and destinations
 - Verify that:
@@ -2899,6 +3119,7 @@ The Route Canvas shows **label-level control flow**, perfect for understanding h
   - Conditional choices (if guards) are logically sound
 
 **Identifying Dead Ends:**
+
 - Labels marked as **unreachable** are red or highlighted
 - These are scenes or endings players can never reach
 - Either:
@@ -2906,12 +3127,14 @@ The Route Canvas shows **label-level control flow**, perfect for understanding h
   - Delete them if they're leftover from cut content
 
 **Route Highlighting for Testing:**
+
 - In the Route List panel, select a route (e.g., "Start → Chapter 1 → Good Ending")
 - The route highlights on the canvas
 - Follow it step by step to verify the narrative makes sense
 - Repeat for every ending to ensure all paths are coherent
 
 **Understanding Convergence:**
+
 - Where do different branches converge back to a common path?
 - The Route Canvas shows when multiple choices lead to the same label
 - This helps you understand how much unique content each path requires
@@ -2930,23 +3153,27 @@ The Choice Canvas shows what the **player actually sees**: choice text, menu pro
 **Use Cases for Writers:**
 
 **Testing the Player Experience:**
+
 - Read choice text as if you were the player
 - Does the choice make sense in context?
 - Is the language clear and consistent?
 - Are conditional choices properly guarded?
 
 **Balancing Choices:**
+
 - Count how many choices each menu offers
 - Too few choices (just 1 or 2) may feel linear
 - Too many choices (6+) may overwhelm the player
 - Aim for 2-4 meaningful choices per menu for good pacing
 
 **Ensuring Choice Consequences:**
+
 - Follow a choice pill to its destination
 - Continue following subsequent choices
 - Verify that early choices have lasting consequences (or intentionally converge if that's your design)
 
 **Identifying Conditional Choice Issues:**
+
 - Choices with conditional badges show `if` statements
 - Ask: Is this condition clear to the player?
 - If a choice is hidden by a condition, does the player understand why?
@@ -2984,12 +3211,14 @@ Characters are the heart of any visual novel. Ren'IDE helps you track, manage, a
 The Characters tab in the Story Elements panel shows all defined characters.
 
 **Information Displayed:**
+
 - **Character tag** (e.g., `e`, `lucy`)
 - **Display name** (e.g., "Eileen", "Lucy")
 - **Color** (color swatch for dialogue text)
 - **Dialogue count** (number of lines spoken)
 
 **Why This Matters for Writers:**
+
 - See all characters in one place
 - Identify characters with too few lines (underdeveloped)
 - Identify characters with too many lines (potential over-representation)
@@ -3029,11 +3258,13 @@ The Character Editor is a detailed interface for configuring character propertie
 **Editable Properties:**
 
 **Basic:**
+
 - **Tag:** Character identifier used in code
 - **Display Name:** Name shown to the player
 - **Color:** Dialogue text color
 
 **Advanced (Ren'Py Parameters):**
+
 - **Voice Tag:** For voice acting or auto-voice systems
 - **Image:** Default character sprite
 - **Dynamic Name:** If the character's name changes during the story (e.g., "???" becomes "Eileen")
@@ -3043,6 +3274,7 @@ The Character Editor is a detailed interface for configuring character propertie
 
 **Profile Notes:**
 A free-text field for writer notes:
+
 - Character backstory
 - Personality traits
 - Voice/tone reminders
@@ -3056,6 +3288,7 @@ Click the color swatch to open a color picker. Choose a color visually instead o
 
 **Example Use Case:**
 You're developing a mystery visual novel. The player doesn't know the protagonist's name until chapter 3. Use the Character Editor to:
+
 - Set the initial display name to "???"
 - Add a profile note: "Reveal true name (Alex) in chapter 3"
 - Later, update the display name to "Alex" when appropriate
@@ -3069,10 +3302,12 @@ Displayed in the Characters tab as a number (e.g., "47 lines").
 
 **Per-Character Word Count (in Stats):**
 The Stats panel shows a bar chart of dialogue counts. This visual makes it easy to see:
+
 - Which characters dominate the narrative
 - Which characters are underutilized
 
 **Why This Matters:**
+
 - **Balance:** Ensure all main characters get adequate screen time
 - **Pacing:** If one character has 500 lines and another has 5, is that intentional?
 - **Cut Content Detection:** If a character was planned to be major but only has a handful of lines, they may need more development
@@ -3081,11 +3316,13 @@ The Stats panel shows a bar chart of dialogue counts. This visual makes it easy 
 Characters defined but never used in dialogue are flagged with a warning in the Characters tab and the Diagnostics panel.
 
 **Possible Causes:**
+
 - Leftover from cut content
 - Placeholder for future development
 - Typo in the character tag (defined as `lucy` but used as `lcuy`)
 
 **How to Fix:**
+
 - Delete the unused character definition, or
 - Add dialogue for that character, or
 - Correct the typo
@@ -3108,6 +3345,7 @@ Menus are the core of branching narratives. Ren'IDE's visual Menu Builder helps 
 Open the **Menus tab** in the Story Elements panel to access the Menu Builder.
 
 **Features:**
+
 - See all menus in your project (extracted from code)
 - Create new menus with a visual interface
 - Add, edit, and remove choices
@@ -3130,34 +3368,41 @@ Open the **Menus tab** in the Story Elements panel to access the Menu Builder.
 **Configure Each Choice:**
 
 **Choice Text:**
+
 - What the player sees (e.g., "Go left", "Stay silent", "Tell the truth")
 - Keep it concise (1-5 words) for readability
 
 **Destination:**
+
 - Where the choice leads
 - Options:
   - **Jump to label:** Transfer control permanently
   - **Call label:** Call a subscene and return to the menu
+
 - Select a label from the dropdown (populated from your project's labels)
 
 **Condition (Optional):**
+
 - An `if` statement that determines if the choice is available
 - Example: `player_intelligence >= 5`
 - If the condition is false, the choice is hidden from the player
 - Leave blank if the choice is always available
 
 **Custom Code Block (Optional):**
+
 - Arbitrary Ren'Py code to execute when the choice is selected
 - Example:
   ```renpy
   $ player_karma += 10
   "You feel good about your decision."
   ```
+
 - This code runs before jumping/calling to the destination
 
 **Example Configuration:**
 
 **Choice 1:**
+
 - Text: "Help the stranger"
 - Destination: `jump help_stranger`
 - Condition: `player_karma >= 0`
@@ -3167,6 +3412,7 @@ Open the **Menus tab** in the Story Elements panel to access the Menu Builder.
   ```
 
 **Choice 2:**
+
 - Text: "Ignore and walk away"
 - Destination: `jump ignore_stranger`
 - Condition: (none)
@@ -3213,6 +3459,7 @@ The Menus tab lists all menus found in your project (extracted during analysis).
 ### 5.3.5 Integration with Choice Canvas
 
 Menus designed in the Menu Builder are visualized on the **Choice Canvas**:
+
 - Each menu becomes a menu node
 - Choice pills show the choice text and destination
 - Conditional badges appear if choices have `if` guards
@@ -3243,11 +3490,13 @@ The fastest way to navigate to any label:
 
 **Zoom-on-Navigate:**
 After navigating, the canvas:
+
 - Centers on the label
 - Zooms in to at least scale 1.0 (so the label is clearly visible)
 - Highlights the label briefly
 
 **Why Use This:**
+
 - Faster than manually scrolling or searching
 - Works across all three canvases (Story, Route, Choice)
 - Fuzzy search tolerates typos and incomplete names
@@ -3265,6 +3514,7 @@ Each canvas (Story, Route, Choice) has a **"Go to Label"** search box in the too
 This is persistent (always visible) unlike the command palette (which appears on Ctrl+G and then dismisses).
 
 **When to Use:**
+
 - When you prefer a persistent search box
 - When you're browsing labels (not just jumping to one specific label)
 
@@ -3290,24 +3540,29 @@ Understanding how your story flows—how players move from scene to scene—is c
 Arrows on the Story Canvas and Route Canvas represent narrative connections.
 
 **Jump Arrows (Solid):**
+
 - Indicate a `jump` statement
 - Transfer control permanently to another label
 - Example: `jump chapter2` from the end of chapter 1
 
 **Call Arrows (Dashed/Distinct):**
+
 - Indicate a `call` statement
 - Call a subscene and return to the caller after it ends
 - Example: `call flashback` to show a flashback scene, then return to present
 
 **Fall-Through (Dotted, Route Canvas Only):**
+
 - When one label ends without a `jump`, `call`, or `return`, control falls through to the next label
 - Represented by dotted lines on the Route Canvas
 
 **Arrow Colors:**
+
 - Colors may match the source node's route color (if route highlighting is active)
 - Or use a default color (configurable in Settings)
 
 **Arrow Thickness:**
+
 - May reflect the number of connections (thicker = more jumps to this destination)
 - Or uniform thickness (depending on canvas settings)
 
@@ -3316,23 +3571,28 @@ Arrows on the Story Canvas and Route Canvas represent narrative connections.
 Blocks on the Story Canvas are classified by role:
 
 **Root Blocks:**
+
 - Blocks with no incoming jumps
 - Entry points to your story (e.g., `script.rpy` with the `start` label)
 - Usually at the "top" or "left" in auto-layout
 
 **Leaf Blocks:**
+
 - Blocks with no outgoing jumps
 - Endings or dead ends
 - Usually at the "bottom" or "right" in auto-layout
 
 **Branching Blocks:**
+
 - Blocks that contain choices (menus)
 - Multiple outgoing arrows
 
 **Story Blocks:**
+
 - Blocks that contain labels (most `.rpy` files)
 
 **Config/Screen Blocks:**
+
 - Blocks that don't contain labels (e.g., `options.rpy`, `screens.rpy`)
 - May be visually distinct (different color or icon)
 
@@ -3341,11 +3601,13 @@ Understanding these classifications helps you see the structure of your project 
 ### 5.5.3 Layout Strategies
 
 **Manual Positioning:**
+
 - Drag blocks to arrange them in a way that makes sense to you
 - Example: Linear story left-to-right, side quests above/below
 - Positions are saved and persist across sessions
 
 **Auto-Layout with Redraw:**
+
 - Click the **Redraw** button in the toolbar
 - Ren'IDE analyzes jump/call connections and arranges blocks automatically
 - Useful for:
@@ -3354,12 +3616,14 @@ Understanding these classifications helps you see the structure of your project 
   - Seeing the algorithmic "ideal" layout
 
 **Layout Modes:**
+
 - **Flow (default):** Hierarchical flow from root to leaf
 - **Hierarchical:** Strict tree layout
 - **Circular:** Blocks in a circle (useful for cyclic stories)
 - **Clustered Flow:** Flow with grouping containers
 
 **Grouping:**
+
 - **By Connected Components:** Groups blocks that are connected by jumps/calls
 - **By File Prefix:** Groups blocks with common file name prefixes (e.g., `chapter1_*.rpy`)
 
@@ -3376,6 +3640,7 @@ Add **sticky notes** to the canvas for annotations:
 4. Drag it to position it near relevant blocks
 
 **Use Cases:**
+
 - Mark sections for revision ("TODO: Add more dialogue here")
 - Document narrative structure ("This is the climax")
 - Leave notes for collaborators ("Need input from artist on this scene")
@@ -3395,6 +3660,7 @@ Variables drive branching logic and state in visual novels. Ren'IDE helps you tr
 The **Variables tab** in the Story Elements panel shows all globally defined variables.
 
 **Information Displayed:**
+
 - **Variable name** (e.g., `player_name`, `relationship_score`)
 - **Type:** `define` (unchanging constant) or `default` (initial value that can change)
 - **Initial value** (e.g., `"Player"`, `0`, `True`)
@@ -3413,10 +3679,12 @@ The **Variables tab** in the Story Elements panel shows all globally defined var
 ### 5.6.2 Understanding Variable Scope
 
 **Global Variables (shown in Variables tab):**
+
 - Defined with `define` or `default` at the top level (outside labels)
 - Accessible throughout the entire project
 
 **Local Variables (not tracked by Ren'IDE):**
+
 - Defined with `$` inside labels (e.g., `$ temp = 5`)
 - Only exist within that label
 - Not shown in the Variables tab
@@ -3441,6 +3709,7 @@ menu:
 Use the Choice Canvas to see which choices are conditional. The conditional badge shows the `if` statement.
 
 **Tips for Writers:**
+
 - Give variables descriptive names (e.g., `eileen_affection` instead of `var1`)
 - Document what each variable tracks in comments
 - Use Find Usages to ensure variables are set before being checked in conditions
@@ -3454,26 +3723,31 @@ Here are some best practices for writers using Ren'IDE.
 ### 5.7.1 Starting a New Story
 
 **Step 1: Outline on the Canvas**
+
 - Create placeholder `.rpy` files for each major scene or chapter
 - Arrange them on the Story Canvas in narrative order
 - Add placeholder labels and jumps so arrows appear
 - Use sticky notes to annotate sections with ideas or reminders
 
 **Step 2: Define Characters**
+
 - Use the Characters tab to add all characters
 - Fill in display names and colors
 - Write profile notes with character backstories and arcs
 
 **Step 3: Define Key Variables**
+
 - In a file like `variables.rpy`, define variables for tracking state (e.g., `default player_karma = 0`)
 - Document what each variable means in comments
 
 **Step 4: Write the First Draft**
+
 - Start with the `start` label and write linearly
 - Don't worry about perfection; focus on getting the story down
 - Use the Menu Builder for choices as you go
 
 **Step 5: Visualize and Revise**
+
 - Switch to the Route Canvas to verify flow
 - Use the Choice Canvas to test player experience
 - Iterate: make changes in the editor, save, and refresh the canvases
@@ -3481,16 +3755,19 @@ Here are some best practices for writers using Ren'IDE.
 ### 5.7.2 Organizing Files and Labels
 
 **File Organization:**
+
 - One file per chapter, scene, or narrative unit
 - Use descriptive names (e.g., `chapter1_intro.rpy`, `ending_happy.rpy`)
 - Group related files with common prefixes for easy grouping on the canvas
 
 **Label Naming:**
+
 - Use clear, descriptive label names (e.g., `chapter1_start`, `flashback_childhood`, `ending_true`)
 - Avoid generic names like `scene1`, `scene2` (hard to distinguish)
 - Use underscores or hyphens for readability
 
 **Comments:**
+
 - Add comments to document narrative intent
   ```renpy
   # Player discovers the truth about their past
@@ -3520,19 +3797,23 @@ Note: "✓ Done" or "⚠ In Progress"
 If you're working with a team:
 
 **Version Control:**
+
 - Commit your project to Git (or another VCS)
 - Commit `project.ide.json` so teammates see your canvas layout and compositions
 
 **Communicate with Canvas:**
+
 - During meetings, open the Story Canvas or Route Canvas to discuss narrative structure
 - Non-technical team members can understand the visual representation
 
 **Asset Coordination:**
+
 - Writers specify which images/audio are needed in the script
 - Artists see references in the Diagnostics panel (missing asset warnings)
 - Artists add assets to the project; writers verify in the Assets tab
 
 **Use Diagnostics:**
+
 - Before committing, check the Diagnostics panel
 - Fix any errors (invalid jumps, undefined characters)
 - Fix or document warnings (unreachable labels may be intentional WIP content)
@@ -3540,20 +3821,24 @@ If you're working with a team:
 ### 5.7.5 Best Practices for Large Projects
 
 **Modularize:**
+
 - Break your story into logical modules (chapters, acts, routes)
 - One file per module
 - Use `call` for reusable subscenes (e.g., flashbacks, recurring dreams)
 
 **Test Regularly:**
+
 - Use the Route Canvas to verify every path reaches an ending
 - Use the Choice Canvas to test player-facing text
 - Run the game frequently to catch issues early
 
 **Track Progress:**
+
 - Use the Stats panel to monitor word count and dialogue distribution
 - Set milestones (e.g., "Reach 50,000 words," "Complete all character arcs")
 
 **Refactor as You Go:**
+
 - If files get too large (500+ lines), split them
 - If labels become unwieldy, reorganize
 - Use Ren'IDE's visualization to guide refactoring decisions
@@ -3586,11 +3871,13 @@ Managing hundreds of image files is a common challenge in visual novel developme
 Open the **Images tab** in the Story Elements panel (right sidebar) to access the Image Asset Manager.
 
 **What You See:**
+
 - **Folder tree:** Images organized by directory structure (e.g., `game/images/characters/`, `game/images/backgrounds/`)
 - **Visual thumbnails:** Each image shows a small preview
 - **Metadata:** Ren'Py name, tags, file size, dimensions
 
 **Folder Navigation:**
+
 - Click a folder to expand/collapse it
 - Browse through your entire image library without opening a file browser
 
@@ -3606,6 +3893,7 @@ If you keep assets in an external library (e.g., a shared Dropbox folder or a se
 5. Ren'IDE scans the directory and adds all images to the asset list
 
 **Benefits:**
+
 - **No duplication:** Images remain in their original location
 - **Shared libraries:** Multiple projects can reference the same asset library
 - **Version control friendly:** External assets don't bloat your project repo
@@ -3650,16 +3938,19 @@ Every image can have metadata for organization and easy reference.
 **Metadata Fields:**
 
 **Ren'Py Name:**
+
 - The name Ren'Py uses to reference this image in code
 - Example: For `game/images/eileen_happy.png`, the Ren'Py name is `eileen happy` (spaces, not underscores)
 - Ren'IDE auto-generates this from the file name, but you can override it
 
 **Tags:**
+
 - Custom tags for categorization (e.g., "character", "CG", "UI", "sprite")
 - Multiple tags allowed (comma-separated)
 - Use tags to filter assets (see below)
 
 **Subfolder:**
+
 - The subfolder within `game/images/` where the file is stored
 - Example: `characters/` or `backgrounds/`
 
@@ -3675,6 +3966,7 @@ One of the most useful features for artists: instantly copy Ren'Py code to your 
 
 **Right-Click Context Menu:**
 Right-click any image in the asset list:
+
 - **Copy `scene` statement:** Copies `scene bg_office` (or the appropriate name) to clipboard
 - **Copy `show` statement:** Copies `show eileen happy` to clipboard
 
@@ -3685,6 +3977,7 @@ Right-click any image in the asset list:
 4. Paste the statement into your script
 
 **Why This Matters:**
+
 - **No typos:** The Ren'Py name is always correct
 - **Fast:** No need to manually type `show eileen happy at left with dissolve`
 - **Consistent:** Everyone on the team uses the same naming conventions
@@ -3694,14 +3987,17 @@ Right-click any image in the asset list:
 For large projects with hundreds of images:
 
 **Search Box (if available):**
+
 - Type an image name or tag
 - The asset list filters to show only matching images
 
 **Tag Filter:**
+
 - Select a tag from the dropdown
 - Only images with that tag are shown
 
 **Folder Filter:**
+
 - Collapse folders to hide their contents
 - Focus on specific subfolders
 
@@ -3711,6 +4007,7 @@ You need to find all character sprites. Filter by the "sprite" tag. The list sho
 ### 6.1.7 Drag to Composers
 
 Images can be dragged from the asset list directly onto:
+
 - **Scene Composer stage** (to add them to a scene composition)
 - **Screen Layout Composer** (to add them to a screen layout)
 
@@ -3727,6 +4024,7 @@ Audio asset management works similarly to image management, with features tailor
 Open the **Snd (Audio) tab** in the Story Elements panel to access the Audio Asset Manager.
 
 **What You See:**
+
 - **Folder tree:** Audio files organized by directory (e.g., `game/audio/music/`, `game/audio/sfx/`)
 - **File list:** Each audio file shows:
   - File name
@@ -3742,18 +4040,21 @@ Like images, you can scan external directories for audio:
 3. Ren'IDE adds them to the asset list without copying
 
 **Use Cases:**
+
 - Reference a shared music library
 - Keep large audio files outside the project repo
 
 ### 6.2.3 Importing Audio
 
 **Drag-and-Drop:**
+
 - Drag audio files from your OS file browser
 - Drop onto the Audio tab
 - Choose destination subfolder (e.g., `music/`, `sfx/`)
 - Click "Import"
 
 **Import Button:**
+
 - Click "Import Audio"
 - Select files in the file picker
 - Choose destination and import
@@ -3772,6 +4073,7 @@ Ren'IDE includes a built-in audio player so you can preview sounds without leavi
    - **Loop toggle:** Enable looping for background music testing
 
 **Why This Matters:**
+
 - Quickly audition sound effects or music tracks
 - Verify audio quality before integrating into the game
 - No need to open a separate audio player app
@@ -3781,14 +4083,17 @@ Ren'IDE includes a built-in audio player so you can preview sounds without leavi
 Each audio file can have metadata:
 
 **Ren'Py Name:**
+
 - The identifier used in code (e.g., `audio/music/theme.mp3`)
 - Auto-generated from file path
 
 **Tags:**
+
 - Custom tags (e.g., "battle", "sad", "ambience")
 - Use for categorization and filtering
 
 **Subfolder:**
+
 - Location within `game/audio/`
 
 **Editing Metadata:**
@@ -3797,6 +4102,7 @@ Double-click an audio file to open the Audio Editor and modify metadata.
 ### 6.2.6 Quick Code Generation
 
 Right-click any audio file for quick code copying:
+
 - **Copy `play music` statement:** `play music "audio/music/theme.mp3"`
 - **Copy `play sound` statement:** `play sound "audio/sfx/doorbell.wav"`
 - **Copy `queue audio` statement:** `queue music "audio/music/theme.mp3"`
@@ -3806,20 +4112,24 @@ Paste into your script for instant audio integration.
 ### 6.2.7 Audio Workflow Tips for Artists
 
 **Organize by Type:**
+
 - `music/` for background music
 - `sfx/` for sound effects
 - `voice/` for voice acting (if applicable)
 - `ambience/` for ambient loops
 
 **Use Tags:**
+
 - Tag tracks by mood ("happy", "tense", "sad")
 - Tag sound effects by category ("ui", "footsteps", "doors")
 
 **Test with Loop Toggle:**
+
 - Enable loop in the player to hear how music loops
 - Check for jarring transitions or pops
 
 **Coordinate with Writers:**
+
 - Writers specify which audio is needed in the script
 - Diagnostics panel flags missing audio
 - Artists add audio, writers verify in the Audio tab
@@ -3836,6 +4146,7 @@ The Scene Composer is a visual tool for composing scenes: laying out backgrounds
 A canvas where you can visually arrange images (backgrounds, sprites, overlays) to create a scene mockup. When you're satisfied, copy the generated Ren'Py code (`scene` and `show` statements) into your script.
 
 **Use Cases:**
+
 - **Mockups:** Show the writer or director what a scene will look like
 - **Reference compositions:** Save complex scenes for later reuse
 - **Quick layouts:** Experiment with sprite positions without writing code
@@ -3852,10 +4163,12 @@ A canvas where you can visually arrange images (backgrounds, sprites, overlays) 
 The central area where you place images. The stage represents the game window.
 
 **Adding Images:**
+
 - **Drag from Image Assets tab:** Drag an image from the asset list onto the stage
 - **Or use the "Add Image" button:** Click it, select an image from a file picker
 
 **Types of Images:**
+
 - **Backgrounds:** Full-screen images (e.g., `bg office`, `bg park`)
 - **Sprites:** Character images, usually with transparency (e.g., `eileen happy`, `lucy sad`)
 - **Overlays:** Additional elements (UI elements, effects)
@@ -3867,6 +4180,7 @@ Images appear at the center of the stage. Drag them to position.
 
 **Configurable Resolution:**
 Set the stage resolution to match your game's resolution:
+
 - **Presets:** 1920×1080, 1280×720, 1024×768, 800×600
 - **Custom:** Enter any width and height
 
@@ -3874,10 +4188,12 @@ Set the stage resolution to match your game's resolution:
 Ensures your composition accurately reflects how the scene will appear in-game.
 
 **Zoom Controls:**
+
 - Zoom in/out to see details or get an overview
 - Fit stage to viewport
 
 **Grid/Guides (if available):**
+
 - Toggle grid overlay for alignment
 - Snap to grid for precise positioning
 
@@ -3886,30 +4202,37 @@ Ensures your composition accurately reflects how the scene will appear in-game.
 Select a sprite to access per-sprite transform controls (usually in a side panel or toolbar):
 
 **Position (X, Y):**
+
 - Drag the sprite on the stage, or
 - Enter exact X/Y coordinates in the controls
 
 **Scale/Zoom:**
+
 - Slider or input field to scale the sprite
 - Example: 0.5 = half size, 2.0 = double size
 - Preserves aspect ratio
 
 **Flip Horizontal:**
+
 - Checkbox or button to flip the sprite left/right
 - Useful for reusing sprites in different orientations
 
 **Flip Vertical:**
+
 - Checkbox or button to flip top/bottom (less common)
 
 **Rotate:**
+
 - Slider or input to rotate the sprite (degrees)
 - Example: 90° rotates the sprite 90 degrees clockwise
 
 **Alpha/Opacity:**
+
 - Slider from 0.0 (fully transparent) to 1.0 (fully opaque)
 - Example: 0.5 = 50% transparent (ghostly effect)
 
 **Blur:**
+
 - Slider to apply a blur effect
 - Use for background/out-of-focus elements
 
@@ -3919,11 +4242,13 @@ Changes apply in real-time on the stage.
 ### 6.3.5 Layer Ordering
 
 Images on the stage are layered (like layers in Photoshop):
+
 - **Bottom layer:** Usually the background
 - **Middle layers:** Character sprites
 - **Top layers:** Overlays or effects
 
 **Reordering Layers:**
+
 - In the layer list (side panel), drag a layer up or down
 - Or use **Bring Forward** / **Send Backward** buttons
 
@@ -3970,6 +4295,7 @@ You can export the composition as a flat PNG image:
 3. Ren'IDE renders the stage to a PNG file
 
 **Use Cases:**
+
 - Social media promotion (share a scene preview)
 - Development logs or dev blogs
 - Reference images for team discussions
@@ -4005,6 +4331,7 @@ The ImageMap Composer is a tool for creating **clickable imagemaps**: images wit
 
 **What is an Imagemap?**
 A Ren'Py construct where a single image has multiple clickable regions. Common uses:
+
 - Point-and-click navigation (e.g., a map where clicking regions goes to different locations)
 - Interactive UIs (e.g., a phone screen with app icons)
 - Puzzle interfaces
@@ -4017,14 +4344,17 @@ A Ren'Py construct where a single image has multiple clickable regions. Common u
 ### 6.4.2 Setting Ground and Hover Images
 
 **Ground Image:**
+
 - The base image displayed on screen
 - Example: A map, a UI mockup, a room background
 
 **Hover Overlay (Optional):**
+
 - An alternate image displayed when the mouse hovers over a hotspot
 - Example: Highlighted regions, glowing buttons
 
 **Setting Images:**
+
 - **Drag from Image Assets tab:** Drag an image onto the "Ground Image" or "Hover Image" placeholder
 - **Or click "Set Ground Image":** Select from a file picker
 
@@ -4040,6 +4370,7 @@ A Ren'Py construct where a single image has multiple clickable regions. Common u
 Create as many hotspots as needed. Each hotspot can have a different action.
 
 **Deleting a Hotspot:**
+
 - Select the hotspot
 - Press `Delete` or click the trash icon
 
@@ -4048,17 +4379,21 @@ Create as many hotspots as needed. Each hotspot can have a different action.
 Select a hotspot to configure its properties (in a side panel):
 
 **Hotspot Name:**
+
 - Internal identifier (e.g., "office_button", "map_region_north")
 
 **Action Type:**
+
 - **Jump:** Transfer control permanently to a label
 - **Call:** Call a label and return
 
 **Target Label:**
+
 - Select from a dropdown (populated with all labels in your project)
 - Example: `jump office` or `call flashback`
 
 **Condition (Optional):**
+
 - An `if` statement that determines if the hotspot is active
 - Example: `if map_unlocked`
 - If the condition is false, the hotspot is non-clickable
@@ -4109,16 +4444,19 @@ Ren'IDE includes several features for previewing assets without leaving the app.
 ### 6.5.1 Image Thumbnails
 
 **In the Project Explorer:**
+
 - Image files show a small thumbnail icon
 - Hover to see a larger preview (if supported)
 
 **In the Image Assets Tab:**
+
 - Each image has a thumbnail
 - Thumbnails are generated asynchronously (you may see a placeholder briefly while it loads)
 
 ### 6.5.2 Double-Click to Open in Editor
 
 **Images:**
+
 - Double-click an image in the asset list
 - The **Image Editor** opens, showing:
   - Full-size preview
@@ -4126,12 +4464,14 @@ Ren'IDE includes several features for previewing assets without leaving the app.
   - Metadata edit controls
 
 **Audio:**
+
 - Double-click an audio file
 - The **Audio Editor** opens with the built-in player
 
 ### 6.5.3 Full-Size Image Preview
 
 In the Image Editor:
+
 - The image displays at full size (or scaled to fit the panel)
 - Zoom in/out if the image is large
 - Rotate or flip for review (does not modify the file)
@@ -4139,15 +4479,18 @@ In the Image Editor:
 ### 6.5.4 Dimensions and File Size Display
 
 **Image Editor:**
+
 - Dimensions: `1920×1080`
 - File size: `2.4 MB`
 
 **Audio Editor:**
+
 - Duration: `3:45`
 - Format: `MP3, 320 kbps`
 - File size: `8.5 MB`
 
 **Why This Matters:**
+
 - Verify image dimensions match your game's resolution
 - Check file sizes to optimize for web distribution (if applicable)
 
@@ -4160,6 +4503,7 @@ Drafting Mode adds placeholder assets for missing images and audio, allowing the
 ### 6.6.1 What is Drafting Mode?
 
 When enabled, Ren'Py placeholders replace missing assets:
+
 - **Missing images:** A gray rectangle with the asset name overlaid
 - **Missing audio:** Silence (or a placeholder tone, depending on configuration)
 
@@ -4179,6 +4523,7 @@ The writer has referenced 50 images in the script, but you've only created 20 so
 Running the game crashes or shows errors for the 30 missing images.
 
 **With Drafting Mode:**
+
 - Missing images display as placeholders
 - The game runs normally
 - You and the writer can test gameplay and dialogue flow
@@ -4196,6 +4541,7 @@ Running the game crashes or shows errors for the 30 missing images.
 ### 6.6.5 Placeholder Customization (If Available)
 
 Some versions of Ren'Py or Ren'IDE allow customizing placeholders:
+
 - Change placeholder color
 - Add custom placeholder images (e.g., a "WIP" graphic)
 
@@ -4230,6 +4576,7 @@ game/images/
 ```
 
 **Benefits:**
+
 - Easy to find specific assets
 - Clear organization for teammates
 - Subfolder-based filtering in the asset manager
@@ -4237,15 +4584,18 @@ game/images/
 ### 6.7.2 Naming Conventions
 
 **Descriptive Names:**
+
 - Use names that describe the content: `eileen_happy.png`, not `char1_01.png`
 - Include character name, emotion, and variant (if multiple versions exist)
 
 **Consistent Format:**
+
 - Stick to one naming scheme across the project
 - Example: `[character]_[emotion]_[variant].png`
 - `eileen_happy_talking.png`, `eileen_happy_standing.png`
 
 **Match Ren'Py Conventions:**
+
 - Ren'Py converts underscores to spaces for image names
 - `eileen_happy.png` becomes `eileen happy` in code
 - Avoid special characters in file names
@@ -4253,6 +4603,7 @@ game/images/
 ### 6.7.3 Using Tags for Filtering
 
 Assign tags to assets:
+
 - **Type tags:** "sprite", "background", "CG", "UI"
 - **Status tags:** "final", "WIP", "placeholder"
 - **Mood tags:** "happy", "sad", "tense" (for backgrounds)
@@ -4273,11 +4624,13 @@ play music "theme.mp3"
 Create the assets and add them to the project (via import or scan).
 
 **Verification:**
+
 - Writers check the Diagnostics panel for missing asset warnings
 - Artists check the asset list to see what's needed
 - Iterate until all assets are in place
 
 **Communication:**
+
 - Use sticky notes on the canvas to annotate asset needs
 - Use task lists in the Diagnostics panel to track asset TODOs
 - Comment in the code to specify asset requirements
@@ -4296,12 +4649,14 @@ git lfs track "*.ogg"
 This prevents the repo from bloating.
 
 **Asset Directories:**
+
 - Commit finalized assets to the repo
 - Keep WIP assets in a separate directory (excluded from version control)
 
 ### 6.7.6 Optimizing Assets
 
 **Image Optimization:**
+
 - Compress images to reduce file size (use tools like TinyPNG, ImageOptim)
 - Choose appropriate formats:
   - **PNG:** For sprites with transparency
@@ -4309,6 +4664,7 @@ This prevents the repo from bloating.
   - **WebP:** For smaller file sizes (check Ren'Py support)
 
 **Audio Optimization:**
+
 - Use OGG Vorbis for music (good compression, wide support)
 - Use MP3 or OGG for sound effects
 - Avoid WAV (uncompressed, large file sizes) unless necessary
@@ -4322,6 +4678,7 @@ This prevents the repo from bloating.
 4. Generate code and integrate into the script
 
 **Benefits:**
+
 - Visual approval before writing code
 - Experiment with layouts quickly
 - Reuse compositions across scenes
@@ -4356,11 +4713,13 @@ As a developer, you'll spend significant time in the code editor. Ren'IDE's Mona
 ### 7.1.1 Monaco Editor Features
 
 **Why Monaco?**
+
 - **Industry standard:** The same engine powering Visual Studio Code
 - **Feature-rich:** IntelliSense, multi-cursor, regex find/replace, code folding, and more
 - **Extensible:** Custom grammars and semantic tokens for Ren'Py
 
 **Core Capabilities:**
+
 - Syntax highlighting with TextMate grammars
 - Context-aware autocomplete (IntelliSense)
 - Code snippets with tab stops
@@ -4374,19 +4733,23 @@ As a developer, you'll spend significant time in the code editor. Ren'IDE's Mona
 ### 7.1.2 Multi-File Editing Workflows
 
 **Split Panes:**
+
 - Open two files side by side for:
   - Comparing implementations
   - Copying code between files
   - Referencing documentation while coding
+
 - Drag tabs between panes to rearrange
 
 **Tab Management:**
+
 - Open as many tabs as needed
 - Drag tabs to reorder
 - Close inactive tabs to reduce clutter
 - Use "Close Others" to focus on one file
 
 **Persistent State:**
+
 - Open tabs and pane layout are saved in `project.ide.json`
 - When you reopen the project, your editor state is restored
 
@@ -4399,6 +4762,7 @@ As a developer, you'll spend significant time in the code editor. Ren'IDE's Mona
 4. Press `Escape` to return to single cursor
 
 **Use Cases:**
+
 - Rename a variable in multiple places
 - Add the same prefix/suffix to multiple lines
 - Align code vertically
@@ -4409,29 +4773,35 @@ As a developer, you'll spend significant time in the code editor. Ren'IDE's Mona
 3. Type to edit all selected lines at once
 
 **Use Cases:**
+
 - Editing tabular data
 - Adding indentation to multiple lines
 - Commenting out blocks of code
 
 **Move Line Up/Down:**
+
 - `Alt+Up`: Move the current line (or selected lines) up
 - `Alt+Down`: Move them down
 - Preserves indentation
 
 **Delete Line:**
+
 - `Ctrl+Shift+K`: Delete the current line
 - No need to select the entire line first
 
 **Toggle Line Comment:**
+
 - `Ctrl+/`: Comment or uncomment the current line (adds or removes `#`)
 - Works on multiple selected lines
 
 **Bracket Matching:**
+
 - Place the cursor next to a bracket, parenthesis, or brace
 - The matching pair is highlighted
 - Press `Ctrl+Shift+\` to jump to the matching bracket (if supported)
 
 **Auto-Indentation:**
+
 - Press `Enter` after a line ending with `:` (e.g., `label start:`, `if condition:`)
 - The next line is automatically indented
 - Monaco detects Ren'Py's indentation-based syntax
@@ -4439,15 +4809,18 @@ As a developer, you'll spend significant time in the code editor. Ren'IDE's Mona
 ### 7.1.4 Find and Replace with Regex
 
 **Find:**
+
 - Press `Ctrl+F` to open the find bar
 - Enter search text
 - Options:
   - **Match Case** (Aa icon)
   - **Whole Word** (ab| icon)
   - **Regex** (.*) icon)
+
 - Navigate matches with up/down arrows
 
 **Replace:**
+
 - Press `Ctrl+H` to open find/replace
 - Enter replacement text
 - Options:
@@ -4457,19 +4830,23 @@ As a developer, you'll spend significant time in the code editor. Ren'IDE's Mona
 **Regex Examples:**
 
 **Find all labels:**
+
 - Pattern: `label \w+:`
 - Matches: `label start:`, `label chapter1:`
 
 **Find all jumps:**
+
 - Pattern: `jump \w+`
 - Matches: `jump start`, `jump ending`
 
 **Replace with capture groups:**
+
 - Find: `label (\w+):`
 - Replace: `label new_$1:`
 - Result: `label start:` becomes `label new_start:`
 
 **Find all character definitions:**
+
 - Pattern: `define \w+ = Character\(.*\)`
 - Matches: `define e = Character("Eileen", color="#c8ffc8")`
 
@@ -4486,6 +4863,7 @@ A set of regex patterns that define how to color different language constructs. 
 
 **Ren'Py Grammar (`renpy.tmLanguage.json`):**
 Ren'IDE includes a grammar specifically designed for Ren'Py, supporting:
+
 - **Keywords:** `label`, `jump`, `call`, `menu`, `if`, `else`, `elif`, `while`, `for`, `define`, `default`, `return`, `pass`, `scene`, `show`, `hide`, `play`, `stop`, `queue`, `with`, etc.
 - **Strings:** Dialogue text in quotes (single or double)
 - **Comments:** Lines starting with `#`
@@ -4501,6 +4879,7 @@ Beyond syntax, Ren'IDE adds **semantic highlighting**:
 Tokens based on the meaning of code, not just its syntax. For example, a label name is semantically different from a variable name, even if both are identifiers.
 
 **Semantic Coloring in Ren'IDE:**
+
 - **Labels:** Highlighted distinctly when defined (`label start:`) and when referenced (`jump start`)
 - **Variables:** Global variables from `define`/`default` are colored differently from local variables
 - **Screen names:** In `screen` definitions and `call screen` statements
@@ -4508,6 +4887,7 @@ Tokens based on the meaning of code, not just its syntax. For example, a label n
 - **Image names:** In `show`/`scene` statements
 
 **Benefits:**
+
 - **Easier code comprehension:** Different concepts have different colors
 - **Faster debugging:** Spot typos or incorrect references visually
 - **Consistent styling:** Semantic tokens update dynamically as you modify code
@@ -4530,12 +4910,14 @@ Snippets are templates for common code patterns. Ren'IDE includes 28+ built-in s
 ### 7.3.1 Built-in Snippets Overview
 
 **Structural Snippets:**
+
 - `label`: Create a new label with placeholder
   ```renpy
   label ${1:label_name}:
       ${2:# your content}
       return
   ```
+
 - `menu`: Create a menu with two choices
   ```renpy
   menu:
@@ -4547,6 +4929,7 @@ Snippets are templates for common code patterns. Ren'IDE includes 28+ built-in s
       "${4:Choice 2}":
           ${5:jump elsewhere}
   ```
+
 - `if`: If/else block
   ```renpy
   if ${1:condition}:
@@ -4556,56 +4939,68 @@ Snippets are templates for common code patterns. Ren'IDE includes 28+ built-in s
   ```
 
 **Display Snippets:**
+
 - `show`: Show an image
   ```renpy
   show ${1:image_name} at ${2:left} with ${3:dissolve}
   ```
+
 - `scene`: Display a scene
   ```renpy
   scene ${1:bg_name} with ${2:fade}
   ```
+
 - `hide`: Hide an image
   ```renpy
   hide ${1:image_name} with ${2:dissolve}
   ```
 
 **Audio Snippets:**
+
 - `play music`: Play music
   ```renpy
   play music "${1:audio/music/theme.mp3}" fadein ${2:1.0}
   ```
+
 - `play sound`: Play sound effect
   ```renpy
   play sound "${1:audio/sfx/doorbell.wav}"
   ```
+
 - `stop music`: Stop music
   ```renpy
   stop music fadeout ${1:1.0}
   ```
 
 **Control Flow Snippets:**
+
 - `jump`: Jump to a label
   ```renpy
   jump ${1:label_name}
   ```
+
 - `call`: Call a label
   ```renpy
   call ${1:label_name}
   ```
+
 - `return`: Return from a call
   ```renpy
   return
   ```
 
 **Variable Snippets:**
+
 - `define`: Define a constant
   ```renpy
   define ${1:variable_name} = ${2:value}
   ```
+
 - `default`: Define a variable with default value
   ```renpy
   default ${1:variable_name} = ${2:value}
   ```
+
 - `$`: Python statement
   ```renpy
   $ ${1:variable_name} = ${2:value}
@@ -4652,6 +5047,7 @@ Create project-specific or personal snippets for boilerplate code.
    - **Snippet Content:** The template code with placeholders
 
 **Placeholder Syntax:**
+
 - `${1:placeholder_text}`: First placeholder (cursor starts here after expansion)
 - `${2:placeholder_text}`: Second placeholder (cursor moves here after Tab)
 - `$0`: Final cursor position (after all placeholders are filled)
@@ -4693,6 +5089,7 @@ define e = Character("Eileen", color="#c8ffc8", image="eileen")
 3. Confirm
 
 **Export/Import Snippets (If Supported):**
+
 - Export your snippet library to share with teammates
 - Import snippet libraries from others
 
@@ -4718,25 +5115,30 @@ A drag-and-drop interface for creating screens visually. Instead of writing scre
 ### 7.4.2 Available Widgets
 
 **Containers (for layout):**
+
 - **vbox:** Vertical box (stacks children vertically)
 - **hbox:** Horizontal box (arranges children horizontally)
 - **frame:** A bordered container with optional background
 - **null:** Invisible spacer (for layout control)
 
 **Content:**
+
 - **text:** Display text
 - **image:** Display an image
 
 **Buttons:**
+
 - **textbutton:** Button with text label
 - **button:** Generic button (can contain other widgets)
 - **imagebutton:** Button with image (idle and hover states)
 
 **Input:**
+
 - **input:** Text input field
 - **bar:** Progress bar or slider
 
 **Others:**
+
 - **viewport:** Scrollable container
 - **label:** Text with specific styling (less common)
 - **timer:** For timed events (advanced)
@@ -4749,6 +5151,7 @@ A drag-and-drop interface for creating screens visually. Instead of writing scre
 3. The widget appears on the stage
 
 **Nesting Widgets:**
+
 - Drag a widget onto a container (vbox, hbox, frame) to nest it
 - The hierarchy is shown in the widget tree (side panel)
 - Example:
@@ -4763,6 +5166,7 @@ A drag-and-drop interface for creating screens visually. Instead of writing scre
 
 **Configuring Widget Properties:**
 Select a widget to see its properties in the property panel:
+
 - **Common properties (all widgets):**
   - **id:** Unique identifier (optional)
   - **xalign, yalign:** Alignment (0.0 = left/top, 0.5 = center, 1.0 = right/bottom)
@@ -4796,9 +5200,11 @@ Select a widget to see its properties in the property panel:
 3. An `image` widget is created automatically
 
 **Or Drag onto an Existing Widget:**
+
 - Drag an image onto an `imagebutton` widget to set its idle or hover image
 
 **Drag onto Image Widget:**
+
 - Replaces the widget's image
 
 ### 7.4.5 Code Generation
@@ -4831,6 +5237,7 @@ Once your screen layout is complete:
 3. The code is copied to clipboard
 
 **Paste into Script:**
+
 - Open `screens.rpy` (or create a new screen file)
 - Paste the generated code
 - Call the screen with `call screen main_menu` or show it with `show screen main_menu`
@@ -4858,16 +5265,19 @@ Existing screens may have complex logic or custom code that the composer doesn't
 ### 7.4.7 Managing Screen Compositions
 
 **Save Composition:**
+
 - Click "Save Composition"
 - Enter a name (e.g., "Main Menu Screen")
 - The composition is saved in `project.ide.json`
 
 **Load Composition:**
+
 - Go to the Composers tab
 - Click a saved screen composition
 - It opens in the Screen Layout Composer
 
 **Delete Composition:**
+
 - Right-click and select "Delete"
 
 ---
@@ -4879,26 +5289,31 @@ The Diagnostics panel is a quality assurance tool. For developers, it's invaluab
 ### 7.5.1 Error Detection
 
 **Parse Errors:**
+
 - Code that doesn't follow Ren'Py syntax
 - Example: Missing colon after `label`, incorrect indentation, unclosed quotes
 - Severity: **Error** (red)
 
 **Invalid Jumps:**
+
 - `jump` or `call` to a label that doesn't exist
 - Example: `jump chapter2` when `chapter2` is never defined
 - Severity: **Error** (red)
 
 **Missing Assets:**
+
 - References to images or audio files not found in the project
 - Example: `show eileen happy` when `eileen_happy.png` doesn't exist in `game/images/`
 - Severity: **Error** (red)
 
 **Undefined Characters:**
+
 - Using a character tag in dialogue before defining it
 - Example: `e "Hello"` when `define e = Character(...)` doesn't exist
 - Severity: **Error** (red)
 
 **Undefined Screens:**
+
 - Calling or showing a screen that hasn't been defined
 - Example: `call screen settings` when `screen settings:` doesn't exist
 - Severity: **Error** (red)
@@ -4906,16 +5321,19 @@ The Diagnostics panel is a quality assurance tool. For developers, it's invaluab
 ### 7.5.2 Warning Categories
 
 **Unused Characters:**
+
 - Characters defined but never used in dialogue
 - Possible causes: Leftover from cut content, placeholder, typo in tag
 - Severity: **Warning** (amber)
 
 **Unreachable Labels:**
+
 - Labels that no path from `start` leads to
 - Possible causes: Dead code, orphaned content, intentional (e.g., bonus content)
 - Severity: **Warning** (amber)
 
 **Missing Variables (Conditional Checks):**
+
 - Variables used in `if` statements but never defined
 - Example: `if player_intelligence >= 5:` when `player_intelligence` is never defined
 - Severity: **Warning** (amber)
@@ -4923,11 +5341,13 @@ The Diagnostics panel is a quality assurance tool. For developers, it's invaluab
 ### 7.5.3 Code Quality Checks
 
 **Info-Level Diagnostics:**
+
 - Suggestions for best practices
 - Example: "Consider using `call` instead of `jump` for subscenes"
 - Severity: **Info** (blue)
 
 **Complexity Metrics:**
+
 - Labels with very high line counts (might need refactoring)
 - Menus with too many choices (player overwhelm risk)
 - Deep nesting (code readability issue)
@@ -4940,6 +5360,7 @@ The Diagnostics panel is a quality assurance tool. For developers, it's invaluab
 3. The problematic code is highlighted
 
 **Why This Matters:**
+
 - No manual searching through files
 - Immediate context for fixing the issue
 
@@ -4951,11 +5372,13 @@ The Diagnostics panel is a quality assurance tool. For developers, it's invaluab
 3. The issue is added to a task list
 
 **Task List:**
+
 - Shown in the Diagnostics panel under a "Tasks" tab
 - Track progress as you fix issues
 - Mark tasks as complete when resolved
 
 **Use Cases:**
+
 - Large backlog of warnings (fix incrementally)
 - Team workflow (assign tasks to team members)
 - Prioritization (tackle errors first, then warnings)
@@ -4963,11 +5386,13 @@ The Diagnostics panel is a quality assurance tool. For developers, it's invaluab
 ### 7.5.6 Continuous Analysis
 
 Diagnostics update in real-time as you code:
+
 - Add a label → diagnostics for "invalid jump" are resolved
 - Reference an image → diagnostics for "missing image" trigger
 - Fix a syntax error → diagnostic disappears
 
 **Why This Matters:**
+
 - Immediate feedback loop
 - Catch mistakes as you make them, not during testing
 
@@ -4980,53 +5405,65 @@ The Stats panel provides metrics useful for developers beyond word counts.
 ### 7.6.1 Code Metrics
 
 **Lines of Code:**
+
 - Total lines across all `.rpy` files
 - Excludes comments and blank lines (if configured)
 
 **Lines of Dialogue:**
+
 - Total dialogue lines (character speech)
 - Useful for estimating localization effort
 
 **Label Count:**
+
 - Total number of labels in the project
 
 **Scene/Route Count:**
+
 - Number of distinct scenes (depending on how you define scenes)
 - Number of narrative routes (paths from `start` to an ending)
 
 **Jump/Call Count:**
+
 - Total `jump` and `call` statements
 - Indicates branching complexity
 
 ### 7.6.2 Complexity Analysis
 
 **Branching Complexity:**
+
 - Metrics like:
   - Average choices per menu
   - Maximum path depth (number of decisions from `start` to an ending)
   - Cyclomatic complexity (number of linearly independent paths)
+
 - **Why It Matters:** High complexity = more testing required, higher QA burden
 
 **Path Depth Statistics:**
+
 - Minimum, maximum, and average path depth
 - Identifies very long paths (potential pacing issues) or very short paths (incomplete content)
 
 **Unreachable Code Ratio:**
+
 - Percentage of labels that are unreachable
 - Ideal: 0% (all code is reachable)
 
 ### 7.6.3 Asset Coverage
 
 **Images:**
+
 - **Defined:** Number of images in `game/images/`
 - **Used:** Number of images referenced in code
 - **Unused:** Defined but not used
 - **Missing:** Used but not defined (errors)
 
 **Audio:**
+
 - Same breakdown as images
 
 **Why It Matters:**
+
 - **Unused assets:** Clutter, increases distribution size
 - **Missing assets:** Errors that need fixing
 
@@ -5041,6 +5478,7 @@ The Stats panel provides metrics useful for developers beyond word counts.
 3. Save to disk
 
 **Use Cases:**
+
 - Tracking project growth over time
 - Reporting to stakeholders
 - Identifying trends (e.g., complexity increasing faster than content)
@@ -5056,12 +5494,14 @@ Ren'IDE works alongside the Ren'Py SDK. This section covers integration details 
 (See Section 2.5 for initial setup.)
 
 **Developer-Specific Notes:**
+
 - SDK path is stored in global settings (affects all projects)
 - You can override the SDK path per project (if supported) for testing multiple Ren'Py versions
 
 ### 7.7.2 Running the Game
 
 **Run Button:**
+
 - Click the **Run** button in the toolbar
 - Ren'IDE:
   1. Saves all unsaved files
@@ -5070,12 +5510,14 @@ Ren'IDE works alongside the Ren'Py SDK. This section covers integration details 
   4. Waits for the game to close
 
 **Console Output:**
+
 - If the SDK outputs console messages, they may appear in:
   - A terminal window (Linux)
   - The Ren'Py log file (Windows/macOS)
   - An output panel in Ren'IDE (if supported)
 
 **Error Handling:**
+
 - If the SDK fails to launch, Ren'IDE shows an error message
 - Common causes: SDK path incorrect, SDK version incompatible, project structure invalid
 
@@ -5090,6 +5532,7 @@ While Ren'IDE is for development, the Ren'Py SDK handles building distributable 
 5. SDK builds the packages
 
 **Workflow:**
+
 - Develop in Ren'IDE
 - Test with the Run button
 - Build distributions with the SDK
@@ -5101,13 +5544,16 @@ While Ren'IDE is for development, the Ren'Py SDK handles building distributable 
 Ren'Py 7.5 or later
 
 **Older Versions:**
+
 - Ren'Py 7.0-7.4: May work but some features might not be fully supported
 - Ren'Py 6.x: Not recommended (missing modern features)
 
 **Newer Versions:**
+
 - Ren'Py 8.x: Fully supported
 
 **Checking Compatibility:**
+
 - Test your project with the SDK version you'll use for distribution
 - Run the game from Ren'IDE to ensure compatibility
 
@@ -5123,6 +5569,7 @@ Ren'IDE uses modern file system APIs for direct access to your project files.
 A web standard API for reading and writing local files from a web app (or Electron app). Ren'IDE uses this to access your project directory.
 
 **Permissions:**
+
 - On first project open, the OS may prompt you to grant access
 - Once granted, Ren'IDE can read and write files in that directory
 - Permissions persist (you don't need to grant access every time)
@@ -5141,50 +5588,60 @@ your-project/
 ```
 
 **game/ Directory:**
+
 - Contains all `.rpy` files and assets
 - Required by Ren'Py
 
 **.ide/ Directory:**
+
 - Created by Ren'IDE
 - Contains cached analysis results and temporary files
 - Can be excluded from version control (.gitignore)
 
 **project.ide.json:**
+
 - Stores Ren'IDE-specific settings:
   - Canvas block positions
   - Saved compositions (Scene, ImageMap, Screen)
   - Image and audio metadata
   - Project-specific settings (active canvas, open tabs, etc.)
+
 - Can be committed to version control if you want teammates to share layouts
 
 ### 7.8.3 File Operations
 
 **Creating Files:**
+
 - Use the Project Explorer to create `.rpy` files
 - Or use the "Add Block" button to create files on the canvas
 - Files are written to disk immediately
 
 **Renaming Files:**
+
 - Right-click a file in the Project Explorer, select "Rename"
 - The file is renamed on disk
 - **Note:** Renaming a file doesn't update jumps/calls that reference labels in that file (use Diagnostics to find broken jumps)
 
 **Deleting Files:**
+
 - Right-click a file, select "Delete"
 - The file is moved to the OS trash/recycle bin (not permanently deleted)
 - **Warning:** Deletion is permanent from Ren'IDE's perspective (no undo via Ren'IDE's undo system)
 
 **Moving Files:**
+
 - Drag-and-drop in the Project Explorer
 - Or cut/paste to move files between folders
 
 ### 7.8.4 File System Watches (If Supported)
 
 Some versions of Ren'IDE watch the file system for external changes:
+
 - If you edit a file in another editor, Ren'IDE detects the change and prompts you to reload
 - If files are added/deleted externally, the Project Explorer updates
 
 **Developer Workflow:**
+
 - Edit code in Ren'IDE
 - Use external tools (Git, image editors, etc.) as needed
 - Ren'IDE stays in sync
@@ -5198,6 +5655,7 @@ Here are best practices for developers using Ren'IDE.
 ### 7.9.1 Organizing Code by Module
 
 **Modular Structure:**
+
 - Break your project into logical modules (files or folders)
 - Example:
   ```
@@ -5218,6 +5676,7 @@ Here are best practices for developers using Ren'IDE.
   ```
 
 **Benefits:**
+
 - Easy to find specific code
 - Reduces merge conflicts (team members work in different files)
 - Clear separation of concerns
@@ -5225,11 +5684,13 @@ Here are best practices for developers using Ren'IDE.
 ### 7.9.2 Using Labels Effectively
 
 **Label Naming Conventions:**
+
 - Use descriptive names: `chapter1_intro`, `flashback_childhood`, `ending_true`
 - Avoid generic names: `scene1`, `label2`
 - Use prefixes for grouping: `ch1_`, `ch2_`, `ending_`
 
 **Label Organization:**
+
 - One label per major scene or subscene
 - Use `call` for reusable subscenes (flashbacks, recurring events)
 - Use `jump` for permanent transitions (chapter endings, epilogues)
@@ -5246,6 +5707,7 @@ Here are best practices for developers using Ren'IDE.
 
 **Continuous Integration (CI):**
 If you have a CI pipeline:
+
 - Export diagnostics as JSON
 - Parse in CI to fail builds on errors
 - Automate QA checks
@@ -5253,62 +5715,74 @@ If you have a CI pipeline:
 ### 7.9.4 Version Control Integration (Git)
 
 **Committing Changes:**
+
 - Commit `.rpy` files to track code changes
 - Commit `project.ide.json` if you want to share canvas layouts and compositions
 - Exclude `.ide/` directory (add to `.gitignore`)
 
 **Branching:**
+
 - Use branches for features or experiments
 - Ren'IDE works with any branch (file system state reflects the current branch)
 
 **Merge Conflicts:**
+
 - If `.rpy` files conflict, resolve manually
 - If `project.ide.json` conflicts, prefer one version or merge carefully (JSON structure must remain valid)
 
 ### 7.9.5 Collaborative Development
 
 **Team Roles:**
+
 - **Writers:** Focus on dialogue, narrative flow
 - **Artists:** Create and manage assets
 - **Developers:** Write systems, screens, technical code
 
 **Communication:**
+
 - Use the Story Canvas in meetings to discuss structure
 - Use sticky notes on the canvas to leave messages
 - Use the Diagnostics panel to track issues
 
 **File Ownership:**
+
 - Assign files to team members to reduce conflicts
 - Example: Writer owns `script.rpy`, Developer owns `screens.rpy`
 
 ### 7.9.6 Testing Strategies
 
 **Manual Testing:**
+
 - Run the game frequently from Ren'IDE
 - Test all branches and endings
 - Use the Route Canvas to identify paths to test
 
 **Automated Testing (Advanced):**
+
 - Write Ren'Py unit tests (if supported by your SDK version)
 - Integrate with a testing framework
 
 **Playtesting:**
+
 - Use the Choice Canvas to trace the player experience
 - Ensure all choices make sense from the player's perspective
 
 ### 7.9.7 Performance Optimization
 
 **Large Projects:**
+
 - If canvas rendering is slow (100+ blocks):
   - Use grouping and filtering to reduce visible blocks
   - Close unnecessary editor tabs
   - Collapse unused folders in the Project Explorer
 
 **Asset Optimization:**
+
 - Compress images and audio before importing
 - Use appropriate formats (PNG for sprites, JPEG for backgrounds, OGG for audio)
 
 **Code Optimization:**
+
 - Avoid deeply nested labels (refactor into separate files)
 - Use `call` for subscenes to improve code organization
 
@@ -5436,6 +5910,7 @@ This section provides a comprehensive quick-reference guide to all Ren'IDE featu
   - Edit character (opens Character Editor)
   - Find usages
   - Jump to definition
+
 - **Character Editor Fields:** Tag, name, color, Ren'Py parameters, profile notes
 
 ### Variables Tab
@@ -5457,6 +5932,7 @@ This section provides a comprehensive quick-reference guide to all Ren'IDE featu
   - Copy `scene` statement (right-click)
   - Copy `show` statement (right-click)
   - Drag to Scene Composer or Screen Composer
+
 - **Metadata Fields:** Ren'Py name, tags, subfolder
 
 ### Snd Tab (Audio Asset Manager)
@@ -5471,6 +5947,7 @@ This section provides a comprehensive quick-reference guide to all Ren'IDE featu
   - Copy `play music` statement
   - Copy `play sound` statement
   - Copy `queue audio` statement
+
 - **Metadata Fields:** Ren'Py name, tags, subfolder
 
 ### Screens Tab
@@ -5517,6 +5994,7 @@ This section provides a comprehensive quick-reference guide to all Ren'IDE featu
 **Purpose:** Compose scenes visually (backgrounds, sprites, overlays)
 
 **Features:**
+
 - Drag images from asset panel onto stage
 - Configurable stage resolution (presets: 1920×1080, 1280×720, 1024×768, 800×600, custom)
 - Per-sprite transforms:
@@ -5526,6 +6004,7 @@ This section provides a comprehensive quick-reference guide to all Ren'IDE featu
   - Rotate (slider, degrees)
   - Alpha/opacity (slider, 0.0-1.0)
   - Blur (slider)
+
 - Layer reordering (drag in layer list, Bring Forward/Send Backward)
 - Code generation (generates `scene` and `show` statements with transforms)
 - Export as PNG (flat image for promotion/reference)
@@ -5536,6 +6015,7 @@ This section provides a comprehensive quick-reference guide to all Ren'IDE featu
 **Purpose:** Create clickable imagemaps (hotspots on images)
 
 **Features:**
+
 - Set ground image and hover overlay (drag from asset panel)
 - Draw rectangular hotspots (click and drag on image)
 - Resize and move hotspots
@@ -5544,6 +6024,7 @@ This section provides a comprehensive quick-reference guide to all Ren'IDE featu
   - Action type (jump or call)
   - Target label (dropdown)
   - Condition (optional `if` statement)
+
 - Code generation (generates `imagemap` or `imagebutton` screen code)
 - Save/load imagemap compositions
 
@@ -5552,12 +6033,14 @@ This section provides a comprehensive quick-reference guide to all Ren'IDE featu
 **Purpose:** Build Ren'Py screens visually
 
 **Available Widgets:**
+
 - **Containers:** vbox, hbox, frame, null
 - **Content:** text, image
 - **Buttons:** textbutton, button, imagebutton
 - **Input:** input, bar
 
 **Features:**
+
 - Drag widgets onto stage
 - Nest widgets (drag onto containers)
 - Configure widget properties (side panel):
@@ -5566,6 +6049,7 @@ This section provides a comprehensive quick-reference guide to all Ren'IDE featu
   - Image-specific: image path, xsize, ysize
   - Button-specific: action (Start, Jump, Return, etc.), idle_image, hover_image
   - Container-specific: spacing, xfill, yfill
+
 - Drag images from asset panel to set image widgets or imagebutton images
 - Code generation (generates `screen` definition)
 - Locked-screen workflow (view existing screens read-only, duplicate to edit)
@@ -6017,6 +6501,7 @@ project-name/
 **Problem:** Opening a project with 100+ files takes a long time.
 
 **Solutions:**
+
 - Wait for initial analysis to complete (one-time process)
 - Close unnecessary editor tabs
 - Use filtering and grouping on the canvas to reduce rendered blocks
@@ -6027,6 +6512,7 @@ project-name/
 **Problem:** Dragging blocks or zooming is sluggish.
 
 **Solutions:**
+
 - Collapse unused folders in Project Explorer
 - Use Fit-to-Screen instead of manual panning
 - Filter canvas by character to reduce visible blocks
@@ -6039,6 +6525,7 @@ project-name/
 **Causes:** Electron apps (including Ren'IDE) use more memory than native apps.
 
 **Solutions:**
+
 - Close other applications
 - Close unused editor tabs and panes
 - Restart Ren'IDE periodically
@@ -6053,6 +6540,7 @@ project-name/
 **Problem:** Can't read or write project files.
 
 **Solutions:**
+
 - **macOS:** Grant file system access in System Preferences → Security & Privacy → Files and Folders → Ren'IDE
 - **Windows:** Run Ren'IDE as administrator (right-click → Run as administrator)
 - **Linux:** Check file permissions: `chmod -R u+rw /path/to/project`
@@ -6070,6 +6558,7 @@ project-name/
 **Causes:** Browser cleared site data, or macOS revoked file access.
 
 **Solutions:**
+
 - Reopen the project (file system access will be requested again)
 - On macOS, grant permanent access in System Preferences
 
@@ -6113,6 +6602,7 @@ project-name/
 **Problem:** Images in `game/images/` don't show in the Images tab.
 
 **Solutions:**
+
 - Refresh the asset list (right-click folder → Refresh, if supported)
 - Check file extensions (Ren'IDE supports PNG, JPG, JPEG, WEBP)
 - Ensure images are in `game/images/` or a scanned external directory
@@ -6122,6 +6612,7 @@ project-name/
 **Problem:** Audio won't play in the built-in player.
 
 **Solutions:**
+
 - Check file format (Ren'IDE supports MP3, OGG, WAV, FLAC)
 - Check file isn't corrupted (try playing in another audio player)
 - Restart Ren'IDE
@@ -6131,6 +6622,7 @@ project-name/
 **Problem:** Changes in external scan directories aren't reflected.
 
 **Solutions:**
+
 - Right-click the scan directory entry and select "Refresh"
 - Reopen the project
 - Re-add the scan directory
@@ -6144,6 +6636,7 @@ project-name/
 **Problem:** Autocomplete suggestions don't appear.
 
 **Solutions:**
+
 - Press `Ctrl+Space` to manually trigger IntelliSense
 - Ensure the project analysis is complete (check status bar)
 - Check that the file is a `.rpy` file (IntelliSense only works for Ren'Py files)
@@ -6154,6 +6647,7 @@ project-name/
 **Problem:** Code appears as plain text, no colors.
 
 **Solutions:**
+
 - Ensure the file has a `.rpy` extension
 - Restart Ren'IDE
 - Check Settings → Editor for theme/color settings
@@ -6163,6 +6657,7 @@ project-name/
 **Problem:** Typing snippet prefixes and pressing Tab doesn't expand.
 
 **Solutions:**
+
 - Ensure you're in a `.rpy` file
 - Check the Snippets tab to verify the snippet exists
 - Try manually triggering IntelliSense (`Ctrl+Space`) and selecting the snippet from the list
@@ -6176,6 +6671,7 @@ project-name/
 **Problem:** Canvas is blank or blocks are missing.
 
 **Solutions:**
+
 - Zoom out to see if blocks are offscreen
 - Click "Fit-to-Screen" to center all blocks
 - Restart Ren'IDE
@@ -6186,6 +6682,7 @@ project-name/
 **Problem:** Jump/call arrows are missing or incorrectly drawn.
 
 **Solutions:**
+
 - Save the project and reopen (triggers re-analysis)
 - Click "Redraw" to recompute layout
 - Check for invalid jumps in the Diagnostics panel (broken jumps may not draw)
@@ -6195,6 +6692,7 @@ project-name/
 **Problem:** Minimap shows outdated block positions.
 
 **Solutions:**
+
 - Click the minimap to refresh it
 - Restart Ren'IDE
 
@@ -6203,6 +6701,7 @@ project-name/
 **Problem:** Ctrl+G doesn't show a label you know exists.
 
 **Solutions:**
+
 - Ensure the file with the label is saved
 - Wait for project analysis to complete (check status bar)
 - Restart Ren'IDE
@@ -6390,6 +6889,7 @@ A: Not currently, but you can script file operations (e.g., batch renaming) usin
 ### Development Team
 
 **Ren'IDE (Vangard Ren'Py IDE)**
+
 - **Project Lead:** (Add name/handle)
 - **Lead Developer:** (Add name/handle)
 - **Contributors:** See [GitHub Contributors](https://github.com/bluemoonfoundry/vangard-renpy-ide/graphs/contributors)
