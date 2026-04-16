@@ -3330,6 +3330,7 @@ const App: React.FC = () => {
             if (data.command === 'open-settings') setSettingsModalOpen(true);
             if (data.command === 'open-shortcuts') setShortcutsModalOpen(true);
             if (data.command === 'open-about') setAboutModalOpen(true);
+            if (data.command === 'show-tutorial') setShowTutorial(true);
             if (data.command === 'toggle-left-sidebar') updateAppSettings(draft => { draft.isLeftSidebarOpen = !draft.isLeftSidebarOpen; });
             if (data.command === 'toggle-right-sidebar') updateAppSettings(draft => { draft.isRightSidebarOpen = !draft.isRightSidebarOpen; });
             if (data.command === 'explorer-new-file') setExplorerExternalAction({ type: 'new-file', key: Date.now() });
@@ -4430,6 +4431,7 @@ const App: React.FC = () => {
       />
 
       <FirstRunTutorial
+        forceShow={showTutorial}
         onComplete={() => setShowTutorial(false)}
       />
     </div>

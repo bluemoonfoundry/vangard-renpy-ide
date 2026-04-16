@@ -66,6 +66,7 @@ const TOUR_STEPS: TourStep[] = [
 
 interface FirstRunTutorialProps {
   onComplete: () => void;
+  forceShow?: boolean;
 }
 
 interface SpotlightRect {
@@ -75,7 +76,7 @@ interface SpotlightRect {
   height: number;
 }
 
-const FirstRunTutorial: React.FC<FirstRunTutorialProps> = ({ onComplete }) => {
+const FirstRunTutorial: React.FC<FirstRunTutorialProps> = ({ onComplete, forceShow = false }) => {
   const [showWelcome, setShowWelcome] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(-1);
   const [spotlightRect, setSpotlightRect] = useState<SpotlightRect | null>(null);
@@ -106,6 +107,14 @@ const FirstRunTutorial: React.FC<FirstRunTutorialProps> = ({ onComplete }) => {
       return () => clearTimeout(timer);
     }
   }, []); // Run once on mount
+
+  // Handle manual trigger from Help menu
+  useEffect(() => {
+    if (forceShow) {
+      setShowWelcome(true);
+      setCurrentStepIndex(-1);
+    }
+  }, [forceShow]);
 
   // Start the tour
   const handleStartTour = useCallback(() => {

@@ -575,6 +575,10 @@ async function updateApplicationMenu() {
         label: 'Help',
         submenu: [
             {
+                label: 'Show Tutorial',
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'show-tutorial' }); }
+            },
+            {
                 label: 'Keyboard Shortcuts',
                 accelerator: 'CmdOrCtrl+/',
                 click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-shortcuts' }); }

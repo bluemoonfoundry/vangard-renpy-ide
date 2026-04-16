@@ -86,25 +86,44 @@ Tutorial targets use `data-tutorial` attributes for easy selection:
 - ARIA labels for better screen reader support
 - Escape key to exit at any time
 
+### Help Menu Integration
+- Added "Show Tutorial" option to Help menu (first item)
+- Accessible via Help → Show Tutorial
+- Allows users to replay the tutorial anytime, even after dismissing it
+- Standard UX pattern for onboarding features
+
 ## User Experience
-- Automatic trigger: Shows 1 second after app first launches (if not previously completed)
-- Guides from zero: Starts with project creation/opening, doesn't assume a project is already loaded
-- Brief: Designed to take 30-60 seconds
-- Skippable: Big, obvious Skip button always visible
-- Progressive: Shows basics only, introduces key concepts (canvas types) before diving into details
-- Respectful: Never repeats if dismissed
-- Graceful fallback: If an element isn't found (e.g., no project open yet), shows message centered without spotlight
+- **Automatic trigger**: Shows 1 second after app first launches (if not previously completed)
+- **Manual trigger**: Available anytime via Help → Show Tutorial menu option
+- **Guides from zero**: Starts with project creation/opening, doesn't assume a project is already loaded
+- **Brief**: Designed to take 30-60 seconds
+- **Skippable**: Big, obvious Skip button always visible
+- **Progressive**: Shows basics only, introduces key concepts (canvas types) before diving into details
+- **Respectful**: Never repeats if dismissed (unless manually triggered)
+- **Graceful fallback**: If an element isn't found (e.g., no project open yet), shows message centered without spotlight
 
 ## Testing Checklist
+
+### Automatic First-Run
 - [ ] Tutorial shows on first app launch
 - [ ] Tutorial doesn't show on subsequent app launches
+- [ ] LocalStorage flag persists across sessions
+
+### Manual Trigger
+- [ ] Help → Show Tutorial menu option is visible
+- [ ] Clicking Help → Show Tutorial shows the tutorial
+- [ ] Tutorial can be replayed even after being dismissed
+- [ ] Manual trigger works regardless of localStorage flag
+
+### Tutorial Flow
 - [ ] First step highlights project menu buttons (New/Open Project)
 - [ ] Second step highlights canvas tabs (Story/Route/Choice)
 - [ ] Subsequent steps highlight correct elements
 - [ ] All spotlight highlights appear correctly
 - [ ] Navigation buttons work (Next, Skip, keyboard shortcuts)
 - [ ] Final step shows centered message without spotlight
-- [ ] LocalStorage flag persists across sessions
+
+### Visual & UX
 - [ ] Dark mode styling works correctly
 - [ ] Responsive positioning keeps message in viewport
 - [ ] Graceful handling when elements don't exist (shows centered message)
