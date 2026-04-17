@@ -116,7 +116,15 @@ const Arrow = forwardRef<SVGGElement, {
   onHighlight: (startNodeId: string) => void;
   targetId: string;
   linkType?: 'jump' | 'call';
-}>(({ pathData, isDimmed, onHighlight, targetId, linkType }, ref) => {
+  isNewArrow?: boolean;
+}>(({ pathData, isDimmed, onHighlight, targetId, linkType, isNewArrow }, ref) => {
+  const [isDrawing, setIsDrawing] = useState(isNewArrow ?? false);
+
+  useEffect(() => {
+    if (!isDrawing) return;
+    const t = setTimeout(() => setIsDrawing(false), 300);
+    return () => clearTimeout(t);
+  }, [isDrawing]);
     const handlePointerDown = (e: React.PointerEvent) => {
         e.stopPropagation();
         onHighlight(targetId);
@@ -145,7 +153,8 @@ const Arrow = forwardRef<SVGGElement, {
               strokeWidth="3"
               fill="none"
               markerEnd="url(#arrowhead)"
-              className="pointer-events-none"
+              pathLength={isDrawing ? 1 : undefined}
+              className={`pointer-events-none${isDrawing ? ' arrow-draw-in' : ''}`}
           />
           {callCirclePos && (
             <circle
@@ -243,6 +252,15 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
   const [flashingBlockId, setFlashingBlockId] = useState<string | null>(null);
   const lastHandledRequestKey = useRef<number | null>(null);
   const lastHandledFlashKey = useRef<number | null>(null);
+
+  // --- Micro-animation state ---
+  const [enteringBlockIds, setEnteringBlockIds] = useState<string[]>([]);
+  const [exitingBlocks, setExitingBlocks] = useState<Map<string, Block>>(new Map());
+  const exitingBlocksRef = useRef<Map<string, Block>>(new Map());
+  const prevBlockIdsRef = useRef<Set<string>>(new Set());
+  const [newArrowKeys, setNewArrowKeys] = useState<Set<string>>(new Set());
+  const prevArrowKeysRef = useRef<Set<string>>(new Set());
+  const hasInitializedArrowsRef = useRef(false);
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
@@ -318,6 +336,23 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
     return () => clearTimeout(timer);
   }, [flashBlockRequest]);
 
+  // Track newly added blocks and animate them in
+  useEffect(() => {
+    const newIds: string[] = [];
+    for (const block of blocks) {
+      if (!prevBlockIdsRef.current.has(block.id)) {
+        newIds.push(block.id);
+      }
+    }
+    prevBlockIdsRef.current = new Set(blocks.map(b => b.id));
+    if (newIds.length === 0) return;
+    setEnteringBlockIds(prev => [...prev, ...newIds]);
+    const timer = setTimeout(() => {
+      setEnteringBlockIds(prev => prev.filter(id => !newIds.includes(id)));
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [blocks]);
+
   const adjacencyMap = useMemo(() => {
     const adj = new Map<string, string[]>();
     blocks.forEach(b => adj.set(b.id, []));
@@ -328,6 +363,20 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
     });
     return adj;
   }, [blocks, analysisResult.links]);
+
+  // Wrap deleteBlock to play exit animation before actual deletion
+  const handleDeleteBlock = useCallback((id: string) => {
+    if (exitingBlocksRef.current.has(id)) return; // already animating out
+    const block = blocks.find(b => b.id === id);
+    if (!block) return;
+    exitingBlocksRef.current.set(id, block);
+    setExitingBlocks(new Map(exitingBlocksRef.current));
+    setTimeout(() => {
+      deleteBlock(id);
+      exitingBlocksRef.current.delete(id);
+      setExitingBlocks(new Map(exitingBlocksRef.current));
+    }, 160);
+  }, [blocks, deleteBlock]);
 
   const handleHighlightPath = useCallback((startNodeId: string) => {
     const path = new Set<string>([startNodeId]);
@@ -915,10 +964,35 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
   }, [fitToScreen]);
 
   const visibleLinks = useMemo(() => {
-      return analysisResult.links.filter(link => 
+      return analysisResult.links.filter(link =>
           visibleBlockIds.has(link.sourceId) && visibleBlockIds.has(link.targetId)
       );
   }, [analysisResult.links, visibleBlockIds]);
+
+  // Track newly added arrows (skip initial load to avoid mass-animating on project open)
+  useEffect(() => {
+    const currentKeys = new Set(visibleLinks.map(l => `${l.sourceId}-${l.targetId}`));
+    if (!hasInitializedArrowsRef.current) {
+      prevArrowKeysRef.current = currentKeys;
+      hasInitializedArrowsRef.current = true;
+      return;
+    }
+    const addedKeys: string[] = [];
+    currentKeys.forEach(k => {
+      if (!prevArrowKeysRef.current.has(k)) addedKeys.push(k);
+    });
+    prevArrowKeysRef.current = currentKeys;
+    if (addedKeys.length === 0) return;
+    setNewArrowKeys(prev => new Set([...prev, ...addedKeys]));
+    const timer = setTimeout(() => {
+      setNewArrowKeys(prev => {
+        const next = new Set(prev);
+        addedKeys.forEach(k => next.delete(k));
+        return next;
+      });
+    }, 320);
+    return () => clearTimeout(timer);
+  }, [visibleLinks]);
 
   const svgBounds = useMemo(() => {
     if (visibleBlocks.length === 0) {
@@ -1197,6 +1271,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
                     onHighlight={handleHighlightPath}
                     targetId={link.targetId}
                     linkType={link.type}
+                    isNewArrow={newArrowKeys.has(linkKey)}
                 />
               );
             })}
@@ -1223,7 +1298,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
           );
         })}
 
-        {visibleBlocks.map((block) => {
+        {visibleBlocks.filter(b => !exitingBlocks.has(b.id)).map((block) => {
           const isDimmed = (highlightedPath !== null && !highlightedPath.has(block.id)) ||
                           (findUsagesHighlightIds !== null && !findUsagesHighlightIds.has(block.id)) ||
                           (characterFilterBlockIds !== null && !characterFilterBlockIds.has(block.id));
@@ -1241,7 +1316,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
               block={block}
               analysisResult={analysisResult}
               updateBlock={updateBlock}
-              deleteBlock={deleteBlock}
+              deleteBlock={handleDeleteBlock}
               onOpenEditor={onOpenEditor}
               onOpenRouteCanvas={onOpenRouteCanvas}
               isSelected={selectedBlockIds.includes(block.id)}
@@ -1256,10 +1331,35 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
               isScreenBlock={isScreenBlock}
               isConfigBlock={isConfigBlock}
               isFlashing={flashingBlockId === block.id}
+              isEntering={enteringBlockIds.includes(block.id)}
               diagnosticSeverity={blockDiagnosticSeverity.get(block.id) ?? null}
             />
           );
         })}
+        {Array.from(exitingBlocks.values()).map((block) => (
+          <CodeBlock
+            key={`exiting-${block.id}`}
+            block={block}
+            analysisResult={analysisResult}
+            updateBlock={() => {}}
+            deleteBlock={() => {}}
+            onOpenEditor={() => {}}
+            isSelected={false}
+            isDragging={false}
+            isRoot={analysisResult.rootBlockIds.has(block.id)}
+            isLeaf={analysisResult.leafBlockIds.has(block.id)}
+            isBranching={analysisResult.branchingBlockIds.has(block.id)}
+            isDimmed={false}
+            isUsageHighlighted={false}
+            isHoverHighlighted={false}
+            isDirty={false}
+            isScreenBlock={analysisResult.screenOnlyBlockIds.has(block.id)}
+            isConfigBlock={analysisResult.configBlockIds.has(block.id)}
+            isFlashing={false}
+            isExiting={true}
+            diagnosticSeverity={null}
+          />
+        ))}
 
         {canvasFilters.notes && stickyNotes.map((note) => (
             <StickyNote

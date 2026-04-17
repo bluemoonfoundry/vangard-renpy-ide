@@ -50,6 +50,35 @@ body {
 .dark .renpy-jump-dynamic {
   color: #4ade80; /* green-400 */
 }
+/* --- Block Micro-animations --- */
+@keyframes blockFadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.block-enter {
+  animation: blockFadeIn 200ms ease-out;
+}
+
+@keyframes blockFadeOut {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.95); }
+}
+.block-exit {
+  animation: blockFadeOut 150ms ease-out forwards;
+  pointer-events: none;
+}
+
+/* --- Arrow Draw-in animation --- */
+@keyframes drawArrow {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
+}
+.arrow-draw-in {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: drawArrow 300ms ease-out forwards;
+}
+
 @keyframes flash-animation {
   0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); }
   70% { box-shadow: 0 0 0 10px rgba(79, 70, 229, 0); }
