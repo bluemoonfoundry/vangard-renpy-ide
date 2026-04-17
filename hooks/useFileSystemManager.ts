@@ -11,6 +11,7 @@ import type { FileSystemTreeNode, Block, BlockGroup, ProjectImage, RenpyAudio, I
 import { produce } from 'immer';
 import { useToasts } from '../contexts/ToastContext';
 import { createId } from '../lib/createId';
+import { formatErrorMessage } from '../lib/formatErrorMessage';
 
 // Add necessary FS API types to the global scope
 declare global {
@@ -218,7 +219,7 @@ export const useFileSystemManager = ({ blocks: _blocks, onProjectLoaded: _onProj
             onFileCreated(newPath, type);
         } catch (e) {
             console.error("Failed to create node:", e);
-            addToast(`Could not create ${type}: ${(e as Error).message}`, 'error');
+            addToast(`Could not create ${type}: ${formatErrorMessage(e)}`, 'error');
         }
     }, [directoryHandle, getHandleFromPath, onBlockCreated, onFileCreated, addToast]);
     

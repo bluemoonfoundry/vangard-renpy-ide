@@ -11,6 +11,7 @@
 import { performRenpyAnalysis, performRouteAnalysis } from '../hooks/useRenpyAnalysis';
 import type { AnalysisBlock } from '../hooks/useRenpyAnalysis';
 import type { RenpyAnalysisResult } from '../types';
+import { formatErrorMessage } from '../lib/formatErrorMessage';
 
 interface WorkerRequest {
   id: number;
@@ -82,6 +83,6 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
     self.postMessage({ id, result });
   } catch (err) {
     console.error('[Analysis Worker]', err);
-    self.postMessage({ id, error: String(err) });
+    self.postMessage({ id, error: formatErrorMessage(err) });
   }
 };

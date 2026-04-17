@@ -42,6 +42,7 @@ import { useRenpyAnalysis, performRouteAnalysis } from './hooks/useRenpyAnalysis
 import { useHistory } from './hooks/useHistory';
 import { useProjectColorScan } from './hooks/useProjectColorScan';
 import { createId } from './lib/createId';
+import { formatErrorMessage } from './lib/formatErrorMessage';
 import {
   buildSavedStoryBlockLayouts,
   computeStoryLayout,
@@ -955,7 +956,7 @@ const App: React.FC = () => {
             }
         } catch (e) {
             console.error(e);
-            const errorMessage = e instanceof Error ? e.message : String(e);
+            const errorMessage = formatErrorMessage(e);
             addToast(`Failed to create file: ${errorMessage}`, 'error');
         }
     } else {
@@ -1000,7 +1001,7 @@ const App: React.FC = () => {
               }
           } catch(e) {
               console.error(e);
-              const errorMessage = e instanceof Error ? e.message : String(e);
+              const errorMessage = formatErrorMessage(e);
               addToast(`Failed to create file: ${errorMessage}`, 'error');
           }
       } else {
@@ -3110,7 +3111,7 @@ const App: React.FC = () => {
                         setFileSystemTree(projData.tree);
                     } else { throw new Error((res.error as string) || 'Unknown file creation error'); }
                 } catch (e) {
-                    addToast(`Failed to create characters.rpy: ${e instanceof Error ? e.message : String(e)}`, 'error');
+                    addToast(`Failed to create characters.rpy: ${formatErrorMessage(e)}`, 'error');
                     return;
                 }
             } else {
@@ -3462,7 +3463,7 @@ const App: React.FC = () => {
           }
       });
       return unsub;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [projectRootPath, setBlocks]);
 
   // --- Exit Handling ---
