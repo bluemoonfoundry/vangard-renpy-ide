@@ -1,6 +1,4 @@
 {
-  "enableAiFeatures": false,
-  "selectedModel": "gemini-2.5-flash",
   "draftingMode": true,
   "storyCanvasLayoutMode": "flow-lr",
   "storyCanvasGroupingMode": "none",
@@ -11,14 +9,14 @@
   "routeCanvasLayoutVersion": 2,
   "routeCanvasLayoutWasUserAdjusted": false,
   "storyElementsTabState": {
-    "activeTab": "storyData",
-    "activeSubTab": "characters"
+    "activeTab": "assets",
+    "activeSubTab": "images"
   },
-  "storyCanvasLayoutFingerprint": "v2;mode=flow-lr;group=none;blocks=game/characters.rpy:320x200|game/debug_placeholders.rpy:320x200|game/gui.rpy:320x200|game/options.rpy:320x200|game/scenes/RopedCovenant.rpy:320x200|game/scenes/stage1/TestScript.rpy:320x200|game/scenes/stage1/stage1_announcement.rpy:320x200|game/scenes/stage1/stage1_arrival.rpy:320x200|game/scenes/stage1/stage1_choice.rpy:320x200|game/scenes/stage1/stage1_evening.rpy:320x200|game/scenes/stage1/stage1_library_notice.rpy:320x200|game/scenes/stage1/stage1_meet_h.rpy:320x200|game/scenes/stage1/stage1_meet_s.rpy:320x200|game/scenes/stage1/stage1_rumors.rpy:320x200|game/scenes/stage2/stage2_begin.rpy:320x200|game/scenes/stage2/stage2_converge.rpy:320x200|game/scenes/stage2/stage2_library_clue.rpy:320x200|game/scenes/stage2/stage2_library_path.rpy:320x200|game/scenes/stage2/stage2_occult_path.rpy:320x200|game/scenes/stage2/stage2_social_clue.rpy:320x200|game/scenes/stage2/stage2_social_path.rpy:320x200|game/scenes/stage2/stage2_tech_clue.rpy:320x200|game/scenes/stage2/stage2_tech_path.rpy:320x200|game/scenes/stage3/stage3_begin.rpy:320x200|game/scenes/stage3/stage3_night.rpy:320x200|game/scenes/stage3/stage3_partnership.rpy:320x200|game/scenes/stage3/stage3_revelation.rpy:320x200|game/scenes/stage3/stage3_trust_h.rpy:320x200|game/scenes/stage3/stage3_trust_k.rpy:320x200|game/scenes/stage3/stage3_trust_l.rpy:320x200|game/scenes/stage3/stage3_trust_m.rpy:320x200|game/scenes/stage3/stage3_trust_y.rpy:320x200|game/scenes/stage4/stage4_analyze_clues.rpy:320x200|game/scenes/stage4/stage4_artifact_history.rpy:320x200|game/scenes/stage4/stage4_begin.rpy:320x200|game/scenes/stage4/stage4_decision.rpy:320x200|game/scenes/stage4/stage4_echo_desire.rpy:320x200|game/scenes/stage4/stage4_echo_effects.rpy:320x200|game/scenes/stage4/stage4_echo_liberation.rpy:320x200|game/scenes/stage4/stage4_garden_event.rpy:320x200|game/scenes/stage4/stage4_suspect_s.rpy:320x200|game/scenes/stage5/stage5_art_room_crisis.rpy:320x200|game/scenes/stage5/stage5_begin.rpy:320x200|game/scenes/stage5/stage5_computer_lab_crisis.rpy:320x200|game/scenes/stage5/stage5_emergency_meeting.rpy:320x200|game/scenes/stage5/stage5_gym_crisis.rpy:320x200|game/scenes/stage5/stage5_phenomenon.rpy:320x200|game/scenes/stage5/stage5_protect_path.rpy:320x200|game/scenes/stage5/stage5_pursue_path.rpy:320x200|game/scenes/stage6/stage6_begin.rpy:320x200|game/scenes/stage6/stage6_evidence_compiled.rpy:320x200|game/scenes/stage6/stage6_final_clue_library.rpy:320x200|game/scenes/stage6/stage6_final_clue_occult.rpy:320x200|game/scenes/stage6/stage6_final_clue_tech.rpy:320x200|game/scenes/stage6/stage6_preparation.rpy:320x200|game/scenes/stage6/stage6_solo_investigation.rpy:320x200|game/scenes/stage6/stage6_team_formation.rpy:320x200|game/scenes/stage6/stage6_team_strategy.rpy:320x200|game/scenes/stage7/stage7_aftermath.rpy:320x200|game/scenes/stage7/stage7_battle.rpy:320x200|game/scenes/stage7/stage7_begin.rpy:320x200|game/scenes/stage7/stage7_challenge_echo.rpy:320x200|game/scenes/stage7/stage7_help_echo.rpy:320x200|game/scenes/stage7/stage7_integration.rpy:320x200|game/scenes/stage7/stage7_negotiate_binding.rpy:320x200|game/scenes/stage7/stage7_ritual_self.rpy:320x200|game/scenes/stage7/stage7_ritual_shared.rpy:320x200|game/scenes/stage7/stage7_ritual_sterling.rpy:320x200|game/scenes/stage8/stage8_begin.rpy:320x200|game/scenes/stage8/stage8_ending_battle_defeat.rpy:320x200|game/scenes/stage8/stage8_ending_battle_victory.rpy:320x200|game/scenes/stage8/stage8_ending_bittersweet.rpy:320x200|game/scenes/stage8/stage8_ending_integration.rpy:320x200|game/scenes/stage8/stage8_ending_self_sacrifice.rpy:320x200|game/scenes/stage8/stage8_ending_shared_perfect.rpy:320x200|game/scenes/stage8/stage8_ending_sterling_sacrifice.rpy:320x200|game/scenes/stage8/stage8_epilogue_solo.rpy:320x200|game/scenes/stage8/stage8_epilogue_team.rpy:320x200|game/screens.rpy:320x200|game/script.rpy:320x200|game/variables.rpy:320x200;links=block-10-1776336033891->block-11-1776336033891:jump|block-10-1776336033891->block-7-1776336033891:jump|block-11-1776336033891->block-4-1776336033891:call|block-11-1776336033891->block-7-1776336033891:jump|block-11-1776336033891->block-8-1776336033891:jump|block-12-1776336033891->block-10-1776336033891:jump|block-12-1776336033891->block-5-1776336033891:jump|block-14-1776336033891->block-17-1776336033891:jump|block-14-1776336033891->block-18-1776336033891:jump|block-14-1776336033891->block-20-1776336033891:jump|block-14-1776336033891->block-22-1776336033891:jump|block-14-1776336033891->block-7-1776336033891:jump|block-15-1776336033891->block-23-1776336033891:jump|block-16-1776336033891->block-15-1776336033891:jump|block-17-1776336033891->block-16-1776336033891:jump|block-19-1776336033891->block-15-1776336033891:jump|block-20-1776336033891->block-19-1776336033891:jump|block-21-1776336033891->block-15-1776336033891:jump|block-22-1776336033891->block-21-1776336033891:jump|block-23-1776336033891->block-27-1776336033891:jump|block-23-1776336033891->block-28-1776336033891:jump|block-23-1776336033891->block-29-1776336033891:jump|block-23-1776336033891->block-30-1776336033891:jump|block-23-1776336033891->block-31-1776336033891:jump|block-24-1776336033891->block-34-1776336033891:jump|block-25-1776336033891->block-26-1776336033891:jump|block-26-1776336033891->block-24-1776336033891:jump|block-27-1776336033891->block-25-1776336033891:jump|block-28-1776336033891->block-25-1776336033891:jump|block-29-1776336033891->block-25-1776336033891:jump|block-30-1776336033891->block-25-1776336033891:jump|block-31-1776336033891->block-25-1776336033891:jump|block-32-1776336033891->block-24-1776336033891:jump|block-32-1776336033891->block-35-1776336033891:jump|block-33-1776336033891->block-39-1776336033891:jump|block-34-1776336033891->block-33-1776336033891:jump|block-35-1776336033891->block-42-1776336033891:jump|block-36-1776336033891->block-32-1776336033891:jump|block-37-1776336033891->block-32-1776336033891:jump|block-38-1776336033891->block-40-1776336033891:jump|block-39-1776336033891->block-36-1776336033891:jump|block-39-1776336033891->block-37-1776336033891:jump|block-39-1776336033891->block-38-1776336033891:jump|block-40-1776336033891->block-32-1776336033891:jump|block-41-1776336033891->block-44-1776336033891:jump|block-42-1776336033891->block-41-1776336033891:jump|block-42-1776336033891->block-43-1776336033891:jump|block-42-1776336033891->block-45-1776336033891:jump|block-43-1776336033891->block-44-1776336033891:jump|block-44-1776336033891->block-47-1776336033891:jump|block-44-1776336033891->block-48-1776336033891:jump|block-45-1776336033891->block-44-1776336033891:jump|block-46-1776336033891->block-44-1776336033891:jump|block-47-1776336033891->block-49-1776336033891:jump|block-48-1776336033891->block-49-1776336033891:jump|block-49-1776336033891->block-55-1776336033891:jump|block-49-1776336033891->block-56-1776336033891:jump|block-5-1776336033891->block-10-1776336033891:jump|block-5-1776336033891->block-11-1776336033891:jump|block-50-1776336033891->block-54-1776336033891:jump|block-51-1776336033891->block-50-1776336033891:jump|block-52-1776336033891->block-50-1776336033891:jump|block-53-1776336033891->block-50-1776336033891:jump|block-54-1776336033891->block-60-1776336033891:jump|block-55-1776336033891->block-51-1776336033891:jump|block-55-1776336033891->block-52-1776336033891:jump|block-55-1776336033891->block-53-1776336033891:jump|block-56-1776336033891->block-57-1776336033891:jump|block-57-1776336033891->block-50-1776336033891:jump|block-58-1776336033891->block-68-1776336033891:jump|block-59-1776336033891->block-58-1776336033891:jump|block-6-1776336033891->block-12-1776336033891:jump|block-6-1776336033891->block-5-1776336033891:jump|block-6-1776336033891->block-9-1776336033891:jump|block-60-1776336033891->block-61-1776336033891:jump|block-60-1776336033891->block-62-1776336033891:jump|block-60-1776336033891->block-64-1776336033891:jump|block-61-1776336033891->block-59-1776336033891:jump|block-61-1776336033891->block-62-1776336033891:jump|block-62-1776336033891->block-65-1776336033891:jump|block-62-1776336033891->block-66-1776336033891:jump|block-62-1776336033891->block-67-1776336033891:jump|block-63-1776336033891->block-58-1776336033891:jump|block-64-1776336033891->block-62-1776336033891:jump|block-64-1776336033891->block-63-1776336033891:jump|block-65-1776336033891->block-58-1776336033891:jump|block-66-1776336033891->block-58-1776336033891:jump|block-67-1776336033891->block-58-1776336033891:jump|block-68-1776336033891->block-69-1776336033891:jump|block-68-1776336033891->block-70-1776336033891:jump|block-68-1776336033891->block-71-1776336033891:jump|block-68-1776336033891->block-72-1776336033891:jump|block-68-1776336033891->block-73-1776336033891:jump|block-68-1776336033891->block-74-1776336033891:jump|block-68-1776336033891->block-75-1776336033891:jump|block-69-1776336033891->block-76-1776336033891:jump|block-7-1776336033891->block-8-1776336033891:jump|block-70-1776336033891->block-76-1776336033891:jump|block-71-1776336033891->block-77-1776336033891:jump|block-72-1776336033891->block-77-1776336033891:jump|block-73-1776336033891->block-76-1776336033891:jump|block-74-1776336033891->block-77-1776336033891:jump|block-75-1776336033891->block-77-1776336033891:jump|block-79-1776336033891->block-6-1776336033891:jump|block-8-1776336033891->block-13-1776336033891:call|block-8-1776336033891->block-14-1776336033891:jump|block-9-1776336033891->block-10-1776336033891:jump|block-9-1776336033891->block-11-1776336033891:jump",
-  "storyCanvasHasAutocentered": true,
-  "routeCanvasLayoutFingerprint": "v2;mode=flow-lr;group=none;nodes=block-10-1776336033891:stage1_meet_h:stage1_meet_h.rpy:180x40|block-11-1776336033891:stage1_meet_s:stage1_meet_s.rpy:180x40|block-12-1776336033891:stage1_rumors:stage1_rumors.rpy:180x40|block-13-1776336033891:TestScriptX:TestScript.rpy:180x40|block-14-1776336033891:stage2_begin:stage2_begin.rpy:180x40|block-15-1776336033891:stage2_converge:stage2_converge.rpy:180x40|block-16-1776336033891:stage2_library_clue:stage2_library_clue.rpy:180x40|block-17-1776336033891:stage2_library_path:stage2_library_path.rpy:180x40|block-18-1776336033891:stage2_occult_path:stage2_occult_path.rpy:180x40|block-19-1776336033891:stage2_social_clue:stage2_social_clue.rpy:180x40|block-20-1776336033891:stage2_interview_custodian:stage2_social_path.rpy:180x40|block-20-1776336033891:stage2_interview_sterling:stage2_social_path.rpy:180x40|block-20-1776336033891:stage2_interview_student:stage2_social_path.rpy:180x40|block-20-1776336033891:stage2_social_path:stage2_social_path.rpy:180x40|block-21-1776336033891:stage2_tech_clue:stage2_tech_clue.rpy:180x40|block-22-1776336033891:stage2_tech_path:stage2_tech_path.rpy:180x40|block-23-1776336033891:stage3_begin:stage3_begin.rpy:180x40|block-24-1776336033891:stage3_night:stage3_night.rpy:180x40|block-25-1776336033891:stage3_partnership:stage3_partnership.rpy:180x40|block-26-1776336033891:stage3_revelation:stage3_revelation.rpy:180x40|block-27-1776336033891:stage3_trust_h:stage3_trust_h.rpy:180x40|block-28-1776336033891:stage3_trust_k:stage3_trust_k.rpy:180x40|block-29-1776336033891:stage3_trust_l:stage3_trust_l.rpy:180x40|block-30-1776336033891:stage3_trust_m:stage3_trust_m.rpy:180x40|block-31-1776336033891:stage3_trust_y:stage3_trust_y.rpy:180x40|block-32-1776336033891:stage4_analyze_clues:stage4_analyze_clues.rpy:180x40|block-33-1776336033891:stage4_artifact_history:stage4_artifact_history.rpy:180x40|block-34-1776336033891:stage4_begin:stage4_begin.rpy:180x40|block-35-1776336033891:stage4_decision:stage4_decision.rpy:180x40|block-35-1776336033891:stage4_theory_binding:stage4_decision.rpy:180x40|block-35-1776336033891:stage4_theory_coexist:stage4_decision.rpy:180x40|block-35-1776336033891:stage4_theory_destroy:stage4_decision.rpy:180x40|block-35-1776336033891:stage4_theory_exit:stage4_decision.rpy:180x40|block-36-1776336033891:stage4_echo_desire:stage4_echo_desire.rpy:180x40|block-37-1776336033891:stage4_echo_effects:stage4_echo_effects.rpy:180x40|block-38-1776336033891:stage4_echo_liberation:stage4_echo_liberation.rpy:180x40|block-39-1776336033891:stage4_garden_event:stage4_garden_event.rpy:180x40|block-4-1776336033891:clarity_file_maxim:RopedCovenant.rpy:180x40|block-40-1776336033891:stage4_suspect_s:stage4_suspect_s.rpy:180x40|block-41-1776336033891:stage5_art_room_crisis:stage5_art_room_crisis.rpy:180x40|block-42-1776336033891:stage5_begin:stage5_begin.rpy:180x40|block-43-1776336033891:stage5_computer_lab_crisis:stage5_computer_lab_crisis.rpy:180x40|block-44-1776336033891:stage5_emergency_meeting:stage5_emergency_meeting.rpy:180x40|block-45-1776336033891:stage5_gym_crisis:stage5_gym_crisis.rpy:180x40|block-46-1776336033891:stage5_phenomenon:stage5_phenomenon.rpy:180x40|block-47-1776336033891:stage5_protect_path:stage5_protect_path.rpy:180x40|block-48-1776336033891:stage5_pursue_path:stage5_pursue_path.rpy:180x40|block-49-1776336033891:stage6_begin:stage6_begin.rpy:180x40|block-5-1776336033891:stage1_announcement:stage1_announcement.rpy:180x40|block-50-1776336033891:stage6_evidence_compiled:stage6_evidence_compiled.rpy:180x40|block-51-1776336033891:stage6_final_clue_library:stage6_final_clue_library.rpy:180x40|block-52-1776336033891:stage6_final_clue_occult:stage6_final_clue_occult.rpy:180x40|block-53-1776336033891:stage6_final_clue_tech:stage6_final_clue_tech.rpy:180x40|block-54-1776336033891:stage6_preparation:stage6_preparation.rpy:180x40|block-55-1776336033891:stage6_solo_investigation:stage6_solo_investigation.rpy:180x40|block-56-1776336033891:stage6_team_formation:stage6_team_formation.rpy:180x40|block-57-1776336033891:stage6_team_strategy:stage6_team_strategy.rpy:180x40|block-58-1776336033891:stage7_aftermath:stage7_aftermath.rpy:180x40|block-59-1776336033891:stage7_battle:stage7_battle.rpy:180x40|block-6-1776336033891:stage1_arrival:stage1_arrival.rpy:180x40|block-60-1776336033891:stage7_begin:stage7_begin.rpy:180x40|block-61-1776336033891:stage7_challenge_echo:stage7_challenge_echo.rpy:180x40|block-62-1776336033891:stage7_help_echo:stage7_help_echo.rpy:180x40|block-63-1776336033891:stage7_integration:stage7_integration.rpy:180x40|block-64-1776336033891:stage7_negotiate_binding:stage7_negotiate_binding.rpy:180x40|block-65-1776336033891:stage7_ritual_self:stage7_ritual_self.rpy:180x40|block-66-1776336033891:stage7_ritual_shared:stage7_ritual_shared.rpy:180x40|block-67-1776336033891:stage7_ritual_sterling:stage7_ritual_sterling.rpy:180x40|block-68-1776336033891:stage8_begin:stage8_begin.rpy:180x40|block-69-1776336033891:stage8_ending_battle_defeat:stage8_ending_battle_defeat.rpy:180x40|block-7-1776336033891:stage1_choice:stage1_choice.rpy:180x40|block-70-1776336033891:stage8_ending_battle_victory:stage8_ending_battle_victory.rpy:180x40|block-71-1776336033891:stage8_ending_bittersweet:stage8_ending_bittersweet.rpy:180x40|block-72-1776336033891:stage8_ending_integration:stage8_ending_integration.rpy:180x40|block-73-1776336033891:stage8_ending_self_sacrifice:stage8_ending_self_sacrifice.rpy:180x40|block-74-1776336033891:stage8_ending_shared_perfect:stage8_ending_shared_perfect.rpy:180x40|block-75-1776336033891:stage8_ending_sterling_sacrifice:stage8_ending_sterling_sacrifice.rpy:180x40|block-76-1776336033891:stage8_epilogue_solo:stage8_epilogue_solo.rpy:180x40|block-77-1776336033891:stage8_epilogue_team:stage8_epilogue_team.rpy:180x40|block-79-1776336033891:start:script.rpy:180x40|block-8-1776336033891:stage1_evening:stage1_evening.rpy:180x40|block-9-1776336033891:stage1_library_notice:stage1_library_notice.rpy:180x40;edges=block-10-1776336033891:stage1_meet_h->block-11-1776336033891:stage1_meet_s:jump|block-10-1776336033891:stage1_meet_h->block-7-1776336033891:stage1_choice:jump|block-11-1776336033891:stage1_meet_s->block-4-1776336033891:clarity_file_maxim:call|block-11-1776336033891:stage1_meet_s->block-7-1776336033891:stage1_choice:jump|block-11-1776336033891:stage1_meet_s->block-8-1776336033891:stage1_evening:jump|block-12-1776336033891:stage1_rumors->block-10-1776336033891:stage1_meet_h:jump|block-12-1776336033891:stage1_rumors->block-5-1776336033891:stage1_announcement:jump|block-14-1776336033891:stage2_begin->block-17-1776336033891:stage2_library_path:jump|block-14-1776336033891:stage2_begin->block-18-1776336033891:stage2_occult_path:jump|block-14-1776336033891:stage2_begin->block-20-1776336033891:stage2_social_path:jump|block-14-1776336033891:stage2_begin->block-22-1776336033891:stage2_tech_path:jump|block-14-1776336033891:stage2_begin->block-7-1776336033891:stage1_choice:jump|block-15-1776336033891:stage2_converge->block-23-1776336033891:stage3_begin:jump|block-16-1776336033891:stage2_library_clue->block-15-1776336033891:stage2_converge:jump|block-17-1776336033891:stage2_library_path->block-16-1776336033891:stage2_library_clue:jump|block-19-1776336033891:stage2_social_clue->block-15-1776336033891:stage2_converge:jump|block-20-1776336033891:stage2_interview_custodian->block-19-1776336033891:stage2_social_clue:jump|block-20-1776336033891:stage2_interview_sterling->block-19-1776336033891:stage2_social_clue:jump|block-20-1776336033891:stage2_interview_student->block-19-1776336033891:stage2_social_clue:jump|block-20-1776336033891:stage2_social_path->block-20-1776336033891:stage2_interview_custodian:jump|block-20-1776336033891:stage2_social_path->block-20-1776336033891:stage2_interview_sterling:implicit|block-20-1776336033891:stage2_social_path->block-20-1776336033891:stage2_interview_sterling:jump|block-20-1776336033891:stage2_social_path->block-20-1776336033891:stage2_interview_student:jump|block-21-1776336033891:stage2_tech_clue->block-15-1776336033891:stage2_converge:jump|block-22-1776336033891:stage2_tech_path->block-21-1776336033891:stage2_tech_clue:jump|block-23-1776336033891:stage3_begin->block-27-1776336033891:stage3_trust_h:jump|block-23-1776336033891:stage3_begin->block-28-1776336033891:stage3_trust_k:jump|block-23-1776336033891:stage3_begin->block-29-1776336033891:stage3_trust_l:jump|block-23-1776336033891:stage3_begin->block-30-1776336033891:stage3_trust_m:jump|block-23-1776336033891:stage3_begin->block-31-1776336033891:stage3_trust_y:jump|block-24-1776336033891:stage3_night->block-34-1776336033891:stage4_begin:jump|block-25-1776336033891:stage3_partnership->block-26-1776336033891:stage3_revelation:jump|block-26-1776336033891:stage3_revelation->block-24-1776336033891:stage3_night:jump|block-27-1776336033891:stage3_trust_h->block-25-1776336033891:stage3_partnership:jump|block-28-1776336033891:stage3_trust_k->block-25-1776336033891:stage3_partnership:jump|block-29-1776336033891:stage3_trust_l->block-25-1776336033891:stage3_partnership:jump|block-30-1776336033891:stage3_trust_m->block-25-1776336033891:stage3_partnership:jump|block-31-1776336033891:stage3_trust_y->block-25-1776336033891:stage3_partnership:jump|block-32-1776336033891:stage4_analyze_clues->block-24-1776336033891:stage3_night:jump|block-32-1776336033891:stage4_analyze_clues->block-35-1776336033891:stage4_theory_binding:jump|block-32-1776336033891:stage4_analyze_clues->block-35-1776336033891:stage4_theory_coexist:jump|block-32-1776336033891:stage4_analyze_clues->block-35-1776336033891:stage4_theory_destroy:jump|block-32-1776336033891:stage4_analyze_clues->block-35-1776336033891:stage4_theory_exit:jump|block-33-1776336033891:stage4_artifact_history->block-39-1776336033891:stage4_garden_event:jump|block-34-1776336033891:stage4_begin->block-33-1776336033891:stage4_artifact_history:jump|block-35-1776336033891:stage4_decision->block-42-1776336033891:stage5_begin:jump|block-35-1776336033891:stage4_theory_binding->block-35-1776336033891:stage4_decision:jump|block-35-1776336033891:stage4_theory_coexist->block-35-1776336033891:stage4_decision:jump|block-35-1776336033891:stage4_theory_destroy->block-35-1776336033891:stage4_decision:jump|block-35-1776336033891:stage4_theory_exit->block-35-1776336033891:stage4_decision:jump|block-36-1776336033891:stage4_echo_desire->block-32-1776336033891:stage4_analyze_clues:jump|block-37-1776336033891:stage4_echo_effects->block-32-1776336033891:stage4_analyze_clues:jump|block-38-1776336033891:stage4_echo_liberation->block-40-1776336033891:stage4_suspect_s:jump|block-39-1776336033891:stage4_garden_event->block-36-1776336033891:stage4_echo_desire:jump|block-39-1776336033891:stage4_garden_event->block-37-1776336033891:stage4_echo_effects:jump|block-39-1776336033891:stage4_garden_event->block-38-1776336033891:stage4_echo_liberation:jump|block-40-1776336033891:stage4_suspect_s->block-32-1776336033891:stage4_analyze_clues:jump|block-41-1776336033891:stage5_art_room_crisis->block-44-1776336033891:stage5_emergency_meeting:jump|block-42-1776336033891:stage5_begin->block-41-1776336033891:stage5_art_room_crisis:jump|block-42-1776336033891:stage5_begin->block-43-1776336033891:stage5_computer_lab_crisis:jump|block-42-1776336033891:stage5_begin->block-45-1776336033891:stage5_gym_crisis:jump|block-43-1776336033891:stage5_computer_lab_crisis->block-44-1776336033891:stage5_emergency_meeting:jump|block-44-1776336033891:stage5_emergency_meeting->block-47-1776336033891:stage5_protect_path:jump|block-44-1776336033891:stage5_emergency_meeting->block-48-1776336033891:stage5_pursue_path:jump|block-45-1776336033891:stage5_gym_crisis->block-44-1776336033891:stage5_emergency_meeting:jump|block-46-1776336033891:stage5_phenomenon->block-44-1776336033891:stage5_emergency_meeting:jump|block-47-1776336033891:stage5_protect_path->block-49-1776336033891:stage6_begin:jump|block-48-1776336033891:stage5_pursue_path->block-49-1776336033891:stage6_begin:jump|block-49-1776336033891:stage6_begin->block-55-1776336033891:stage6_solo_investigation:jump|block-49-1776336033891:stage6_begin->block-56-1776336033891:stage6_team_formation:jump|block-5-1776336033891:stage1_announcement->block-10-1776336033891:stage1_meet_h:jump|block-5-1776336033891:stage1_announcement->block-11-1776336033891:stage1_meet_s:jump|block-50-1776336033891:stage6_evidence_compiled->block-54-1776336033891:stage6_preparation:jump|block-51-1776336033891:stage6_final_clue_library->block-50-1776336033891:stage6_evidence_compiled:jump|block-52-1776336033891:stage6_final_clue_occult->block-50-1776336033891:stage6_evidence_compiled:jump|block-53-1776336033891:stage6_final_clue_tech->block-50-1776336033891:stage6_evidence_compiled:jump|block-54-1776336033891:stage6_preparation->block-60-1776336033891:stage7_begin:jump|block-55-1776336033891:stage6_solo_investigation->block-51-1776336033891:stage6_final_clue_library:jump|block-55-1776336033891:stage6_solo_investigation->block-52-1776336033891:stage6_final_clue_occult:jump|block-55-1776336033891:stage6_solo_investigation->block-53-1776336033891:stage6_final_clue_tech:jump|block-56-1776336033891:stage6_team_formation->block-57-1776336033891:stage6_team_strategy:jump|block-57-1776336033891:stage6_team_strategy->block-50-1776336033891:stage6_evidence_compiled:jump|block-58-1776336033891:stage7_aftermath->block-68-1776336033891:stage8_begin:jump|block-59-1776336033891:stage7_battle->block-58-1776336033891:stage7_aftermath:jump|block-6-1776336033891:stage1_arrival->block-12-1776336033891:stage1_rumors:jump|block-6-1776336033891:stage1_arrival->block-5-1776336033891:stage1_announcement:jump|block-6-1776336033891:stage1_arrival->block-9-1776336033891:stage1_library_notice:jump|block-60-1776336033891:stage7_begin->block-61-1776336033891:stage7_challenge_echo:jump|block-60-1776336033891:stage7_begin->block-62-1776336033891:stage7_help_echo:jump|block-60-1776336033891:stage7_begin->block-64-1776336033891:stage7_negotiate_binding:jump|block-61-1776336033891:stage7_challenge_echo->block-59-1776336033891:stage7_battle:jump|block-61-1776336033891:stage7_challenge_echo->block-62-1776336033891:stage7_help_echo:jump|block-62-1776336033891:stage7_help_echo->block-65-1776336033891:stage7_ritual_self:jump|block-62-1776336033891:stage7_help_echo->block-65-1776336033891:stage7_ritual_self:jump|block-62-1776336033891:stage7_help_echo->block-66-1776336033891:stage7_ritual_shared:jump|block-62-1776336033891:stage7_help_echo->block-67-1776336033891:stage7_ritual_sterling:jump|block-63-1776336033891:stage7_integration->block-58-1776336033891:stage7_aftermath:jump|block-64-1776336033891:stage7_negotiate_binding->block-62-1776336033891:stage7_help_echo:jump|block-64-1776336033891:stage7_negotiate_binding->block-63-1776336033891:stage7_integration:jump|block-65-1776336033891:stage7_ritual_self->block-58-1776336033891:stage7_aftermath:jump|block-66-1776336033891:stage7_ritual_shared->block-58-1776336033891:stage7_aftermath:jump|block-67-1776336033891:stage7_ritual_sterling->block-58-1776336033891:stage7_aftermath:jump|block-68-1776336033891:stage8_begin->block-69-1776336033891:stage8_ending_battle_defeat:jump|block-68-1776336033891:stage8_begin->block-70-1776336033891:stage8_ending_battle_victory:jump|block-68-1776336033891:stage8_begin->block-71-1776336033891:stage8_ending_bittersweet:jump|block-68-1776336033891:stage8_begin->block-72-1776336033891:stage8_ending_integration:jump|block-68-1776336033891:stage8_begin->block-73-1776336033891:stage8_ending_self_sacrifice:jump|block-68-1776336033891:stage8_begin->block-74-1776336033891:stage8_ending_shared_perfect:jump|block-68-1776336033891:stage8_begin->block-75-1776336033891:stage8_ending_sterling_sacrifice:jump|block-69-1776336033891:stage8_ending_battle_defeat->block-76-1776336033891:stage8_epilogue_solo:jump|block-7-1776336033891:stage1_choice->block-8-1776336033891:stage1_evening:jump|block-7-1776336033891:stage1_choice->block-8-1776336033891:stage1_evening:jump|block-7-1776336033891:stage1_choice->block-8-1776336033891:stage1_evening:jump|block-7-1776336033891:stage1_choice->block-8-1776336033891:stage1_evening:jump|block-70-1776336033891:stage8_ending_battle_victory->block-76-1776336033891:stage8_epilogue_solo:jump|block-71-1776336033891:stage8_ending_bittersweet->block-77-1776336033891:stage8_epilogue_team:jump|block-72-1776336033891:stage8_ending_integration->block-77-1776336033891:stage8_epilogue_team:jump|block-73-1776336033891:stage8_ending_self_sacrifice->block-76-1776336033891:stage8_epilogue_solo:jump|block-74-1776336033891:stage8_ending_shared_perfect->block-77-1776336033891:stage8_epilogue_team:jump|block-75-1776336033891:stage8_ending_sterling_sacrifice->block-77-1776336033891:stage8_epilogue_team:jump|block-79-1776336033891:start->block-6-1776336033891:stage1_arrival:jump|block-8-1776336033891:stage1_evening->block-13-1776336033891:TestScriptX:call|block-8-1776336033891:stage1_evening->block-14-1776336033891:stage2_begin:jump|block-9-1776336033891:stage1_library_notice->block-10-1776336033891:stage1_meet_h:jump|block-9-1776336033891:stage1_library_notice->block-11-1776336033891:stage1_meet_s:jump",
-  "routeCanvasHasAutocentered": true,
-  "choiceCanvasHasAutocentered": true,
+  "storyCanvasLayoutFingerprint": "v2;mode=flow-lr;group=none;blocks=game/characters.rpy:320x200|game/debug_placeholders.rpy:320x200|game/gui.rpy:320x200|game/options.rpy:320x200|game/scenes/RopedCovenant.rpy:320x200|game/scenes/stage1/TestScript.rpy:320x200|game/scenes/stage1/stage1_announcement.rpy:320x200|game/scenes/stage1/stage1_arrival.rpy:320x200|game/scenes/stage1/stage1_choice.rpy:320x200|game/scenes/stage1/stage1_evening.rpy:320x200|game/scenes/stage1/stage1_library_notice.rpy:320x200|game/scenes/stage1/stage1_meet_h.rpy:320x200|game/scenes/stage1/stage1_meet_s.rpy:320x200|game/scenes/stage1/stage1_rumors.rpy:320x200|game/scenes/stage2/stage2_begin.rpy:320x200|game/scenes/stage2/stage2_converge.rpy:320x200|game/scenes/stage2/stage2_library_clue.rpy:320x200|game/scenes/stage2/stage2_library_path.rpy:320x200|game/scenes/stage2/stage2_occult_path.rpy:320x200|game/scenes/stage2/stage2_social_clue.rpy:320x200|game/scenes/stage2/stage2_social_path.rpy:320x200|game/scenes/stage2/stage2_tech_clue.rpy:320x200|game/scenes/stage2/stage2_tech_path.rpy:320x200|game/scenes/stage3/stage3_begin.rpy:320x200|game/scenes/stage3/stage3_night.rpy:320x200|game/scenes/stage3/stage3_partnership.rpy:320x200|game/scenes/stage3/stage3_revelation.rpy:320x200|game/scenes/stage3/stage3_trust_h.rpy:320x200|game/scenes/stage3/stage3_trust_k.rpy:320x200|game/scenes/stage3/stage3_trust_l.rpy:320x200|game/scenes/stage3/stage3_trust_m.rpy:320x200|game/scenes/stage3/stage3_trust_y.rpy:320x200|game/scenes/stage4/stage4_analyze_clues.rpy:320x200|game/scenes/stage4/stage4_artifact_history.rpy:320x200|game/scenes/stage4/stage4_begin.rpy:320x200|game/scenes/stage4/stage4_decision.rpy:320x200|game/scenes/stage4/stage4_echo_desire.rpy:320x200|game/scenes/stage4/stage4_echo_effects.rpy:320x200|game/scenes/stage4/stage4_echo_liberation.rpy:320x200|game/scenes/stage4/stage4_garden_event.rpy:320x200|game/scenes/stage4/stage4_suspect_s.rpy:320x200|game/scenes/stage5/stage5_art_room_crisis.rpy:320x200|game/scenes/stage5/stage5_begin.rpy:320x200|game/scenes/stage5/stage5_computer_lab_crisis.rpy:320x200|game/scenes/stage5/stage5_emergency_meeting.rpy:320x200|game/scenes/stage5/stage5_gym_crisis.rpy:320x200|game/scenes/stage5/stage5_phenomenon.rpy:320x200|game/scenes/stage5/stage5_protect_path.rpy:320x200|game/scenes/stage5/stage5_pursue_path.rpy:320x200|game/scenes/stage6/stage6_begin.rpy:320x200|game/scenes/stage6/stage6_evidence_compiled.rpy:320x200|game/scenes/stage6/stage6_final_clue_library.rpy:320x200|game/scenes/stage6/stage6_final_clue_occult.rpy:320x200|game/scenes/stage6/stage6_final_clue_tech.rpy:320x200|game/scenes/stage6/stage6_preparation.rpy:320x200|game/scenes/stage6/stage6_solo_investigation.rpy:320x200|game/scenes/stage6/stage6_team_formation.rpy:320x200|game/scenes/stage6/stage6_team_strategy.rpy:320x200|game/scenes/stage7/stage7_aftermath.rpy:320x200|game/scenes/stage7/stage7_battle.rpy:320x200|game/scenes/stage7/stage7_begin.rpy:320x200|game/scenes/stage7/stage7_challenge_echo.rpy:320x200|game/scenes/stage7/stage7_help_echo.rpy:320x200|game/scenes/stage7/stage7_integration.rpy:320x200|game/scenes/stage7/stage7_negotiate_binding.rpy:320x200|game/scenes/stage7/stage7_ritual_self.rpy:320x200|game/scenes/stage7/stage7_ritual_shared.rpy:320x200|game/scenes/stage7/stage7_ritual_sterling.rpy:320x200|game/scenes/stage8/stage8_begin.rpy:320x200|game/scenes/stage8/stage8_ending_battle_defeat.rpy:320x200|game/scenes/stage8/stage8_ending_battle_victory.rpy:320x200|game/scenes/stage8/stage8_ending_bittersweet.rpy:320x200|game/scenes/stage8/stage8_ending_integration.rpy:320x200|game/scenes/stage8/stage8_ending_self_sacrifice.rpy:320x200|game/scenes/stage8/stage8_ending_shared_perfect.rpy:320x200|game/scenes/stage8/stage8_ending_sterling_sacrifice.rpy:320x200|game/scenes/stage8/stage8_epilogue_solo.rpy:320x200|game/scenes/stage8/stage8_epilogue_team.rpy:320x200|game/screens.rpy:320x200|game/script.rpy:320x200|game/variables.rpy:320x200;links=block-10-1776472411519->block-11-1776472411519:jump|block-10-1776472411519->block-12-1776472411519:jump|block-11-1776472411519->block-12-1776472411519:jump|block-11-1776472411519->block-8-1776472411519:jump|block-12-1776472411519->block-4-1776472411519:call|block-12-1776472411519->block-8-1776472411519:jump|block-12-1776472411519->block-9-1776472411519:jump|block-13-1776472411519->block-11-1776472411519:jump|block-13-1776472411519->block-6-1776472411519:jump|block-14-1776472411519->block-17-1776472411519:jump|block-14-1776472411519->block-18-1776472411519:jump|block-14-1776472411519->block-20-1776472411519:jump|block-14-1776472411519->block-22-1776472411519:jump|block-14-1776472411519->block-8-1776472411519:jump|block-15-1776472411519->block-23-1776472411519:jump|block-16-1776472411519->block-15-1776472411519:jump|block-17-1776472411519->block-16-1776472411519:jump|block-19-1776472411519->block-15-1776472411519:jump|block-20-1776472411519->block-19-1776472411519:jump|block-21-1776472411519->block-15-1776472411519:jump|block-22-1776472411519->block-21-1776472411519:jump|block-23-1776472411519->block-27-1776472411519:jump|block-23-1776472411519->block-28-1776472411519:jump|block-23-1776472411519->block-29-1776472411519:jump|block-23-1776472411519->block-30-1776472411519:jump|block-23-1776472411519->block-31-1776472411519:jump|block-24-1776472411519->block-34-1776472411519:jump|block-25-1776472411519->block-26-1776472411519:jump|block-26-1776472411519->block-24-1776472411519:jump|block-27-1776472411519->block-25-1776472411519:jump|block-28-1776472411519->block-25-1776472411519:jump|block-29-1776472411519->block-25-1776472411519:jump|block-30-1776472411519->block-25-1776472411519:jump|block-31-1776472411519->block-25-1776472411519:jump|block-32-1776472411519->block-24-1776472411519:jump|block-32-1776472411519->block-35-1776472411519:jump|block-33-1776472411519->block-39-1776472411519:jump|block-34-1776472411519->block-33-1776472411519:jump|block-35-1776472411519->block-42-1776472411519:jump|block-36-1776472411519->block-32-1776472411519:jump|block-37-1776472411519->block-32-1776472411519:jump|block-38-1776472411519->block-40-1776472411519:jump|block-39-1776472411519->block-36-1776472411519:jump|block-39-1776472411519->block-37-1776472411519:jump|block-39-1776472411519->block-38-1776472411519:jump|block-40-1776472411519->block-32-1776472411519:jump|block-41-1776472411519->block-44-1776472411519:jump|block-42-1776472411519->block-41-1776472411519:jump|block-42-1776472411519->block-43-1776472411519:jump|block-42-1776472411519->block-45-1776472411519:jump|block-43-1776472411519->block-44-1776472411519:jump|block-44-1776472411519->block-47-1776472411519:jump|block-44-1776472411519->block-48-1776472411519:jump|block-45-1776472411519->block-44-1776472411519:jump|block-46-1776472411519->block-44-1776472411519:jump|block-47-1776472411519->block-49-1776472411519:jump|block-48-1776472411519->block-49-1776472411519:jump|block-49-1776472411519->block-55-1776472411519:jump|block-49-1776472411519->block-56-1776472411519:jump|block-50-1776472411519->block-54-1776472411519:jump|block-51-1776472411519->block-50-1776472411519:jump|block-52-1776472411519->block-50-1776472411519:jump|block-53-1776472411519->block-50-1776472411519:jump|block-54-1776472411519->block-60-1776472411519:jump|block-55-1776472411519->block-51-1776472411519:jump|block-55-1776472411519->block-52-1776472411519:jump|block-55-1776472411519->block-53-1776472411519:jump|block-56-1776472411519->block-57-1776472411519:jump|block-57-1776472411519->block-50-1776472411519:jump|block-58-1776472411519->block-68-1776472411519:jump|block-59-1776472411519->block-58-1776472411519:jump|block-6-1776472411519->block-11-1776472411519:jump|block-6-1776472411519->block-12-1776472411519:jump|block-60-1776472411519->block-61-1776472411519:jump|block-60-1776472411519->block-62-1776472411519:jump|block-60-1776472411519->block-64-1776472411519:jump|block-61-1776472411519->block-59-1776472411519:jump|block-61-1776472411519->block-62-1776472411519:jump|block-62-1776472411519->block-65-1776472411519:jump|block-62-1776472411519->block-66-1776472411519:jump|block-62-1776472411519->block-67-1776472411519:jump|block-63-1776472411519->block-58-1776472411519:jump|block-64-1776472411519->block-62-1776472411519:jump|block-64-1776472411519->block-63-1776472411519:jump|block-65-1776472411519->block-58-1776472411519:jump|block-66-1776472411519->block-58-1776472411519:jump|block-67-1776472411519->block-58-1776472411519:jump|block-68-1776472411519->block-69-1776472411519:jump|block-68-1776472411519->block-70-1776472411519:jump|block-68-1776472411519->block-71-1776472411519:jump|block-68-1776472411519->block-72-1776472411519:jump|block-68-1776472411519->block-73-1776472411519:jump|block-68-1776472411519->block-74-1776472411519:jump|block-68-1776472411519->block-75-1776472411519:jump|block-69-1776472411519->block-76-1776472411519:jump|block-7-1776472411519->block-10-1776472411519:jump|block-7-1776472411519->block-13-1776472411519:jump|block-7-1776472411519->block-6-1776472411519:jump|block-70-1776472411519->block-76-1776472411519:jump|block-71-1776472411519->block-77-1776472411519:jump|block-72-1776472411519->block-77-1776472411519:jump|block-73-1776472411519->block-76-1776472411519:jump|block-74-1776472411519->block-77-1776472411519:jump|block-75-1776472411519->block-77-1776472411519:jump|block-79-1776472411519->block-7-1776472411519:jump|block-8-1776472411519->block-9-1776472411519:jump|block-9-1776472411519->block-14-1776472411519:jump|block-9-1776472411519->block-5-1776472411519:call",
+  "storyCanvasHasAutocentered": false,
+  "routeCanvasLayoutFingerprint": "v2;mode=flow-lr;group=none;nodes=block-10-1776472411519:stage1_library_notice:stage1_library_notice.rpy:180x40|block-11-1776472411519:stage1_meet_h:stage1_meet_h.rpy:180x40|block-12-1776472411519:stage1_meet_s:stage1_meet_s.rpy:180x40|block-13-1776472411519:stage1_rumors:stage1_rumors.rpy:180x40|block-14-1776472411519:stage2_begin:stage2_begin.rpy:180x40|block-15-1776472411519:stage2_converge:stage2_converge.rpy:180x40|block-16-1776472411519:stage2_library_clue:stage2_library_clue.rpy:180x40|block-17-1776472411519:stage2_library_path:stage2_library_path.rpy:180x40|block-18-1776472411519:stage2_occult_path:stage2_occult_path.rpy:180x40|block-19-1776472411519:stage2_social_clue:stage2_social_clue.rpy:180x40|block-20-1776472411519:stage2_interview_custodian:stage2_social_path.rpy:180x40|block-20-1776472411519:stage2_interview_sterling:stage2_social_path.rpy:180x40|block-20-1776472411519:stage2_interview_student:stage2_social_path.rpy:180x40|block-20-1776472411519:stage2_social_path:stage2_social_path.rpy:180x40|block-21-1776472411519:stage2_tech_clue:stage2_tech_clue.rpy:180x40|block-22-1776472411519:stage2_tech_path:stage2_tech_path.rpy:180x40|block-23-1776472411519:stage3_begin:stage3_begin.rpy:180x40|block-24-1776472411519:stage3_night:stage3_night.rpy:180x40|block-25-1776472411519:stage3_partnership:stage3_partnership.rpy:180x40|block-26-1776472411519:stage3_revelation:stage3_revelation.rpy:180x40|block-27-1776472411519:stage3_trust_h:stage3_trust_h.rpy:180x40|block-28-1776472411519:stage3_trust_k:stage3_trust_k.rpy:180x40|block-29-1776472411519:stage3_trust_l:stage3_trust_l.rpy:180x40|block-30-1776472411519:stage3_trust_m:stage3_trust_m.rpy:180x40|block-31-1776472411519:stage3_trust_y:stage3_trust_y.rpy:180x40|block-32-1776472411519:stage4_analyze_clues:stage4_analyze_clues.rpy:180x40|block-33-1776472411519:stage4_artifact_history:stage4_artifact_history.rpy:180x40|block-34-1776472411519:stage4_begin:stage4_begin.rpy:180x40|block-35-1776472411519:stage4_decision:stage4_decision.rpy:180x40|block-35-1776472411519:stage4_theory_binding:stage4_decision.rpy:180x40|block-35-1776472411519:stage4_theory_coexist:stage4_decision.rpy:180x40|block-35-1776472411519:stage4_theory_destroy:stage4_decision.rpy:180x40|block-35-1776472411519:stage4_theory_exit:stage4_decision.rpy:180x40|block-36-1776472411519:stage4_echo_desire:stage4_echo_desire.rpy:180x40|block-37-1776472411519:stage4_echo_effects:stage4_echo_effects.rpy:180x40|block-38-1776472411519:stage4_echo_liberation:stage4_echo_liberation.rpy:180x40|block-39-1776472411519:stage4_garden_event:stage4_garden_event.rpy:180x40|block-4-1776472411519:clarity_file_maxim:RopedCovenant.rpy:180x40|block-40-1776472411519:stage4_suspect_s:stage4_suspect_s.rpy:180x40|block-41-1776472411519:stage5_art_room_crisis:stage5_art_room_crisis.rpy:180x40|block-42-1776472411519:stage5_begin:stage5_begin.rpy:180x40|block-43-1776472411519:stage5_computer_lab_crisis:stage5_computer_lab_crisis.rpy:180x40|block-44-1776472411519:stage5_emergency_meeting:stage5_emergency_meeting.rpy:180x40|block-45-1776472411519:stage5_gym_crisis:stage5_gym_crisis.rpy:180x40|block-46-1776472411519:stage5_phenomenon:stage5_phenomenon.rpy:180x40|block-47-1776472411519:stage5_protect_path:stage5_protect_path.rpy:180x40|block-48-1776472411519:stage5_pursue_path:stage5_pursue_path.rpy:180x40|block-49-1776472411519:stage6_begin:stage6_begin.rpy:180x40|block-5-1776472411519:TestScriptX:TestScript.rpy:180x40|block-50-1776472411519:stage6_evidence_compiled:stage6_evidence_compiled.rpy:180x40|block-51-1776472411519:stage6_final_clue_library:stage6_final_clue_library.rpy:180x40|block-52-1776472411519:stage6_final_clue_occult:stage6_final_clue_occult.rpy:180x40|block-53-1776472411519:stage6_final_clue_tech:stage6_final_clue_tech.rpy:180x40|block-54-1776472411519:stage6_preparation:stage6_preparation.rpy:180x40|block-55-1776472411519:stage6_solo_investigation:stage6_solo_investigation.rpy:180x40|block-56-1776472411519:stage6_team_formation:stage6_team_formation.rpy:180x40|block-57-1776472411519:stage6_team_strategy:stage6_team_strategy.rpy:180x40|block-58-1776472411519:stage7_aftermath:stage7_aftermath.rpy:180x40|block-59-1776472411519:stage7_battle:stage7_battle.rpy:180x40|block-6-1776472411519:stage1_announcement:stage1_announcement.rpy:180x40|block-60-1776472411519:stage7_begin:stage7_begin.rpy:180x40|block-61-1776472411519:stage7_challenge_echo:stage7_challenge_echo.rpy:180x40|block-62-1776472411519:stage7_help_echo:stage7_help_echo.rpy:180x40|block-63-1776472411519:stage7_integration:stage7_integration.rpy:180x40|block-64-1776472411519:stage7_negotiate_binding:stage7_negotiate_binding.rpy:180x40|block-65-1776472411519:stage7_ritual_self:stage7_ritual_self.rpy:180x40|block-66-1776472411519:stage7_ritual_shared:stage7_ritual_shared.rpy:180x40|block-67-1776472411519:stage7_ritual_sterling:stage7_ritual_sterling.rpy:180x40|block-68-1776472411519:stage8_begin:stage8_begin.rpy:180x40|block-69-1776472411519:stage8_ending_battle_defeat:stage8_ending_battle_defeat.rpy:180x40|block-7-1776472411519:stage1_arrival:stage1_arrival.rpy:180x40|block-70-1776472411519:stage8_ending_battle_victory:stage8_ending_battle_victory.rpy:180x40|block-71-1776472411519:stage8_ending_bittersweet:stage8_ending_bittersweet.rpy:180x40|block-72-1776472411519:stage8_ending_integration:stage8_ending_integration.rpy:180x40|block-73-1776472411519:stage8_ending_self_sacrifice:stage8_ending_self_sacrifice.rpy:180x40|block-74-1776472411519:stage8_ending_shared_perfect:stage8_ending_shared_perfect.rpy:180x40|block-75-1776472411519:stage8_ending_sterling_sacrifice:stage8_ending_sterling_sacrifice.rpy:180x40|block-76-1776472411519:stage8_epilogue_solo:stage8_epilogue_solo.rpy:180x40|block-77-1776472411519:stage8_epilogue_team:stage8_epilogue_team.rpy:180x40|block-79-1776472411519:start:script.rpy:180x40|block-8-1776472411519:stage1_choice:stage1_choice.rpy:180x40|block-9-1776472411519:stage1_evening:stage1_evening.rpy:180x40;edges=block-10-1776472411519:stage1_library_notice->block-11-1776472411519:stage1_meet_h:jump|block-10-1776472411519:stage1_library_notice->block-12-1776472411519:stage1_meet_s:jump|block-11-1776472411519:stage1_meet_h->block-12-1776472411519:stage1_meet_s:jump|block-11-1776472411519:stage1_meet_h->block-8-1776472411519:stage1_choice:jump|block-12-1776472411519:stage1_meet_s->block-4-1776472411519:clarity_file_maxim:call|block-12-1776472411519:stage1_meet_s->block-8-1776472411519:stage1_choice:jump|block-12-1776472411519:stage1_meet_s->block-9-1776472411519:stage1_evening:jump|block-13-1776472411519:stage1_rumors->block-11-1776472411519:stage1_meet_h:jump|block-13-1776472411519:stage1_rumors->block-6-1776472411519:stage1_announcement:jump|block-14-1776472411519:stage2_begin->block-17-1776472411519:stage2_library_path:jump|block-14-1776472411519:stage2_begin->block-18-1776472411519:stage2_occult_path:jump|block-14-1776472411519:stage2_begin->block-20-1776472411519:stage2_social_path:jump|block-14-1776472411519:stage2_begin->block-22-1776472411519:stage2_tech_path:jump|block-14-1776472411519:stage2_begin->block-8-1776472411519:stage1_choice:jump|block-15-1776472411519:stage2_converge->block-23-1776472411519:stage3_begin:jump|block-16-1776472411519:stage2_library_clue->block-15-1776472411519:stage2_converge:jump|block-17-1776472411519:stage2_library_path->block-16-1776472411519:stage2_library_clue:jump|block-19-1776472411519:stage2_social_clue->block-15-1776472411519:stage2_converge:jump|block-20-1776472411519:stage2_interview_custodian->block-19-1776472411519:stage2_social_clue:jump|block-20-1776472411519:stage2_interview_sterling->block-19-1776472411519:stage2_social_clue:jump|block-20-1776472411519:stage2_interview_student->block-19-1776472411519:stage2_social_clue:jump|block-20-1776472411519:stage2_social_path->block-20-1776472411519:stage2_interview_custodian:jump|block-20-1776472411519:stage2_social_path->block-20-1776472411519:stage2_interview_sterling:implicit|block-20-1776472411519:stage2_social_path->block-20-1776472411519:stage2_interview_sterling:jump|block-20-1776472411519:stage2_social_path->block-20-1776472411519:stage2_interview_student:jump|block-21-1776472411519:stage2_tech_clue->block-15-1776472411519:stage2_converge:jump|block-22-1776472411519:stage2_tech_path->block-21-1776472411519:stage2_tech_clue:jump|block-23-1776472411519:stage3_begin->block-27-1776472411519:stage3_trust_h:jump|block-23-1776472411519:stage3_begin->block-28-1776472411519:stage3_trust_k:jump|block-23-1776472411519:stage3_begin->block-29-1776472411519:stage3_trust_l:jump|block-23-1776472411519:stage3_begin->block-30-1776472411519:stage3_trust_m:jump|block-23-1776472411519:stage3_begin->block-31-1776472411519:stage3_trust_y:jump|block-24-1776472411519:stage3_night->block-34-1776472411519:stage4_begin:jump|block-25-1776472411519:stage3_partnership->block-26-1776472411519:stage3_revelation:jump|block-26-1776472411519:stage3_revelation->block-24-1776472411519:stage3_night:jump|block-27-1776472411519:stage3_trust_h->block-25-1776472411519:stage3_partnership:jump|block-28-1776472411519:stage3_trust_k->block-25-1776472411519:stage3_partnership:jump|block-29-1776472411519:stage3_trust_l->block-25-1776472411519:stage3_partnership:jump|block-30-1776472411519:stage3_trust_m->block-25-1776472411519:stage3_partnership:jump|block-31-1776472411519:stage3_trust_y->block-25-1776472411519:stage3_partnership:jump|block-32-1776472411519:stage4_analyze_clues->block-24-1776472411519:stage3_night:jump|block-32-1776472411519:stage4_analyze_clues->block-35-1776472411519:stage4_theory_binding:jump|block-32-1776472411519:stage4_analyze_clues->block-35-1776472411519:stage4_theory_coexist:jump|block-32-1776472411519:stage4_analyze_clues->block-35-1776472411519:stage4_theory_destroy:jump|block-32-1776472411519:stage4_analyze_clues->block-35-1776472411519:stage4_theory_exit:jump|block-33-1776472411519:stage4_artifact_history->block-39-1776472411519:stage4_garden_event:jump|block-34-1776472411519:stage4_begin->block-33-1776472411519:stage4_artifact_history:jump|block-35-1776472411519:stage4_decision->block-42-1776472411519:stage5_begin:jump|block-35-1776472411519:stage4_theory_binding->block-35-1776472411519:stage4_decision:jump|block-35-1776472411519:stage4_theory_coexist->block-35-1776472411519:stage4_decision:jump|block-35-1776472411519:stage4_theory_destroy->block-35-1776472411519:stage4_decision:jump|block-35-1776472411519:stage4_theory_exit->block-35-1776472411519:stage4_decision:jump|block-36-1776472411519:stage4_echo_desire->block-32-1776472411519:stage4_analyze_clues:jump|block-37-1776472411519:stage4_echo_effects->block-32-1776472411519:stage4_analyze_clues:jump|block-38-1776472411519:stage4_echo_liberation->block-40-1776472411519:stage4_suspect_s:jump|block-39-1776472411519:stage4_garden_event->block-36-1776472411519:stage4_echo_desire:jump|block-39-1776472411519:stage4_garden_event->block-37-1776472411519:stage4_echo_effects:jump|block-39-1776472411519:stage4_garden_event->block-38-1776472411519:stage4_echo_liberation:jump|block-40-1776472411519:stage4_suspect_s->block-32-1776472411519:stage4_analyze_clues:jump|block-41-1776472411519:stage5_art_room_crisis->block-44-1776472411519:stage5_emergency_meeting:jump|block-42-1776472411519:stage5_begin->block-41-1776472411519:stage5_art_room_crisis:jump|block-42-1776472411519:stage5_begin->block-43-1776472411519:stage5_computer_lab_crisis:jump|block-42-1776472411519:stage5_begin->block-45-1776472411519:stage5_gym_crisis:jump|block-43-1776472411519:stage5_computer_lab_crisis->block-44-1776472411519:stage5_emergency_meeting:jump|block-44-1776472411519:stage5_emergency_meeting->block-47-1776472411519:stage5_protect_path:jump|block-44-1776472411519:stage5_emergency_meeting->block-48-1776472411519:stage5_pursue_path:jump|block-45-1776472411519:stage5_gym_crisis->block-44-1776472411519:stage5_emergency_meeting:jump|block-46-1776472411519:stage5_phenomenon->block-44-1776472411519:stage5_emergency_meeting:jump|block-47-1776472411519:stage5_protect_path->block-49-1776472411519:stage6_begin:jump|block-48-1776472411519:stage5_pursue_path->block-49-1776472411519:stage6_begin:jump|block-49-1776472411519:stage6_begin->block-55-1776472411519:stage6_solo_investigation:jump|block-49-1776472411519:stage6_begin->block-56-1776472411519:stage6_team_formation:jump|block-50-1776472411519:stage6_evidence_compiled->block-54-1776472411519:stage6_preparation:jump|block-51-1776472411519:stage6_final_clue_library->block-50-1776472411519:stage6_evidence_compiled:jump|block-52-1776472411519:stage6_final_clue_occult->block-50-1776472411519:stage6_evidence_compiled:jump|block-53-1776472411519:stage6_final_clue_tech->block-50-1776472411519:stage6_evidence_compiled:jump|block-54-1776472411519:stage6_preparation->block-60-1776472411519:stage7_begin:jump|block-55-1776472411519:stage6_solo_investigation->block-51-1776472411519:stage6_final_clue_library:jump|block-55-1776472411519:stage6_solo_investigation->block-52-1776472411519:stage6_final_clue_occult:jump|block-55-1776472411519:stage6_solo_investigation->block-53-1776472411519:stage6_final_clue_tech:jump|block-56-1776472411519:stage6_team_formation->block-57-1776472411519:stage6_team_strategy:jump|block-57-1776472411519:stage6_team_strategy->block-50-1776472411519:stage6_evidence_compiled:jump|block-58-1776472411519:stage7_aftermath->block-68-1776472411519:stage8_begin:jump|block-59-1776472411519:stage7_battle->block-58-1776472411519:stage7_aftermath:jump|block-6-1776472411519:stage1_announcement->block-11-1776472411519:stage1_meet_h:jump|block-6-1776472411519:stage1_announcement->block-12-1776472411519:stage1_meet_s:jump|block-60-1776472411519:stage7_begin->block-61-1776472411519:stage7_challenge_echo:jump|block-60-1776472411519:stage7_begin->block-62-1776472411519:stage7_help_echo:jump|block-60-1776472411519:stage7_begin->block-64-1776472411519:stage7_negotiate_binding:jump|block-61-1776472411519:stage7_challenge_echo->block-59-1776472411519:stage7_battle:jump|block-61-1776472411519:stage7_challenge_echo->block-62-1776472411519:stage7_help_echo:jump|block-62-1776472411519:stage7_help_echo->block-65-1776472411519:stage7_ritual_self:jump|block-62-1776472411519:stage7_help_echo->block-65-1776472411519:stage7_ritual_self:jump|block-62-1776472411519:stage7_help_echo->block-66-1776472411519:stage7_ritual_shared:jump|block-62-1776472411519:stage7_help_echo->block-67-1776472411519:stage7_ritual_sterling:jump|block-63-1776472411519:stage7_integration->block-58-1776472411519:stage7_aftermath:jump|block-64-1776472411519:stage7_negotiate_binding->block-62-1776472411519:stage7_help_echo:jump|block-64-1776472411519:stage7_negotiate_binding->block-63-1776472411519:stage7_integration:jump|block-65-1776472411519:stage7_ritual_self->block-58-1776472411519:stage7_aftermath:jump|block-66-1776472411519:stage7_ritual_shared->block-58-1776472411519:stage7_aftermath:jump|block-67-1776472411519:stage7_ritual_sterling->block-58-1776472411519:stage7_aftermath:jump|block-68-1776472411519:stage8_begin->block-69-1776472411519:stage8_ending_battle_defeat:jump|block-68-1776472411519:stage8_begin->block-70-1776472411519:stage8_ending_battle_victory:jump|block-68-1776472411519:stage8_begin->block-71-1776472411519:stage8_ending_bittersweet:jump|block-68-1776472411519:stage8_begin->block-72-1776472411519:stage8_ending_integration:jump|block-68-1776472411519:stage8_begin->block-73-1776472411519:stage8_ending_self_sacrifice:jump|block-68-1776472411519:stage8_begin->block-74-1776472411519:stage8_ending_shared_perfect:jump|block-68-1776472411519:stage8_begin->block-75-1776472411519:stage8_ending_sterling_sacrifice:jump|block-69-1776472411519:stage8_ending_battle_defeat->block-76-1776472411519:stage8_epilogue_solo:jump|block-7-1776472411519:stage1_arrival->block-10-1776472411519:stage1_library_notice:jump|block-7-1776472411519:stage1_arrival->block-13-1776472411519:stage1_rumors:jump|block-7-1776472411519:stage1_arrival->block-6-1776472411519:stage1_announcement:jump|block-70-1776472411519:stage8_ending_battle_victory->block-76-1776472411519:stage8_epilogue_solo:jump|block-71-1776472411519:stage8_ending_bittersweet->block-77-1776472411519:stage8_epilogue_team:jump|block-72-1776472411519:stage8_ending_integration->block-77-1776472411519:stage8_epilogue_team:jump|block-73-1776472411519:stage8_ending_self_sacrifice->block-76-1776472411519:stage8_epilogue_solo:jump|block-74-1776472411519:stage8_ending_shared_perfect->block-77-1776472411519:stage8_epilogue_team:jump|block-75-1776472411519:stage8_ending_sterling_sacrifice->block-77-1776472411519:stage8_epilogue_team:jump|block-79-1776472411519:start->block-7-1776472411519:stage1_arrival:jump|block-8-1776472411519:stage1_choice->block-9-1776472411519:stage1_evening:jump|block-8-1776472411519:stage1_choice->block-9-1776472411519:stage1_evening:jump|block-8-1776472411519:stage1_choice->block-9-1776472411519:stage1_evening:jump|block-8-1776472411519:stage1_choice->block-9-1776472411519:stage1_evening:jump|block-9-1776472411519:stage1_evening->block-14-1776472411519:stage2_begin:jump|block-9-1776472411519:stage1_evening->block-5-1776472411519:TestScriptX:call",
+  "routeCanvasHasAutocentered": false,
+  "choiceCanvasHasAutocentered": false,
   "storyBlockLayouts": {
     "game/characters.rpy": {
       "position": {
@@ -56,6 +54,14 @@
       "position": {
         "x": 4900,
         "y": 850
+      },
+      "width": 320,
+      "height": 200
+    },
+    "game/scenes/stage1/TestScript.rpy": {
+      "position": {
+        "x": 6310,
+        "y": 725
       },
       "width": 320,
       "height": 200
@@ -119,14 +125,6 @@
     "game/scenes/stage1/stage1_rumors.rpy": {
       "position": {
         "x": 3020,
-        "y": 725
-      },
-      "width": 320,
-      "height": 200
-    },
-    "game/scenes/stage1/TestScript.rpy": {
-      "position": {
-        "x": 6310,
         "y": 725
       },
       "width": 320,
@@ -670,493 +668,493 @@
     }
   },
   "routeNodeLayouts": {
-    "block-4-1776336033891:clarity_file_maxim": {
+    "block-4-1776472411519:clarity_file_maxim": {
       "position": {
         "x": 1920,
         "y": 430
       }
     },
-    "block-5-1776336033891:stage1_announcement": {
+    "block-5-1776472411519:TestScriptX": {
+      "position": {
+        "x": 2880,
+        "y": 375
+      }
+    },
+    "block-6-1776472411519:stage1_announcement": {
       "position": {
         "x": 960,
         "y": 430
       }
     },
-    "block-6-1776336033891:stage1_arrival": {
+    "block-7-1776472411519:stage1_arrival": {
       "position": {
         "x": 320,
         "y": 430
       }
     },
-    "block-7-1776336033891:stage1_choice": {
+    "block-8-1776472411519:stage1_choice": {
       "position": {
         "x": 2240,
         "y": 430
       }
     },
-    "block-8-1776336033891:stage1_evening": {
+    "block-9-1776472411519:stage1_evening": {
       "position": {
         "x": 2560,
         "y": 430
       }
     },
-    "block-9-1776336033891:stage1_library_notice": {
+    "block-10-1776472411519:stage1_library_notice": {
       "position": {
         "x": 640,
         "y": 485
       }
     },
-    "block-10-1776336033891:stage1_meet_h": {
+    "block-11-1776472411519:stage1_meet_h": {
       "position": {
         "x": 1280,
         "y": 430
       }
     },
-    "block-11-1776336033891:stage1_meet_s": {
+    "block-12-1776472411519:stage1_meet_s": {
       "position": {
         "x": 1600,
         "y": 430
       }
     },
-    "block-12-1776336033891:stage1_rumors": {
+    "block-13-1776472411519:stage1_rumors": {
       "position": {
         "x": 640,
         "y": 375
       }
     },
-    "block-13-1776336033891:TestScriptX": {
-      "position": {
-        "x": 2880,
-        "y": 375
-      }
-    },
-    "block-14-1776336033891:stage2_begin": {
+    "block-14-1776472411519:stage2_begin": {
       "position": {
         "x": 2880,
         "y": 485
       }
     },
-    "block-15-1776336033891:stage2_converge": {
+    "block-15-1776472411519:stage2_converge": {
       "position": {
         "x": 4160,
         "y": 430
       }
     },
-    "block-16-1776336033891:stage2_library_clue": {
+    "block-16-1776472411519:stage2_library_clue": {
       "position": {
         "x": 3520,
         "y": 210
       }
     },
-    "block-17-1776336033891:stage2_library_path": {
+    "block-17-1776472411519:stage2_library_path": {
       "position": {
         "x": 3200,
         "y": 265
       }
     },
-    "block-18-1776336033891:stage2_occult_path": {
+    "block-18-1776472411519:stage2_occult_path": {
       "position": {
         "x": 3200,
         "y": 595
       }
     },
-    "block-19-1776336033891:stage2_social_clue": {
+    "block-19-1776472411519:stage2_social_clue": {
       "position": {
         "x": 3840,
         "y": 430
       }
     },
-    "block-20-1776336033891:stage2_social_path": {
+    "block-20-1776472411519:stage2_social_path": {
       "position": {
         "x": 3200,
         "y": 485
       }
     },
-    "block-20-1776336033891:stage2_interview_sterling": {
+    "block-20-1776472411519:stage2_interview_sterling": {
       "position": {
         "x": 3520,
         "y": 430
       }
     },
-    "block-20-1776336033891:stage2_interview_custodian": {
+    "block-20-1776472411519:stage2_interview_custodian": {
       "position": {
         "x": 3520,
         "y": 540
       }
     },
-    "block-20-1776336033891:stage2_interview_student": {
+    "block-20-1776472411519:stage2_interview_student": {
       "position": {
         "x": 3520,
         "y": 650
       }
     },
-    "block-21-1776336033891:stage2_tech_clue": {
+    "block-21-1776472411519:stage2_tech_clue": {
       "position": {
         "x": 3520,
         "y": 320
       }
     },
-    "block-22-1776336033891:stage2_tech_path": {
+    "block-22-1776472411519:stage2_tech_path": {
       "position": {
         "x": 3200,
         "y": 375
       }
     },
-    "block-23-1776336033891:stage3_begin": {
+    "block-23-1776472411519:stage3_begin": {
       "position": {
         "x": 4480,
         "y": 430
       }
     },
-    "block-24-1776336033891:stage3_night": {
+    "block-24-1776472411519:stage3_night": {
       "position": {
         "x": 5760,
         "y": 430
       }
     },
-    "block-25-1776336033891:stage3_partnership": {
+    "block-25-1776472411519:stage3_partnership": {
       "position": {
         "x": 5120,
         "y": 430
       }
     },
-    "block-26-1776336033891:stage3_revelation": {
+    "block-26-1776472411519:stage3_revelation": {
       "position": {
         "x": 5440,
         "y": 430
       }
     },
-    "block-27-1776336033891:stage3_trust_h": {
+    "block-27-1776472411519:stage3_trust_h": {
       "position": {
         "x": 4800,
         "y": 210
       }
     },
-    "block-28-1776336033891:stage3_trust_k": {
+    "block-28-1776472411519:stage3_trust_k": {
       "position": {
         "x": 4800,
         "y": 540
       }
     },
-    "block-29-1776336033891:stage3_trust_l": {
+    "block-29-1776472411519:stage3_trust_l": {
       "position": {
         "x": 4800,
         "y": 320
       }
     },
-    "block-30-1776336033891:stage3_trust_m": {
+    "block-30-1776472411519:stage3_trust_m": {
       "position": {
         "x": 4800,
         "y": 650
       }
     },
-    "block-31-1776336033891:stage3_trust_y": {
+    "block-31-1776472411519:stage3_trust_y": {
       "position": {
         "x": 4800,
         "y": 430
       }
     },
-    "block-32-1776336033891:stage4_analyze_clues": {
+    "block-32-1776472411519:stage4_analyze_clues": {
       "position": {
         "x": 7680,
         "y": 430
       }
     },
-    "block-33-1776336033891:stage4_artifact_history": {
+    "block-33-1776472411519:stage4_artifact_history": {
       "position": {
         "x": 6400,
         "y": 430
       }
     },
-    "block-34-1776336033891:stage4_begin": {
+    "block-34-1776472411519:stage4_begin": {
       "position": {
         "x": 6080,
         "y": 430
       }
     },
-    "block-35-1776336033891:stage4_theory_coexist": {
+    "block-35-1776472411519:stage4_theory_coexist": {
       "position": {
         "x": 8000,
         "y": 265
       }
     },
-    "block-35-1776336033891:stage4_theory_binding": {
+    "block-35-1776472411519:stage4_theory_binding": {
       "position": {
         "x": 8000,
         "y": 375
       }
     },
-    "block-35-1776336033891:stage4_theory_exit": {
+    "block-35-1776472411519:stage4_theory_exit": {
       "position": {
         "x": 8000,
         "y": 485
       }
     },
-    "block-35-1776336033891:stage4_theory_destroy": {
+    "block-35-1776472411519:stage4_theory_destroy": {
       "position": {
         "x": 8000,
         "y": 595
       }
     },
-    "block-35-1776336033891:stage4_decision": {
+    "block-35-1776472411519:stage4_decision": {
       "position": {
         "x": 8320,
         "y": 430
       }
     },
-    "block-36-1776336033891:stage4_echo_desire": {
+    "block-36-1776472411519:stage4_echo_desire": {
       "position": {
         "x": 7040,
         "y": 430
       }
     },
-    "block-37-1776336033891:stage4_echo_effects": {
+    "block-37-1776472411519:stage4_echo_effects": {
       "position": {
         "x": 7040,
         "y": 540
       }
     },
-    "block-38-1776336033891:stage4_echo_liberation": {
+    "block-38-1776472411519:stage4_echo_liberation": {
       "position": {
         "x": 7040,
         "y": 320
       }
     },
-    "block-39-1776336033891:stage4_garden_event": {
+    "block-39-1776472411519:stage4_garden_event": {
       "position": {
         "x": 6720,
         "y": 430
       }
     },
-    "block-40-1776336033891:stage4_suspect_s": {
+    "block-40-1776472411519:stage4_suspect_s": {
       "position": {
         "x": 7360,
         "y": 430
       }
     },
-    "block-41-1776336033891:stage5_art_room_crisis": {
+    "block-41-1776472411519:stage5_art_room_crisis": {
       "position": {
         "x": 8960,
         "y": 540
       }
     },
-    "block-42-1776336033891:stage5_begin": {
+    "block-42-1776472411519:stage5_begin": {
       "position": {
         "x": 8640,
         "y": 430
       }
     },
-    "block-43-1776336033891:stage5_computer_lab_crisis": {
+    "block-43-1776472411519:stage5_computer_lab_crisis": {
       "position": {
         "x": 8960,
         "y": 430
       }
     },
-    "block-44-1776336033891:stage5_emergency_meeting": {
+    "block-44-1776472411519:stage5_emergency_meeting": {
       "position": {
         "x": 9280,
         "y": 430
       }
     },
-    "block-45-1776336033891:stage5_gym_crisis": {
+    "block-45-1776472411519:stage5_gym_crisis": {
       "position": {
         "x": 8960,
         "y": 320
       }
     },
-    "block-46-1776336033891:stage5_phenomenon": {
+    "block-46-1776472411519:stage5_phenomenon": {
       "position": {
         "x": 0,
         "y": 375
       }
     },
-    "block-47-1776336033891:stage5_protect_path": {
+    "block-47-1776472411519:stage5_protect_path": {
       "position": {
         "x": 9600,
         "y": 375
       }
     },
-    "block-48-1776336033891:stage5_pursue_path": {
+    "block-48-1776472411519:stage5_pursue_path": {
       "position": {
         "x": 9600,
         "y": 485
       }
     },
-    "block-49-1776336033891:stage6_begin": {
+    "block-49-1776472411519:stage6_begin": {
       "position": {
         "x": 9920,
         "y": 430
       }
     },
-    "block-50-1776336033891:stage6_evidence_compiled": {
+    "block-50-1776472411519:stage6_evidence_compiled": {
       "position": {
         "x": 10880,
         "y": 430
       }
     },
-    "block-51-1776336033891:stage6_final_clue_library": {
+    "block-51-1776472411519:stage6_final_clue_library": {
       "position": {
         "x": 10560,
         "y": 375
       }
     },
-    "block-52-1776336033891:stage6_final_clue_occult": {
+    "block-52-1776472411519:stage6_final_clue_occult": {
       "position": {
         "x": 10560,
         "y": 595
       }
     },
-    "block-53-1776336033891:stage6_final_clue_tech": {
+    "block-53-1776472411519:stage6_final_clue_tech": {
       "position": {
         "x": 10560,
         "y": 485
       }
     },
-    "block-54-1776336033891:stage6_preparation": {
+    "block-54-1776472411519:stage6_preparation": {
       "position": {
         "x": 11200,
         "y": 430
       }
     },
-    "block-55-1776336033891:stage6_solo_investigation": {
+    "block-55-1776472411519:stage6_solo_investigation": {
       "position": {
         "x": 10240,
         "y": 485
       }
     },
-    "block-56-1776336033891:stage6_team_formation": {
+    "block-56-1776472411519:stage6_team_formation": {
       "position": {
         "x": 10240,
         "y": 375
       }
     },
-    "block-57-1776336033891:stage6_team_strategy": {
+    "block-57-1776472411519:stage6_team_strategy": {
       "position": {
         "x": 10560,
         "y": 265
       }
     },
-    "block-58-1776336033891:stage7_aftermath": {
+    "block-58-1776472411519:stage7_aftermath": {
       "position": {
         "x": 12800,
         "y": 430
       }
     },
-    "block-59-1776336033891:stage7_battle": {
+    "block-59-1776472411519:stage7_battle": {
       "position": {
         "x": 12160,
         "y": 430
       }
     },
-    "block-60-1776336033891:stage7_begin": {
+    "block-60-1776472411519:stage7_begin": {
       "position": {
         "x": 11520,
         "y": 430
       }
     },
-    "block-61-1776336033891:stage7_challenge_echo": {
+    "block-61-1776472411519:stage7_challenge_echo": {
       "position": {
         "x": 11840,
         "y": 485
       }
     },
-    "block-62-1776336033891:stage7_help_echo": {
+    "block-62-1776472411519:stage7_help_echo": {
       "position": {
         "x": 12160,
         "y": 540
       }
     },
-    "block-63-1776336033891:stage7_integration": {
+    "block-63-1776472411519:stage7_integration": {
       "position": {
         "x": 12160,
         "y": 320
       }
     },
-    "block-64-1776336033891:stage7_negotiate_binding": {
+    "block-64-1776472411519:stage7_negotiate_binding": {
       "position": {
         "x": 11840,
         "y": 375
       }
     },
-    "block-65-1776336033891:stage7_ritual_self": {
+    "block-65-1776472411519:stage7_ritual_self": {
       "position": {
         "x": 12480,
         "y": 320
       }
     },
-    "block-66-1776336033891:stage7_ritual_shared": {
+    "block-66-1776472411519:stage7_ritual_shared": {
       "position": {
         "x": 12480,
         "y": 540
       }
     },
-    "block-67-1776336033891:stage7_ritual_sterling": {
+    "block-67-1776472411519:stage7_ritual_sterling": {
       "position": {
         "x": 12480,
         "y": 430
       }
     },
-    "block-68-1776336033891:stage8_begin": {
+    "block-68-1776472411519:stage8_begin": {
       "position": {
         "x": 13120,
         "y": 430
       }
     },
-    "block-69-1776336033891:stage8_ending_battle_defeat": {
+    "block-69-1776472411519:stage8_ending_battle_defeat": {
       "position": {
         "x": 13440,
         "y": 650
       }
     },
-    "block-70-1776336033891:stage8_ending_battle_victory": {
+    "block-70-1776472411519:stage8_ending_battle_victory": {
       "position": {
         "x": 13440,
         "y": 540
       }
     },
-    "block-71-1776336033891:stage8_ending_bittersweet": {
+    "block-71-1776472411519:stage8_ending_bittersweet": {
       "position": {
         "x": 13440,
         "y": 760
       }
     },
-    "block-72-1776336033891:stage8_ending_integration": {
+    "block-72-1776472411519:stage8_ending_integration": {
       "position": {
         "x": 13440,
         "y": 430
       }
     },
-    "block-73-1776336033891:stage8_ending_self_sacrifice": {
+    "block-73-1776472411519:stage8_ending_self_sacrifice": {
       "position": {
         "x": 13440,
         "y": 100
       }
     },
-    "block-74-1776336033891:stage8_ending_shared_perfect": {
+    "block-74-1776472411519:stage8_ending_shared_perfect": {
       "position": {
         "x": 13440,
         "y": 320
       }
     },
-    "block-75-1776336033891:stage8_ending_sterling_sacrifice": {
+    "block-75-1776472411519:stage8_ending_sterling_sacrifice": {
       "position": {
         "x": 13440,
         "y": 210
       }
     },
-    "block-76-1776336033891:stage8_epilogue_solo": {
+    "block-76-1776472411519:stage8_epilogue_solo": {
       "position": {
         "x": 13760,
         "y": 375
       }
     },
-    "block-77-1776336033891:stage8_epilogue_team": {
+    "block-77-1776472411519:stage8_epilogue_team": {
       "position": {
         "x": 13760,
         "y": 485
       }
     },
-    "block-79-1776336033891:start": {
+    "block-79-1776472411519:start": {
       "position": {
         "x": 0,
         "y": 485
@@ -1165,23 +1163,28 @@
   },
   "openTabs": [
     {
-      "id": "block-5-1776336033891",
+      "id": "block-6-1776472411519",
       "type": "editor",
-      "blockId": "block-5-1776336033891",
+      "blockId": "block-6-1776472411519",
       "filePath": "game/scenes/stage1/stage1_announcement.rpy"
     },
     {
-      "id": "block-39-1776336033891",
+      "id": "block-39-1776472411519",
       "type": "editor",
-      "blockId": "block-39-1776336033891",
+      "blockId": "block-39-1776472411519",
       "filePath": "game/scenes/stage4/stage4_garden_event.rpy"
     },
     {
       "id": "canvas",
       "type": "canvas"
+    },
+    {
+      "id": "scene-1776436021630",
+      "type": "scene-composer",
+      "sceneId": "scene-1776436021630"
     }
   ],
-  "activeTabId": "canvas",
+  "activeTabId": "scene-1776436021630",
   "splitLayout": "none",
   "splitPrimarySize": 600,
   "secondaryOpenTabs": [],
@@ -1355,11 +1358,77 @@
           "blur": 0
         }
       ]
+    },
+    "scene-1776436021630": {
+      "background": null,
+      "sprites": [
+        {
+          "id": "sprite-1776436044979",
+          "image": {
+            "filePath": "game/images/cg/m.png"
+          },
+          "x": 0.27072945861539943,
+          "y": 0.47286794630977524,
+          "zoom": 0.75,
+          "zIndex": 1,
+          "flipH": false,
+          "flipV": false,
+          "rotation": 0,
+          "alpha": 1,
+          "blur": 0,
+          "visible": true,
+          "activeShader": "",
+          "shaderUniforms": {},
+          "colorMode": "colorize",
+          "colorizeBlack": "#36ad14",
+          "colorizeWhite": "#ff0000",
+          "saturation": 2
+        },
+        {
+          "id": "sprite-1776436192460",
+          "image": {
+            "filePath": "game/images/cg/m.png"
+          },
+          "x": 0.839001222875236,
+          "y": 0.4703033380292713,
+          "zoom": 0.77,
+          "zIndex": 2,
+          "flipH": false,
+          "flipV": false,
+          "rotation": 0,
+          "alpha": 1,
+          "blur": 0,
+          "visible": true,
+          "colorMode": "colorize",
+          "colorizeBlack": "#e00b0b",
+          "colorizeWhite": "#ffdd00",
+          "saturation": 1.45
+        },
+        {
+          "id": "sprite-1776472546932",
+          "image": {
+            "filePath": "game/images/cg/l.png"
+          },
+          "x": 0.5320655953555828,
+          "y": 0.4997848388425016,
+          "zoom": 0.93,
+          "zIndex": 3,
+          "flipH": true,
+          "flipV": false,
+          "rotation": null,
+          "alpha": 1,
+          "blur": 0,
+          "visible": true,
+          "colorMode": "colorize",
+          "saturation": 0
+        }
+      ]
     }
   },
   "sceneNames": {
     "scene-1764262740876": "Garden",
-    "scene-1764262795876": "Nascent"
+    "scene-1764262795876": "Nascent",
+    "scene-1776436021630": "Sprite Composer"
   },
   "imagemapCompositions": {
     "imagemap-1775273324257": {

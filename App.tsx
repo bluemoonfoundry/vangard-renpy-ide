@@ -4048,6 +4048,7 @@ const App: React.FC = () => {
         canRedo={canRedo}
         undo={undo}
         redo={redo}
+        hideUndoRedo={openTabs.find(t => t.id === activeTabId)?.type === 'scene-composer'}
         addBlock={() => setCreateBlockModalOpen(true)}
         handleTidyUp={handleActiveCanvasTidyUp}
         handleSave={handleSaveAll}

@@ -9,6 +9,165 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import type { ProjectImage, ImageMetadata, SceneComposition, SceneSprite } from '../types';
 import CopyButton from './CopyButton';
+import SceneSpriteProperties from './SceneSpriteProperties';
+
+// Returns the hue-rotate degrees needed to tint an image from sepia baseline (~38°) to the target hex color
+function hexToHueDeg(hex: string): number {
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const d = max - min;
+    if (d === 0) return 0;
+    let h = 0;
+    if (max === r) h = ((g - b) / d + 6) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    const targetHue = Math.round(h * 60);
+    return (targetHue - 38 + 360) % 360;
+}
+
+// Builds a CSS filter string approximating Ren'Py matrixcolor/shader effects for live preview
+function spriteVisualFilter(sprite: SceneSprite): string {
+    const parts: string[] = [];
+    const colorMode = sprite.colorMode ?? 'none';
+    const saturation = sprite.saturation ?? 1.0;
+    const brightness = sprite.brightness ?? 0;
+    const contrast = sprite.contrast ?? 1.0;
+    const invert = sprite.invert ?? 0;
+    const activeShader = sprite.activeShader ?? '';
+    const uniforms = sprite.shaderUniforms ?? {};
+
+    // renpy.blur uses log2 scale; convert to CSS px via 2^n. Fall back to the legacy blur field.
+    const blurPx = activeShader === 'renpy.blur'
+        ? Math.pow(2, uniforms['u_renpy_blur_log2'] ?? 1)
+        : (sprite.blur ?? 0);
+    if (blurPx > 0) parts.push(`blur(${blurPx.toFixed(1)}px)`);
+
+    if (colorMode === 'tint' && sprite.tintColor) {
+        const hue = hexToHueDeg(sprite.tintColor);
+        parts.push('sepia(1)', `hue-rotate(${hue}deg)`, `saturate(${(saturation * 3).toFixed(2)})`);
+    } else if (colorMode === 'colorize' && sprite.colorizeWhite) {
+        const hue = hexToHueDeg(sprite.colorizeWhite);
+        parts.push('sepia(1)', `hue-rotate(${hue}deg)`, `saturate(${(saturation * 2).toFixed(2)})`);
+    } else if (saturation !== 1.0) {
+        parts.push(`saturate(${saturation})`);
+    }
+
+    if (brightness !== 0) parts.push(`brightness(${(1 + brightness).toFixed(2)})`);
+    if (contrast !== 1.0) parts.push(`contrast(${contrast.toFixed(2)})`);
+    if (invert !== 0) parts.push(`invert(${invert.toFixed(2)})`);
+
+    return parts.length > 0 ? parts.join(' ') : 'none';
+}
+
+// Builds the matrixcolor + shader lines for the Ren'Py ATL code generator
+function spriteEffectCode(sprite: SceneSprite, indent = '    '): string {
+    let code = '';
+    const colorMode = sprite.colorMode ?? 'none';
+    const saturation = sprite.saturation ?? 1.0;
+    const brightness = sprite.brightness ?? 0;
+    const contrast = sprite.contrast ?? 1.0;
+    const invert = sprite.invert ?? 0;
+    const activeShader = sprite.activeShader ?? '';
+    const uniforms = sprite.shaderUniforms ?? {};
+
+    const matrixParts: string[] = [];
+    if (colorMode === 'tint' && sprite.tintColor) {
+        matrixParts.push(`TintMatrix("${sprite.tintColor}")`);
+    } else if (colorMode === 'colorize') {
+        matrixParts.push(`ColorizeMatrix("${sprite.colorizeBlack ?? '#000000'}", "${sprite.colorizeWhite ?? '#ffffff'}")`);
+    }
+    if (saturation !== 1.0) matrixParts.push(`SaturationMatrix(${saturation.toFixed(2)})`);
+    if (brightness !== 0) matrixParts.push(`BrightnessMatrix(${brightness.toFixed(2)})`);
+    if (contrast !== 1.0) matrixParts.push(`ContrastMatrix(${contrast.toFixed(2)})`);
+    if (invert !== 0) matrixParts.push(`InvertMatrix(${invert.toFixed(2)})`);
+    if (matrixParts.length > 0) code += `${indent}matrixcolor ${matrixParts.join(' * ')}\n`;
+
+    if (activeShader) {
+        code += `${indent}shader "${activeShader}"\n`;
+        Object.entries(uniforms).forEach(([k, v]) => {
+            code += `${indent}${k} ${v}\n`;
+        });
+    }
+
+    return code;
+}
+
+interface SpritePreviewImageProps {
+    sprite: SceneSprite;
+    isBackground: boolean;
+}
+
+const SpritePreviewImage: React.FC<SpritePreviewImageProps> = ({ sprite, isBackground }) => {
+    const [naturalSize, setNaturalSize] = React.useState<{ w: number; h: number } | null>(null);
+
+    const isPixelize = sprite.activeShader === 'renpy.pixelize';
+    const uniforms = sprite.shaderUniforms ?? {};
+    const uAmount = uniforms['u_amount'] ?? 0.01;
+
+    const baseTransform = `rotate(${sprite.rotation}deg) scale(${sprite.zoom || 1}) scaleX(${sprite.flipH ? -1 : 1}) scaleY(${sprite.flipV ? -1 : 1})`;
+
+    if (isPixelize && naturalSize) {
+        // Downscale to (blockSize x blockSize) resolution, then CSS-scale back up with pixelated rendering.
+        // u_amount maps 0.001–0.1 → blockSize 1–20 so the effect is visible at typical slider values.
+        const blockSize = Math.max(1, Math.round(uAmount * 200));
+        const downW = Math.max(1, Math.round(naturalSize.w / blockSize));
+        const downH = Math.max(1, Math.round(naturalSize.h / blockSize));
+        const upScale = naturalSize.w / downW;
+
+        return (
+            <div
+                style={{
+                    width: naturalSize.w,
+                    height: naturalSize.h,
+                    overflow: 'hidden',
+                    transform: baseTransform,
+                    transformOrigin: 'center center',
+                    opacity: sprite.alpha ?? 1,
+                    flexShrink: 0,
+                }}
+                className="pointer-events-none block select-none"
+            >
+                <img
+                    src={sprite.image.dataUrl}
+                    width={downW}
+                    height={downH}
+                    style={{
+                        imageRendering: 'pixelated',
+                        transform: `scale(${upScale})`,
+                        transformOrigin: 'top left',
+                        display: 'block',
+                    }}
+                    className="pointer-events-none select-none"
+                />
+            </div>
+        );
+    }
+
+    return (
+        <img
+            src={sprite.image.dataUrl}
+            onLoad={e => {
+                const img = e.currentTarget;
+                setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
+            }}
+            style={{
+                height: isBackground ? '100%' : 'auto',
+                width: isBackground ? '100%' : 'auto',
+                objectFit: isBackground ? 'fill' : undefined,
+                maxWidth: 'none',
+                maxHeight: 'none',
+                transform: baseTransform,
+                transformOrigin: 'center center',
+                opacity: sprite.alpha ?? 1,
+                filter: spriteVisualFilter(sprite),
+            }}
+            className="pointer-events-none block select-none"
+        />
+    );
+};
 
 const PRESET_RESOLUTIONS = [
     { label: '1920×1080 (16:9)', width: 1920, height: 1080 },
@@ -33,7 +192,31 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
     const [isRenaming, setIsRenaming] = useState(false);
     const [editName, setEditName] = useState(sceneName);
     const [isExporting, setIsExporting] = useState(false);
-    
+
+    // Undo / Redo
+    const [undoStack, setUndoStack] = useState<SceneComposition[]>([]);
+    const [redoStack, setRedoStack] = useState<SceneComposition[]>([]);
+    const saveUndo = useCallback(() => {
+        setUndoStack(prev => [...prev.slice(-49), scene]);
+        setRedoStack([]);
+    }, [scene]);
+
+    const handleUndo = useCallback(() => {
+        if (undoStack.length === 0) return;
+        const prev = undoStack[undoStack.length - 1];
+        setRedoStack(r => [scene, ...r.slice(0, 49)]);
+        setUndoStack(u => u.slice(0, -1));
+        onSceneChange(prev);
+    }, [undoStack, scene, onSceneChange]);
+
+    const handleRedo = useCallback(() => {
+        if (redoStack.length === 0) return;
+        const next = redoStack[0];
+        setUndoStack(u => [...u.slice(-49), scene]);
+        setRedoStack(r => r.slice(1));
+        onSceneChange(next);
+    }, [redoStack, scene, onSceneChange]);
+
     // Layer List Drag State
     const [dragOverInfo, setDragOverInfo] = useState<{ id: string, position: 'top' | 'bottom' } | null>(null);
     
@@ -120,6 +303,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                 flipH: false, flipV: false, rotation: 0, alpha: 1.0, blur: 0,
                 visible: true
             };
+            saveUndo();
             onSceneChange(prev => ({ ...prev, background: newBg }));
             setSelectedSpriteId('background');
         } else {
@@ -144,6 +328,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                     blur: 0,
                     visible: true
                 };
+                saveUndo();
                 onSceneChange(prev => ({ ...prev, sprites: [...prev.sprites, newSprite] }));
                 setSelectedSpriteId(newSprite.id);
             }
@@ -156,7 +341,9 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
     };
 
     // Sprite Manipulation
-    const updateSprite = (id: string, updates: Partial<SceneSprite>) => {
+    const updateSprite = useCallback((id: string, updates: Partial<SceneSprite>) => {
+        // Skip undo snapshot during pointer drag — handlePointerDown already captured it
+        if (!draggingId) saveUndo();
         if (id === 'background') {
             onSceneChange(prev => prev.background ? ({ ...prev, background: { ...prev.background, ...updates } }) : prev);
         } else {
@@ -165,7 +352,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                 sprites: prev.sprites.map(s => s.id === id ? { ...s, ...updates } : s)
             }));
         }
-    };
+    }, [draggingId, saveUndo, onSceneChange]);
 
     const toggleVisibility = (id: string) => {
         if (id === 'background') {
@@ -186,6 +373,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
     };
 
     const removeSprite = useCallback((id: string) => {
+        saveUndo();
         if (id === 'background') {
             onSceneChange(prev => ({ ...prev, background: null }));
         } else {
@@ -197,14 +385,20 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             });
         }
         if (selectedSpriteId === id) setSelectedSpriteId(null);
-    }, [onSceneChange, selectedSpriteId]);
+    }, [onSceneChange, selectedSpriteId, saveUndo]);
 
     // Keyboard Shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             // Ignore if typing in an input
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-            
+
+            const mod = e.ctrlKey || e.metaKey;
+
+            // Undo / Redo (handled regardless of selection)
+            if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); handleUndo(); return; }
+            if (mod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); handleRedo(); return; }
+
             if (!selectedSpriteId) return;
 
             if (e.key === 'Escape') {
@@ -230,6 +424,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
 
                 if (dx !== 0 || dy !== 0) {
                     e.preventDefault();
+                    saveUndo();
                     onSceneChange(prev => ({
                         ...prev,
                         sprites: prev.sprites.map(s => {
@@ -255,9 +450,10 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         return () => {
             if (container) container.removeEventListener('keydown', handleKeyDown);
         };
-    }, [onSceneChange, removeSprite, selectedSpriteId]);
+    }, [onSceneChange, removeSprite, selectedSpriteId, handleUndo, handleRedo, saveUndo]);
 
     const moveSpriteToGap = (fromIndex: number, gapIndex: number) => {
+        saveUndo();
         onSceneChange(prev => {
             const newSprites = [...prev.sprites];
             const insertionIndex = fromIndex < gapIndex ? gapIndex - 1 : gapIndex;
@@ -274,6 +470,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
 
     const setSpriteAsBackground = (id: string) => {
         if (id === 'background') return;
+        saveUndo();
         onSceneChange(prev => {
             const sprite = prev.sprites.find(s => s.id === id);
             if (!sprite) return prev;
@@ -327,7 +524,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                 ctx.rotate(bgSprite.rotation * Math.PI / 180);
                 ctx.scale((bgSprite.zoom || 1) * (bgSprite.flipH ? -1 : 1), (bgSprite.zoom || 1) * (bgSprite.flipV ? -1 : 1));
                 ctx.globalAlpha = bgSprite.alpha ?? 1;
-                if (bgSprite.blur) ctx.filter = `blur(${bgSprite.blur}px)`;
+                ctx.filter = spriteVisualFilter(bgSprite);
                 
                 // Draw centered
                 ctx.drawImage(img, -REF_WIDTH / 2, -REF_HEIGHT / 2, REF_WIDTH, REF_HEIGHT);
@@ -344,7 +541,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                     ctx.rotate(sprite.rotation * Math.PI / 180);
                     ctx.scale((sprite.zoom || 1) * (sprite.flipH ? -1 : 1), (sprite.zoom || 1) * (sprite.flipV ? -1 : 1));
                     ctx.globalAlpha = sprite.alpha ?? 1;
-                    if (sprite.blur) ctx.filter = `blur(${sprite.blur}px)`;
+                    ctx.filter = spriteVisualFilter(sprite);
                     
                     // Draw centered at natural size
                     ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
@@ -403,6 +600,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         if (id !== 'background') {
             const sprite = scene.sprites.find(s => s.id === id);
             if (!(sprite?.locked ?? false)) {
+                saveUndo();
                 setDraggingId(id);
                 (e.target as HTMLElement).setPointerCapture(e.pointerId);
             }
@@ -489,10 +687,12 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             if (bg.rotation !== 0) transforms.push(`rotate ${bg.rotation}`);
             if (bg.alpha !== 1.0) transforms.push(`alpha ${bg.alpha}`);
             if (bg.blur > 0) transforms.push(`blur ${bg.blur}`);
-            
+
+            const bgEffects = spriteEffectCode(bg);
             let bgCode: string;
-            if (transforms.length > 0) {
-                bgCode = `scene ${tag}:\n    ${transforms.join('\n    ')}\n`;
+            if (transforms.length > 0 || bgEffects) {
+                bgCode = `scene ${tag}:\n    ${transforms.join('\n    ')}${transforms.length > 0 ? '\n' : ''}${bgEffects}`;
+                if (!bgCode.endsWith('\n')) bgCode += '\n';
             } else {
                 bgCode = `scene ${tag}\n`;
             }
@@ -520,7 +720,8 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             const zStr = ` zorder ${index + 1}`;
             
             // Ren'Py xcenter/ycenter aligns with the visual editor's center point logic
-            let spriteCode = `show ${tag}${zStr}:\n    xcenter ${x} ycenter ${y}${zoomStr}${xzoomStr}${yzoomStr}${rotateStr}${alphaStr}${blurStr}\n`;
+            const effectCode = spriteEffectCode(sprite);
+            let spriteCode = `show ${tag}${zStr}:\n    xcenter ${x} ycenter ${y}${zoomStr}${xzoomStr}${yzoomStr}${rotateStr}${alphaStr}${blurStr}\n${effectCode}`;
             
             if (sprite.visible === false) {
                 spriteCode = spriteCode.split('\n').map(l => l.trim() ? `# ${l}` : l).join('\n');
@@ -539,33 +740,6 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         return scene.sprites.map((s, index) => ({ sprite: s, originalIndex: index })).reverse();
     }, [scene.sprites]);
 
-    // Render Helpers
-    const renderSpriteImage = (sprite: SceneSprite, isBackground: boolean) => (
-        <img 
-            src={sprite.image.dataUrl} 
-            style={{ 
-                height: isBackground ? '100%' : 'auto',
-                width: isBackground ? '100%' : 'auto',
-                objectFit: isBackground ? 'fill' : undefined,
-                maxWidth: 'none',
-                maxHeight: 'none',
-                transform: `rotate(${sprite.rotation}deg) scale(${sprite.zoom || 1}) scaleX(${sprite.flipH ? -1 : 1}) scaleY(${sprite.flipV ? -1 : 1})`,
-                transformOrigin: 'center center',
-                opacity: sprite.alpha ?? 1,
-                filter: sprite.blur ? `blur(${sprite.blur}px)` : 'none',
-            }}
-            className="pointer-events-none block select-none"
-        />
-    );
-
-    const ControlGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-        <div className="flex flex-col space-y-1.5 p-2 bg-gray-50 dark:bg-gray-700/50 rounded border border-gray-200 dark:border-gray-600">
-            <span className="text-[10px] font-bold text-gray-50 dark:text-gray-400 uppercase tracking-wide">{label}</span>
-            <div className="flex items-center space-x-2">
-                {children}
-            </div>
-        </div>
-    );
 
     const handleLayerListDragOver = (e: React.DragEvent, id: string, _originalIndex: number) => {
         e.preventDefault();
@@ -596,17 +770,19 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         } else {
             const [w, h] = val.split('x').map(Number);
             setShowCustomInputs(false);
+            saveUndo();
             onSceneChange(prev => ({ ...prev, resolution: { width: w, height: h } }));
         }
-    }, [onSceneChange]);
+    }, [onSceneChange, saveUndo]);
 
     const applyCustomResolution = useCallback(() => {
         const w = parseInt(customW);
         const h = parseInt(customH);
         if (w > 0 && h > 0) {
+            saveUndo();
             onSceneChange(prev => ({ ...prev, resolution: { width: w, height: h } }));
         }
-    }, [customW, customH, onSceneChange]);
+    }, [customW, customH, onSceneChange, saveUndo]);
 
     const resolutionDropdownValue = (showCustomInputs || isCustomResolution) ? 'custom' : `${REF_WIDTH}x${REF_HEIGHT}`;
     const showResolutionInputs = showCustomInputs || isCustomResolution;
@@ -731,7 +907,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                             style={{ zIndex: 0, pointerEvents: scene.background.locked ? 'none' : 'auto' }}
                             onPointerDown={(e) => handlePointerDown(e, 'background')}
                         >
-                            {renderSpriteImage(scene.background, true)}
+                            <SpritePreviewImage sprite={scene.background} isBackground={true} />
                         </div>
                     )}
                     
@@ -762,7 +938,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                                 onPointerDown={(e) => handlePointerDown(e, sprite.id)}
                                 onWheel={(e) => handleWheel(e, sprite.id)}
                             >
-                                {renderSpriteImage(sprite, false)}
+                                <SpritePreviewImage sprite={sprite} isBackground={false} />
                                 {isSelected && (
                                     <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black/70 text-white text-xs px-2 py-1 rounded whitespace-nowrap pointer-events-none z-[9999]">
                                         X: {sprite.x.toFixed(2)} Y: {sprite.y.toFixed(2)}
@@ -775,133 +951,35 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             </div>
 
             {/* Bottom Panel */}
-            <div className="h-72 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex flex-row flex-shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10">
-                
+            <div className="h-80 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex flex-row flex-shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10">
+
                 {/* Properties Pane (Left) */}
                 <div className="flex-1 flex flex-col min-w-0">
                     <div className="flex-none p-2 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
                         <span className="font-bold text-xs ml-2 text-gray-700 dark:text-gray-300 uppercase tracking-wider">Properties</span>
+                        <span className="text-[9px] text-gray-400 dark:text-gray-500 ml-2" title="Undo/redo scene changes with Ctrl+Z / Ctrl+Y">Ctrl+Z to undo</span>
                         <div className="flex space-x-2">
-                            <button onClick={() => onSceneChange({ background: null, sprites: [] })} className="px-3 py-1 text-xs bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300 rounded hover:bg-red-200 font-medium">Clear All</button>
+                            <button onClick={() => { saveUndo(); onSceneChange({ background: null, sprites: [] }); }} className="px-3 py-1 text-xs bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300 rounded hover:bg-red-200 font-medium">Clear All</button>
                         </div>
                     </div>
-                    
+
                     {/* Properties Controls */}
-                    <div className="p-4 overflow-x-auto flex-1 flex items-start">
-                        {activeSprite ? (
-                            <div className="flex items-start space-x-4">
-                                <ControlGroup label="Transform">
-                                    <div className="flex space-x-1">
-                                        <button 
-                                            onClick={() => updateSprite(activeSprite.id, { flipH: !activeSprite.flipH })} 
-                                            className={`p-1.5 rounded ${activeSprite.flipH ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}`}
-                                            title="Flip Horizontal"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-                                        </button>
-                                        <button 
-                                            onClick={() => updateSprite(activeSprite.id, { flipV: !activeSprite.flipV })} 
-                                            className={`p-1.5 rounded ${activeSprite.flipV ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}`}
-                                            title="Flip Vertical"
-                                        >
-                                            <svg className="w-4 h-4 transform rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-                                        </button>
-                                    </div>
-                                </ControlGroup>
-
-                                <ControlGroup label="Scale & Rotation">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="flex flex-col w-20">
-                                            <span className="text-[9px] text-gray-400 mb-0.5">Zoom</span>
-                                            <input 
-                                                type="number" step="0.1" value={activeSprite.zoom || 1} 
-                                                onChange={(e) => updateSprite(activeSprite.id, { zoom: Math.max(0.1, parseFloat(e.target.value)) })}
-                                                className="w-full text-xs p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                                            />
-                                        </div>
-                                        <div className="flex flex-col w-20">
-                                            <span className="text-[9px] text-gray-400 mb-0.5">Angle</span>
-                                            <input 
-                                                type="number" value={activeSprite.rotation} 
-                                                onChange={(e) => updateSprite(activeSprite.id, { rotation: parseInt(e.target.value) })}
-                                                className="w-full text-xs p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                                            />
-                                        </div>
-                                    </div>
-                                </ControlGroup>
-
-                                <ControlGroup label="Appearance">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="flex flex-col w-28">
-                                            <div className="flex justify-between items-center mb-1">
-                                                <span className="text-[9px] text-gray-400">Opacity</span>
-                                                <input 
-                                                    type="number" 
-                                                    min="0" max="1" step="0.05" 
-                                                    value={activeSprite.alpha ?? 1} 
-                                                    onChange={(e) => updateSprite(activeSprite.id, { alpha: Math.min(1, Math.max(0, parseFloat(e.target.value))) })}
-                                                    className="w-12 text-[10px] p-0.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-right"
-                                                />
-                                            </div>
-                                            <input 
-                                                type="range" min="0" max="1" step="0.05" value={activeSprite.alpha ?? 1} 
-                                                onChange={(e) => updateSprite(activeSprite.id, { alpha: parseFloat(e.target.value) })}
-                                                className="h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-600 w-full"
-                                            />
-                                        </div>
-                                        <div className="flex flex-col w-28">
-                                            <div className="flex justify-between items-center mb-1">
-                                                <span className="text-[9px] text-gray-400">Blur (px)</span>
-                                                <input 
-                                                    type="number" 
-                                                    min="0" max="50" step="1" 
-                                                    value={activeSprite.blur ?? 0} 
-                                                    onChange={(e) => updateSprite(activeSprite.id, { blur: Math.max(0, parseInt(e.target.value) || 0) })}
-                                                    className="w-12 text-[10px] p-0.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-right"
-                                                />
-                                            </div>
-                                            <input 
-                                                type="range" min="0" max="50" step="1" value={activeSprite.blur ?? 0} 
-                                                onChange={(e) => updateSprite(activeSprite.id, { blur: parseInt(e.target.value) })}
-                                                className="h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-600 w-full"
-                                            />
-                                        </div>
-                                    </div>
-                                </ControlGroup>
-
-                                <div className="flex items-center space-x-2 border-l border-gray-200 dark:border-gray-700 pl-4 ml-auto">
-                                    {selectedSpriteId !== 'background' && (
-                                        <>
-                                            <button onClick={() => setSpriteAsBackground(activeSprite.id)} className="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 font-medium whitespace-nowrap">Make BG</button>
-                                            <button onClick={() => removeSprite(activeSprite.id)} className="px-3 py-1.5 text-xs bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/50 font-medium">Delete</button>
-                                        </>
-                                    )}
-                                    {selectedSpriteId === 'background' && (
-                                        <button onClick={() => removeSprite('background')} className="px-3 py-1.5 text-xs bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/50 font-medium">Clear BG</button>
-                                    )}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="w-full h-16 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
-                                <p className="text-sm text-gray-400 dark:text-gray-500 font-medium">Select a layer to edit properties</p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Code Preview */}
-                    <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex-shrink-0">
-                        <div className="flex justify-between items-center px-2 py-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase">Code Preview</span>
-                            <CopyButton text={generatedCode} size="xs" />
-                        </div>
-                        <pre className="p-3 font-mono text-xs overflow-auto text-gray-600 dark:text-gray-400 select-text max-h-24 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                            {generatedCode}
-                        </pre>
+                    <div className="px-4 py-3 overflow-y-auto flex-1">
+                        <SceneSpriteProperties
+                            activeSprite={activeSprite}
+                            selectedSpriteId={selectedSpriteId}
+                            onUpdate={updateSprite}
+                            onRemove={removeSprite}
+                            onSetBackground={setSpriteAsBackground}
+                        />
                     </div>
                 </div>
 
-                {/* Layers Pane (Right) */}
-                <div className="w-64 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col flex-shrink-0">
+                {/* Right Column — Layers + Code Preview */}
+                <div className="flex-1 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col min-w-0">
+
+                {/* Layers Pane */}
+                <div className="flex-1 flex flex-col min-h-0">
                     <div className="p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
                         <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Layers (Foreground Top)</h3>
                     </div>
@@ -1041,6 +1119,19 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                         )}
                     </div>
                 </div>
+
+                    {/* Code Preview */}
+                    <div className="flex-1 flex flex-col min-h-0 border-t border-gray-200 dark:border-gray-700">
+                        <div className="flex-none flex justify-between items-center px-2 py-1 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase">Code Preview</span>
+                            <CopyButton text={generatedCode} size="xs" />
+                        </div>
+                        <pre className="flex-1 p-3 font-mono text-xs overflow-auto text-gray-600 dark:text-gray-400 select-text bg-white dark:bg-gray-800 min-h-0">
+                            {generatedCode}
+                        </pre>
+                    </div>
+
+                </div>{/* end Right Column */}
 
             </div>
         </div>
