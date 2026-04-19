@@ -123,7 +123,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
   // Shared style for canvas switcher buttons
   const canvasBtn = (active: boolean) =>
-    `flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors border-r last:border-r-0 border-gray-200 dark:border-gray-600 ${
+    `flex items-center justify-center p-2 transition-colors border-r last:border-r-0 border-gray-200 dark:border-gray-600 ${
       active
         ? 'bg-indigo-600 text-white'
         : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
@@ -150,7 +150,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
         <ToolbarButton onClick={addBlock} title="New Scene (N)" variant="primary" data-tutorial="new-scene-button">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
-          <span>New Scene</span>
         </ToolbarButton>
 
         <ToolbarButton
@@ -159,7 +158,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
           title={onAddStickyNote ? 'Leave a Note on active canvas' : 'Open a canvas to add notes'}
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v11a3 3 0 106 0V4a2 2 0 00-2-2H4zm1 14a1 1 0 100-2 1 1 0 000 2zm5-1.757l4.9-4.9a2 2 0 000-2.828L13.485 5.1a2 2 0 00-2.828 0L10 5.757v8.486zM16 18H9.071l6-6H16a2 2 0 012 2v2a2 2 0 01-2 2z" clipRule="evenodd" /></svg>
-          <span>Leave a Note</span>
         </ToolbarButton>
 
         <ToolbarButton
@@ -168,7 +166,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
           title={canRedraw ? `Organize ${redrawLabel} Layout` : 'No active canvas to organize'}
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
-          <span>Auto-arrange</span>
         </ToolbarButton>
         <div className="h-6 w-px bg-primary shrink-0" />
 
@@ -183,14 +180,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
               </span>
             )}
           </div>
-          <span>Diagnostics</span>
         </ToolbarButton>
 
         <ToolbarButton onClick={() => onOpenStaticTab('stats')} title="Script Statistics" aria-label="Script Statistics">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
             <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
           </svg>
-          <span>Stats</span>
         </ToolbarButton>
 
         <div className="h-6 w-px bg-primary shrink-0" />
@@ -211,7 +206,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
             </svg>
-            Story
           </button>
           <button
             onClick={() => onOpenStaticTab('route-canvas')}
@@ -222,7 +216,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fillRule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
             </svg>
-            Route
           </button>
           <button
             onClick={() => onOpenStaticTab('choice-canvas')}
@@ -233,7 +226,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fillRule="evenodd" d="M10 2a1 1 0 01.707.293l7 7a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7a1 1 0 010-1.414l7-7A1 1 0 0110 2zm0 3.414L4.414 11 10 16.586 15.586 11 10 5.414z" clipRule="evenodd" />
             </svg>
-            Choice
           </button>
         </div>
       </div>
@@ -241,12 +233,15 @@ const Toolbar: React.FC<ToolbarProps> = ({
       {/* ── Right section: mode toggles + run + save ── */}
       <div className="ml-auto flex items-center space-x-3">
         {/* Drafting Mode Toggle */}
-        <div className="flex items-center space-x-2 mr-2">
-          <span className={`text-xs font-bold ${draftingMode ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>Drafting Mode</span>
+        <div className="flex items-center space-x-1.5 mr-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 shrink-0 ${draftingMode ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+            <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" />
+          </svg>
           <button
             onClick={() => onToggleDraftingMode(!draftingMode)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${draftingMode ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-600'}`}
-            title={draftingMode ? 'Disable Drafting Mode' : 'Enable Drafting Mode'}
+            title={draftingMode ? 'Drafting Mode: ON — click to disable' : 'Drafting Mode: OFF — click to enable'}
             aria-label={draftingMode ? 'Disable Drafting Mode' : 'Enable Drafting Mode'}
           >
             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${draftingMode ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -254,14 +249,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
         </div>
 
         {isGameRunning ? (
-          <button onClick={onStopGame} title="Stop Game" className="flex items-center justify-center rounded-md text-sm font-medium px-3 py-1.5 space-x-2 bg-red-600 hover:bg-red-700 text-white transition-colors">
+          <button onClick={onStopGame} title="Stop Game" aria-label="Stop Game" className="flex items-center justify-center rounded-md text-sm font-medium p-2 bg-red-600 hover:bg-red-700 text-white transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1zm4 0a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
-            <span>Stop</span>
           </button>
         ) : (
-          <button onClick={onRunGame} disabled={!projectRootPath || !isRenpyPathValid} title="Run Project (F5)" className="flex items-center justify-center rounded-md text-sm font-medium px-3 py-1.5 space-x-2 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors">
+          <button onClick={onRunGame} disabled={!projectRootPath || !isRenpyPathValid} title="Run Project (F5)" aria-label="Run Project" className="flex items-center justify-center rounded-md text-sm font-medium p-2 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
-            <span>Run</span>
           </button>
         )}
         <div className="h-6 w-px bg-primary" />
