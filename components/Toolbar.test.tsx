@@ -40,10 +40,10 @@ describe('Toolbar', () => {
   it('renders key toolbar buttons', () => {
     render(<Toolbar {...createProps()} />);
 
-    expect(screen.getByText('New Scene')).toBeInTheDocument();
-    expect(screen.getByText('Leave a Note')).toBeInTheDocument();
-    expect(screen.getByText('Auto-arrange')).toBeInTheDocument();
-    expect(screen.getByText('Run')).toBeInTheDocument();
+    expect(screen.getByTitle('New Scene (N)')).toBeInTheDocument();
+    expect(screen.getByTitle('Leave a Note on active canvas')).toBeInTheDocument();
+    expect(screen.getByTitle('Organize Story Layout')).toBeInTheDocument();
+    expect(screen.getByTitle('Run Project (F5)')).toBeInTheDocument();
   });
 
   it('disables undo button when canUndo is false', () => {
@@ -103,14 +103,14 @@ describe('Toolbar', () => {
 
   it('shows Stop button when game is running', () => {
     render(<Toolbar {...createProps({ isGameRunning: true })} />);
-    expect(screen.getByText('Stop')).toBeInTheDocument();
-    expect(screen.queryByText('Run')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Stop Game')).toBeInTheDocument();
+    expect(screen.queryByTitle('Run Project (F5)')).not.toBeInTheDocument();
   });
 
   it('shows Run button when game is not running', () => {
     render(<Toolbar {...createProps({ isGameRunning: false })} />);
-    expect(screen.getByText('Run')).toBeInTheDocument();
-    expect(screen.queryByText('Stop')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Run Project (F5)')).toBeInTheDocument();
+    expect(screen.queryByTitle('Stop Game')).not.toBeInTheDocument();
   });
 
   it('disables Run button when no project is open', () => {
@@ -141,7 +141,7 @@ describe('Toolbar', () => {
     const user = userEvent.setup();
     render(<Toolbar {...props} />);
 
-    await user.click(screen.getByText('New Scene'));
+    await user.click(screen.getByTitle('New Scene (N)'));
     expect(props.addBlock).toHaveBeenCalledTimes(1);
   });
 
@@ -150,7 +150,7 @@ describe('Toolbar', () => {
     const user = userEvent.setup();
     render(<Toolbar {...props} />);
 
-    await user.click(screen.getByText('Auto-arrange'));
+    await user.click(screen.getByTitle('Organize Story Layout'));
 
     expect(props.handleTidyUp).toHaveBeenCalledTimes(1);
   });
