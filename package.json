@@ -29,13 +29,11 @@
     "release:major": "npm run version:major && npm run build"
   },
   "dependencies": {
-    "@google/genai": "^0.12.0",
     "@monaco-editor/react": "^4.6.0",
     "electron-updater": "^6.8.3",
     "graphology": "^0.26.0",
     "graphology-components": "^1.5.4",
     "graphology-dag": "^0.4.1",
-    "graphology-traversal": "^0.3.1",
     "graphology-types": "^0.24.8",
     "immer": "^10.1.1",
     "jszip": "^3.10.1",
@@ -43,7 +41,6 @@
     "monaco-editor": "^0.45.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-is": "^19.2.5",
     "recharts": "^3.7.0",
     "sharp": "^0.33.5",
     "use-immer": "^0.10.0",

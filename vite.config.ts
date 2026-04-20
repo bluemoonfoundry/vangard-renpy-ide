@@ -81,13 +81,6 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: {
       include: ['use-immer', 'immer'],
     },
-    // Resolve aliases for test environment
-    resolve: {
-      alias: {
-        // useFileSystemManager.ts imports immer from a CDN URL; remap to the local package
-        'https://aistudiocdn.com/immer@^10.1.1': 'immer',
-      },
-    },
     // Vitest test runner configuration
     test: {
       globals: true,

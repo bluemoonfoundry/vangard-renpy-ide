@@ -148,10 +148,10 @@ const App: React.FC = () => {
   // --- State: Scanning ---
   const [imageScanDirectories, setImageScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
   const [audioScanDirectories, setAudioScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
-  const [imagesLastScanned] = useState<number | null>(null);
-  const [audiosLastScanned] = useState<number | null>(null);
-  const [isRefreshingImages] = useState(false);
-  const [isRefreshingAudios] = useState(false);
+  const [imagesLastScanned, setImagesLastScanned] = useState<number | null>(null);
+  const [audiosLastScanned, setAudiosLastScanned] = useState<number | null>(null);
+  const [isRefreshingImages, setIsRefreshingImages] = useState(false);
+  const [isRefreshingAudios, setIsRefreshingAudios] = useState(false);
 
   // --- State: UI & Editor ---
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([{ id: 'canvas', type: 'canvas' }]);
@@ -1810,6 +1810,7 @@ const App: React.FC = () => {
                   if (window.electronAPI) {
                        perfRecorders.recordScanStart();
                        setIsScanningAssets(true);
+                       setIsRefreshingImages(true);
                        Promise.all(paths.map((dirPath) =>
                            window.electronAPI!.scanDirectory(dirPath).then(({ images: scanned }) => {
                                setImages(prev => {
@@ -1834,10 +1835,10 @@ const App: React.FC = () => {
                                    return next;
                                });
                            })
-                       )).finally(() => { perfRecorders.recordScanEnd(); setIsScanningAssets(false); });
+                       )).finally(() => { perfRecorders.recordScanEnd(); setIsScanningAssets(false); setIsRefreshingImages(false); setImagesLastScanned(Date.now()); });
                   }
               }
-              
+
               if (projectData.settings.scannedAudioPaths) {
                   const paths = projectData.settings.scannedAudioPaths;
                   const map = new Map<string, FileSystemDirectoryHandle>();
@@ -1848,6 +1849,7 @@ const App: React.FC = () => {
                   if (window.electronAPI) {
                        perfRecorders.recordScanStart();
                        setIsScanningAssets(true);
+                       setIsRefreshingAudios(true);
                        Promise.all(paths.map((dirPath) =>
                            window.electronAPI!.scanDirectory(dirPath).then(({ audios: scanned }) => {
                                setAudios(prev => {
@@ -1872,7 +1874,7 @@ const App: React.FC = () => {
                                    return next;
                                });
                            })
-                       )).finally(() => { perfRecorders.recordScanEnd(); setIsScanningAssets(false); });
+                       )).finally(() => { perfRecorders.recordScanEnd(); setIsScanningAssets(false); setIsRefreshingAudios(false); setAudiosLastScanned(Date.now()); });
                   }
               }
 
@@ -3599,6 +3601,7 @@ const App: React.FC = () => {
           setImageScanDirectories(prev => new Map(prev).set(path, null as unknown as FileSystemDirectoryHandle));
           perfRecorders.recordScanStart();
           setIsScanningAssets(true);
+          setIsRefreshingImages(true);
           try {
             const { images: scanned } = await window.electronAPI.scanDirectory(path);
             setImages(prev => {
@@ -3611,6 +3614,8 @@ const App: React.FC = () => {
           } finally {
             perfRecorders.recordScanEnd();
             setIsScanningAssets(false);
+            setIsRefreshingImages(false);
+            setImagesLastScanned(Date.now());
           }
           setHasUnsavedSettings(true);
         }
@@ -3620,6 +3625,33 @@ const App: React.FC = () => {
       }
     }
   }, [addToast]);
+
+  const handleRefreshImages = useCallback(async () => {
+    if (!window.electronAPI) return;
+    const paths = Array.from(imageScanDirectories.keys());
+    if (paths.length === 0) return;
+    setIsRefreshingImages(true);
+    perfRecorders.recordScanStart();
+    setIsScanningAssets(true);
+    try {
+      await Promise.all(paths.map((dirPath) =>
+        window.electronAPI!.scanDirectory(dirPath).then(({ images: scanned }) => {
+          setImages(prev => {
+            const next = new Map(prev);
+            scanned.forEach((img) => {
+              if (!next.has(img.path)) next.set(img.path, { ...img, filePath: img.path, isInProject: false, fileHandle: null });
+            });
+            return next;
+          });
+        })
+      ));
+    } finally {
+      perfRecorders.recordScanEnd();
+      setIsScanningAssets(false);
+      setIsRefreshingImages(false);
+      setImagesLastScanned(Date.now());
+    }
+  }, [imageScanDirectories]);
 
   const handleRemoveImageScanDirectory = useCallback((path: string) => {
     setImageScanDirectories(prev => {
@@ -3655,6 +3687,7 @@ const App: React.FC = () => {
           setAudioScanDirectories(prev => new Map(prev).set(path, null as unknown as FileSystemDirectoryHandle));
           perfRecorders.recordScanStart();
           setIsScanningAssets(true);
+          setIsRefreshingAudios(true);
           try {
             const { audios: scanned } = await window.electronAPI.scanDirectory(path);
             setAudios(prev => {
@@ -3667,6 +3700,8 @@ const App: React.FC = () => {
           } finally {
             perfRecorders.recordScanEnd();
             setIsScanningAssets(false);
+            setIsRefreshingAudios(false);
+            setAudiosLastScanned(Date.now());
           }
           setHasUnsavedSettings(true);
         }
@@ -3676,6 +3711,33 @@ const App: React.FC = () => {
       }
     }
   }, [addToast]);
+
+  const handleRefreshAudios = useCallback(async () => {
+    if (!window.electronAPI) return;
+    const paths = Array.from(audioScanDirectories.keys());
+    if (paths.length === 0) return;
+    setIsRefreshingAudios(true);
+    perfRecorders.recordScanStart();
+    setIsScanningAssets(true);
+    try {
+      await Promise.all(paths.map((dirPath) =>
+        window.electronAPI!.scanDirectory(dirPath).then(({ audios: scanned }) => {
+          setAudios(prev => {
+            const next = new Map(prev);
+            scanned.forEach((aud) => {
+              if (!next.has(aud.path)) next.set(aud.path, { ...aud, filePath: aud.path, isInProject: false, fileHandle: null });
+            });
+            return next;
+          });
+        })
+      ));
+    } finally {
+      perfRecorders.recordScanEnd();
+      setIsScanningAssets(false);
+      setIsRefreshingAudios(false);
+      setAudiosLastScanned(Date.now());
+    }
+  }, [audioScanDirectories]);
 
   const handleRemoveAudioScanDirectory = useCallback((path: string) => {
     setAudioScanDirectories(prev => {
@@ -4326,7 +4388,7 @@ const App: React.FC = () => {
                 onOpenImageEditor={handleOpenImageEditorTab}
                 imagesLastScanned={imagesLastScanned}
                 isRefreshingImages={isRefreshingImages}
-                onRefreshImages={() => {/* Logic to re-scan all directories */}}
+                onRefreshImages={handleRefreshImages}
                 
                 // Audio Props
                 projectAudios={audios}
@@ -4338,7 +4400,7 @@ const App: React.FC = () => {
                 onOpenAudioEditor={handleOpenAudioEditorInTab}
                 audiosLastScanned={audiosLastScanned}
                 isRefreshingAudios={isRefreshingAudios}
-                onRefreshAudios={() => {}}
+                onRefreshAudios={handleRefreshAudios}
                 isFileSystemApiSupported={!!window.electronAPI}
                 onHoverHighlightStart={handleHoverHighlightStart}
                 onHoverHighlightEnd={handleHoverHighlightEnd}

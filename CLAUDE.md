@@ -60,11 +60,10 @@ Main process watches the project folder for `.rpy` changes. If the block is clea
 `openTabs: EditorTab[]` tracks open panels. Tabs mount lazily on first activation, then stay mounted-but-hidden to preserve Monaco scroll/state. Valid tab types: `canvas`, `route-canvas`, `choice-canvas`, `editor`, `image`, `audio`, `character`, `scene-composer`, `stats`, `diagnostics`, `punchlist`.
 
 ### Context Providers
-All four wrap the entire app in `App.tsx`:
-- **`AssetContext`** — `projectImages: Map<path, ProjectImage>`, `projectAudios`, `imageMetadata`, `audioMetadata`. Tags and Ren'Py names (`renpyName`) are stored in metadata separately from file paths.
-- **`FileSystemContext`** — file tree CRUD, clipboard state, drag-drop; delegates FS ops to Electron via IPC.
+Only `SearchContext` wraps the app in `App.tsx`:
 - **`SearchContext`** — offloads search state from App to avoid prop drilling; delegates to `electronAPI.searchInProject` for ripgrep-backed search.
-- **`ToastContext`** — `addToast(message, type)` renders a portal at bottom-right.
+
+`App.tsx` manages asset state, file system ops, and toasts directly via `useState`/`useImmer` — no contexts for those.
 
 ### Memoization Discipline
 `App.tsx` aggressively memoizes derived arrays/sets to prevent canvas re-renders on unrelated state changes:
