@@ -242,6 +242,7 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
   const groupRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const noteRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const arrowRefs = useRef<Map<string, SVGGElement>>(new Map());
+  const announceLiveRef = useRef<HTMLDivElement>(null);
 
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
   const [highlightedPath, setHighlightedPath] = useState<Set<string> | null>(null);
@@ -953,6 +954,70 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
     setLabelSearchQuery('');
   }, [blocks, onTransformChange]);
 
+  const announce = useCallback((msg: string) => {
+    if (!announceLiveRef.current) return;
+    announceLiveRef.current.textContent = '';
+    requestAnimationFrame(() => {
+      if (announceLiveRef.current) announceLiveRef.current.textContent = msg;
+    });
+  }, []);
+
+  const handleCanvasKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    const focusedEl = document.activeElement as HTMLElement | null;
+    const blockId = focusedEl?.closest('[data-block-id]')?.getAttribute('data-block-id') ?? null;
+    const block = blockId ? blocks.find(b => b.id === blockId) : null;
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setSelectedBlockIds([]);
+      setSelectedGroupIds([]);
+      announce('Selection cleared');
+      return;
+    }
+
+    if (!block) return;
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      onOpenEditor(block.id);
+      return;
+    }
+
+    const dirMap: Record<string, [number, number]> = {
+      ArrowRight: [1, 0], ArrowLeft: [-1, 0],
+      ArrowDown: [0, 1], ArrowUp: [0, -1],
+    };
+    if (!(e.key in dirMap)) return;
+    e.preventDefault();
+
+    const [dx, dy] = dirMap[e.key];
+    const cx = block.position.x + block.width / 2;
+    const cy = block.position.y + block.height / 2;
+
+    let best: Block | null = null;
+    let bestScore = Infinity;
+    for (const b of visibleBlocks) {
+      if (b.id === block.id) continue;
+      const bx = b.position.x + b.width / 2;
+      const by = b.position.y + b.height / 2;
+      const dot = (bx - cx) * dx + (by - cy) * dy;
+      if (dot <= 0) continue;
+      const perp = Math.abs((bx - cx) * dy - (by - cy) * dx);
+      const dist = Math.hypot(bx - cx, by - cy);
+      if (dist + perp * 1.5 < bestScore) { bestScore = dist + perp * 1.5; best = b; }
+    }
+
+    if (best) {
+      blockRefs.current.get(best.id)?.focus();
+      setSelectedBlockIds([best.id]);
+      const title = best.title ?? best.filePath?.split('/').pop()?.replace(/\.rpy$/, '') ?? 'Block';
+      announce(`${title} focused`);
+    }
+  }, [blocks, visibleBlocks, onOpenEditor, setSelectedBlockIds, setSelectedGroupIds, announce]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
@@ -1041,13 +1106,17 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
   return (
     <div
       ref={canvasRef}
+      role="application"
+      aria-label="Story canvas"
       className="absolute inset-0 overflow-hidden cursor-grab active:cursor-grabbing bg-primary bg-[radial-gradient(var(--dot-color)_1px,transparent_1px)]"
       style={backgroundStyle}
       onPointerDown={handlePointerDown}
       onWheel={handleWheel}
       onContextMenu={handleContextMenu}
+      onKeyDown={handleCanvasKeyDown}
       data-tutorial="story-canvas"
     >
+      <div ref={announceLiveRef} role="status" aria-live="polite" aria-atomic="true" className="sr-only" />
         {blocks.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
           <div className="bg-secondary border border-primary rounded-xl shadow-xl p-8 max-w-sm text-center pointer-events-auto">

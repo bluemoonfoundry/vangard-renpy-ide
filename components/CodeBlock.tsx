@@ -164,6 +164,17 @@ const CodeBlock = forwardRef<HTMLDivElement, CodeBlockProps>(({
 
   const hasInvalidJumps = blockInvalidJumps.length > 0;
 
+  const blockType = isConfigBlock ? 'config' : isScreenBlock ? 'screen' : 'story';
+  const ariaLabel = [
+    `${displayedTitle}, ${blockType} block`,
+    isDirty ? 'unsaved changes' : null,
+    isRoot ? 'story start' : null,
+    isLeaf ? 'story end' : null,
+    hasInvalidJumps ? 'has invalid jumps' : null,
+    diagnosticSeverity ? `has ${diagnosticSeverity}s` : null,
+    isSelected ? 'selected' : null,
+  ].filter(Boolean).join(', ');
+
   // Resolve Styles
   const customColor = block.color && BLOCK_COLORS[block.color] ? BLOCK_COLORS[block.color] : null;
   const defaultColor = BLOCK_COLORS.default;
@@ -228,7 +239,11 @@ const CodeBlock = forwardRef<HTMLDivElement, CodeBlockProps>(({
       ref={ref}
       data-block-id={block.id}
       data-tutorial="canvas-block"
-      className={`code-block-wrapper group absolute ${bgClass} rounded-lg ${diagnosticSeverity ? '' : 'shadow-2xl'} border-2 ${borderClass} ${shadowClass} flex flex-col transition-colors duration-200 ${isDimmed ? 'opacity-30' : ''} ${isFlashing ? 'flash-block' : isHoverHighlighted ? 'pulse-block heatmap-highlight' : ''} ${isEntering ? 'block-enter' : ''} ${isExiting ? 'block-exit' : ''}`}
+      tabIndex={0}
+      role="button"
+      aria-label={ariaLabel}
+      aria-pressed={isSelected}
+      className={`code-block-wrapper group absolute ${bgClass} rounded-lg ${diagnosticSeverity ? '' : 'shadow-2xl'} border-2 ${borderClass} ${shadowClass} flex flex-col transition-colors duration-200 ${isDimmed ? 'opacity-30' : ''} ${isFlashing ? 'flash-block' : isHoverHighlighted ? 'pulse-block heatmap-highlight' : ''} ${isEntering ? 'block-enter' : ''} ${isExiting ? 'block-exit' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1`}
       style={{
         left: block.position.x,
         top: block.position.y,

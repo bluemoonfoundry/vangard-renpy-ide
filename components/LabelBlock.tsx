@@ -47,6 +47,15 @@ const LabelBlock: React.FC<LabelBlockProps> = React.memo(({
 
   const overlayStyle = overlayHighlight ? OVERLAY_STYLES[overlayHighlight] : null;
 
+  const ariaLabel = [
+    `Label: ${node.label}`,
+    isEntry ? 'entry point' : null,
+    isUnreachable ? 'unreachable' : null,
+    isDeadEnd ? 'dead end' : null,
+    overlayStyle ? overlayStyle.title : null,
+    isSelected ? 'selected' : null,
+  ].filter(Boolean).join(', ');
+
   const borderClass = isSelected
     ? 'border-indigo-500 dark:border-indigo-400'
     : overlayStyle
@@ -83,7 +92,11 @@ const LabelBlock: React.FC<LabelBlockProps> = React.memo(({
   return (
     <div
       data-label-node-id={node.id}
-      className={`group label-block-wrapper absolute rounded-md border-2 ${borderClass} ${shadowClass} ${bgClass} flex items-center px-3 space-x-2 cursor-grab transition-all duration-200 ${isDimmed ? 'opacity-20 pointer-events-none' : ''}`}
+      tabIndex={isDimmed ? -1 : 0}
+      role="button"
+      aria-label={ariaLabel}
+      aria-pressed={isSelected}
+      className={`group label-block-wrapper absolute rounded-md border-2 ${borderClass} ${shadowClass} ${bgClass} flex items-center px-3 space-x-2 cursor-grab transition-all duration-200 ${isDimmed ? 'opacity-20 pointer-events-none' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400`}
       style={{
         left: node.position.x,
         top: node.position.y,

@@ -216,6 +216,7 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
   const [showLegend, setShowLegend] = useState(true);
   const svgRef = useRef<SVGSVGElement>(null);
   const canvasAreaRef = useRef<HTMLDivElement>(null);
+  const announceLiveRef = useRef<HTMLDivElement>(null);
   // Interaction state: idle | panning | node-press
   const istate = useRef<{ type: 'idle' | 'panning' | 'node'; nodeId?: string }>({ type: 'idle' });
   const startClient = useRef({ x: 0, y: 0 });
@@ -704,6 +705,69 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
 
   const isEmpty = layoutedNodes.length === 0;
 
+  const announce = useCallback((msg: string) => {
+    if (!announceLiveRef.current) return;
+    announceLiveRef.current.textContent = '';
+    requestAnimationFrame(() => {
+      if (announceLiveRef.current) announceLiveRef.current.textContent = msg;
+    });
+  }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    const focusedEl = document.activeElement;
+    const nodeId = focusedEl?.getAttribute?.('data-ccnid') ?? null;
+    const node = nodeId ? layoutedNodes.find(n => n.id === nodeId) : null;
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setSelectedNodeId(null);
+      announce('Selection cleared');
+      return;
+    }
+
+    if (!node) return;
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      onOpenEditor(node.blockId, node.startLine);
+      return;
+    }
+
+    const dirMap: Record<string, [number, number]> = {
+      ArrowRight: [1, 0], ArrowLeft: [-1, 0],
+      ArrowDown: [0, 1], ArrowUp: [0, -1],
+    };
+    if (!(e.key in dirMap)) return;
+    e.preventDefault();
+
+    const [dx, dy] = dirMap[e.key];
+    const cx = node.position.x + node.width / 2;
+    const cy = node.position.y + node.height / 2;
+
+    let best: typeof node | null = null;
+    let bestScore = Infinity;
+    for (const n of layoutedNodes) {
+      if (n.id === node.id) continue;
+      const nx = n.position.x + n.width / 2;
+      const ny = n.position.y + n.height / 2;
+      const dot = (nx - cx) * dx + (ny - cy) * dy;
+      if (dot <= 0) continue;
+      const perp = Math.abs((nx - cx) * dy - (ny - cy) * dx);
+      const dist = Math.hypot(nx - cx, ny - cy);
+      if (dist + perp * 1.5 < bestScore) { bestScore = dist + perp * 1.5; best = n; }
+    }
+
+    if (best) {
+      const el = svgRef.current?.querySelector(`[data-ccnid="${best.id}"]`) as SVGGElement | null;
+      el?.focus();
+      setSelectedNodeId(best.id);
+      announce(`${best.label} focused`);
+    }
+  }, [layoutedNodes, onOpenEditor, setSelectedNodeId, announce]);
+
   return (
     <div className="relative w-full h-full flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden select-none">
 
@@ -739,7 +803,8 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
       </div>
 
       {/* ── Canvas ── */}
-      <div ref={canvasAreaRef} className="flex-1 relative overflow-hidden">
+      <div ref={canvasAreaRef} role="application" aria-label="Choice canvas" className="flex-1 relative overflow-hidden" onKeyDown={handleKeyDown}>
+        <div ref={announceLiveRef} role="status" aria-live="polite" aria-atomic="true" className="sr-only" />
         {/* ── Canvas Toolbox (top-left) ── */}
         <CanvasToolbox label="Choice Canvas">
           <CanvasLayoutControls
@@ -1106,7 +1171,11 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
                   <g
                     key={id}
                     data-ccnid={id}
-                    style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={[isMenuNode ? `Menu node: ${label}` : `Label node: ${label}`, isSelected ? 'selected' : null].filter(Boolean).join(', ')}
+                    aria-pressed={isSelected}
+                    style={{ cursor: 'pointer', transition: 'opacity 0.15s', outline: 'none' }}
                     opacity={isNodeHighlighted ? 1 : 0.2}
                   >
                     {isMenuNode ? (

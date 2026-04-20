@@ -342,6 +342,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
   const [showOnlyCalls, setShowOnlyCalls] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
+  const announceLiveRef = useRef<HTMLDivElement>(null);
   const pendingDrillDownRef = useRef<string | null>(null);
   const interactionState = useRef<InteractionState>({ type: 'idle' });
   const pointerStartPos = useRef<Position>({ x: 0, y: 0 });
@@ -710,6 +711,70 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
     observer.observe(canvasRef.current);
     return () => observer.disconnect();
   }, []);
+
+  const announce = useCallback((msg: string) => {
+    if (!announceLiveRef.current) return;
+    announceLiveRef.current.textContent = '';
+    requestAnimationFrame(() => {
+      if (announceLiveRef.current) announceLiveRef.current.textContent = msg;
+    });
+  }, []);
+
+  const handleCanvasKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    const focusedEl = document.activeElement as HTMLElement | null;
+    const nodeId = focusedEl?.closest('[data-label-node-id]')?.getAttribute('data-label-node-id') ?? null;
+    const activeNodes = viewLevel === 'file' && fileGraph ? fileGraph.nodes : labelNodes;
+    const node = nodeId ? activeNodes.find(n => n.id === nodeId) : null;
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setSelectedNodeIds([]);
+      announce('Selection cleared');
+      return;
+    }
+
+    if (!node) return;
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      onOpenEditor(node.blockId, node.startLine);
+      return;
+    }
+
+    const dirMap: Record<string, [number, number]> = {
+      ArrowRight: [1, 0], ArrowLeft: [-1, 0],
+      ArrowDown: [0, 1], ArrowUp: [0, -1],
+    };
+    if (!(e.key in dirMap)) return;
+    e.preventDefault();
+
+    const [dx, dy] = dirMap[e.key];
+    const cx = node.position.x + node.width / 2;
+    const cy = node.position.y + node.height / 2;
+
+    let best: typeof node | null = null;
+    let bestScore = Infinity;
+    for (const n of activeNodes) {
+      if (n.id === node.id) continue;
+      const nx = n.position.x + n.width / 2;
+      const ny = n.position.y + n.height / 2;
+      const dot = (nx - cx) * dx + (ny - cy) * dy;
+      if (dot <= 0) continue;
+      const perp = Math.abs((nx - cx) * dy - (ny - cy) * dx);
+      const dist = Math.hypot(nx - cx, ny - cy);
+      if (dist + perp * 1.5 < bestScore) { bestScore = dist + perp * 1.5; best = n; }
+    }
+
+    if (best) {
+      const el = canvasRef.current?.querySelector(`[data-label-node-id="${best.id}"]`) as HTMLElement | null;
+      el?.focus();
+      setSelectedNodeIds([best.id]);
+      announce(`${best.label} focused`);
+    }
+  }, [labelNodes, fileGraph, viewLevel, onOpenEditor, setSelectedNodeIds, announce]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1257,11 +1322,15 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
   return (
     <div
       ref={canvasRef}
+      role="application"
+      aria-label="Route canvas"
       className="absolute inset-0 overflow-hidden cursor-grab active:cursor-grabbing bg-gray-100 dark:bg-gray-900 bg-[radial-gradient(#d4d4d8_1px,transparent_1px)] dark:bg-[radial-gradient(#4b5563_1px,transparent_1px)]"
       style={backgroundStyle}
       onPointerDown={handlePointerDown}
       onContextMenu={handleContextMenu}
+      onKeyDown={handleCanvasKeyDown}
     >
+      <div ref={announceLiveRef} role="status" aria-live="polite" aria-atomic="true" className="sr-only" />
       {/* ── Canvas Toolbox (top-left) — section order: Layout → Nav → Routes → Menu Inspector ── */}
       <CanvasToolbox label="Route Canvas">
         <CanvasLayoutControls
