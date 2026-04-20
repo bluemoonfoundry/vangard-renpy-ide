@@ -222,20 +222,25 @@ Output goes to `release/`. On Windows: run the `.exe` installer. On Mac: open th
 
 ## Toolbar Reference
 
-| Button | Function | Shortcut |
-|--------|----------|----------|
-| **Undo / Redo** | Revert or re-apply canvas and editor changes | `Ctrl+Z` / `Ctrl+Y` |
-| **Add Block** | Create a new blank `.rpy` file on the canvas | `N` |
-| **Add Note** | Add a sticky note to the canvas | — |
-| **Redraw** | Auto-layout blocks by story flow | — |
-| **Diagnostics** | Table of errors, warnings, info, and tasks | - |
-| **Stats** | Project statistics visualization | - |
-| **Story** | Present story canvas tab | - |
-| **Route** | Present route canvas tab | - |
-| **Drafting Mode** | Add placeholders for missing assets | — |
-| **Run** | Launch Ren'Py game (requires SDK path in Settings) | — |
-| **Save All** | Save all unsaved changes to disk | `Ctrl+S` |
-| **Settings** | Theme, editor, SDK path, AI, mouse preferences | — |
+Buttons are arranged left-to-right. The canvas switcher (Story / Route / Choice) sits at the centre; mode toggles and Run/Save live on the right.
+
+| Icon | Button | Function | Shortcut |
+|------|--------|----------|----------|
+| ← | **Undo** | Revert the last canvas or editor change | `Ctrl+Z` |
+| → | **Redo** | Re-apply the last undone change | `Ctrl+Y` |
+| ＋ | **Add Block** | Create a new blank `.rpy` file on the canvas | `N` |
+| ✎ | **Add Note** | Add a sticky note to the active canvas | — |
+| ⊞ | **Redraw** | Auto-layout blocks on the active canvas by story flow | — |
+| ⓘ | **Diagnostics** | Open the diagnostics panel (errors, warnings, info, tasks); shows a red badge when errors are present | — |
+| ▦ | **Stats** | Open the project statistics visualization | — |
+| ⊞ | **Story Canvas** | Switch to the Story Canvas — file-level block flow | — |
+| ‹/› | **Route Canvas** | Switch to the Route Canvas — label-level control flow graph | — |
+| ◇ | **Choice Canvas** | Switch to the Choice Canvas — player-visible choice tree | — |
+| ✏ | **Drafting Mode** | Toggle placeholder images/audio for missing assets; green toggle = on | — |
+| ▶ | **Run** | Launch the Ren'Py game as a child process (requires SDK path in Settings) | `F5` |
+| ⏸ | **Stop** | Stop the running game — replaces Run while the game is active | — |
+| ◱ | **Save All** | Save all unsaved changes to disk; button highlights when there are unsaved changes | `Ctrl+S` |
+| ⚙ | **Settings** | Theme, editor font, SDK path, AI keys, mouse preferences | — |
 
 ---
 
