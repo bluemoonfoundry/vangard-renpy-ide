@@ -15,7 +15,6 @@ jobs:
   test:
     name: Test & Lint
     runs-on: ubuntu-latest
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -42,7 +41,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest, macos-15-intel]
+        include:
+          - os: windows-latest
+            platform: win
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: macos-arm64
+          - os: macos-15-intel
+            platform: macos-intel
 
     steps:
       - name: Check out repository
@@ -62,33 +69,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get build date
-        id: date
-        shell: bash
-        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
-
-      - name: Rename release artifacts to include date
+      - name: Rename release artifacts to static names
         shell: bash
         run: |
-          DATE="${{ steps.date.outputs.date }}"
+          PLATFORM="${{ matrix.platform }}"
+          mkdir -p final-artifacts
+          # Move and rename files to static names to ensure they overwrite on the Release page
           for f in release/*.exe release/*.dmg release/*.AppImage release/*.zip; do
             [ -f "$f" ] || continue
-            dir=$(dirname "$f")
-            base=$(basename "$f")
-            ext="${base##*.}"
-            name="${base%.*}"
-            mv "$f" "$dir/${name}-${DATE}.${ext}"
+            ext="${f##*.}"
+            mv "$f" "final-artifacts/renide-nightly-${PLATFORM}.${ext}"
           done
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: renide-nightly-${{ matrix.os }}-${{ steps.date.outputs.date }}
-          path: |
-            release/*.exe
-            release/*.dmg
-            release/*.AppImage
-            release/*.zip
+          # Using a static name here ensures artifacts are grouped together in the UI
+          name: nightly-build-${{ matrix.platform }}
+          path: final-artifacts/*
 
   publish:
     name: Publish Nightly Release
@@ -107,6 +105,11 @@ jobs:
           path: artifacts/
           merge-multiple: true
 
+      - name: Compute SHA256 checksums
+        run: |
+          cd artifacts
+          sha256sum * > SHA256SUMS.txt
+
       - name: Generate changelog
         id: changelog
         run: |
@@ -118,29 +121,29 @@ jobs:
           echo "$CHANGES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Compute SHA256 checksums
-        run: sha256sum artifacts/* > artifacts/SHA256SUMS.txt
-
       - name: Publish rolling nightly release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: nightly
-          name: "Nightly — ${{ github.run_number }} (${{ github.sha && github.sha || 'main' }})"
+          name: "Nightly Build (Latest)"
           prerelease: true
           make_latest: false
+          # This setting ensures existing files with the same name are overwritten
+          overwrite: true 
           body: |
-            > ⚠️ **Pre-release for power users.** Built from `main` at `${{ github.sha }}`. May be unstable.
+            > ⚠️ **Pre-release for power users.** Built from `main` at `${{ github.sha }}`. 
+            > This release is updated daily. Existing files are overwritten.
 
             ## Changes in the last 24 hours
             ${{ steps.changelog.outputs.changes }}
 
             ## Platform downloads
-            | Platform | Installer |
+            | Platform | Filename |
             |---|---|
-            | macOS (Apple Silicon) | `.dmg` from `macos-latest` |
-            | macOS (Intel) | `.dmg` from `macos-15-intel` |
-            | Windows | `.exe` |
-            | Linux | `.AppImage` |
+            | macOS (Apple Silicon) | `renide-nightly-macos-arm64.dmg` |
+            | macOS (Intel) | `renide-nightly-macos-intel.dmg` |
+            | Windows | `renide-nightly-win.exe` |
+            | Linux | `renide-nightly-linux.AppImage` |
 
-            Checksums: `SHA256SUMS.txt`
+            **Checksums:** See `SHA256SUMS.txt` below.
           files: artifacts/*
