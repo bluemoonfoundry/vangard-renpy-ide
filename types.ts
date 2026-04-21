@@ -446,7 +446,7 @@ export interface DialogueLine {
 }
 
 /**
- * Represents a single label node on the Route Canvas.
+ * Represents a single label node on the Flow Canvas.
  * Each label is a distinct point in the narrative flow.
  * @interface LabelNode
  * @property {string} id - Composite key: `${blockId}:${label}`
@@ -470,7 +470,7 @@ export interface LabelNode {
 }
 
 /**
- * Represents a connection between two label nodes on the Route Canvas.
+ * Represents a connection between two label nodes on the Flow Canvas.
  * Shows the flow of execution from one label to another.
  * @interface RouteLink
  * @property {string} id - Unique identifier for the link
@@ -491,7 +491,7 @@ export interface RouteLink {
 
 /**
  * Represents one identified route (path) through the entire label graph.
- * Used to color-code different narrative paths in the Route Canvas.
+ * Used to color-code different narrative paths in the Flow Canvas.
  * @interface IdentifiedRoute
  * @property {number} id - Unique route identifier
  * @property {string} color - Hex color code for visual representation
@@ -526,8 +526,8 @@ export interface IdentifiedRoute {
  * @property {Map<string, RenpyScreen>} screens - Map of screen name to definition
  * @property {Set<string>} definedImages - Set of image tags defined in code
  * @property {Map<string, Set<string>>} blockTypes - Map of block ID to content types found
- * @property {LabelNode[]} labelNodes - All nodes in Route Canvas visualization
- * @property {RouteLink[]} routeLinks - All connections in Route Canvas
+ * @property {LabelNode[]} labelNodes - All nodes in Flow Canvas visualization
+ * @property {RouteLink[]} routeLinks - All connections in Flow Canvas
  * @property {IdentifiedRoute[]} identifiedRoutes - Identified narrative paths
  * @property {boolean} routesTruncated - True when route enumeration hit the hard cap
  */

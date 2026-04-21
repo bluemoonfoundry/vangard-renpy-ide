@@ -200,7 +200,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
           <button
             onClick={() => onOpenStaticTab('canvas')}
             className={canvasBtn(activeCanvasType === 'story')}
-            title="Story Canvas — file-level block flow"
+            title="Project Canvas — bird's-eye view of your script files"
             aria-pressed={activeCanvasType === 'story'}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -210,7 +210,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
           <button
             onClick={() => onOpenStaticTab('route-canvas')}
             className={canvasBtn(activeCanvasType === 'route')}
-            title="Route Canvas — label-level control flow graph"
+            title="Flow Canvas — trace your story's narrative flow"
             aria-pressed={activeCanvasType === 'route'}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
@@ -220,7 +220,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
           <button
             onClick={() => onOpenStaticTab('choice-canvas')}
             className={canvasBtn(activeCanvasType === 'choice')}
-            title="Choice Canvas — player-visible choice tree"
+            title="Choices Canvas — player decision tree"
             aria-pressed={activeCanvasType === 'choice'}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">

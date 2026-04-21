@@ -773,7 +773,7 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
 
       {/* ── Toolbar ── */}
       <div className="cc-controls flex-none flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-xs z-10">
-        <span className="font-semibold text-gray-600 dark:text-gray-300">Choice Canvas</span>
+        <span className="font-semibold text-gray-600 dark:text-gray-300">Choices Canvas</span>
         <div className="w-px h-4 bg-gray-200 dark:bg-gray-600 shrink-0" />
 
         <button
@@ -806,9 +806,9 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
       <div ref={canvasAreaRef} role="application" aria-label="Choice canvas" className="flex-1 relative overflow-hidden" onKeyDown={handleKeyDown}>
         <div ref={announceLiveRef} role="status" aria-live="polite" aria-atomic="true" className="sr-only" />
         {/* ── Canvas Toolbox (top-left) ── */}
-        <CanvasToolbox label="Choice Canvas">
+        <CanvasToolbox label="Choices Canvas">
           <CanvasLayoutControls
-            canvasLabel="Choice Canvas"
+            canvasLabel="Choices Canvas"
             layoutMode={layoutMode}
             groupingMode={groupingMode}
             onChangeLayoutMode={onChangeLayoutMode}

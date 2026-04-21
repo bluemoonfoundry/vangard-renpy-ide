@@ -1332,9 +1332,9 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
     >
       <div ref={announceLiveRef} role="status" aria-live="polite" aria-atomic="true" className="sr-only" />
       {/* ── Canvas Toolbox (top-left) — section order: Layout → Nav → Routes → Menu Inspector ── */}
-      <CanvasToolbox label="Route Canvas">
+      <CanvasToolbox label="Flow Canvas">
         <CanvasLayoutControls
-          canvasLabel="Route Canvas"
+          canvasLabel="Flow Canvas"
           layoutMode={layoutMode}
           groupingMode={groupingMode}
           onChangeLayoutMode={onChangeLayoutMode}

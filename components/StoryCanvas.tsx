@@ -1133,9 +1133,9 @@ const StoryCanvas: React.FC<StoryCanvasProps> = ({
         </div>
       )}
       {/* ── Canvas Toolbox (top-left) ── */}
-      <CanvasToolbox label="Story Canvas">
+      <CanvasToolbox label="Project Canvas">
         <CanvasLayoutControls
-          canvasLabel="Story Canvas"
+          canvasLabel="Project Canvas"
           layoutMode={layoutMode}
           groupingMode={groupingMode}
           onChangeLayoutMode={onChangeLayoutMode}

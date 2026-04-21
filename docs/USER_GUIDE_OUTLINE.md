@@ -182,7 +182,7 @@
 
 ### 4.1 The Three Canvas System
 
-#### 4.1.1 Story Canvas - File-Level View
+#### 4.1.1 Project Canvas - File-Level View
 - What it shows: .rpy files as draggable blocks
 - Jump and call arrows
 - Block positioning and organization
@@ -197,7 +197,7 @@
 - Grouping modes (connected components, file prefix)
 - Layout modes (flow, hierarchical, circular, clustered flow)
 
-#### 4.1.2 Route Canvas - Label-Level View
+#### 4.1.2 Flow Canvas - Label-Level View
 - What it shows: labels as nodes, jumps/calls as edges
 - Control flow graph
 - Unreachable label detection
@@ -208,7 +208,7 @@
 - Call vs. jump distinction
 - Graph layout algorithms
 
-#### 4.1.3 Choice Canvas - Player Experience View
+#### 4.1.3 Choices Canvas - Player Experience View
 - What it shows: player-facing choices
 - Menu nodes with choice pills
 - Color-coded choice destinations
@@ -319,21 +319,21 @@
 
 ### 5.1 Visualizing Your Narrative
 
-#### 5.1.1 Using the Story Canvas
+#### 5.1.1 Using the Project Canvas
 - See all story files at once
 - Understanding jump connections
 - Identifying story branches
 - Following narrative threads
 - Using role tinting to track character arcs
 
-#### 5.1.2 Using the Route Canvas
+#### 5.1.2 Using the Flow Canvas
 - Tracing control flow
 - Understanding label connections
 - Finding unreachable content
 - Analyzing narrative complexity
 - Highlighting specific routes
 
-#### 5.1.3 Using the Choice Canvas
+#### 5.1.3 Using the Choices Canvas
 - Player perspective
 - Seeing what choices players will encounter
 - Understanding conditional choices
@@ -365,7 +365,7 @@
 - Per-character dialogue counts
 - Finding where characters speak
 - Unused character detection
-- Character filter on Story Canvas
+- Character filter on Project Canvas
 
 ### 5.3 Menu Builder & Choices
 
@@ -379,7 +379,7 @@
 
 #### 5.3.2 Menu Analysis
 - Viewing all menus in project
-- Menu decision inspector on Route Canvas
+- Menu decision inspector on Flow Canvas
 - Understanding choice consequences
 - Testing branching paths
 
@@ -394,9 +394,9 @@
 - Using from any canvas
 
 #### 5.4.2 Toolbox Label Search
-- Story Canvas toolbox
-- Choice Canvas toolbox
-- Route Canvas toolbox
+- Project Canvas toolbox
+- Choices Canvas toolbox
+- Flow Canvas toolbox
 - Filtering and jumping to labels
 
 ### 5.5 Story Flow Visualization
@@ -799,7 +799,7 @@
 
 ### 8.1 Canvas Features
 
-#### 8.1.1 Story Canvas
+#### 8.1.1 Project Canvas
 - Block representation of .rpy files
 - Draggable positioning
 - Jump and call arrows
@@ -822,7 +822,7 @@
 - Delete selected (Delete key)
 - New block (N key)
 
-#### 8.1.2 Route Canvas
+#### 8.1.2 Flow Canvas
 - Label-by-label control flow graph
 - Jump, call, fall-through edges
 - Unreachable label detection
@@ -839,7 +839,7 @@
 - Zoom and pan
 - Minimap
 
-#### 8.1.3 Choice Canvas
+#### 8.1.3 Choices Canvas
 - Player-facing choice view
 - Menu nodes with choice pills
 - Color-coded destinations
@@ -1225,7 +1225,7 @@
 - Is there an API for automation?
 
 ### Appendix D: Glossary of Terms
-- **Block** - A .rpy file represented as a draggable node on the Story Canvas
+- **Block** - A .rpy file represented as a draggable node on the Project Canvas
 - **Canvas** - Visual workspace (Story, Route, or Choice)
 - **Composition** - A saved layout from Scene/ImageMap/Screen Composer
 - **Diagnostics** - Errors, warnings, and info issues detected in the project

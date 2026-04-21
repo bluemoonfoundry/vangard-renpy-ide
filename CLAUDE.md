@@ -82,15 +82,19 @@ Without this, every tab switch recalculates arrays and re-renders the full canva
 ### Three Canvases
 All three canvases share the same pointer-event drag model: global `pointermove`/`pointerup` listeners are attached on `pointerdown` and removed on release — no React synthetic events during drag for performance. Drag state is tracked in a local state machine (`dragging-blocks`, `dragging-groups`, `dragging-notes`), initial positions stored in a Map, deltas applied live.
 
-| | StoryCanvas | RouteCanvas | ChoiceCanvas |
+| | ProjectCanvas | FlowCanvas | ChoicesCanvas |
 |--|-------------|-------------|--------------|
+| **Display Name** | Project Canvas | Flow Canvas | Choices Canvas |
+| **Component File** | `StoryCanvas.tsx` | `RouteCanvas.tsx` | `ChoiceCanvas.tsx` |
 | **Granularity** | Block-level (`.rpy` files) | Label-level | Label-level |
 | **Nodes** | `blocks[]` | `labelNodes[]` | `labelNodes[]` |
 | **Edges** | `analysisResult.links[]` | `routeLinks[]` | `routeLinks[]` + choice pills |
 | **Layout** | `storyCanvasLayout.ts` (4 algorithms) | `routeCanvasLayout.ts` | `routeCanvasLayout.ts` |
 | **Visual uniqueness** | Hash-derived block colors, block-type icons, groups | Hub/branch/menu-heavy badges | Choice pills (6-color rotation), dialogue snippets |
 
-`RenpyAnalysisResult` is the central data structure connecting analysis to all three canvases. Beyond labels/jumps/characters/screens, it carries `labelNodes[]`, `routeLinks[]`, and `identifiedRoutes[]` specifically for Route/Choice Canvas rendering.
+**Note:** Display names changed to Project/Flow/Choices in v0.7.1 for better clarity with non-technical users. Internal component files and state variables still use original names (Story/Route/Choice) to avoid breaking changes.
+
+`RenpyAnalysisResult` is the central data structure connecting analysis to all three canvases. Beyond labels/jumps/characters/screens, it carries `labelNodes[]`, `routeLinks[]`, and `identifiedRoutes[]` specifically for Flow/Choices Canvas rendering.
 
 ### Key Hooks
 | Hook | Purpose |

@@ -6,8 +6,8 @@ This document lists all screenshots needed for the user guide, organized by sect
 
 ### Section 1: Introduction (3-4 screenshots)
 
-- [ ] **intro-story-canvas.png** - Story Canvas showing a medium-sized project with visible blocks, arrows, and the diagnostic glow feature
-- [ ] **intro-three-canvases.png** - Side-by-side comparison showing Story Canvas, Route Canvas, and Choice Canvas
+- [ ] **intro-story-canvas.png** - Project Canvas showing a medium-sized project with visible blocks, arrows, and the diagnostic glow feature
+- [ ] **intro-three-canvases.png** - Side-by-side comparison showing Project Canvas, Flow Canvas, and Choices Canvas
 - [ ] **intro-code-editor.png** - Monaco editor with IntelliSense popup showing label suggestions
 - [ ] **intro-diagnostics-panel.png** - Diagnostics panel with a mix of errors and warnings
 
@@ -22,7 +22,7 @@ This document lists all screenshots needed for the user guide, organized by sect
 
 #### First Launch
 - [ ] **welcome-screen.png** - Welcome screen with "Open Existing Project" and "Create New Project" buttons, recent projects list
-- [ ] **project-opened.png** - Ren'IDE immediately after opening a project (Story Canvas visible, file tree populated)
+- [ ] **project-opened.png** - Ren'IDE immediately after opening a project (Project Canvas visible, file tree populated)
 
 #### New Project Wizard
 - [ ] **wizard-step1.png** - New Project Wizard Step 1 (name and location)
@@ -65,22 +65,22 @@ This document lists all screenshots needed for the user guide, organized by sect
 
 ### Section 4: Core Features Tour (12-15 screenshots)
 
-#### Story Canvas
-- [ ] **story-canvas-basic.png** - Story Canvas with blocks arranged, showing jump/call arrows
+#### Project Canvas
+- [ ] **story-canvas-basic.png** - Project Canvas with blocks arranged, showing jump/call arrows
 - [ ] **story-canvas-diagnostic-glow.png** - Blocks with red and amber diagnostic glow visible
 - [ ] **story-canvas-role-tinting.png** - Role tinting enabled, showing color-coded blocks
 - [ ] **story-canvas-minimap.png** - Minimap visible in corner
 - [ ] **story-canvas-legend.png** - Legend overlay explaining arrow types and colors
 - [ ] **goto-label-palette.png** - Ctrl+G command palette open with search results
 
-#### Route Canvas
-- [ ] **route-canvas-basic.png** - Route Canvas showing label nodes and edges
+#### Flow Canvas
+- [ ] **route-canvas-basic.png** - Flow Canvas showing label nodes and edges
 - [ ] **route-canvas-menu-inspector.png** - Hover popover over a menu node showing choices
 - [ ] **route-canvas-route-highlighting.png** - Route highlighting active, with one path highlighted
 - [ ] **route-list-panel.png** - Route List panel showing multiple routes
 
-#### Choice Canvas
-- [ ] **choice-canvas-basic.png** - Choice Canvas showing menu nodes and choice pills
+#### Choices Canvas
+- [ ] **choice-canvas-basic.png** - Choices Canvas showing menu nodes and choice pills
 - [ ] **choice-canvas-conditional-badges.png** - Choice pills with conditional badges visible
 
 #### Code Editor
@@ -100,13 +100,13 @@ This document lists all screenshots needed for the user guide, organized by sect
 
 ### Section 5: For Writers (8-10 screenshots)
 
-- [ ] **writer-story-canvas-organized.png** - Story Canvas with blocks spatially organized (main story center, side quests off to sides)
+- [ ] **writer-story-canvas-organized.png** - Project Canvas with blocks spatially organized (main story center, side quests off to sides)
 - [ ] **writer-character-filter.png** - Character filter dropdown in toolbox, showing dimmed blocks
 - [ ] **writer-character-manager.png** - Characters tab with multiple characters
 - [ ] **writer-character-editor.png** - Character Editor modal/panel with all fields visible
 - [ ] **writer-menu-builder.png** - Menu Builder interface with choices configured
-- [ ] **writer-route-canvas-path-trace.png** - Route Canvas with a highlighted path from start to ending
-- [ ] **writer-choice-canvas-player-view.png** - Choice Canvas showing player-facing choice text
+- [ ] **writer-route-canvas-path-trace.png** - Flow Canvas with a highlighted path from start to ending
+- [ ] **writer-choice-canvas-player-view.png** - Choices Canvas showing player-facing choice text
 - [ ] **writer-sticky-notes.png** - Canvas with sticky notes attached to blocks
 - [ ] **writer-goto-toolbox.png** - Go-to-Label toolbox search box with dropdown results
 

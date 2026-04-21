@@ -31,9 +31,9 @@ Your `.rpy` files appear as draggable blocks on a canvas. Jump and call connecti
 
 **Three Different Views**
 
-- **Story Canvas** shows your project at the file level—one block per `.rpy` file
-- **Route Canvas** shows your project at the label level—one node per label, with every jump and call visualized
-- **Choice Canvas** shows your project from the player's perspective—what choices will they see, where do they lead, and what conditions guard them?
+- **Project Canvas** shows your project at the file level—one block per `.rpy` file
+- **Flow Canvas** shows your project at the label level—one node per label, with every jump and call visualized
+- **Choices Canvas** shows your project from the player's perspective—what choices will they see, where do they lead, and what conditions guard them?
 
 **Integrated Code Editor**
 A full-featured code editor (powered by the same engine as Visual Studio Code) is built right in. You get syntax highlighting designed specifically for Ren'Py, autocomplete for labels and assets, 28+ built-in code snippets, and the ability to edit multiple files side by side.
@@ -90,7 +90,7 @@ Design branching choices with a visual menu builder. See all the player-facing t
 Jump to any label in your project instantly with the command palette (Ctrl+G). No more scrolling through files trying to find that scene you wrote last week.
 
 **Label-Level Visualization**
-Use the Route Canvas to trace the player's path through your story at the label level. Every `label`, `jump`, and `call` becomes a node or connection, making control flow crystal clear.
+Use the Flow Canvas to trace the player's path through your story at the label level. Every `label`, `jump`, and `call` becomes a node or connection, making control flow crystal clear.
 
 **Dialogue Tracking**
 See per-character dialogue counts and identify characters who might need more screen time or who might be over-represented in certain story sections.
@@ -147,7 +147,7 @@ Analyze your project with metrics like total word count, estimated play time, li
 Configure the path to your Ren'Py SDK installation and run your game directly from the Ren'IDE toolbar. No need to switch to a terminal or the Ren'Py launcher.
 
 **Advanced Canvas Features**
-Use the Route Canvas to understand control flow at a granular level, identify unreachable code, and visualize cyclic structures (loops and recursion). Use the Choice Canvas to test the player experience and verify conditional logic.
+Use the Flow Canvas to understand control flow at a granular level, identify unreachable code, and visualize cyclic structures (loops and recursion). Use the Choices Canvas to test the player experience and verify conditional logic.
 
 Developers benefit from Ren'IDE because it combines the power of a **professional code editor** with **intelligent project analysis** and **visual debugging tools** designed specifically for Ren'Py.
 
@@ -171,7 +171,7 @@ If you're working with other people—whether a small team or a larger studio—
 
 - **Non-technical team members can navigate.** Writers and artists who aren't comfortable in a text editor can use the Canvas views to understand the project structure and find specific scenes or files.
 
-- **The Canvas is a communication tool.** During planning meetings, open the Story Canvas to discuss narrative flow. Use the Route Canvas to identify problematic branches. Use the Choice Canvas to review the player experience.
+- **The Canvas is a communication tool.** During planning meetings, open the Project Canvas to discuss narrative flow. Use the Flow Canvas to identify problematic branches. Use the Choices Canvas to review the player experience.
 
 - **Asset handoffs are clear.** Artists can see exactly which images and audio files are referenced in the script. Programmers can see diagnostic warnings for missing assets.
 
@@ -187,11 +187,11 @@ Teams benefit from Ren'IDE because it creates a **shared understanding** of the 
 
 The most immediate benefit of Ren'IDE is visualization. Instead of mentally reconstructing the flow of your story from dozens of text files, you see it as a graph:
 
-- **File-level view (Story Canvas):** Each `.rpy` file is a block. Arrows show jumps and calls. You can arrange blocks spatially to reflect the narrative structure (e.g., main story on the left, side quests on the right).
+- **File-level view (Project Canvas):** Each `.rpy` file is a block. Arrows show jumps and calls. You can arrange blocks spatially to reflect the narrative structure (e.g., main story on the left, side quests on the right).
 
-- **Label-level view (Route Canvas):** Each label is a node. Edges show every possible transition. You can trace the path from `start` to any ending, see which labels are unreachable, and understand cyclical structures (repeated scenes or loops).
+- **Label-level view (Flow Canvas):** Each label is a node. Edges show every possible transition. You can trace the path from `start` to any ending, see which labels are unreachable, and understand cyclical structures (repeated scenes or loops).
 
-- **Player-facing view (Choice Canvas):** Menu nodes show the actual choice text the player will see. Colored pills lead to destination labels. Conditional badges indicate when choices are guarded by `if` statements.
+- **Player-facing view (Choices Canvas):** Menu nodes show the actual choice text the player will see. Colored pills lead to destination labels. Conditional badges indicate when choices are guarded by `if` statements.
 
 With these three views, you can answer questions that are nearly impossible to answer in a text editor:
 
@@ -209,9 +209,9 @@ Large Ren'Py projects can have hundreds of labels spread across dozens of files.
 
 - Use the label search box in the Canvas toolbox to filter and navigate to labels without a keyboard shortcut.
 
-- Click a block on the Story Canvas to see all the labels it contains, then click a label to open the file in the editor with the cursor positioned on that line.
+- Click a block on the Project Canvas to see all the labels it contains, then click a label to open the file in the editor with the cursor positioned on that line.
 
-- Right-click a `.rpy` file in the Project Explorer and select "Center on Canvas" to instantly locate its block on the Story Canvas.
+- Right-click a `.rpy` file in the Project Explorer and select "Center on Canvas" to instantly locate its block on the Project Canvas.
 
 Navigation is instant and visual. You spend less time hunting for code and more time writing.
 
@@ -354,7 +354,7 @@ Ren'IDE creates a small `.ide` directory in your project folder to store setting
 For most projects (up to several hundred `.rpy` files and a few thousand labels), Ren'IDE performs well on minimum-spec hardware. However, very large projects may benefit from more RAM and faster storage:
 
 - **Large projects (1000+ labels):** 8 GB RAM recommended for smooth canvas rendering and navigation
-- **Complex graphs:** Projects with highly interconnected label graphs (lots of jumps and calls between labels) may experience slower layout computation. The Route Canvas layout algorithm can take several seconds for graphs with thousands of nodes and edges.
+- **Complex graphs:** Projects with highly interconnected label graphs (lots of jumps and calls between labels) may experience slower layout computation. The Flow Canvas layout algorithm can take several seconds for graphs with thousands of nodes and edges.
 - **Many assets (1000+ images/audio):** Asset thumbnails are generated asynchronously, but initial loading may be slower on HDDs. An SSD significantly improves asset browsing performance.
 
 If you experience performance issues with a large project, consider:
@@ -853,7 +853,7 @@ When you open a project, Ren'IDE performs a comprehensive analysis:
    - Image definitions
    - Dialogue lines
 3. **Canvas generation:** Creates blocks for each `.rpy` file and draws arrows for jumps and calls
-4. **Route graph construction:** Builds the label-level graph for the Route Canvas
+4. **Route graph construction:** Builds the label-level graph for the Flow Canvas
 5. **Asset scanning:** Scans `game/images/` and `game/audio/` for asset files
 6. **Diagnostic generation:** Analyzes the project for errors and warnings
 
@@ -863,7 +863,7 @@ For small projects (< 50 files, < 500 labels), this takes a few seconds. For lar
 
 After analysis, you'll see:
 
-- **Story Canvas (center):** Each `.rpy` file is represented as a draggable block. Arrows show jumps and calls between files. If this is the first time opening the project, blocks will be positioned automatically.
+- **Project Canvas (center):** Each `.rpy` file is represented as a draggable block. Arrows show jumps and calls between files. If this is the first time opening the project, blocks will be positioned automatically.
 
 - **Project Explorer (left sidebar):** A tree view of your project's file structure. You can navigate, create, rename, and delete files and folders here.
 
@@ -989,7 +989,7 @@ Ren'IDE will:
 
 You'll see:
 
-- A single block on the Story Canvas labeled `script.rpy`
+- A single block on the Project Canvas labeled `script.rpy`
 - An empty Project Explorer tree (just the `game/` folder and its subdirectories)
 - Empty Story Elements tabs (no characters, variables, or assets yet)
 
@@ -1146,7 +1146,7 @@ Now that you have Ren'IDE installed and your first project open, let's explore t
 
 Ren'IDE's interface is organized into several distinct areas, each serving a specific purpose. Understanding this layout will help you navigate efficiently and find the tools you need.
 
-![Full application layout with Story Canvas](images/app-layout.png)
+![Full application layout with Project Canvas](images/app-layout.png)
 
 ### Main Layout Areas
 
@@ -1176,9 +1176,9 @@ Contains action buttons for common operations (save, undo/redo, add block, run g
 **Canvas Area (Center):**
 The main workspace. Displays one of three canvas views:
 
-- Story Canvas (file-level blocks with jump/call arrows)
-- Route Canvas (label-level control flow graph)
-- Choice Canvas (player-facing choice view)
+- Project Canvas (file-level blocks with jump/call arrows)
+- Flow Canvas (label-level control flow graph)
+- Choices Canvas (player-facing choice view)
 
 Switch between canvases using the tabs in the toolbar or keyboard shortcuts. This area is where you'll spend most of your time visualizing and navigating your story structure.
 
@@ -1511,7 +1511,7 @@ Right-click any file or folder to access these actions (depending on file type):
 - Rename
 - Delete
 - Cut / Copy / Paste
-- **Center on Canvas:** Locates the corresponding block on the Story Canvas and zooms to it
+- **Center on Canvas:** Locates the corresponding block on the Project Canvas and zooms to it
 
 **For image files:**
 
@@ -1541,7 +1541,7 @@ One of the most useful features for navigation:
 
 1. Right-click any `.rpy` file in the Project Explorer
 2. Select **"Center on Canvas"**
-3. The Story Canvas activates (if you're on a different canvas)
+3. The Project Canvas activates (if you're on a different canvas)
 4. The canvas pans and zooms to center on the block representing that file
 5. The block is highlighted briefly
 
@@ -1740,8 +1740,8 @@ The Menus tab provides a visual interface for designing Ren'Py menu structures.
 4. Click "Generate Code" to copy the Ren'Py menu code to clipboard
 5. Paste into your script
 
-**Integration with Choice Canvas:**
-Menus designed here are also visualized on the Choice Canvas as menu nodes with choice pills.
+**Integration with Choices Canvas:**
+Menus designed here are also visualized on the Choices Canvas as menu nodes with choice pills.
 
 ### Snippets Tab
 
@@ -2086,13 +2086,13 @@ This section provides an in-depth tour of Ren'IDE's most powerful features: the 
 
 Ren'IDE's signature feature is its three-canvas visualization system. Each canvas shows your project from a different perspective, helping you understand narrative structure at multiple levels of abstraction.
 
-### Story Canvas - File-Level View
+### Project Canvas - File-Level View
 
-The Story Canvas is the default view when you open a project. It represents your project at the **file level**: each `.rpy` file is a draggable block on the canvas, and arrows show jumps and calls between files.
+The Project Canvas is the default view when you open a project. It represents your project at the **file level**: each `.rpy` file is a draggable block on the canvas, and arrows show jumps and calls between files.
 
-![Story Canvas](images/story-canvas-basic.png)
+![Project Canvas](images/story-canvas-basic.png)
 
-#### What the Story Canvas Shows
+#### What the Project Canvas Shows
 
 **Blocks:**
 
@@ -2194,7 +2194,7 @@ Right-click a block for options:
 
 **Toolbox Label Search:**
 
-- A "Go to Label" search box appears in the Story Canvas toolbox (top-left)
+- A "Go to Label" search box appears in the Project Canvas toolbox (top-left)
 - Type to filter labels
 - Click a result to navigate
 - Same zoom-on-navigate behavior as Ctrl+G
@@ -2255,22 +2255,22 @@ Click the **Legend** button (if available) in the toolbox to show an overlay exp
 
 The legend is a floating panel that can be moved or dismissed.
 
-#### Tips for Using Story Canvas
+#### Tips for Using Project Canvas
 
 - **Use grouping for large projects:** If you have 50+ files, grouping by connected components helps identify independent storylines.
 - **Zoom out to see the big picture:** The diagnostic glow means you can identify problem areas even when blocks are too small to read.
 - **Use the minimap for navigation:** Faster than panning manually when blocks are far apart.
-- **Combine with Route Canvas:** Story Canvas shows file-level structure; Route Canvas shows label-level detail. Use both for complete understanding.
+- **Combine with Flow Canvas:** Project Canvas shows file-level structure; Flow Canvas shows label-level detail. Use both for complete understanding.
 
 ---
 
-### Route Canvas - Label-Level View
+### Flow Canvas - Label-Level View
 
-The Route Canvas visualizes your project at the **label level**: every `label` becomes a node, and every `jump`, `call`, or implicit fall-through becomes an edge. This is a control flow graph that shows how the player moves through your story.
+The Flow Canvas visualizes your project at the **label level**: every `label` becomes a node, and every `jump`, `call`, or implicit fall-through becomes an edge. This is a control flow graph that shows how the player moves through your story.
 
-![Route Canvas](images/route-canvas-basic.png)
+![Flow Canvas](images/route-canvas-basic.png)
 
-#### What the Route Canvas Shows
+#### What the Flow Canvas Shows
 
 **Nodes (Labels):**
 
@@ -2302,7 +2302,7 @@ The Route Canvas visualizes your project at the **label level**: every `label` b
 
 #### Graph Layout
 
-The Route Canvas uses a graph layout algorithm to position nodes:
+The Flow Canvas uses a graph layout algorithm to position nodes:
 
 **BFS Layered Layout (default):**
 
@@ -2325,7 +2325,7 @@ The Route Canvas uses a graph layout algorithm to position nodes:
 
 #### Route Highlighting
 
-The Route Canvas supports **route highlighting**: tracing specific narrative paths through the story.
+The Flow Canvas supports **route highlighting**: tracing specific narrative paths through the story.
 
 **What is a Route?**
 A route is a complete path from the `start` label to an ending label (a label with no outgoing edges or a `return` statement).
@@ -2356,11 +2356,11 @@ A route is a complete path from the `start` label to an ending label (a label wi
   - Change Color
   - Delete Route (removes from list, doesn't affect code)
 
-#### Go-to-Label on Route Canvas
+#### Go-to-Label on Flow Canvas
 
-The Route Canvas also supports:
+The Flow Canvas also supports:
 
-- **Ctrl+G command palette** (same as Story Canvas)
+- **Ctrl+G command palette** (same as Project Canvas)
 - **Toolbox label search** (filter and jump to labels)
 - Both zoom-on-navigate to at least scale 1.0
 
@@ -2388,22 +2388,22 @@ Each node is classified by role:
 
 Roles are indicated by color and/or icon.
 
-#### Tips for Using Route Canvas
+#### Tips for Using Flow Canvas
 
 - **Use route highlighting to verify story paths:** Highlight the "good ending" route to make sure all choices leading to it are correct.
 - **Identify unreachable labels early:** Red/highlighted unreachable labels indicate dead code that needs attention.
 - **Hover over menu nodes instead of opening files:** Save time by inspecting choices directly on the canvas.
-- **Combine with Choice Canvas:** Route Canvas shows code structure; Choice Canvas shows player experience.
+- **Combine with Choices Canvas:** Flow Canvas shows code structure; Choices Canvas shows player experience.
 
 ---
 
-### Choice Canvas - Player Experience View
+### Choices Canvas - Player Experience View
 
-The Choice Canvas shows your project from the **player's perspective**: what choices will they see, what text appears, where do choices lead, and what conditions guard them?
+The Choices Canvas shows your project from the **player's perspective**: what choices will they see, what text appears, where do choices lead, and what conditions guard them?
 
-![Choice Canvas](images/choice-canvas-basic.png)
+![Choices Canvas](images/choice-canvas-basic.png)
 
-#### What the Choice Canvas Shows
+#### What the Choices Canvas Shows
 
 **Menu Nodes:**
 
@@ -2436,7 +2436,7 @@ The Choice Canvas shows your project from the **player's perspective**: what cho
 
 #### Tracing Player Paths
 
-The Choice Canvas is designed for **player experience testing**:
+The Choices Canvas is designed for **player experience testing**:
 
 1. Start at the first menu node
 2. Read the choice texts
@@ -2448,7 +2448,7 @@ This lets you "play" your game visually without launching Ren'Py.
 
 #### Understanding Branching Complexity
 
-The Choice Canvas makes branching structure obvious:
+The Choices Canvas makes branching structure obvious:
 
 - **Linear sections:** Few or no menu nodes (straight line through the story)
 - **Dense branching:** Many menu nodes with many choices (complex decision trees)
@@ -2456,9 +2456,9 @@ The Choice Canvas makes branching structure obvious:
 
 Visualizing this helps you balance player agency with manageable development complexity.
 
-#### Go-to-Label on Choice Canvas
+#### Go-to-Label on Choices Canvas
 
-The Choice Canvas supports:
+The Choices Canvas supports:
 
 - **Ctrl+G command palette** for instant label navigation
 - **Toolbox label search** to filter and jump
@@ -2466,7 +2466,7 @@ The Choice Canvas supports:
 
 #### Comparing Canvases
 
-| Feature | Story Canvas | Route Canvas | Choice Canvas |
+| Feature | Project Canvas | Flow Canvas | Choices Canvas |
 |---------|--------------|--------------|---------------|
 | **Granularity** | File-level | Label-level | Menu-level |
 | **Nodes** | .rpy files | Labels | Menus |
@@ -2867,7 +2867,7 @@ Tasks appear in the Diagnostics panel under a "Tasks" tab. Track your progress a
 The Diagnostics button in the toolbar shows a badge with the total count of errors and warnings (e.g., "3" for 3 total issues). This gives you an at-a-glance indication of project health.
 
 **Canvas Block Glow:**
-Blocks on the Story Canvas that contain diagnostics display a colored glow (red for errors, amber for warnings). This makes it easy to spot problem areas even when zoomed out.
+Blocks on the Project Canvas that contain diagnostics display a colored glow (red for errors, amber for warnings). This makes it easy to spot problem areas even when zoomed out.
 
 ### Tips for Using Diagnostics
 
@@ -3071,9 +3071,9 @@ This section is for visual novel writers—the people crafting narratives, devel
 
 As a writer, your primary challenge is managing the complexity of branching narratives. Ren'IDE's three canvas views transform your story from abstract text into a visual structure you can navigate and understand at a glance.
 
-### Using the Story Canvas for Narrative Structure
+### Using the Project Canvas for Narrative Structure
 
-The Story Canvas shows your project at the file level, making it ideal for understanding **high-level narrative organization**.
+The Project Canvas shows your project at the file level, making it ideal for understanding **high-level narrative organization**.
 
 **Use Cases for Writers:**
 
@@ -3128,15 +3128,15 @@ The Story Canvas shows your project at the file level, making it ideal for under
 4. Enable role tinting to see character distribution
 5. Begin writing, filling in each block's content
 
-### Using the Route Canvas for Plot Structure
+### Using the Flow Canvas for Plot Structure
 
-The Route Canvas shows **label-level control flow**, perfect for understanding how players move through your story.
+The Flow Canvas shows **label-level control flow**, perfect for understanding how players move through your story.
 
 **Use Cases for Writers:**
 
 **Tracing Player Paths:**
 
-- Open the Route Canvas
+- Open the Flow Canvas
 - Visually follow the path from the `start` label
 - See every decision point (menu nodes) and where choices lead
 - Ensure every path reaches a satisfying conclusion
@@ -3168,19 +3168,19 @@ The Route Canvas shows **label-level control flow**, perfect for understanding h
 **Understanding Convergence:**
 
 - Where do different branches converge back to a common path?
-- The Route Canvas shows when multiple choices lead to the same label
+- The Flow Canvas shows when multiple choices lead to the same label
 - This helps you understand how much unique content each path requires
 
 **Example Workflow:**
 1. Write a branching scene with multiple choices
-2. Open the Route Canvas
+2. Open the Flow Canvas
 3. Verify that every choice leads somewhere sensible
 4. Use route highlighting to "play" through each branch visually
 5. Identify and fix any broken paths
 
-### Using the Choice Canvas for Player Experience
+### Using the Choices Canvas for Player Experience
 
-The Choice Canvas shows what the **player actually sees**: choice text, menu prompts, and conditional options.
+The Choices Canvas shows what the **player actually sees**: choice text, menu prompts, and conditional options.
 
 **Use Cases for Writers:**
 
@@ -3213,7 +3213,7 @@ The Choice Canvas shows what the **player actually sees**: choice text, menu pro
 
 **Example Workflow:**
 1. Write a menu with choices
-2. Open the Choice Canvas
+2. Open the Choices Canvas
 3. Read the choice text aloud
 4. Follow each choice to its destination
 5. Verify that the player experience is coherent and satisfying
@@ -3222,14 +3222,14 @@ The Choice Canvas shows what the **player actually sees**: choice text, menu pro
 
 Use all three canvases together for a complete picture:
 
-- **Story Canvas:** "How is my project organized?"
-- **Route Canvas:** "How does the plot flow?"
-- **Choice Canvas:** "What does the player experience?"
+- **Project Canvas:** "How is my project organized?"
+- **Flow Canvas:** "How does the plot flow?"
+- **Choices Canvas:** "What does the player experience?"
 
 **Example Combined Workflow:**
-1. Use the Story Canvas to organize chapters
-2. Switch to the Route Canvas to verify plot logic
-3. Switch to the Choice Canvas to test player-facing text
+1. Use the Project Canvas to organize chapters
+2. Switch to the Flow Canvas to verify plot logic
+3. Switch to the Choices Canvas to test player-facing text
 4. Iterate: make changes in the code editor, save, and refresh the canvas views
 
 ---
@@ -3494,15 +3494,15 @@ The Menus tab lists all menus found in your project (extracted during analysis).
 
 **Note:** Editing may require manual adjustment if the original menu has complex inline code not supported by the visual builder.
 
-### Integration with Choice Canvas
+### Integration with Choices Canvas
 
-Menus designed in the Menu Builder are visualized on the **Choice Canvas**:
+Menus designed in the Menu Builder are visualized on the **Choices Canvas**:
 
 - Each menu becomes a menu node
 - Choice pills show the choice text and destination
 - Conditional badges appear if choices have `if` guards
 
-Use the Choice Canvas to visually verify your menu design after generating code.
+Use the Choices Canvas to visually verify your menu design after generating code.
 
 ---
 
@@ -3575,7 +3575,7 @@ Understanding how your story flows—how players move from scene to scene—is c
 
 ### Understanding Arrows
 
-Arrows on the Story Canvas and Route Canvas represent narrative connections.
+Arrows on the Project Canvas and Flow Canvas represent narrative connections.
 
 **Jump Arrows (Solid):**
 
@@ -3589,10 +3589,10 @@ Arrows on the Story Canvas and Route Canvas represent narrative connections.
 - Call a subscene and return to the caller after it ends
 - Example: `call flashback` to show a flashback scene, then return to present
 
-**Fall-Through (Dotted, Route Canvas Only):**
+**Fall-Through (Dotted, Flow Canvas Only):**
 
 - When one label ends without a `jump`, `call`, or `return`, control falls through to the next label
-- Represented by dotted lines on the Route Canvas
+- Represented by dotted lines on the Flow Canvas
 
 **Arrow Colors:**
 
@@ -3606,7 +3606,7 @@ Arrows on the Story Canvas and Route Canvas represent narrative connections.
 
 ### Block Classification
 
-Blocks on the Story Canvas are classified by role:
+Blocks on the Project Canvas are classified by role:
 
 **Root Blocks:**
 
@@ -3746,7 +3746,7 @@ menu:
         jump friend_zone
 ```
 
-Use the Choice Canvas to see which choices are conditional. The conditional badge shows the `if` statement.
+Use the Choices Canvas to see which choices are conditional. The conditional badge shows the `if` statement.
 
 **Tips for Writers:**
 
@@ -3765,7 +3765,7 @@ Here are some best practices for writers using Ren'IDE.
 **Step 1: Outline on the Canvas**
 
 - Create placeholder `.rpy` files for each major scene or chapter
-- Arrange them on the Story Canvas in narrative order
+- Arrange them on the Project Canvas in narrative order
 - Add placeholder labels and jumps so arrows appear
 - Use sticky notes to annotate sections with ideas or reminders
 
@@ -3788,8 +3788,8 @@ Here are some best practices for writers using Ren'IDE.
 
 **Step 5: Visualize and Revise**
 
-- Switch to the Route Canvas to verify flow
-- Use the Choice Canvas to test player experience
+- Switch to the Flow Canvas to verify flow
+- Use the Choices Canvas to test player experience
 - Iterate: make changes in the editor, save, and refresh the canvases
 
 ### Organizing Files and Labels
@@ -3843,7 +3843,7 @@ If you're working with a team:
 
 **Communicate with Canvas:**
 
-- During meetings, open the Story Canvas or Route Canvas to discuss narrative structure
+- During meetings, open the Project Canvas or Flow Canvas to discuss narrative structure
 - Non-technical team members can understand the visual representation
 
 **Asset Coordination:**
@@ -3868,8 +3868,8 @@ If you're working with a team:
 
 **Test Regularly:**
 
-- Use the Route Canvas to verify every path reaches an ending
-- Use the Choice Canvas to test player-facing text
+- Use the Flow Canvas to verify every path reaches an ending
+- Use the Choices Canvas to test player-facing text
 - Run the game frequently to catch issues early
 
 **Track Progress:**
@@ -5807,7 +5807,7 @@ If you have a CI pipeline:
 
 **Communication:**
 
-- Use the Story Canvas in meetings to discuss structure
+- Use the Project Canvas in meetings to discuss structure
 - Use sticky notes on the canvas to leave messages
 - Use the Diagnostics panel to track issues
 
@@ -5822,7 +5822,7 @@ If you have a CI pipeline:
 
 - Run the game frequently from Ren'IDE
 - Test all branches and endings
-- Use the Route Canvas to identify paths to test
+- Use the Flow Canvas to identify paths to test
 
 **Automated Testing (Advanced):**
 
@@ -5831,7 +5831,7 @@ If you have a CI pipeline:
 
 **Playtesting:**
 
-- Use the Choice Canvas to trace the player experience
+- Use the Choices Canvas to trace the player experience
 - Ensure all choices make sense from the player's perspective
 
 ### Performance Optimization
@@ -5865,7 +5865,7 @@ This section provides a comprehensive quick-reference guide to all Ren'IDE featu
 
 ## Canvas Features
 
-### Story Canvas
+### Project Canvas
 
 | Feature | Description | Key Actions |
 |---------|-------------|-------------|
@@ -5887,7 +5887,7 @@ This section provides a comprehensive quick-reference guide to all Ren'IDE featu
 | **Sticky Notes** | Canvas annotations | Toolbar "Add Note" button |
 | **Canvas Legend** | Explains arrow types and colors | Button in toolbox (if available) |
 
-### Route Canvas
+### Flow Canvas
 
 | Feature | Description | Key Actions |
 |---------|-------------|-------------|
@@ -5899,10 +5899,10 @@ This section provides a comprehensive quick-reference guide to all Ren'IDE featu
 | **Route List Panel** | List of all discovered routes | Collapsible left sidebar, hover to expand |
 | **Node Roles** | Start (green), End (red), Choice (blue), etc. | Color/icon indicates role |
 | **Graph Layout Algorithm** | BFS layered or force-directed | Auto-computed |
-| **Go-to-Label Features** | Same as Story Canvas | Ctrl+G, toolbox search |
-| **Fit/Go-to-Start** | Same as Story Canvas | Canvas controls |
+| **Go-to-Label Features** | Same as Project Canvas | Ctrl+G, toolbox search |
+| **Fit/Go-to-Start** | Same as Project Canvas | Canvas controls |
 
-### Choice Canvas
+### Choices Canvas
 
 | Feature | Description | Key Actions |
 |---------|-------------|-------------|
@@ -5910,7 +5910,7 @@ This section provides a comprehensive quick-reference guide to all Ren'IDE featu
 | **Choice Pills** | Colored rectangles for each choice | Shows choice text |
 | **Conditional Badges** | Display `if` guards on choices | Badge shows condition |
 | **Destination Connections** | Pills connect to destination labels | Color-coded |
-| **Go-to-Label Features** | Same as Story/Route Canvas | Ctrl+G, toolbox search |
+| **Go-to-Label Features** | Same as Story/Flow Canvas | Ctrl+G, toolbox search |
 
 ---
 
@@ -6871,15 +6871,15 @@ A: Not currently, but you can script file operations (e.g., batch renaming) usin
 
 **AppImage:** A self-contained Linux executable format that runs on most distributions without installation.
 
-**Block:** A draggable node on the Story Canvas representing a `.rpy` file.
+**Block:** A draggable node on the Project Canvas representing a `.rpy` file.
 
-**Canvas:** A visual workspace (Story Canvas, Route Canvas, or Choice Canvas) for viewing project structure.
+**Canvas:** A visual workspace (Project Canvas, Flow Canvas, or Choices Canvas) for viewing project structure.
 
 **Call:** A Ren'Py statement (`call label_name`) that transfers control to a label and returns when the label ends.
 
 **Character:** A Ren'Py construct defined with `define tag = Character("Name", ...)` representing a speaking character.
 
-**Choice Canvas:** Canvas view showing player-facing menu choices and their destinations.
+**Choices Canvas:** Canvas view showing player-facing menu choices and their destinations.
 
 **Composition:** A saved layout from the Scene Composer, ImageMap Composer, or Screen Layout Composer.
 
@@ -6905,7 +6905,7 @@ A: Not currently, but you can script file operations (e.g., batch renaming) usin
 
 **Route:** A complete narrative path from the `start` label to an ending label.
 
-**Route Canvas:** Canvas view showing label-level control flow with nodes for labels and edges for jumps/calls.
+**Flow Canvas:** Canvas view showing label-level control flow with nodes for labels and edges for jumps/calls.
 
 **SDK (Software Development Kit):** The Ren'Py SDK includes the engine, launcher, and tools for building visual novels.
 
@@ -6913,7 +6913,7 @@ A: Not currently, but you can script file operations (e.g., batch renaming) usin
 
 **Snippet:** A reusable code template that expands when you type a trigger prefix and press Tab.
 
-**Story Canvas:** Canvas view showing file-level structure with blocks for `.rpy` files and arrows for jumps/calls.
+**Project Canvas:** Canvas view showing file-level structure with blocks for `.rpy` files and arrows for jumps/calls.
 
 **Story Elements:** The right sidebar panel with tabs for Characters, Variables, Images, Audio, Screens, etc.
 

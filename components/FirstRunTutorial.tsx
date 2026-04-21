@@ -30,14 +30,14 @@ const TOUR_STEPS: TourStep[] = [
   {
     id: 'canvas-types',
     title: 'Three Canvas Types',
-    message: 'Ren\'IDE has three canvases: Story (file view), Route (label flow), and Choice (decision tree). Switch between them here.',
+    message: 'Ren\'IDE has three ways to visualize your visual novel: Project (organize script files), Flow (trace narrative flow), and Choices (player decisions). Switch between them here.',
     targetSelector: '[data-tutorial="canvas-tabs"]',
     position: 'bottom',
   },
   {
     id: 'story-canvas',
-    title: 'Story Canvas',
-    message: 'This is your Story Canvas — your visual novel at a glance. Each block is a scene file.',
+    title: 'Project Canvas',
+    message: 'This is your Project Canvas — your visual novel at a glance. Each block is a script file.',
     targetSelector: '[data-tutorial="story-canvas"]',
     position: 'bottom',
   },

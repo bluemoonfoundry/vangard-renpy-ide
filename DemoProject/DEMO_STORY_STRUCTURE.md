@@ -239,21 +239,21 @@ A complex branching narrative mystery visual novel designed to showcase all feat
 
 ## Canvas Visualization Features
 
-### Story Canvas (File-Level)
+### Project Canvas (File-Level)
 - **8 distinct clusters** representing story stages
 - **Interconnected files** within each cluster
 - **Cross-cluster jumps** showing stage transitions
 - **Color-coded** by character presence (role tinting)
 - **Multiple convergence points** where paths reunite
 
-### Route Canvas (Label-Level)
+### Flow Canvas (Label-Level)
 - **Deep branching** within each stage
 - **Multiple valid paths** through the story
 - **Menu nodes** with visible choice consequences
 - **Conditional jumps** based on variables
 - **Dead ends** (battle defeat) and optimal paths
 
-### Choice Canvas (Player Experience)
+### Choices Canvas (Player Experience)
 - **Decision trees** clearly visible
 - **Choice guards** showing conditions (`if` badges)
 - **Consequence tracking** visible through variable changes

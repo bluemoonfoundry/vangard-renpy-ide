@@ -272,7 +272,7 @@ const App: React.FC = () => {
   const [_editorCursorPosition, setEditorCursorPosition] = useState<{ line: number; column: number } | null>(null);
   const [hoverHighlightIds, setHoverHighlightIds] = useState<Set<string> | null>(null);
 
-  // --- State: Route Canvas ---
+  // --- State: Flow Canvas (label-level flow graph) ---
   const [routeNodeLayoutCache, setRouteNodeLayoutCache] = useState<Map<string, Position>>(new Map());
 
   // --- State: Search (panel toggle remains here; query/results live in SearchContext) ---
@@ -1117,7 +1117,7 @@ const App: React.FC = () => {
       setHasUnsavedSettings(true);
   }, [setStickyNotes]);
 
-  // --- Route Canvas Sticky Note Management ---
+  // --- Flow Canvas Sticky Note Management ---
   const addRouteStickyNote = useCallback((initialPosition?: Position) => {
       const id = `rnote-${Date.now()}`;
       const width = 200;
@@ -1139,7 +1139,7 @@ const App: React.FC = () => {
       setHasUnsavedSettings(true);
   }, [setRouteStickyNotes]);
 
-  // --- Choice Canvas Sticky Note Management ---
+  // --- Choices Canvas Sticky Note Management ---
   const addChoiceStickyNote = useCallback((initialPosition?: Position) => {
       const id = `cnote-${Date.now()}`;
       const width = 200;
@@ -1535,7 +1535,7 @@ const App: React.FC = () => {
     setCenterOnRouteStartRequest,
   ]);
 
-  // Auto-center Choice Canvas on first project open
+  // Auto-center Choices Canvas on first project open
   useEffect(() => {
     if (isInitialAnalysisPending || isAnalysisPending) return;
     if (!pendingAutoCenterRef.current.choice) return;
@@ -4096,9 +4096,9 @@ const App: React.FC = () => {
 
   // --- Tab helpers (used by both panes) ---
   const getTabLabel = (tab: EditorTab): React.ReactNode => {
-    if (tab.id === 'canvas') return 'Story Canvas';
-    if (tab.id === 'route-canvas') return 'Route Canvas';
-    if (tab.id === 'choice-canvas') return 'Choice Canvas';
+    if (tab.id === 'canvas') return 'Project Canvas';
+    if (tab.id === 'route-canvas') return 'Flow Canvas';
+    if (tab.id === 'choice-canvas') return 'Choices Canvas';
     if (tab.id === 'diagnostics' || tab.id === 'punchlist') return 'Diagnostics';
     if (tab.id === 'stats') return 'Stats';
     if (tab.type === 'scene-composer') return sceneNames[tab.sceneId!] || 'Scene';

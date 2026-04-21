@@ -175,7 +175,7 @@ Shortest path to completion:
 
 ### What This Demo Showcases
 
-#### Story Canvas Features:
+#### Project Canvas Features:
 ✅ **Clustered Layout**: 8 distinct stage clusters
 ✅ **Deep Branching**: Multiple paths within each cluster
 ✅ **Reconvergence**: Paths merge at stage transitions
@@ -184,7 +184,7 @@ Shortest path to completion:
 ✅ **Auto-Layout**: Demonstrates "Redraw" functionality
 ✅ **Jump/Call Connections**: 100+ connections between files
 
-#### Route Canvas Features:
+#### Flow Canvas Features:
 ✅ **Label Complexity**: 70+ unique labels
 ✅ **Menu Nodes**: Dozens of choice points
 ✅ **Conditional Paths**: Many `if` statement branches
@@ -192,7 +192,7 @@ Shortest path to completion:
 ✅ **Dead Ends**: Defeat ending shows unreachable paths
 ✅ **Convergence Points**: Clear stage transition labels
 
-#### Choice Canvas Features:
+#### Choices Canvas Features:
 ✅ **Player Experience**: Choice consequences visible
 ✅ **Decision Trees**: Branching clearly illustrated
 ✅ **Guarded Choices**: Conditions shown on choices
@@ -224,7 +224,7 @@ Shortest path to completion:
 ### Running the Demo
 
 1. Open the DemoProject folder in Vangard Ren'Py IDE
-2. The Story Canvas will show all 8 stages as clusters
+2. The Project Canvas will show all 8 stages as clusters
 3. Click "Redraw" to see auto-layout organize the stages
 4. Filter by character (e.g., "h") to see Hasper's story arc
 5. Open `stage1_arrival.rpy` in the editor
@@ -235,7 +235,7 @@ Shortest path to completion:
 ### Recommended Demo Video Flow
 
 **Act 1: Project Overview** (30 seconds)
-- Show Story Canvas with all 8 stages visible
+- Show Project Canvas with all 8 stages visible
 - Use "Redraw" to demonstrate auto-layout
 - Zoom in/out to show scale
 
@@ -243,11 +243,11 @@ Shortest path to completion:
 - Click a Stage 1 file to open in editor
 - Show IntelliSense for jump targets
 - Use "Jump to Definition" to follow a connection
-- Switch to Route Canvas to show label flow
-- Switch to Choice Canvas to show player experience
+- Switch to Flow Canvas to show label flow
+- Switch to Choices Canvas to show player experience
 
 **Act 3: Character Focus** (45 seconds)
-- Filter Story Canvas by character "h" (Hasper)
+- Filter Project Canvas by character "h" (Hasper)
 - Show files highlighted where she appears
 - Switch to Characters panel in Story Elements
 - Show her dialogue count and color

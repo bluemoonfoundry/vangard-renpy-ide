@@ -179,7 +179,7 @@ New to Ren'IDE? Here's a 5-minute quick start to get you up and running.
 ## 3. Explore the Interface
 
 **Main areas:**
-- **Center:** The Story Canvas showing your `.rpy` files as blocks
+- **Center:** The Project Canvas showing your `.rpy` files as blocks
 - **Left:** Project Explorer with your file tree
 - **Right:** Story Elements panel with characters, images, audio, and more
 - **Bottom:** Code editor (appears when you open a file)

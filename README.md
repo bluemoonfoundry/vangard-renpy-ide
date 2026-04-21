@@ -35,19 +35,19 @@ Vangard gives you that picture — and keeps it in sync as you write.
 
 ### Three Canvases
 
-#### Story Canvas
+#### Project Canvas
 
 Your `.rpy` files as draggable blocks. `jump` and `call` connections auto-draw as arrows. Drag blocks to organize, click "Redraw" to auto-layout, or filter by character to focus on a single storyline. Role tinting colors blocks by which characters appear in them. A legend overlay explains arrow types and colors. Blocks with diagnostics display a colored outer glow — red for errors, amber for warnings — so problem areas are visible even when fully zoomed out.
 
 Use `Ctrl+G` (or `Cmd+G`) to open the **Go-to-Label** command palette at any time. Type a label name and press `Enter` to jump directly to that node. The toolbox also has a persistent "Go to Label" search box for the same purpose. Both zoom the canvas in to at least 100% so the target is always clearly visible.
 
-#### Route Canvas
+#### Flow Canvas
 
-A label-by-label control flow graph. Every `label` becomes a node; every `jump`, `call`, and implicit fall-through becomes an edge. Highlight specific routes with distinct colors. Unreachable labels are flagged. Hover over menu nodes to inspect all choices and their destinations. Includes a "Go to Label" toolbox search and responds to the global `Ctrl+G` palette, with zoom-on-navigate consistent with the Story Canvas.
+A label-by-label narrative flow graph. Every `label` becomes a node; every `jump`, `call`, and implicit fall-through becomes an edge. Highlight specific routes with distinct colors. Unreachable labels are flagged. Hover over menu nodes to inspect all choices and their destinations. Includes a "Go to Label" toolbox search and responds to the global `Ctrl+G` palette, with zoom-on-navigate consistent with the Project Canvas.
 
-#### Choice Canvas
+#### Choices Canvas
 
-The writer's view. Where the Route Canvas shows code structure, the Choice Canvas shows the player experience. Menu nodes fan out to destinations via color-coded choice pills. Each pill shows the player-visible choice text and any `if` condition guard as a badge — so you can trace exactly what the player sees and where each choice leads, even when paths cross. Includes a "Go to Label" toolbox search and responds to the global `Ctrl+G` palette.
+The player's view. Where the Flow Canvas shows code structure, the Choices Canvas shows the player experience. Menu nodes fan out to destinations via color-coded choice pills. Each pill shows the player-visible choice text and any `if` condition guard as a badge — so you can trace exactly what the player sees and where each choice leads, even when paths cross. Includes a "Go to Label" toolbox search and responds to the global `Ctrl+G` palette.
 
 ---
 
@@ -89,7 +89,7 @@ Browse all project images organized by folder, with visual thumbnails. Scan exte
 
 #### Audio Assets
 
-Same workflow for audio. Browse, scan external directories, and right-click to copy `play music`, `play sound`, or `queue audio` statements. Built-in audio player.
+Same workflow for audio. Browse, scan external directories, and right-click to copy `play music`, `play sound`, or `queue audio` statements. **Custom audio player** with Web Audio API integration, 64-bar equalizer visualization (cyan→blue→violet gradient with peak dots and scanline overlay), and volume control.
 
 ---
 
@@ -97,7 +97,7 @@ Same workflow for audio. Browse, scan external directories, and right-click to c
 
 #### Scene Composer
 
-Layer backgrounds and sprites on a stage. Per-sprite controls: zoom, flip, rotate, alpha, blur. Reorder layers by dragging. Configurable stage resolution (presets: 1920×1080, 1280×720, 1024×768, 800×600, or custom). Copy the generated `scene`/`show` Ren'Py code or export the composition as a PNG.
+Layer backgrounds and sprites on a stage. Per-sprite controls: zoom, flip, rotate, alpha, blur. **Visual Effects panel** with color grading (saturation, brightness, contrast, invert), color modes (tint, colorize), and categorized matrix presets (Night, Sunset, Sepia, Greyscale, Noir, Faded, Silhouette, etc.). Lock layers to prevent accidental edits. Inline layer actions (delete, make background) appear as hover-reveal icons on each layer row. Reorder layers by dragging. Configurable stage resolution (presets: 1920×1080, 1280×720, 1024×768, 800×600, or custom). Copy the generated `scene`/`show` Ren'Py code or export the composition as a PNG.
 
 #### ImageMap Composer
 
@@ -132,7 +132,7 @@ Word counts, estimated play time, lines of dialogue, per-character dialogue brea
 
 ### More
 
-- **Project Explorer** — file tree with create, rename, delete, cut/copy/paste, and drag-drop. Right-click an `.rpy` file → "Center on Canvas" to locate its block.
+- **Project Explorer** — file tree with create, rename, delete, cut/copy/paste, and drag-drop. Right-click an `.rpy` file → "Center on Canvas" to locate its block. **Refresh Project** option (File menu, context menu) reconciles all files and assets with disk state.
 - **Project-wide Search & Replace** — full-text search with regex. Replace individually or bulk with confirmation.
 - **New Project Wizard** — 3-step flow: name + location, resolution presets, theme + color picker. Generates a complete SDK-compatible Ren'Py project.
 - **Markdown Preview** — double-click any `.md` file for GitHub-style rendered preview with toggle to Monaco edit mode.
@@ -143,7 +143,7 @@ Word counts, estimated play time, lines of dialogue, per-character dialogue brea
 - **Drafting Mode** — adds placeholders for missing images and audio so the game runs during development.
 - **Run Game** — launch Ren'Py as a child process directly from the toolbar.
 - **Keyboard-accessible canvases** — Tab to move focus between blocks/nodes, Arrow keys for spatial navigation, Enter to open in editor, Escape to deselect. Every canvas element has an `aria-label` for screen readers (NVDA, VoiceOver, JAWS). Visible focus indicators for keyboard-only users.
-- **10 Themes** — system, light, dark, solarized light/dark, colorful light/dark, neon dark, ocean dark, candy light, forest light.
+- **11 Themes** — system, light, dark, solarized light/dark, colorful, colorful light, neon dark, ocean dark, candy light, forest light.
 - **Auto-updater** — checks for new releases on launch and prompts to install.
 - **Version in status bar** — the app version is always visible at the right end of the status bar.
 - **Cross-platform** — Windows (NSIS installer), macOS (DMG), Linux (AppImage).
@@ -226,21 +226,21 @@ Buttons are arranged left-to-right. The canvas switcher (Story / Route / Choice)
 
 | Icon | Button | Function | Shortcut |
 |------|--------|----------|----------|
-| ← | **Undo** | Revert the last canvas or editor change | `Ctrl+Z` |
-| → | **Redo** | Re-apply the last undone change | `Ctrl+Y` |
-| ＋ | **Add Block** | Create a new blank `.rpy` file on the canvas | `N` |
-| ✎ | **Add Note** | Add a sticky note to the active canvas | — |
-| ⊞ | **Redraw** | Auto-layout blocks on the active canvas by story flow | — |
-| ⓘ | **Diagnostics** | Open the diagnostics panel (errors, warnings, info, tasks); shows a red badge when errors are present | — |
-| ▦ | **Stats** | Open the project statistics visualization | — |
-| ⊞ | **Story Canvas** | Switch to the Story Canvas — file-level block flow | — |
-| ‹/› | **Route Canvas** | Switch to the Route Canvas — label-level control flow graph | — |
-| ◇ | **Choice Canvas** | Switch to the Choice Canvas — player-visible choice tree | — |
-| ✏ | **Drafting Mode** | Toggle placeholder images/audio for missing assets; green toggle = on | — |
-| ▶ | **Run** | Launch the Ren'Py game as a child process (requires SDK path in Settings) | `F5` |
-| ⏸ | **Stop** | Stop the running game — replaces Run while the game is active | — |
-| ◱ | **Save All** | Save all unsaved changes to disk; button highlights when there are unsaved changes | `Ctrl+S` |
-| ⚙ | **Settings** | Theme, editor font, SDK path, AI keys, mouse preferences | — |
+| ![Arrow Left](https://img.shields.io/badge/-←-gray?style=flat-square) | **Undo** | Revert the last canvas or editor change | `Ctrl+Z` |
+| ![Arrow Right](https://img.shields.io/badge/-→-gray?style=flat-square) | **Redo** | Re-apply the last undone change | `Ctrl+Y` |
+| ![Plus](https://img.shields.io/badge/-+-blue?style=flat-square) | **New Scene** | Create a new blank `.rpy` file on the canvas | `N` |
+| ![Pencil](https://img.shields.io/badge/-✎-gray?style=flat-square) | **Add Note** | Add a sticky note to the active canvas | — |
+| ![Arrows](https://img.shields.io/badge/-⟲-gray?style=flat-square) | **Organize Layout** | Auto-layout blocks on the active canvas by story flow | — |
+| ![Alert Circle](https://img.shields.io/badge/-⚠-gray?style=flat-square) | **Diagnostics** | Open the diagnostics panel (errors, warnings, info, tasks); shows a red badge when errors are present | — |
+| ![Bar Chart](https://img.shields.io/badge/-▦-gray?style=flat-square) | **Stats** | Open the project statistics visualization | — |
+| ![Layers](https://img.shields.io/badge/-⫶-gray?style=flat-square) | **Project Canvas** | Switch to the Project Canvas — bird's-eye view of script files | — |
+| ![Network](https://img.shields.io/badge/-⬡-gray?style=flat-square) | **Flow Canvas** | Switch to the Flow Canvas — trace narrative flow | — |
+| ![Grid](https://img.shields.io/badge/-⊞-gray?style=flat-square) | **Choices Canvas** | Switch to the Choices Canvas — player decision tree | — |
+| ![Pencil](https://img.shields.io/badge/-✏-green?style=flat-square) + Toggle | **Drafting Mode** | Toggle placeholder images/audio for missing assets; green toggle = on | — |
+| ![Play](https://img.shields.io/badge/-▶-green?style=flat-square) | **Run** | Launch the Ren'Py game as a child process (requires SDK path in Settings) | `F5` |
+| ![Stop](https://img.shields.io/badge/-⏸-red?style=flat-square) | **Stop** | Stop the running game — replaces Run while the game is active | — |
+| ![Save](https://img.shields.io/badge/-💾-gray?style=flat-square) | **Save All** | Save all unsaved changes to disk; button highlights when there are unsaved changes | `Ctrl+S` |
+| ![Gear](https://img.shields.io/badge/-⚙-gray?style=flat-square) | **Settings** | Theme, editor font, SDK path, AI keys, mouse preferences | — |
 
 ---
 
