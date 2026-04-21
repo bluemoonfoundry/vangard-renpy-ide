@@ -98,6 +98,11 @@ All notable changes to Vangard Ren'Py IDE are documented here. Note that this is
 - **Enter to open in editor** — press Enter on a focused block or node to open it in the code editor.
 - **Escape to deselect** — press Escape to clear the current selection. Screen reader live announcements are made when focus moves or selection changes.
 - **Visible focus ring** — focused blocks display a visible indigo outline (`:focus-visible`) for keyboard-only and high-contrast users.
+
+#### Tab Management — Improved Keyboard Shortcuts
+- **Ctrl+W / Cmd+W now closes the active tab** instead of closing the entire application window. This matches standard browser and editor behavior where Ctrl+W closes tabs.
+- **Ctrl+Q / Cmd+Q still quits the application** as before.
+- The "Close Tab" command is available in the File menu for all platforms and respects unsaved change confirmations.
 - Each canvas container is marked `role="application"` with a descriptive label and includes a hidden `aria-live="polite"` region for state change announcements.
 
 #### Stats Tab — IDE Performance Metrics

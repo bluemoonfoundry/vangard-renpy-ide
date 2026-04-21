@@ -155,6 +155,8 @@ Word counts, estimated play time, lines of dialogue, per-character dialogue brea
 | Action | Shortcut |
 |--------|----------|
 | Save All | `Ctrl+S` |
+| Close Active Tab | `Ctrl+W` / `Cmd+W` |
+| Quit Application | `Ctrl+Q` / `Cmd+Q` |
 | Undo / Redo | `Ctrl+Z` / `Ctrl+Y` |
 | New Block | `N` |
 | Group selected blocks | `G` |

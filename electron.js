@@ -528,7 +528,13 @@ async function updateApplicationMenu() {
                 click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'stop-project' }); }
             },
             { type: 'separator' },
-            process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' }
+            {
+                label: 'Close Tab',
+                accelerator: 'CmdOrCtrl+W',
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'close-tab' }); }
+            },
+            { type: 'separator' },
+            { role: 'quit' }
         ]
     },
     {

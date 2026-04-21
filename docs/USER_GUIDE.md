@@ -1967,6 +1967,8 @@ Keyboard shortcuts make navigation and editing faster. Here are the most importa
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl+S` / `Cmd+S` | Save All |
+| `Ctrl+W` / `Cmd+W` | Close Active Tab |
+| `Ctrl+Q` / `Cmd+Q` | Quit Application |
 | `Ctrl+Z` / `Cmd+Z` | Undo |
 | `Ctrl+Y` / `Cmd+Y` / `Ctrl+Shift+Z` | Redo |
 | `Ctrl+G` / `Cmd+G` | Go to Label (command palette) |
@@ -6323,6 +6325,8 @@ This section provides a comprehensive quick-reference guide to all Ren'IDE featu
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl+S` / `Cmd+S` | Save All |
+| `Ctrl+W` / `Cmd+W` | Close Active Tab |
+| `Ctrl+Q` / `Cmd+Q` | Quit Application |
 | `Ctrl+Z` / `Cmd+Z` | Undo |
 | `Ctrl+Y` / `Cmd+Y` / `Ctrl+Shift+Z` | Redo |
 | `Ctrl+G` / `Cmd+G` | Go to Label (command palette) |
@@ -6486,6 +6490,8 @@ project-name/
 |----------|--------|---------------|-------|
 | **Global** | | | |
 | | Save All | `Ctrl+S` | `Cmd+S` |
+| | Close Active Tab | `Ctrl+W` | `Cmd+W` |
+| | Quit Application | `Ctrl+Q` | `Cmd+Q` |
 | | Undo | `Ctrl+Z` | `Cmd+Z` |
 | | Redo | `Ctrl+Y` or `Ctrl+Shift+Z` | `Cmd+Y` or `Cmd+Shift+Z` |
 | | Go to Label | `Ctrl+G` | `Cmd+G` |

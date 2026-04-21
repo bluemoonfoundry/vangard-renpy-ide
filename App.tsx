@@ -952,9 +952,11 @@ const App: React.FC = () => {
     
     setBlocks(prev => [...prev, newBlock]);
     setDirtyBlockIds(prev => new Set(prev).add(id));
-    
+
     setSelectedBlockIds([id]);
     setFlashBlockRequest({ blockId: id, key: Date.now() });
+    // Zoom to the newly created block on Project Canvas
+    setCenterOnBlockRequest({ blockId: id, key: Date.now() });
 
     if (fileSystemTree && filePath) {
         setFileSystemTree(prev => {
@@ -1196,11 +1198,45 @@ const App: React.FC = () => {
             g.blockIds = g.blockIds.filter(bid => bid !== id);
         });
     });
-    
+
     setBlocks(prev => prev.filter(b => b.id !== id));
     setOpenTabs(prev => prev.filter(t => t.blockId !== id));
     if (activeTabId === id) setActiveTabId('canvas');
   }, [setBlocks, setGroups, activeTabId]);
+
+  // Delete block AND its associated file from disk
+  const deleteBlockWithFile = useCallback(async (id: string) => {
+    const block = blocks.find(b => b.id === id);
+    if (!block || !block.filePath || !projectRootPath || !window.electronAPI) {
+      // If no file path or no project, just delete the block from state
+      deleteBlock(id);
+      return;
+    }
+
+    // Show confirmation modal
+    setDeleteConfirmInfo({
+      paths: [block.filePath],
+      onConfirm: async () => {
+        try {
+          // Delete the file from disk
+          const fullPath = await window.electronAPI.path.join(projectRootPath, block.filePath) as string;
+          await window.electronAPI.removeEntry(fullPath);
+
+          // Remove the block from state
+          deleteBlock(id);
+
+          // Reload file system tree
+          const projData = await window.electronAPI.loadProject(projectRootPath);
+          setFileSystemTree(projData.tree);
+
+          addToast(`Deleted ${block.filePath}`, 'success');
+        } catch (err) {
+          console.error('Failed to delete file:', err);
+          addToast(`Failed to delete ${block.filePath}`, 'error');
+        }
+      }
+    });
+  }, [blocks, projectRootPath, deleteBlock, addToast]);
 
   // --- Layout ---
   // Ref so applyStoryLayout always reads the latest blocks without needing blocks in its
@@ -3215,13 +3251,24 @@ const App: React.FC = () => {
         e.preventDefault();
         setIsGoToLabelOpen(prev => !prev);
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+        // Close the currently active tab
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        e.preventDefault();
+        const currentPaneId = activePaneId;
+        const currentTabId = currentPaneId === 'primary' ? activeTabId : secondaryActiveTabId;
+        if (currentTabId) {
+          handleCloseTab(currentTabId, currentPaneId);
+        }
+      }
       if (e.key === 'Escape') {
         setIsGoToLabelOpen(false);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [activeCanvasTabId]);
+  }, [activeCanvasTabId, activePaneId, activeTabId, secondaryActiveTabId, handleCloseTab]);
 
   // DnD Handlers for Tabs
   const handleTabDragStart = (e: React.DragEvent<HTMLDivElement>, tabId: string, paneId: 'primary' | 'secondary' = 'primary') => {
@@ -3726,9 +3773,17 @@ const App: React.FC = () => {
             if (data.command === 'explorer-rename') setExplorerExternalAction({ type: 'rename', key: Date.now() });
             if (data.command === 'explorer-delete') handleDeleteNode(Array.from(explorerSelectedPaths));
             if (data.command === 'explorer-refresh') handleRefreshProject();
+            if (data.command === 'close-tab') {
+                // Close the currently active tab
+                const currentPaneId = activePaneId;
+                const currentTabId = currentPaneId === 'primary' ? activeTabId : secondaryActiveTabId;
+                if (currentTabId) {
+                    handleCloseTab(currentTabId, currentPaneId);
+                }
+            }
         });
         return removeListener;
-  }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenWithRenpyCheck, loadProject, handleSaveAll, projectRootPath, appSettings.renpyPath, handleOpenStaticTab, handleToggleSearch, updateAppSettings, handleDeleteNode, explorerSelectedPaths, handleRefreshProject]);
+  }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenWithRenpyCheck, loadProject, handleSaveAll, projectRootPath, appSettings.renpyPath, handleOpenStaticTab, handleToggleSearch, updateAppSettings, handleDeleteNode, explorerSelectedPaths, handleRefreshProject, handleCloseTab, activePaneId, activeTabId, secondaryActiveTabId]);
 
   // --- Game Running State ---
   useEffect(() => {
@@ -4116,7 +4171,7 @@ const App: React.FC = () => {
         blocks={blocks} groups={groups} stickyNotes={stickyNotes} analysisResult={analysisResult}
         updateBlock={updateBlock} updateGroup={updateGroup} updateBlockPositions={updateBlockPositions}
         updateGroupPositions={updateGroupPositions} updateStickyNote={updateStickyNote} deleteStickyNote={deleteStickyNote}
-        onInteractionEnd={canvasInteractionEnd} deleteBlock={deleteBlock} onOpenEditor={handleOpenEditor}
+        onInteractionEnd={canvasInteractionEnd} deleteBlock={deleteBlockWithFile} onOpenEditor={handleOpenEditor}
         selectedBlockIds={selectedBlockIds} setSelectedBlockIds={setSelectedBlockIds}
         selectedGroupIds={selectedGroupIds} setSelectedGroupIds={setSelectedGroupIds}
         findUsagesHighlightIds={findUsagesHighlightIds} clearFindUsages={handleClearFindUsages}

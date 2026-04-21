@@ -63,6 +63,8 @@ const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
         { keys: ['Shift', 'F5'], description: 'Stop Project' },
         { keys: ['Ctrl', 'Shift', 'F'], description: 'Search in Files' },
         { keys: ['Ctrl', 'S'], description: 'Save All' },
+        { keys: ['Ctrl', 'W'], description: 'Close Active Tab' },
+        { keys: ['Ctrl', 'Q'], description: 'Quit Application' },
         { keys: ['Ctrl', ','], description: 'Settings' },
         { keys: ['Ctrl', '/'], description: 'Keyboard Shortcuts' },
         { keys: ['Ctrl', 'Z'], description: 'Undo' },
