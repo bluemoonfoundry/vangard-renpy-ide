@@ -1,4 +1,4 @@
-name: Nightly Build
+name: Release
 
 permissions:
   contents: write
@@ -7,9 +7,14 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 on:
-  schedule:
-    - cron: '0 4 * * *' # 4am UTC daily
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.7.1-beta4)'
+        required: true
 
 jobs:
   test:
@@ -69,93 +74,77 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Rename release artifacts to static names
+      - name: Suffix macOS DMG with platform
+        if: runner.os == 'macOS'
         shell: bash
         run: |
-          PLATFORM="${{ matrix.platform }}"
-          mkdir -p final-artifacts
-          # We move files to a new folder with generic names (no version, no date)
-          for f in release/*.exe release/*.dmg release/*.AppImage release/*.zip; do
+          for f in release/*.dmg; do
             [ -f "$f" ] || continue
-            ext="${f##*.}"
-            mv "$f" "final-artifacts/renide-nightly-${PLATFORM}.${ext}"
+            mv "$f" "${f%.dmg}-${{ matrix.platform }}.dmg"
           done
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          # This name is internal to this specific workflow run
-          name: build-artifacts-${{ matrix.platform }}
-          path: final-artifacts/*
+          name: release-artifacts-${{ matrix.platform }}
+          path: |
+            release/*.exe
+            release/*.dmg
+            release/*.AppImage
 
   publish:
-    name: Publish Nightly Release
+    name: Publish Release
     runs-on: ubuntu-latest
     needs: build
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          # This downloads ALL artifacts from the 'build' jobs
           path: artifacts
           merge-multiple: true
-
-      - name: Verify and List Artifacts
-        # This step helps you see in the logs exactly what was downloaded
-        run: |
-          echo "Files downloaded:"
-          ls -R artifacts/
 
       - name: Compute SHA256 checksums
         run: |
           cd artifacts
-          # Use a clean list to avoid self-referencing if this runs twice
-          rm -f SHA256SUMS.txt
           sha256sum * > SHA256SUMS.txt
 
-      - name: Generate changelog
-        id: changelog
+      - name: Resolve tag name
+        id: tag
         run: |
-          CHANGES=$(git log --since="25 hours ago" --pretty=format:"- %s (%h)" --no-merges)
-          if [ -z "$CHANGES" ]; then
-            CHANGES="- No new commits in the last 24 hours"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           fi
-          echo "changes<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Publish rolling nightly release
+      - name: Detect prerelease
+        id: prerelease
+        run: |
+          TAG="${{ steps.tag.outputs.name }}"
+          if echo "$TAG" | grep -qiE 'alpha|beta|rc'; then
+            echo "value=true" >> $GITHUB_OUTPUT
+          else
+            echo "value=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: nightly
-          # Forces the tag to point to the current commit of the nightly run
-          target_commitish: ${{ github.sha }}
-          name: "Nightly Build (Latest)"
-          prerelease: true
-          make_latest: false
-          overwrite_files: true
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: ${{ steps.tag.outputs.name }}
+          prerelease: ${{ steps.prerelease.outputs.value }}
+          make_latest: ${{ steps.prerelease.outputs.value == 'false' }}
           fail_on_unmatched_files: true
           body: |
-            > ⚠️ **Pre-release for power users.** 
-            > This release is updated every 24 hours. Files here always reflect the latest `main` branch.
-
-            ## Changes in the last 24 hours
-            ${{ steps.changelog.outputs.changes }}
-
             ## Platform downloads
             | Platform | Filename |
             |---|---|
-            | macOS (Apple Silicon) | `renide-nightly-macos-arm64.dmg` |
-            | macOS (Intel) | `renide-nightly-macos-intel.dmg` |
-            | Windows | `renide-nightly-win.exe` |
-            | Linux | `renide-nightly-linux.AppImage` |
+            | macOS (Apple Silicon) | `renide-*.dmg` (from `macos-arm64`) |
+            | macOS (Intel) | `renide-*.dmg` (from `macos-intel`) |
+            | Windows | `renide-Setup-*.exe` |
+            | Linux | `renide-*.AppImage` |
 
             **Checksums:** See `SHA256SUMS.txt` below.
           files: |

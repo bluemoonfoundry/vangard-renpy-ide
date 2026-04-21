@@ -1,7 +1,7 @@
 name: Build/Release
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -65,17 +65,3 @@ jobs:
           # Required if you have configured GitHub releases in package.json
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get short SHA
-        id: sha
-        shell: bash
-        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: renide-dev-${{ matrix.os }}-${{ steps.sha.outputs.sha }}
-          path: |
-            release/*.exe
-            release/*.dmg
-            release/*.AppImage
-            release/*.zip
