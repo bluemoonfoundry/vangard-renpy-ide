@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
-Vangard Ren'Py IDE is an Electron + React/TypeScript desktop application for visual novel development. It maps `.rpy` files to draggable blocks on a canvas, provides integrated Monaco editors, and includes visual composers for scenes, image maps, and screens.
+Vangard Ren'Py IDE (Ren'IDE) is an Electron + React/TypeScript desktop application for visual novel development. It maps `.rpy` files to draggable blocks on a canvas, provides integrated Monaco editors, and includes visual composers for scenes, image maps, and screens. Current version: **0.7.1 Public Beta 4**.
 
 ## Commands
 ```bash
@@ -21,16 +21,18 @@ npm run lint:fix                   # ESLint auto-fix
 ## Architecture & State
 
 ### State Hub (`App.tsx`)
-All core state lives in `App.tsx` using `useImmer`. Key state categories:
+All core state lives in `App.tsx` using `useImmer` or `useState`. Key state categories:
 
 | State | Hook | Persisted To |
 |-------|------|-------------|
 | `blocks[]` | `useHistory` (undo/redo) | Individual `.rpy` files + `.renide/project.json` (positions) |
-| `groups[]`, `stickyNotes[]` | `useImmer` | `.renide/project.json` |
-| `imageMetadata`, `audioMetadata` | `useState` | `.renide/ide-settings.json` |
-| `sceneCompositions`, `screenLayoutCompositions` | `useImmer` | `.renide/ide-settings.json` |
+| `groups[]`, `stickyNotes[]`, `routeStickyNotes[]`, `choiceStickyNotes[]` | `useImmer` | `.renide/project.json` |
+| `projectImages`, `projectAudios` | `useState` (Maps) | `.renide/ide-settings.json` (metadata only) |
+| `sceneCompositions`, `imagemapCompositions`, `screenLayoutCompositions` | `useImmer` | `.renide/ide-settings.json` |
+| `diagnosticsTasks`, `ignoredDiagnostics`, `characterProfiles` | `useImmer` | `.renide/project.json` |
 | `analysisResult`, `diagnosticsResult` | derived/computed | Never — recalculated on change |
 | `openTabs[]`, `activeTabId`, `selectedBlockIds[]` | `useState` | Never — session-only |
+| `menuTemplates` | `useState` | `.renide/ide-settings.json` |
 
 App-level settings (theme, font, layout prefs) persist to `userData/app-settings.json`. API keys are stored via Electron's `safeStorage` (encrypted OS keychain), accessed through `app:load-api-keys` / `app:save-api-key` IPC handlers.
 
@@ -53,17 +55,21 @@ ipcMain.handle('fs:readFile', async (event, path) => fs.readFile(path, 'utf-8'))
 ```
 Namespaces: `fs`, `project`, `dialog`, `game`, `renpy`, `app`, `path`, `shell`, `explorer`. Async push events from main (file watcher, game lifecycle) arrive via `ipcRenderer.on` and are exposed as `electronAPI.on*` callbacks: `onLoadProgress`, `onFileChangedExternally`, `onGameStarted`, `onGameStopped`, `onGameError`, `onMenuCommand`, `onCheckUnsavedChangesBeforeExit`, `onShowExitModal`, `onSaveIdeStateBeforeQuit`.
 
+Key recent IPC additions:
+- `project:refresh` — reconciles blocks/images/audios with disk state (for external file changes)
+- `app:load-api-keys` / `app:save-api-key` — encrypted API key storage via Electron's safeStorage
+
 ### External File Watcher
-Main process watches the project folder for `.rpy` changes. If the block is clean in the editor, it auto-reloads silently. If dirty, it shows a persistent warning bar ("Reload" / "Keep"). Main suppresses change events for 3 seconds after the app writes a file to avoid false positives.
+Main process watches the project folder for `.rpy` changes with 400ms debounce. If the block is clean in the editor, it auto-reloads silently. If dirty, it shows a persistent warning bar ("Reload" / "Keep"). Main suppresses change events for 3 seconds after the app writes a file to avoid false positives. Related feature: **Refresh Project** (File menu, explorer context menu) manually reconciles all files/assets with disk state via `project:refresh` IPC.
 
 ### Tab System
-`openTabs: EditorTab[]` tracks open panels. Tabs mount lazily on first activation, then stay mounted-but-hidden to preserve Monaco scroll/state. Valid tab types: `canvas`, `route-canvas`, `choice-canvas`, `editor`, `image`, `audio`, `character`, `scene-composer`, `stats`, `diagnostics`, `punchlist`.
+`openTabs: EditorTab[]` tracks open panels. Tabs mount lazily on first activation, then stay mounted-but-hidden to preserve Monaco scroll/state. Valid tab types: `canvas`, `route-canvas`, `choice-canvas`, `editor`, `image`, `audio`, `character`, `scene-composer`, `image-map`, `screen-layout`, `markdown`, `stats`, `diagnostics`, `punchlist` (legacy, now diagnostics).
 
 ### Context Providers
 Only `SearchContext` wraps the app in `App.tsx`:
 - **`SearchContext`** — offloads search state from App to avoid prop drilling; delegates to `electronAPI.searchInProject` for ripgrep-backed search.
 
-`App.tsx` manages asset state, file system ops, and toasts directly via `useState`/`useImmer` — no contexts for those.
+**Note:** Previous versions had `AssetContext`, `FileSystemContext`, and `ToastContext`, but these were removed in commit 381fb02 (April 2025). All asset state, file system operations, and toast management are now handled directly in `App.tsx` via `useState`/`useImmer` for simpler state flow.
 
 ### Memoization Discipline
 `App.tsx` aggressively memoizes derived arrays/sets to prevent canvas re-renders on unrelated state changes:
@@ -93,11 +99,13 @@ All three canvases share the same pointer-event drag model: global `pointermove`
 | `useRenpyAnalysis` | Heavy parser — populates `RenpyAnalysisResult` including all canvas data; takes only `{ id, content, filePath }` to avoid drag-triggered re-runs |
 | `useDiagnostics` | Computes errors/warnings/info; supports rule suppression via `ignoredDiagnostics` |
 | `useFileSystemManager` | File tree CRUD, clipboard (copy/cut), drag-drop routing |
-| `useAssetManager` | Scans/syncs image+audio directories; manages Ren'Py names and tags |
 | `usePerformanceMetrics` | Per-frame render/layout timing; records FPS spikes |
 | `useVirtualList` | Lazy-renders long lists (file explorer) |
 | `useSnippetLoader` | Loads user snippets from `.renide/snippets.json` |
 | `useDebounce` | Generic 500ms debounce (blocks feed into analysis via this) |
+| `useCanvasFps` | Measures canvas rendering FPS (60-frame rolling average) for IDE performance metrics |
+| `useProjectColorScan` | Scans all block content for hex color literals to populate "Project Theme" palette |
+| `useModalAccessibility` | Focus trap, ESC handling, ARIA for modals |
 
 ### Monaco & Syntax Highlighting
 Monaco uses two layers of Ren'Py language support:
@@ -116,6 +124,76 @@ The app supports 11 themes (`system`, `light`, `dark`, `solarized-light`, `solar
 | `renpyCompletionProvider.ts` | Monaco autocomplete: labels, characters, screens, variables |
 | `renpySemanticTokens.ts` | Syntax highlighting via Monaco semantic tokens |
 | `screenCodeGenerator.ts` | Converts Screen Layout Composer tree → Ren'Py screen code |
+| `textmateGrammar.ts` | TextMate tokenization with Oniguruma WASM for syntax highlighting |
+| `renpyHoverProvider.ts` | Hover tooltips in Monaco for labels, characters, images, screens |
+| `colorUtils.ts` | Color conversion utilities and palette definitions |
+
+## Major Features & Recent Updates
+
+### Scene Composer Visual Effects (April 2025)
+The Scene Composer now includes a comprehensive Visual Effects system with shader support:
+- **Color grading**: saturation, brightness, contrast, invert sliders
+- **Color modes**: tint (single color overlay), colorize (remap black→white gradient)
+- **Matrix presets**: Categorized preset effects (Night, Sunset, Sepia, Greyscale, Noir, Faded, Silhouette, etc.) via `MatrixPresetPopover`
+- **Custom shader uniforms**: extensible shader system via `activeShader` and `shaderUniforms` in `SceneSprite` type
+- **Layer locking**: prevent accidental edits to sprites
+- **Inline layer actions**: Delete/Make BG buttons now appear as hover-reveal icons on layer rows
+
+### Audio Player (April 2025)
+Custom audio player in AudioEditorView replaces native `<audio controls>`:
+- **Web Audio API integration**: glowing play/pause button with custom seek bar
+- **64-bar equalizer**: cyan→blue→violet gradient with peak dots and scanline overlay
+- **Volume control**: custom slider with visual feedback
+- **Flex-row layout**: player on left, metadata sidebar on right (matches ImageEditorView)
+
+### Accessibility & Keyboard Navigation (April 2025)
+Full keyboard navigation for all three canvases:
+- **Global shortcuts**: `Ctrl+G` / `Cmd+G` opens Go-to-Label command palette (auto-zooms to 100%)
+- **Canvas navigation**: Tab/Shift+Tab for focus cycling, Arrow keys for spatial navigation, Enter to open in editor, Escape to deselect
+- **ARIA labels**: all canvas blocks/nodes have descriptive labels for screen readers (NVDA, VoiceOver, JAWS)
+- **Focus indicators**: visible outlines for keyboard-only users
+
+### First-Run Tutorial (April 2025)
+6-step interactive onboarding with SVG spotlight animations:
+1. Welcome + Project creation
+2. Three canvas types (Story/Route/Choice)
+3. Story Canvas file-level view
+4. New Scene button
+5. Story Elements panel
+6. Final tips (keyboard shortcuts)
+- Stored in localStorage; replay via Help → Show Tutorial
+- Keyboard nav: Escape to skip, Enter/arrows to navigate
+
+### Markdown Preview (April 2025)
+- Double-click `.md` files in Project Explorer to open preview
+- GitHub-Flavored Markdown rendering via `marked`
+- Toggle between preview and edit modes
+- Full dark mode support
+
+### Diagnostics & Tasks (April 2025)
+- **DiagnosticsTask** system replaces legacy "punchlist"
+- **Suppression rules**: ignore specific diagnostics via `IgnoredDiagnosticRule` interface
+- **Sticky note promotion**: convert notes to tasks via checkbox
+- **Migration**: `migratePunchlistToTasks()` handles legacy data
+
+### Color Picker & Palette System (April 2025)
+- **ColorPickerPane** with four built-in palettes: Ren'Py Standard, HTML Named, Material 500, Pastel
+- **Project Theme palette**: auto-scans all `.rpy` files for hex colors via `useProjectColorScan` hook
+- **Draggable swatches**: drag colors onto `ColorDropTarget` components
+- **Actions**: Insert at cursor, Wrap in `{color}` tags, Copy hex
+
+### Menu Constructor (April 2025)
+Visual menu designer with:
+- Custom code block support per choice
+- Save/reuse menu templates via `MenuTemplate` interface
+- Action types: jump, call, pass, return, code
+- `MenuInspectorPanel` shows hover details on Route/Choice Canvas menu nodes
+
+### Project Refresh (April 2025)
+- **Refresh option** in File menu and Project Explorer context menu
+- `handleRefreshProject()` reconciles blocks/images/audios with disk state
+- Queues dirty-file conflict warnings
+- `project:refresh` IPC handler reads all file contents
 
 ## Conventions
 - **State mutation**: Always use `useImmer` drafts; never mutate state directly.
@@ -124,6 +202,8 @@ The app supports 11 themes (`system`, `light`, `dark`, `solarized-light`, `solar
 - **Styling**: Tailwind CSS + dark mode via `class` strategy.
 - **Clipboard UI**: Use `components/CopyButton.tsx`.
 - **Sticky notes**: Three separate arrays (`stickyNotes`, `routeStickyNotes`, `choiceStickyNotes`), one per canvas. Content renders as Markdown via `marked`. Notes can be promoted to `DiagnosticsTask` via checkbox.
+- **Color swatches**: Use `ColorDropTarget.tsx` component for drag-and-drop color input (wraps `<input type="color">`).
+- **Diagnostics tasks**: Use `DiagnosticsTask` interface (migrated from legacy "punchlist"). Tasks persist in `.renide/project.json`.
 - **Tests**: Vitest + JSDOM. Setup in `test/setup.ts`. Test files match `**/*.test.{ts,tsx}`.
 - **Data models**: `types.ts` is the single source of truth for all interfaces (Block, Link, Diagnostic, Composition, etc.).
 - **Canvas drag**: Use native pointer events (`pointerdown`/`pointermove`/`pointerup`) with global listeners — do not use React synthetic events for drag performance.
