@@ -1,6 +1,6 @@
 [![Build/Release](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/build.yml/badge.svg)](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/build.yml)
 [![CodeQL](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/github-code-scanning/codeql)
-![Version](https://img.shields.io/badge/version-0.7.1_Public_Beta_4-blue)
+![Version](https://img.shields.io/badge/version-0.6.0_Public_Beta_3-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows_%7C_macOS_%7C_Linux-lightgrey)
 
 # Ren'IDE : The Ren'Py Visual Designer
