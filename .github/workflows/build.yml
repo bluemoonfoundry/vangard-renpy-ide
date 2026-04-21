@@ -14,8 +14,12 @@ on:
 
 jobs:
   test:
-    name: Test & Lint
-    runs-on: ubuntu-latest
+    name: Test & Lint on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       - name: Check out Git repository
