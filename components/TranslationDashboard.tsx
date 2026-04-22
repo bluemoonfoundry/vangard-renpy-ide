@@ -4,7 +4,8 @@
  * detected languages. Three sections: language overview cards, file breakdown
  * table, and a virtual string-level view.
  */
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { TranslationAnalysisResult, LanguageCoverage, TranslationFileBreakdown, Block } from '../types';
 import { useVirtualList } from '../hooks/useVirtualList';
 
@@ -48,12 +49,14 @@ type SortDir = 'asc' | 'desc';
 function sortFileBreakdown(rows: TranslationFileBreakdown[], key: FileSortKey, dir: SortDir): TranslationFileBreakdown[] {
   const sorted = [...rows];
   const mult = dir === 'asc' ? 1 : -1;
+  const getEffectiveTranslated = (row: TranslationFileBreakdown) => row.translatedCount - row.staleCount;
+  const getEffectiveUntranslated = (row: TranslationFileBreakdown) => row.totalStrings - getEffectiveTranslated(row);
   sorted.sort((a, b) => {
     switch (key) {
       case 'file': return mult * a.sourceFilePath.localeCompare(b.sourceFilePath);
       case 'total': return mult * (a.totalStrings - b.totalStrings);
-      case 'translated': return mult * (a.translatedCount - b.translatedCount);
-      case 'untranslated': return mult * ((a.totalStrings - a.translatedCount) - (b.totalStrings - b.translatedCount));
+      case 'translated': return mult * (getEffectiveTranslated(a) - getEffectiveTranslated(b));
+      case 'untranslated': return mult * (getEffectiveUntranslated(a) - getEffectiveUntranslated(b));
       case 'stale': return mult * (a.staleCount - b.staleCount);
       case 'completion': return mult * (a.completionPercent - b.completionPercent);
     }
@@ -85,6 +88,25 @@ const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translation
 
   const isLanguageValid = LANGUAGE_PATTERN.test(languageInput);
 
+  useEffect(() => {
+    if (!showGenerateForm || typeof document === 'undefined') return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowGenerateForm(false);
+        setLanguageInput('');
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [showGenerateForm]);
+
   const handleGenerate = useCallback(async () => {
     if (!isLanguageValid) return;
     await onGenerateTranslations(languageInput);
@@ -109,38 +131,79 @@ const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translation
     </button>
   );
 
-  const generateForm = showGenerateForm ? (
-    <div className="flex items-center gap-2 mt-2" data-testid="generate-form">
-      <input
-        type="text"
-        placeholder='e.g. "french", "japanese"'
-        value={languageInput}
-        onChange={e => setLanguageInput(e.target.value.toLowerCase())}
-        onKeyDown={e => { if (e.key === 'Enter') handleGenerate(); if (e.key === 'Escape') setShowGenerateForm(false); }}
-        className="px-2 py-1 text-xs bg-secondary border border-primary rounded focus:outline-none focus:ring-1 focus:ring-indigo-400 text-primary placeholder:text-secondary w-48"
-        data-testid="language-input"
-        autoFocus
-      />
-      <button
-        onClick={handleGenerate}
-        disabled={!isLanguageValid || isGenerating}
-        className="px-3 py-1 text-xs font-medium rounded-md bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        data-testid="confirm-generate-btn"
-      >
-        Generate
-      </button>
-      <button
-        onClick={() => { setShowGenerateForm(false); setLanguageInput(''); }}
-        className="px-3 py-1 text-xs font-medium rounded-md bg-secondary text-secondary hover:bg-tertiary border border-primary transition-colors"
-        data-testid="cancel-generate-btn"
-      >
-        Cancel
-      </button>
-      {languageInput && !isLanguageValid && (
-        <span className="text-xs text-red-500" data-testid="language-validation-error">Lowercase letters, numbers, underscores only. Must start with a letter.</span>
-      )}
-    </div>
-  ) : null;
+  const generateModal = showGenerateForm && typeof document !== 'undefined'
+    ? createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 bg-black/50 backdrop-blur-sm"
+          onMouseDown={() => {
+            setShowGenerateForm(false);
+            setLanguageInput('');
+          }}
+          data-testid="generate-modal"
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-primary bg-secondary shadow-2xl p-5"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="generate-translation-title"
+            data-testid="generate-form"
+            onMouseDown={e => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h3 id="generate-translation-title" className="text-base font-semibold text-primary">
+                  Generate Translations
+                </h3>
+                <p className="text-xs text-secondary mt-1">
+                  Enter the language code Ren'Py should generate under <code className="px-1 py-0.5 bg-tertiary rounded">game/tl/</code>.
+                </p>
+              </div>
+              <button
+                onClick={() => { setShowGenerateForm(false); setLanguageInput(''); }}
+                className="text-secondary hover:text-primary text-lg leading-none"
+                aria-label="Close dialog"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <input
+                type="text"
+                placeholder='e.g. "french", "japanese"'
+                value={languageInput}
+                onChange={e => setLanguageInput(e.target.value.toLowerCase())}
+                onKeyDown={e => { if (e.key === 'Enter') handleGenerate(); }}
+                className="px-3 py-2 text-sm bg-primary border border-primary rounded focus:outline-none focus:ring-1 focus:ring-indigo-400 text-primary placeholder:text-secondary"
+                data-testid="language-input"
+                autoFocus
+              />
+              {languageInput && !isLanguageValid && (
+                <span className="text-xs text-red-500" data-testid="language-validation-error">Lowercase letters, numbers, underscores only. Must start with a letter.</span>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  onClick={() => { setShowGenerateForm(false); setLanguageInput(''); }}
+                  className="px-3 py-1.5 text-xs font-medium rounded-md bg-secondary text-secondary hover:bg-tertiary border border-primary transition-colors"
+                  data-testid="cancel-generate-btn"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleGenerate}
+                  disabled={!isLanguageValid || isGenerating}
+                  className="px-3 py-1.5 text-xs font-medium rounded-md bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  data-testid="confirm-generate-btn"
+                >
+                  Generate
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )
+    : null;
 
   const { languageCoverages, detectedLanguages, translatableStrings, stringTranslations } = translationData;
 
@@ -156,10 +219,11 @@ const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translation
   const fileRows = useMemo(() => {
     if (!activeCoverage) return [];
     let rows = activeCoverage.fileBreakdown;
+    const getEffectiveTranslated = (row: TranslationFileBreakdown) => row.translatedCount - row.staleCount;
 
     // Status filter
-    if (statusFilter === 'translated') rows = rows.filter(r => r.completionPercent === 100);
-    else if (statusFilter === 'untranslated') rows = rows.filter(r => r.translatedCount < r.totalStrings);
+    if (statusFilter === 'translated') rows = rows.filter(r => getEffectiveTranslated(r) > 0);
+    else if (statusFilter === 'untranslated') rows = rows.filter(r => getEffectiveTranslated(r) < r.totalStrings);
     else if (statusFilter === 'stale') rows = rows.filter(r => r.staleCount > 0);
 
     // Text filter
@@ -209,18 +273,20 @@ const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translation
   // --- Empty state ---
   if (detectedLanguages.length === 0 && translatableStrings.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-secondary gap-4 px-8">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-        </svg>
-        <h3 className="text-lg font-semibold text-primary">No Translations Detected</h3>
-        <p className="text-sm text-center max-w-md">
-          Ren'Py stores translations under <code className="px-1 py-0.5 bg-secondary rounded text-xs">game/tl/&lt;language&gt;/</code> directories.
-          Generate translations with Ren'Py's built-in tool or create translation files manually to see coverage here.
-        </p>
-        {!showGenerateForm && generateButton}
-        {generateForm}
-      </div>
+      <>
+        <div className="flex flex-col items-center justify-center h-full text-secondary gap-4 px-8">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+          </svg>
+          <h3 className="text-lg font-semibold text-primary">No Translations Detected</h3>
+          <p className="text-sm text-center max-w-md">
+            Ren'Py stores translations under <code className="px-1 py-0.5 bg-secondary rounded text-xs">game/tl/&lt;language&gt;/</code> directories.
+            Generate translations with Ren'Py's built-in tool or create translation files manually to see coverage here.
+          </p>
+          {!showGenerateForm && generateButton}
+        </div>
+        {generateModal}
+      </>
     );
   }
 
@@ -232,7 +298,6 @@ const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translation
           <SectionLabel>Language Coverage</SectionLabel>
           {!showGenerateForm && generateButton}
         </div>
-        {generateForm}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {languageCoverages.map(cov => (
             <button
@@ -335,21 +400,26 @@ const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translation
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-primary">
-                  {fileRows.map(row => (
-                    <tr key={row.sourceFilePath} className="hover:bg-tertiary-hover">
-                      <td className="px-3 py-2 font-mono text-xs text-primary">{row.sourceFilePath}</td>
-                      <td className="px-3 py-2 text-center">{row.totalStrings}</td>
-                      <td className="px-3 py-2 text-center text-green-600 dark:text-green-400">{row.translatedCount}</td>
-                      <td className="px-3 py-2 text-center text-red-600 dark:text-red-400">{row.totalStrings - row.translatedCount}</td>
-                      <td className="px-3 py-2 text-center text-amber-600 dark:text-amber-400">{row.staleCount}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <ProgressBar percent={row.completionPercent} />
-                          <span className="text-xs text-secondary w-8 text-right">{row.completionPercent}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {fileRows.map(row => {
+                    const effectiveTranslated = row.translatedCount - row.staleCount;
+                    const effectiveUntranslated = row.totalStrings - effectiveTranslated;
+
+                    return (
+                      <tr key={row.sourceFilePath} className="hover:bg-tertiary-hover">
+                        <td className="px-3 py-2 font-mono text-xs text-primary">{row.sourceFilePath}</td>
+                        <td className="px-3 py-2 text-center">{row.totalStrings}</td>
+                        <td className="px-3 py-2 text-center text-green-600 dark:text-green-400">{effectiveTranslated}</td>
+                        <td className="px-3 py-2 text-center text-red-600 dark:text-red-400">{effectiveUntranslated}</td>
+                        <td className="px-3 py-2 text-center text-amber-600 dark:text-amber-400">{row.staleCount}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <ProgressBar percent={row.completionPercent} />
+                            <span className="text-xs text-secondary w-8 text-right">{row.completionPercent}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {fileRows.length === 0 && (
                     <tr><td colSpan={6} className="px-3 py-6 text-center text-secondary text-xs">No matching files</td></tr>
                   )}
@@ -424,6 +494,7 @@ const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translation
           </div>
         </section>
       </div>
+      {generateModal}
     </div>
   );
 };

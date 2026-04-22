@@ -109,6 +109,47 @@ describe('TranslationDashboard', () => {
     expect(screen.getByText('game/script.rpy')).toBeInTheDocument();
   });
 
+  it('shows effective translated and untranslated counts in file breakdown when stale entries exist', () => {
+    const data: TranslationAnalysisResult = {
+      translatableStrings: [],
+      translatedStrings: new Map(),
+      languageCoverages: [
+        {
+          language: 'french',
+          totalStrings: 912,
+          translatedCount: 912,
+          staleCount: 911,
+          untranslatedCount: 0,
+          completionPercent: 0,
+          fileBreakdown: [
+            {
+              sourceFilePath: 'game/script.rpy',
+              totalStrings: 912,
+              translatedCount: 912,
+              staleCount: 911,
+              completionPercent: 0,
+            },
+          ],
+        },
+      ],
+      detectedLanguages: ['french'],
+      stringTranslations: new Map(),
+    };
+
+    const { container } = render(
+      <TranslationDashboard translationData={data} blocks={[]} onOpenBlock={vi.fn()} {...defaultGenerateProps} />,
+    );
+
+    const row = container.querySelector('tbody tr');
+    expect(row).not.toBeNull();
+    const cells = row!.querySelectorAll('td');
+    expect(cells[1]).toHaveTextContent('912');
+    expect(cells[2]).toHaveTextContent('1');
+    expect(cells[3]).toHaveTextContent('911');
+    expect(cells[4]).toHaveTextContent('911');
+    expect(cells[5]).toHaveTextContent('0%');
+  });
+
   it('renders translatable strings section', () => {
     const data = makeSampleTranslationData();
     render(
@@ -138,6 +179,19 @@ describe('TranslationDashboard', () => {
     const untranslatedButtons = screen.getAllByText('untranslated');
     fireEvent.click(untranslatedButtons[0]);
     // After filtering, the string count should reflect untranslated only
+    expect(screen.getByText(/Translatable Strings \(1\)/)).toBeInTheDocument();
+  });
+
+  it('shows partially translated files when filtering by translated status', () => {
+    const data = makeSampleTranslationData();
+    render(
+      <TranslationDashboard translationData={data} blocks={makeSampleBlocks()} onOpenBlock={vi.fn()} {...defaultGenerateProps} />,
+    );
+
+    const translatedButtons = screen.getAllByText('translated');
+    fireEvent.click(translatedButtons[0]);
+
+    expect(screen.getByText('game/script.rpy')).toBeInTheDocument();
     expect(screen.getByText(/Translatable Strings \(1\)/)).toBeInTheDocument();
   });
 
@@ -174,13 +228,15 @@ describe('TranslationDashboard', () => {
     expect(screen.getByText('Generating...')).toBeInTheDocument();
   });
 
-  it('shows language input form when generate button is clicked', () => {
+  it('shows generate language modal when generate button is clicked', () => {
     const data = makeEmptyTranslationData();
     render(
       <TranslationDashboard translationData={data} blocks={[]} onOpenBlock={vi.fn()} {...defaultGenerateProps} />,
     );
     fireEvent.click(screen.getByTestId('generate-translations-btn'));
+    expect(screen.getByTestId('generate-modal')).toBeInTheDocument();
     expect(screen.getByTestId('generate-form')).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByTestId('language-input')).toBeInTheDocument();
     expect(screen.getByTestId('confirm-generate-btn')).toBeInTheDocument();
     expect(screen.getByTestId('cancel-generate-btn')).toBeInTheDocument();
