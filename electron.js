@@ -859,9 +859,12 @@ app.whenReady().then(() => {
     return new Promise((resolve, reject) => {
       let stdout = '';
       let stderr = '';
+      let settled = false;
       const proc = spawn(executable, [projectPath, 'translate', language]);
 
       const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
         proc.kill();
         reject(new Error('Translation generation timed out after 60 seconds'));
       }, 60000);
@@ -871,6 +874,8 @@ app.whenReady().then(() => {
 
       proc.on('close', (code) => {
         clearTimeout(timeout);
+        if (settled) return;
+        settled = true;
         if (code === 0) {
           resolve({ success: true, output: stdout });
         } else {
@@ -880,6 +885,8 @@ app.whenReady().then(() => {
 
       proc.on('error', (err) => {
         clearTimeout(timeout);
+        if (settled) return;
+        settled = true;
         reject(new Error(`Failed to start Ren'Py: ${err.message}`));
       });
     });
