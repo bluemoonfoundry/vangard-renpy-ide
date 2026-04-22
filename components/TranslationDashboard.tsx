@@ -225,9 +225,9 @@ const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translation
   }
 
   return (
-    <div className="h-full overflow-y-auto p-6 space-y-6">
-      {/* ── Section 1: Language Overview Cards ── */}
-      <section>
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* ── Section 1: Language Overview Cards (sticky) ── */}
+      <section className="flex-none px-6 pt-6 pb-4 border-b border-primary">
         <div className="flex items-center justify-between mb-3">
           <SectionLabel>Language Coverage</SectionLabel>
           {!showGenerateForm && generateButton}
@@ -254,13 +254,10 @@ const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translation
         </div>
       </section>
 
-      {/* ── Section 2: File Breakdown Table ── */}
+      {/* ── Filters (shared between both tables) ── */}
       {activeCoverage && (
-        <section>
-          <SectionLabel>File Breakdown — {activeLang}</SectionLabel>
-
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-2 mb-3">
+        <div className="flex-none px-6 pt-4 pb-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Language pills */}
             <div className="flex rounded-md border border-primary overflow-hidden text-xs flex-none">
               {detectedLanguages.map(lang => (
@@ -306,119 +303,127 @@ const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translation
             </div>
             <span className="text-xs text-secondary flex-none">{fileRows.length} file{fileRows.length !== 1 ? 's' : ''}</span>
           </div>
-
-          {/* Table */}
-          <div className="overflow-x-auto rounded-lg border border-primary">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-tertiary text-left text-xs font-semibold text-secondary uppercase tracking-wider">
-                  {([
-                    ['file', 'File'],
-                    ['total', 'Total'],
-                    ['translated', 'Translated'],
-                    ['untranslated', 'Untranslated'],
-                    ['stale', 'Stale'],
-                    ['completion', 'Completion'],
-                  ] as [FileSortKey, string][]).map(([key, label]) => (
-                    <th
-                      key={key}
-                      className="px-3 py-2 cursor-pointer select-none hover:text-primary"
-                      onClick={() => toggleSort(key)}
-                    >
-                      {label}<SortIcon col={key} />
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-primary">
-                {fileRows.map(row => (
-                  <tr key={row.sourceFilePath} className="hover:bg-tertiary-hover">
-                    <td className="px-3 py-2 font-mono text-xs text-primary">{row.sourceFilePath}</td>
-                    <td className="px-3 py-2 text-center">{row.totalStrings}</td>
-                    <td className="px-3 py-2 text-center text-green-600 dark:text-green-400">{row.translatedCount}</td>
-                    <td className="px-3 py-2 text-center text-red-600 dark:text-red-400">{row.totalStrings - row.translatedCount}</td>
-                    <td className="px-3 py-2 text-center text-amber-600 dark:text-amber-400">{row.staleCount}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <ProgressBar percent={row.completionPercent} />
-                        <span className="text-xs text-secondary w-8 text-right">{row.completionPercent}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {fileRows.length === 0 && (
-                  <tr><td colSpan={6} className="px-3 py-6 text-center text-secondary text-xs">No matching files</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        </div>
       )}
 
-      {/* ── Section 3: String-Level View (Virtual) ── */}
-      <section>
-        <SectionLabel>Translatable Strings ({stringItems.length})</SectionLabel>
-        <div
-          ref={containerRef}
-          onScroll={handleScroll}
-          className="h-[400px] overflow-y-auto border border-primary rounded-lg"
-        >
-          <div style={{ height: totalHeight, position: 'relative' }}>
-            {virtualItems.map(({ item: s, index, offsetTop }) => {
-              const translations = stringTranslations.get(s.id);
+      {/* ── Bottom half: two tables split 50/50 ── */}
+      <div className="flex-1 min-h-0 flex flex-col px-6 pb-6 gap-4">
+        {/* ── Section 2: File Breakdown Table ── */}
+        {activeCoverage && (
+          <section className="flex-1 min-h-0 flex flex-col">
+            <SectionLabel>File Breakdown — {activeLang}</SectionLabel>
+            <div className="flex-1 min-h-0 overflow-auto rounded-lg border border-primary">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-tertiary text-left text-xs font-semibold text-secondary uppercase tracking-wider">
+                    {([
+                      ['file', 'File'],
+                      ['total', 'Total'],
+                      ['translated', 'Translated'],
+                      ['untranslated', 'Untranslated'],
+                      ['stale', 'Stale'],
+                      ['completion', 'Completion'],
+                    ] as [FileSortKey, string][]).map(([key, label]) => (
+                      <th
+                        key={key}
+                        className="px-3 py-2 cursor-pointer select-none hover:text-primary"
+                        onClick={() => toggleSort(key)}
+                      >
+                        {label}<SortIcon col={key} />
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-primary">
+                  {fileRows.map(row => (
+                    <tr key={row.sourceFilePath} className="hover:bg-tertiary-hover">
+                      <td className="px-3 py-2 font-mono text-xs text-primary">{row.sourceFilePath}</td>
+                      <td className="px-3 py-2 text-center">{row.totalStrings}</td>
+                      <td className="px-3 py-2 text-center text-green-600 dark:text-green-400">{row.translatedCount}</td>
+                      <td className="px-3 py-2 text-center text-red-600 dark:text-red-400">{row.totalStrings - row.translatedCount}</td>
+                      <td className="px-3 py-2 text-center text-amber-600 dark:text-amber-400">{row.staleCount}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <ProgressBar percent={row.completionPercent} />
+                          <span className="text-xs text-secondary w-8 text-right">{row.completionPercent}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {fileRows.length === 0 && (
+                    <tr><td colSpan={6} className="px-3 py-6 text-center text-secondary text-xs">No matching files</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
-              return (
-                <div
-                  key={s.id}
-                  className="absolute left-0 right-0 flex items-center gap-3 px-3 border-b border-primary hover:bg-tertiary-hover cursor-pointer"
-                  style={{ top: offsetTop, height: 56 }}
-                  onClick={() => onOpenBlock(s.blockId, s.line)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={e => { if (e.key === 'Enter') onOpenBlock(s.blockId, s.line); }}
-                  data-testid={`string-row-${index}`}
-                >
-                  {/* Type badge */}
-                  <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded flex-none ${
-                    s.type === 'dialogue' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
-                    s.type === 'narration' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' :
-                    'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
-                  }`}>
-                    {s.type === 'menu-choice' ? 'choice' : s.type}
-                  </span>
+        {/* ── Section 3: String-Level View (Virtual) ── */}
+        <section className="flex-1 min-h-0 flex flex-col">
+          <SectionLabel>Translatable Strings ({stringItems.length})</SectionLabel>
+          <div
+            ref={containerRef}
+            onScroll={handleScroll}
+            className="flex-1 min-h-0 overflow-y-auto border border-primary rounded-lg"
+          >
+            <div style={{ height: totalHeight, position: 'relative' }}>
+              {virtualItems.map(({ item: s, index, offsetTop }) => {
+                const translations = stringTranslations.get(s.id);
 
-                  {/* Source text */}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-primary truncate">
-                      {s.characterTag && <span className="font-semibold text-indigo-500 mr-1">{s.characterTag}:</span>}
-                      {s.sourceText}
+                return (
+                  <div
+                    key={s.id}
+                    className="absolute left-0 right-0 flex items-center gap-3 px-3 border-b border-primary hover:bg-tertiary-hover cursor-pointer"
+                    style={{ top: offsetTop, height: 56 }}
+                    onClick={() => onOpenBlock(s.blockId, s.line)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={e => { if (e.key === 'Enter') onOpenBlock(s.blockId, s.line); }}
+                    data-testid={`string-row-${index}`}
+                  >
+                    {/* Type badge */}
+                    <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded flex-none ${
+                      s.type === 'dialogue' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
+                      s.type === 'narration' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' :
+                      'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
+                    }`}>
+                      {s.type === 'menu-choice' ? 'choice' : s.type}
+                    </span>
+
+                    {/* Source text */}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-primary truncate">
+                        {s.characterTag && <span className="font-semibold text-indigo-500 mr-1">{s.characterTag}:</span>}
+                        {s.sourceText}
+                      </div>
+                      <div className="text-[10px] text-secondary truncate">{s.filePath}:{s.line}</div>
                     </div>
-                    <div className="text-[10px] text-secondary truncate">{s.filePath}:{s.line}</div>
-                  </div>
 
-                  {/* Language status badges */}
-                  <div className="flex gap-1 flex-none">
-                    {detectedLanguages.map(lang => {
-                      const t = translations?.get(lang);
-                      const isStale = t && t.translatedText === s.sourceText;
-                      const color = t
-                        ? isStale
-                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
-                          : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                        : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300';
-                      return (
-                        <span key={lang} className={`text-[9px] font-bold uppercase px-1 py-0.5 rounded ${color}`} title={t ? (isStale ? `${lang}: stale` : `${lang}: ${t.translatedText}`) : `${lang}: missing`}>
-                          {lang.slice(0, 2)}
-                        </span>
-                      );
-                    })}
+                    {/* Language status badges */}
+                    <div className="flex gap-1 flex-none">
+                      {detectedLanguages.map(lang => {
+                        const t = translations?.get(lang);
+                        const isStale = t && t.translatedText === s.sourceText;
+                        const color = t
+                          ? isStale
+                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+                            : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                          : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300';
+                        return (
+                          <span key={lang} className={`text-[9px] font-bold uppercase px-1 py-0.5 rounded ${color}`} title={t ? (isStale ? `${lang}: stale` : `${lang}: ${t.translatedText}`) : `${lang}: missing`}>
+                            {lang.slice(0, 2)}
+                          </span>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   );
 };

@@ -879,7 +879,8 @@ app.whenReady().then(() => {
         if (code === 0) {
           resolve({ success: true, output: stdout });
         } else {
-          resolve({ success: false, output: stdout, error: stderr || `Process exited with code ${code}` });
+          const combined = [stderr, stdout].filter(Boolean).join('\n').trim();
+          resolve({ success: false, output: stdout, error: combined || `Process exited with code ${code}` });
         }
       });
 

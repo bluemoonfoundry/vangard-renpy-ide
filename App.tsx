@@ -2833,7 +2833,11 @@ const App: React.FC = () => {
         addToast(`Translation files generated for "${language}"`, 'success');
         await handleRefreshProject();
       } else {
-        addToast(`Failed to generate translations: ${result.error || 'Unknown error'}`, 'error');
+        const detail = result.error || 'Unknown error';
+        console.error('Generate translations failed:\n', detail);
+        // Show first meaningful line in the toast, full output is in the console
+        const firstLine = detail.split('\n').find(l => l.trim().length > 0) || detail;
+        addToast(`Translation generation failed: ${firstLine}`, 'error');
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);

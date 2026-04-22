@@ -319,8 +319,11 @@ export function computeLanguageCoverages(
       }
     }
 
+    // Stale strings have a translation entry but the text is identical to the source,
+    // so they shouldn't count toward completion — they're just untranslated placeholders.
+    const effectiveTranslated = translatedCount - staleCount;
     const untranslatedCount = totalStrings - translatedCount;
-    const completionPercent = totalStrings > 0 ? Math.round((translatedCount / totalStrings) * 100) : 0;
+    const completionPercent = totalStrings > 0 ? Math.round((effectiveTranslated / totalStrings) * 100) : 0;
 
     // File breakdown
     const fileBreakdown: TranslationFileBreakdown[] = [];
@@ -344,7 +347,7 @@ export function computeLanguageCoverages(
         totalStrings: fileTotal,
         translatedCount: fileTranslated,
         staleCount: fileStale,
-        completionPercent: fileTotal > 0 ? Math.round((fileTranslated / fileTotal) * 100) : 0,
+        completionPercent: fileTotal > 0 ? Math.round(((fileTranslated - fileStale) / fileTotal) * 100) : 0,
       });
     }
 
