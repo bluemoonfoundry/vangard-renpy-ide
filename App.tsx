@@ -247,6 +247,7 @@ const App: React.FC = () => {
     lastProjectDir: '',
   });
   const [isRenpyPathValid, setIsRenpyPathValid] = useState(false);
+  const [isGeneratingTranslations, setIsGeneratingTranslations] = useState(false);
   const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'punchlistMetadata' | 'diagnosticsTasks' | 'ignoredDiagnostics' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>>({
     draftingMode: false,
     storyCanvasLayoutMode: 'flow-lr',
@@ -2823,6 +2824,21 @@ const App: React.FC = () => {
       }
   }, [projectRootPath, addToast, setBlocks, setFileSystemTree, setImages, setAudios]);
 
+  const handleGenerateTranslations = useCallback(async (language: string) => {
+    if (!appSettings.renpyPath || !projectRootPath) return;
+    setIsGeneratingTranslations(true);
+    try {
+      await window.electronAPI!.generateTranslations(appSettings.renpyPath, projectRootPath, language);
+      addToast(`Translation files generated for "${language}"`, 'success');
+      await handleRefreshProject();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addToast(`Failed to generate translations: ${msg}`, 'error');
+    } finally {
+      setIsGeneratingTranslations(false);
+    }
+  }, [appSettings.renpyPath, projectRootPath, addToast, handleRefreshProject]);
+
   const handleNewProjectRequest = useCallback(() => {
     const hasUnsaved = dirtyBlockIds.size > 0 || dirtyEditors.size > 0 || hasUnsavedSettings;
     
@@ -4410,6 +4426,9 @@ const App: React.FC = () => {
         translationData={analysisResult.translationData}
         blocks={blocks}
         onOpenBlock={handleOpenEditor}
+        onGenerateTranslations={handleGenerateTranslations}
+        isGenerating={isGeneratingTranslations}
+        isRenpyPathValid={isRenpyPathValid}
       />;
     }
     if (tab.type === 'editor' && tab.blockId) {

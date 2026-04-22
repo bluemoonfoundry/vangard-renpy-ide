@@ -852,6 +852,39 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('renpy:generate-translations', async (event, sdkDir, projectPath, language) => {
+    const executable = getRenpyExecutable(sdkDir);
+    if (!executable) throw new Error('Ren\'Py SDK path is not configured');
+
+    return new Promise((resolve, reject) => {
+      let stdout = '';
+      let stderr = '';
+      const proc = spawn(executable, [projectPath, 'translate', language]);
+
+      const timeout = setTimeout(() => {
+        proc.kill();
+        reject(new Error('Translation generation timed out after 60 seconds'));
+      }, 60000);
+
+      proc.stdout.on('data', (data) => { stdout += data.toString(); });
+      proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+      proc.on('close', (code) => {
+        clearTimeout(timeout);
+        if (code === 0) {
+          resolve({ success: true, output: stdout });
+        } else {
+          reject(new Error(stderr || `Process exited with code ${code}`));
+        }
+      });
+
+      proc.on('error', (err) => {
+        clearTimeout(timeout);
+        reject(new Error(`Failed to start Ren'Py: ${err.message}`));
+      });
+    });
+  });
+
   ipcMain.handle('dialog:createProject', async () => {
     const { canceled, filePath } = await dialog.showSaveDialog({
         title: 'Create New Ren\'Py Project',

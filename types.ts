@@ -1131,6 +1131,7 @@ declare global {
           runGame: (renpyPath: string, projectPath: string) => void;
           stopGame: () => void;
           checkRenpyPath: (path: string) => Promise<boolean>;
+          generateTranslations: (sdkDir: string, projectPath: string, language: string) => Promise<{ success: boolean; output: string }>;
           onGameStarted: (callback: () => void) => () => void;
           onGameStopped: (callback: () => void) => () => void;
           onGameError: (callback: (error: string) => void) => () => void;

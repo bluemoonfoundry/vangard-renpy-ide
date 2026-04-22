@@ -16,6 +16,9 @@ interface TranslationDashboardProps {
   translationData: TranslationAnalysisResult;
   blocks: Block[];
   onOpenBlock: (blockId: string, line?: number) => void;
+  onGenerateTranslations: (language: string) => Promise<void>;
+  isGenerating: boolean;
+  isRenpyPathValid: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,13 +71,76 @@ type StatusFilter = 'all' | 'translated' | 'untranslated' | 'stale';
 // Main component
 // ---------------------------------------------------------------------------
 
-const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translationData, blocks: _blocks, onOpenBlock }) => {
+const LANGUAGE_PATTERN = /^[a-z][a-z0-9_]*$/;
+
+const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translationData, blocks: _blocks, onOpenBlock, onGenerateTranslations, isGenerating, isRenpyPathValid }) => {
   // --- State ---
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [textFilter, setTextFilter] = useState('');
   const [fileSortKey, setFileSortKey] = useState<FileSortKey>('file');
   const [fileSortDir, setFileSortDir] = useState<SortDir>('asc');
+  const [showGenerateForm, setShowGenerateForm] = useState(false);
+  const [languageInput, setLanguageInput] = useState('');
+
+  const isLanguageValid = LANGUAGE_PATTERN.test(languageInput);
+
+  const handleGenerate = useCallback(async () => {
+    if (!isLanguageValid) return;
+    await onGenerateTranslations(languageInput);
+    setLanguageInput('');
+    setShowGenerateForm(false);
+  }, [languageInput, isLanguageValid, onGenerateTranslations]);
+
+  const generateButton = (
+    <button
+      onClick={() => setShowGenerateForm(true)}
+      disabled={!isRenpyPathValid || isGenerating}
+      title={!isRenpyPathValid ? 'Configure Ren\'Py SDK path in settings first' : undefined}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      data-testid="generate-translations-btn"
+    >
+      {isGenerating ? (
+        <>
+          <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+          Generating...
+        </>
+      ) : 'Generate Translations'}
+    </button>
+  );
+
+  const generateForm = showGenerateForm ? (
+    <div className="flex items-center gap-2 mt-2" data-testid="generate-form">
+      <input
+        type="text"
+        placeholder='e.g. "french", "japanese"'
+        value={languageInput}
+        onChange={e => setLanguageInput(e.target.value.toLowerCase())}
+        onKeyDown={e => { if (e.key === 'Enter') handleGenerate(); if (e.key === 'Escape') setShowGenerateForm(false); }}
+        className="px-2 py-1 text-xs bg-secondary border border-primary rounded focus:outline-none focus:ring-1 focus:ring-indigo-400 text-primary placeholder:text-secondary w-48"
+        data-testid="language-input"
+        autoFocus
+      />
+      <button
+        onClick={handleGenerate}
+        disabled={!isLanguageValid || isGenerating}
+        className="px-3 py-1 text-xs font-medium rounded-md bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        data-testid="confirm-generate-btn"
+      >
+        Generate
+      </button>
+      <button
+        onClick={() => { setShowGenerateForm(false); setLanguageInput(''); }}
+        className="px-3 py-1 text-xs font-medium rounded-md bg-secondary text-secondary hover:bg-tertiary border border-primary transition-colors"
+        data-testid="cancel-generate-btn"
+      >
+        Cancel
+      </button>
+      {languageInput && !isLanguageValid && (
+        <span className="text-xs text-red-500" data-testid="language-validation-error">Lowercase letters, numbers, underscores only. Must start with a letter.</span>
+      )}
+    </div>
+  ) : null;
 
   const { languageCoverages, detectedLanguages, translatableStrings, stringTranslations } = translationData;
 
@@ -122,7 +188,7 @@ const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translation
     });
   }, [translatableStrings, activeLang, textFilter, statusFilter, stringTranslations]);
 
-  const { containerRef, onScroll, virtualItems, totalHeight } = useVirtualList(stringItems, 56);
+  const { containerRef, handleScroll, virtualItems, totalHeight } = useVirtualList(stringItems, 56);
 
   const toggleSort = useCallback((key: FileSortKey) => {
     setFileSortKey(prev => {
@@ -152,6 +218,8 @@ const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translation
           Ren'Py stores translations under <code className="px-1 py-0.5 bg-secondary rounded text-xs">game/tl/&lt;language&gt;/</code> directories.
           Generate translations with Ren'Py's built-in tool or create translation files manually to see coverage here.
         </p>
+        {!showGenerateForm && generateButton}
+        {generateForm}
       </div>
     );
   }
@@ -160,7 +228,11 @@ const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translation
     <div className="h-full overflow-y-auto p-6 space-y-6">
       {/* ── Section 1: Language Overview Cards ── */}
       <section>
-        <SectionLabel>Language Coverage</SectionLabel>
+        <div className="flex items-center justify-between mb-3">
+          <SectionLabel>Language Coverage</SectionLabel>
+          {!showGenerateForm && generateButton}
+        </div>
+        {generateForm}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {languageCoverages.map(cov => (
             <button
@@ -288,7 +360,7 @@ const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translation
         <SectionLabel>Translatable Strings ({stringItems.length})</SectionLabel>
         <div
           ref={containerRef}
-          onScroll={onScroll}
+          onScroll={handleScroll}
           className="h-[400px] overflow-y-auto border border-primary rounded-lg"
         >
           <div style={{ height: totalHeight, position: 'relative' }}>

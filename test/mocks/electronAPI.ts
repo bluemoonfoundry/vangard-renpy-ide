@@ -84,6 +84,7 @@ export interface MockElectronAPI {
   runGame: Mock<(renpyPath: string, projectPath: string) => void>;
   stopGame: Mock<() => void>;
   checkRenpyPath: Mock<(path: string) => Promise<boolean>>;
+  generateTranslations: Mock<(sdkDir: string, projectPath: string, language: string) => Promise<{ success: boolean; output: string }>>;
   onGameStarted: Mock<(callback: (...args: unknown[]) => unknown) => Unsubscribe>;
   onGameStopped: Mock<(callback: (...args: unknown[]) => unknown) => Unsubscribe>;
   onGameError: Mock<(callback: (...args: unknown[]) => unknown) => Unsubscribe>;
@@ -151,6 +152,7 @@ export function createMockElectronAPI(): MockElectronAPI {
     runGame: vi.fn(),
     stopGame: vi.fn(),
     checkRenpyPath: vi.fn().mockResolvedValue(false),
+    generateTranslations: vi.fn().mockResolvedValue({ success: true, output: '' }),
     onGameStarted: vi.fn().mockReturnValue(noopUnsubscribe),
     onGameStopped: vi.fn().mockReturnValue(noopUnsubscribe),
     onGameError: vi.fn().mockReturnValue(noopUnsubscribe),

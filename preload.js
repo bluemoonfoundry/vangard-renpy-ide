@@ -61,6 +61,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   runGame: (renpyPath, projectPath) => ipcRenderer.send('game:run', renpyPath, projectPath),
   stopGame: () => ipcRenderer.send('game:stop'),
   checkRenpyPath: (path) => ipcRenderer.invoke('renpy:check-path', path),
+  generateTranslations: (sdkDir, projectPath, language) => ipcRenderer.invoke('renpy:generate-translations', sdkDir, projectPath, language),
   onGameStarted: (callback) => {
     const subscription = () => callback();
     ipcRenderer.on('game-started', subscription);
