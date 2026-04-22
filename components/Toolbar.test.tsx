@@ -26,6 +26,7 @@ describe('Toolbar', () => {
     onAddStickyNote: vi.fn(),
     isGameRunning: false,
     onRunGame: vi.fn(),
+    onWarpToLabel: vi.fn(),
     onStopGame: vi.fn(),
     isRenpyPathValid: true,
     draftingMode: false,
@@ -43,6 +44,7 @@ describe('Toolbar', () => {
     expect(screen.getByTitle('New Scene (N)')).toBeInTheDocument();
     expect(screen.getByTitle('Leave a Note on active canvas')).toBeInTheDocument();
     expect(screen.getByTitle('Organize Story Layout')).toBeInTheDocument();
+    expect(screen.getByTitle('Warp to Label...')).toBeInTheDocument();
     expect(screen.getByTitle('Run Project (F5)')).toBeInTheDocument();
   });
 
@@ -109,8 +111,18 @@ describe('Toolbar', () => {
 
   it('shows Run button when game is not running', () => {
     render(<Toolbar {...createProps({ isGameRunning: false })} />);
+    expect(screen.getByTitle('Warp to Label...')).toBeInTheDocument();
     expect(screen.getByTitle('Run Project (F5)')).toBeInTheDocument();
     expect(screen.queryByTitle('Stop Game')).not.toBeInTheDocument();
+  });
+
+  it('calls warp handler when Warp to Label is clicked', async () => {
+    const props = createProps();
+    const user = userEvent.setup();
+    render(<Toolbar {...props} />);
+
+    await user.click(screen.getByTitle('Warp to Label...'));
+    expect(props.onWarpToLabel).toHaveBeenCalledTimes(1);
   });
 
   it('disables Run button when no project is open', () => {

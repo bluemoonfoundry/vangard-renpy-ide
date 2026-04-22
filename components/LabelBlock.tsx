@@ -11,6 +11,7 @@ import type { LabelNode } from '../types';
 interface LabelBlockProps {
   node: LabelNode;
   onOpenEditor: (blockId: string, line: number) => void;
+  onContextMenu?: (event: React.MouseEvent<HTMLDivElement>) => void;
   isSelected: boolean;
   isDragging: boolean;
   isEntry?: boolean;
@@ -35,6 +36,7 @@ const OVERLAY_STYLES: Record<NonNullable<LabelBlockProps['overlayHighlight']>, {
 const LabelBlock: React.FC<LabelBlockProps> = React.memo(({
   node,
   onOpenEditor,
+  onContextMenu,
   isSelected,
   isDragging,
   isEntry,
@@ -104,6 +106,7 @@ const LabelBlock: React.FC<LabelBlockProps> = React.memo(({
         height: node.height,
         zIndex: isSelected ? 10 : 5,
       }}
+      onContextMenu={onContextMenu}
       onDoubleClick={() => onOpenEditor(node.blockId, node.startLine)}
       title={`Label: ${node.label}\nDouble-click to open in editor${roleTitle}`}
     >

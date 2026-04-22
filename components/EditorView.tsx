@@ -6,7 +6,7 @@
  * Supports undo/redo, minimap, and integration with story canvas for navigation.
  */
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type { Block, RenpyAnalysisResult, ToastMessage, UserSnippet, MenuTemplate, MenuChoice as MenuChoiceType } from '../types';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
@@ -17,6 +17,7 @@ import { initTextMate, createTextMateTokensProvider } from '../lib/textmateGramm
 import { getTripleQuotedLineMask } from '../lib/renpyTripleQuotes';
 import { isReservedRenpyName } from '../lib/renpyNames';
 import { collectRenpyHasLabelGuards, isJumpGuardedByHasLabel } from '../lib/renpyLabelGuards';
+import { getLabelAtLine } from '../lib/warpTarget';
 import {
   getSemanticTokensLegend,
   computeSemanticTokens,
@@ -46,6 +47,7 @@ interface EditorViewProps {
   onEditorMount: (blockId: string, editor: monaco.editor.IStandaloneCodeEditor) => void;
   onEditorUnmount: (blockId: string) => void;
   onCursorPositionChange?: (pos: { line: number; column: number } | null) => void;
+  onWarpToLabel: (labelName: string) => void;
   draftingMode: boolean;
   existingImageTags: Set<string>;
   existingAudioPaths: Set<string>;
@@ -242,6 +244,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     onEditorMount,
     onEditorUnmount,
     onCursorPositionChange,
+    onWarpToLabel,
     draftingMode,
     existingImageTags,
     existingAudioPaths
@@ -278,11 +281,14 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   }
   const onEditorUnmountRef = useRef(onEditorUnmount);
   const onCursorPositionChangeRef = useRef(onCursorPositionChange);
+  const onWarpToLabelRef = useRef(onWarpToLabel);
   const onContentChangeRef = useRef(onContentChange);
   const contentChangeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userSnippetsRef = useRef(props.userSnippets);
   const menuTemplatesRef = useRef(props.menuTemplates);
   const onSaveMenuTemplateRef = useRef(props.onSaveMenuTemplate);
+  const warpLabelContextKeyRef = useRef<monaco.editor.IContextKey<boolean> | null>(null);
+  const warpLabelNameRef = useRef<string | null>(null);
 
   useEffect(() => {
     onDirtyChangeRef.current = onDirtyChange;
@@ -294,11 +300,19 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     semanticTokensChangeEmitter.current.fire();
     onEditorUnmountRef.current = onEditorUnmount;
     onCursorPositionChangeRef.current = onCursorPositionChange;
+    onWarpToLabelRef.current = onWarpToLabel;
     onContentChangeRef.current = onContentChange;
     userSnippetsRef.current = props.userSnippets;
     menuTemplatesRef.current = props.menuTemplates;
     onSaveMenuTemplateRef.current = props.onSaveMenuTemplate;
-  }, [onDirtyChange, onTriggerSave, block, onSwitchFocusBlock, analysisResult, onEditorUnmount, onCursorPositionChange, onContentChange, props.userSnippets, props.menuTemplates, props.onSaveMenuTemplate]);
+  }, [onDirtyChange, onTriggerSave, block, onSwitchFocusBlock, analysisResult, onEditorUnmount, onCursorPositionChange, onWarpToLabel, onContentChange, props.userSnippets, props.menuTemplates, props.onSaveMenuTemplate]);
+
+  const syncWarpContext = useCallback((lineNumber?: number | null) => {
+    const line = lineNumber ?? editorRef.current?.getPosition()?.lineNumber ?? null;
+    const labelLocation = line ? getLabelAtLine(analysisResultRef.current.labels, blockRef.current.id, line) : null;
+    warpLabelNameRef.current = labelLocation?.label ?? null;
+    warpLabelContextKeyRef.current?.set(Boolean(labelLocation));
+  }, []);
 
   // This effect syncs the Monaco model when block.content is updated externally
   // (e.g. the character editor rewrites a define statement, or a file is reloaded).
@@ -690,6 +704,8 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     editor.focus();
     setIsMounted(true);
     updateContext();
+    warpLabelContextKeyRef.current = editor.createContextKey('renpyCanWarpHere', false);
+    syncWarpContext(editor.getPosition()?.lineNumber ?? null);
 
     // Scroll to the requested line on initial mount (the useEffect approach fires
     // before editorRef is set, so new-tab scroll requests need handling here too)
@@ -760,6 +776,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         updateContext();
         const pos = editor.getPosition();
         if (pos) {
+            syncWarpContext(pos.lineNumber);
             onCursorPositionChangeRef.current?.({ line: pos.lineNumber, column: pos.column });
             const model = editor.getModel();
             if (model) {
@@ -773,6 +790,15 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                 }
             }
         }
+    });
+
+    editor.onContextMenu((e) => {
+      if (e.target.position) {
+        editor.setPosition(e.target.position);
+        syncWarpContext(e.target.position.lineNumber);
+      } else {
+        syncWarpContext(null);
+      }
     });
 
     editor.addAction({
@@ -807,6 +833,20 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         run: (ed) => {
             setInsertionPosition(ed.getPosition());
             setShowMenuTemplatePicker(true);
+        },
+    });
+
+    editor.addAction({
+        id: 'warp-to-here',
+        label: 'Warp to here',
+        contextMenuGroupId: 'renpy',
+        contextMenuOrder: 3,
+        precondition: 'renpyCanWarpHere',
+        run: () => {
+            const labelName = warpLabelNameRef.current;
+            if (labelName) {
+                onWarpToLabelRef.current(labelName);
+            }
         },
     });
 

@@ -58,7 +58,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   // --- Game Execution ---
   selectRenpy: () => ipcRenderer.invoke('dialog:selectRenpy'),
-  runGame: (renpyPath, projectPath) => ipcRenderer.send('game:run', renpyPath, projectPath),
+  runGame: (renpyPath, projectPath, warpTarget) => ipcRenderer.send('game:run', renpyPath, projectPath, warpTarget),
   stopGame: () => ipcRenderer.send('game:stop'),
   checkRenpyPath: (path) => ipcRenderer.invoke('renpy:check-path', path),
   generateTranslations: (sdkDir, projectPath, language) => ipcRenderer.invoke('renpy:generate-translations', sdkDir, projectPath, language),

@@ -1196,7 +1196,7 @@ app.whenReady().then(() => {
     setExplorerMenuState(state);
   });
 
-  ipcMain.on('game:run', (event, renpyPath, projectPath) => {
+  ipcMain.on('game:run', (event, renpyPath, projectPath, warpTarget) => {
     if (gameProcess) {
       return;
     }
@@ -1204,7 +1204,20 @@ app.whenReady().then(() => {
     try {
       // renpyPath may be an SDK directory or a direct executable path (legacy)
       const executable = getRenpyExecutable(renpyPath) || renpyPath;
-      gameProcess = spawn(executable, [projectPath]);
+      const args = [projectPath];
+      if (warpTarget) {
+        args.push('--warp', warpTarget);
+      }
+      const env = warpTarget
+        ? {
+            ...process.env,
+            RENPY_SKIP_MAIN_MENU: '1',
+            RENPY_SKIP_SPLASHSCREEN: '1',
+          }
+        : process.env;
+      gameProcess = spawn(executable, args, {
+        env,
+      });
       event.sender.send('game-started');
       setGameRunningMenuState(true);
 

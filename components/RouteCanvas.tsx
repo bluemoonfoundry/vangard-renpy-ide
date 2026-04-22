@@ -19,6 +19,7 @@ import MenuInspectorPanel from './MenuInspectorPanel';
 import type { SelectedMenu, MenuPopoverChoice } from './MenuInspectorPanel';
 import StickyNoteComponent from './StickyNote';
 import CanvasContextMenu from './CanvasContextMenu';
+import CanvasNodeContextMenu from './CanvasNodeContextMenu';
 import type { MinimapItem } from './Minimap';
 import type { LabelNode, RouteLink, Position, IdentifiedRoute, MouseGestureSettings, StoryCanvasGroupingMode, StoryCanvasLayoutMode, StickyNote } from '../types';
 import { computeRouteCanvasLayout } from '../lib/routeCanvasLayout';
@@ -41,6 +42,7 @@ interface RouteCanvasProps {
   groupingMode: StoryCanvasGroupingMode;
   onChangeLayoutMode: (mode: StoryCanvasLayoutMode) => void;
   onChangeGroupingMode: (mode: StoryCanvasGroupingMode) => void;
+  onWarpToLabel: (labelName: string) => void;
   centerOnStartRequest?: { key: number } | null;
   centerOnNodeRequest?: { nodeId: string; key: number } | null;
 }
@@ -56,6 +58,12 @@ interface EdgeContextMenuState {
   x: number;
   y: number;
   link: RouteLink;
+}
+
+interface NodeContextMenuState {
+  x: number;
+  y: number;
+  node: LabelNode;
 }
 
 const getAttachmentPoint = (node: LabelNode, side: 'left' | 'right' | 'top' | 'bottom'): Position => {
@@ -310,6 +318,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
   groupingMode,
   onChangeLayoutMode,
   onChangeGroupingMode,
+  onWarpToLabel,
   centerOnStartRequest,
   centerOnNodeRequest,
 }) => {
@@ -321,6 +330,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
   const [isMenuPanelOpen, setIsMenuPanelOpen] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [edgeContextMenu, setEdgeContextMenu] = useState<EdgeContextMenuState | null>(null);
+  const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState | null>(null);
   const [canvasContextMenu, setCanvasContextMenu] = useState<{ x: number; y: number; worldPos: Position } | null>(null);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const [routeSearchQuery, setRouteSearchQuery] = useState('');
@@ -947,6 +957,14 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
     setShowRouteSearchResults(false);
     setChooserMode(null);
   }, []);
+
+  const handleOpenNodeContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>, node: LabelNode) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setNodeContextMenu({ x: event.clientX, y: event.clientY, node });
+    setEdgeContextMenu(null);
+    closeTransientUi();
+  }, [closeTransientUi]);
 
   const handleChangeViewLevel = useCallback((level: 'label' | 'file') => {
     if (level === 'file' && traceMode) handleExitTrace();
@@ -1985,6 +2003,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
                   key={node.id}
                   node={node}
                   onOpenEditor={onOpenEditor}
+                  onContextMenu={(event) => handleOpenNodeContextMenu(event, node)}
                   isSelected={isSelected}
                   isDragging={isDraggingSelection && isSelected}
                   isEntry={node.id === entryNodeId}
@@ -2072,6 +2091,18 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
             Open source in editor
           </button>
         </div>
+      )}
+      {nodeContextMenu && (
+        <CanvasNodeContextMenu
+          x={nodeContextMenu.x}
+          y={nodeContextMenu.y}
+          label={nodeContextMenu.node.label}
+          onClose={() => setNodeContextMenu(null)}
+          onOpenEditor={() => {
+            onOpenEditor(nodeContextMenu.node.blockId, nodeContextMenu.node.startLine);
+          }}
+          onWarpToHere={() => onWarpToLabel(nodeContextMenu.node.label)}
+        />
       )}
       {/* ── Bottom-right cluster: Nav controls + Minimap ── */}
       <div className="absolute bottom-4 right-4 z-30 flex flex-col items-end gap-1.5" onPointerDown={e => e.stopPropagation()}>

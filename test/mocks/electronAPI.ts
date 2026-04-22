@@ -81,7 +81,7 @@ export interface MockElectronAPI {
 
   // Game execution
   selectRenpy: Mock<() => Promise<string | null>>;
-  runGame: Mock<(renpyPath: string, projectPath: string) => void>;
+  runGame: Mock<(renpyPath: string, projectPath: string, warpTarget?: string) => void>;
   stopGame: Mock<() => void>;
   checkRenpyPath: Mock<(path: string) => Promise<boolean>>;
   generateTranslations: Mock<(sdkDir: string, projectPath: string, language: string) => Promise<{ success: boolean; output: string; error?: string }>>;

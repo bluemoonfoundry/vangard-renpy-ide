@@ -24,6 +24,7 @@ import ImageMapComposer from './components/ImageMapComposer';
 import ScreenLayoutComposer from './components/ScreenLayoutComposer';
 import MarkdownPreviewView from './components/MarkdownPreviewView';
 import DiagnosticsPanel from './components/DiagnosticsPanel';
+import WarpVariablesModal from './components/WarpVariablesModal';
 import { useDiagnostics, migratePunchlistToTasks } from './hooks/useDiagnostics';
 import { useDebounce } from './hooks/useDebounce';
 import TabContextMenu from './components/TabContextMenu';
@@ -56,6 +57,13 @@ import {
   computeRouteCanvasLayoutFingerprint,
   getRouteCanvasLayoutVersion,
 } from './lib/routeCanvasLayout';
+import { resolveWarpTarget } from './lib/warpTarget';
+import {
+  buildAfterWarpScript,
+  getWarpVariableDrafts,
+  hasAfterWarpLabel,
+  type WarpVariableDraft,
+} from './lib/warpAfterWarp';
 import type {
   Block, BlockGroup, Position, FileSystemTreeNode, EditorTab,
   ToastMessage, Theme, ProjectImage, RenpyAudio, Variable,
@@ -269,10 +277,16 @@ const App: React.FC = () => {
   const [centerOnRouteNodeRequest, setCenterOnRouteNodeRequest] = useState<{ nodeId: string; key: number } | null>(null);
   const [centerOnChoiceNodeRequest, setCenterOnChoiceNodeRequest] = useState<{ nodeId: string; key: number } | null>(null);
   const [isGoToLabelOpen, setIsGoToLabelOpen] = useState(false);
+  const [isWarpToLabelOpen, setIsWarpToLabelOpen] = useState(false);
+  const [isWarpVariablesOpen, setIsWarpVariablesOpen] = useState(false);
+  const [pendingWarpLabelName, setPendingWarpLabelName] = useState<string | null>(null);
+  const [pendingWarpTarget, setPendingWarpTarget] = useState<string | null>(null);
+  const [pendingWarpVariableDrafts, setPendingWarpVariableDrafts] = useState<WarpVariableDraft[]>([]);
   const [flashBlockRequest, setFlashBlockRequest] = useState<{ blockId: string, key: number } | null>(null);
   const [canvasFilters, setCanvasFilters] = useState({ story: true, screens: true, config: false, notes: true, minimap: true });
   const [_editorCursorPosition, setEditorCursorPosition] = useState<{ line: number; column: number } | null>(null);
   const [hoverHighlightIds, setHoverHighlightIds] = useState<Set<string> | null>(null);
+  const warpTempFilePathRef = useRef<string | null>(null);
 
   // --- State: Flow Canvas (label-level flow graph) ---
   const [routeNodeLayoutCache, setRouteNodeLayoutCache] = useState<Map<string, Position>>(new Map());
@@ -3257,6 +3271,13 @@ const App: React.FC = () => {
     : activeCanvasTabId === 'choice-canvas' ? 'Choice'
     : '';
 
+  const warpLabelItems = useMemo<GoToLabelItem[]>(() => {
+    return Object.values(analysisResult.labels)
+      .slice()
+      .sort((a, b) => a.label.localeCompare(b.label))
+      .map(loc => ({ label: loc.label, id: loc.label }));
+  }, [analysisResult.labels]);
+
   const handleGoToLabel = useCallback((id: string) => {
     setIsGoToLabelOpen(false);
     if (activeCanvasTabId === 'canvas') {
@@ -3268,9 +3289,98 @@ const App: React.FC = () => {
     }
   }, [activeCanvasTabId]);
 
+  const handleRunGame = useCallback(() => {
+    if (!window.electronAPI || !projectRootPath) return;
+    window.electronAPI.runGame(appSettings.renpyPath, projectRootPath);
+  }, [appSettings.renpyPath, projectRootPath]);
+
+  const cleanupWarpTempFile = useCallback(async () => {
+    if (!window.electronAPI || !projectRootPath) return;
+
+    const tempPath = warpTempFilePathRef.current
+      ?? await window.electronAPI.path.join(projectRootPath, 'game', '_ide_after_warp.rpy');
+
+    try {
+      if (await window.electronAPI.fileExists(tempPath)) {
+        await window.electronAPI.removeEntry(tempPath);
+      }
+    } catch (error) {
+      console.error('Failed to clean up temporary warp file:', error);
+    } finally {
+      if (warpTempFilePathRef.current === tempPath) {
+        warpTempFilePathRef.current = null;
+      }
+    }
+  }, [projectRootPath]);
+
+  const resetWarpLaunchState = useCallback(() => {
+    setIsWarpVariablesOpen(false);
+    setPendingWarpLabelName(null);
+    setPendingWarpTarget(null);
+    setPendingWarpVariableDrafts([]);
+  }, []);
+
+  const handleConfirmWarpVariables = useCallback(async (variableDrafts: WarpVariableDraft[]) => {
+    if (!window.electronAPI || !projectRootPath || !pendingWarpTarget) return;
+
+    const tempPath = await window.electronAPI.path.join(projectRootPath, 'game', '_ide_after_warp.rpy');
+    const needsTempFile = variableDrafts.length > 0 || !hasAfterWarpLabel(analysisResult.labels);
+
+    try {
+      if (needsTempFile) {
+        const script = buildAfterWarpScript(variableDrafts, !hasAfterWarpLabel(analysisResult.labels));
+        await cleanupWarpTempFile();
+
+        const writeResult = await window.electronAPI.writeFile(tempPath, script, 'utf-8');
+        if (!writeResult.success) {
+          throw new Error(writeResult.error || 'Failed to write temporary warp file.');
+        }
+
+        warpTempFilePathRef.current = tempPath;
+      } else {
+        await cleanupWarpTempFile();
+      }
+
+      const warpTarget = pendingWarpTarget;
+      resetWarpLaunchState();
+      window.electronAPI.runGame(appSettings.renpyPath, projectRootPath, warpTarget);
+    } catch (error) {
+      console.error('Failed to launch warped game:', error);
+      addToast(`Failed to launch warp: ${formatErrorMessage(error)}`, 'error');
+    }
+  }, [analysisResult.labels, addToast, appSettings.renpyPath, cleanupWarpTempFile, pendingWarpTarget, projectRootPath, resetWarpLaunchState]);
+
+  const handleWarpToLabel = useCallback((labelName: string) => {
+    if (!window.electronAPI || !projectRootPath) return;
+
+    const warpTarget = resolveWarpTarget(blocks, analysisResult.labels, labelName);
+    setIsWarpToLabelOpen(false);
+
+    if (!warpTarget) {
+      addToast(`Could not resolve warp target for "${labelName}"`, 'warning');
+      return;
+    }
+
+    setPendingWarpLabelName(labelName);
+    setPendingWarpTarget(warpTarget);
+    setPendingWarpVariableDrafts(getWarpVariableDrafts(
+      analysisResult.variables,
+      analysisResult.translationData.translatableStrings,
+    ));
+    setIsWarpVariablesOpen(true);
+  }, [analysisResult.labels, analysisResult.translationData.translatableStrings, analysisResult.variables, addToast, blocks, projectRootPath]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'g') {
+      const isMetaShortcut = e.ctrlKey || e.metaKey;
+      const isG = e.key.toLowerCase() === 'g';
+      if (isMetaShortcut && e.shiftKey && isG) {
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        if (!projectRootPath) return;
+        e.preventDefault();
+        setIsWarpToLabelOpen(true);
+      } else if (isMetaShortcut && isG) {
         const tag = (e.target as HTMLElement).tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA') return;
         if (!activeCanvasTabId) return;
@@ -3290,11 +3400,13 @@ const App: React.FC = () => {
       }
       if (e.key === 'Escape') {
         setIsGoToLabelOpen(false);
+        setIsWarpToLabelOpen(false);
+        resetWarpLaunchState();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [activeCanvasTabId, activePaneId, activeTabId, secondaryActiveTabId, handleCloseTab]);
+  }, [activeCanvasTabId, activePaneId, activeTabId, handleCloseTab, projectRootPath, resetWarpLaunchState, secondaryActiveTabId]);
 
   // DnD Handlers for Tabs
   const handleTabDragStart = (e: React.DragEvent<HTMLDivElement>, tabId: string, paneId: 'primary' | 'secondary' = 'primary') => {
@@ -3889,9 +4001,16 @@ const App: React.FC = () => {
   useEffect(() => {
       if (!window.electronAPI) return;
       const removeStarted = window.electronAPI.onGameStarted(() => setIsGameRunning(true));
-      const removeStopped = window.electronAPI.onGameStopped(() => setIsGameRunning(false));
-      return () => { removeStarted(); removeStopped(); };
-  }, []);
+      const removeStopped = window.electronAPI.onGameStopped(() => {
+        setIsGameRunning(false);
+        void cleanupWarpTempFile();
+      });
+      const removeError = window.electronAPI.onGameError(() => {
+        setIsGameRunning(false);
+        void cleanupWarpTempFile();
+      });
+      return () => { removeStarted(); removeStopped(); removeError(); };
+  }, [cleanupWarpTempFile]);
 
   // --- Auto-update notifications ---
   useEffect(() => {
@@ -4381,6 +4500,7 @@ const App: React.FC = () => {
         groupingMode={projectSettings.routeCanvasGroupingMode ?? 'none'}
         onChangeLayoutMode={handleChangeRouteCanvasLayoutMode}
         onChangeGroupingMode={handleChangeRouteCanvasGroupingMode}
+        onWarpToLabel={handleWarpToLabel}
         centerOnStartRequest={centerOnRouteStartRequest}
         centerOnNodeRequest={centerOnRouteNodeRequest}
       />;
@@ -4401,6 +4521,7 @@ const App: React.FC = () => {
         groupingMode={projectSettings.choiceCanvasGroupingMode ?? 'none'}
         onChangeLayoutMode={handleChangeChoiceCanvasLayoutMode}
         onChangeGroupingMode={handleChangeChoiceCanvasGroupingMode}
+        onWarpToLabel={handleWarpToLabel}
         centerOnStartRequest={centerOnChoiceStartRequest}
         centerOnNodeRequest={centerOnChoiceNodeRequest}
       />;
@@ -4452,6 +4573,7 @@ const App: React.FC = () => {
         onEditorMount={(id, editor) => editorInstances.current.set(id, editor)}
         onEditorUnmount={(id) => { const editor = editorInstances.current.get(id); if (editor) { const block = blocksRef.current.find(b => b.id === id); if (block && editor.getValue() !== block.content) { syncEditorToStateAndMarkDirty(id, editor.getValue()); } } editorInstances.current.delete(id); }}
         onCursorPositionChange={setEditorCursorPosition}
+        onWarpToLabel={handleWarpToLabel}
         draftingMode={projectSettings.draftingMode} existingImageTags={existingImageTags} existingAudioPaths={existingAudioPaths}
         userSnippets={appSettings.userSnippets}
         menuTemplates={appSettings.menuTemplates}
@@ -4692,7 +4814,8 @@ const App: React.FC = () => {
         diagnosticsErrorCount={diagnosticsResult.errorCount}
         onAddStickyNote={activeCanvasOnAddStickyNote}
         isGameRunning={isGameRunning}
-        onRunGame={() => window.electronAPI?.runGame(appSettings.renpyPath, projectRootPath!)}
+        onRunGame={handleRunGame}
+        onWarpToLabel={() => setIsWarpToLabelOpen(true)}
         onStopGame={() => window.electronAPI?.stopGame()}
         isRenpyPathValid={isRenpyPathValid}
         draftingMode={projectSettings.draftingMode}
@@ -5200,6 +5323,24 @@ const App: React.FC = () => {
         canvasName={goToLabelCanvasName}
         onSelect={handleGoToLabel}
         onClose={() => setIsGoToLabelOpen(false)}
+      />
+      <GoToLabelModal
+        isOpen={isWarpToLabelOpen}
+        items={warpLabelItems}
+        canvasName="Warp"
+        title="Warp to Label"
+        placeholder="Warp to label…"
+        emptyStateText="No labels available"
+        onSelect={handleWarpToLabel}
+        onClose={() => setIsWarpToLabelOpen(false)}
+      />
+      <WarpVariablesModal
+        isOpen={isWarpVariablesOpen}
+        defaultVariables={pendingWarpVariableDrafts}
+        hasExistingAfterWarp={hasAfterWarpLabel(analysisResult.labels)}
+        warpLabelName={pendingWarpLabelName ?? undefined}
+        onClose={resetWarpLaunchState}
+        onConfirm={handleConfirmWarpVariables}
       />
 
       <FirstRunTutorial

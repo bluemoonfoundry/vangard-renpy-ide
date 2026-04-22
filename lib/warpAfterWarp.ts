@@ -1,0 +1,190 @@
+import type { LabelLocation, TranslatableString, Variable } from '../types';
+
+export interface WarpVariableDraft {
+  name: string;
+  value: string;
+  source: 'default' | 'interpolated';
+}
+
+const INTERPOLATION_SKIP_FILES = new Set(['options.rpy', 'gui.rpy', 'screens.rpy']);
+
+/**
+ * Returns the default variables that can be overridden for a warp launch.
+ * These are sorted alphabetically so the modal stays stable across renders.
+ */
+function extractInterpolationSegments(sourceText: string): string[] {
+  const segments: string[] = [];
+  let i = 0;
+
+  while (i < sourceText.length) {
+    if (sourceText[i] !== '[' || sourceText[i + 1] === '[') {
+      i++;
+      continue;
+    }
+
+    let depth = 1;
+    let j = i + 1;
+    while (j < sourceText.length && depth > 0) {
+      if (sourceText[j] === '[' && sourceText[j + 1] !== '[') {
+        depth++;
+      } else if (sourceText[j] === ']') {
+        depth--;
+      }
+      j++;
+    }
+
+    if (depth === 0) {
+      segments.push(sourceText.slice(i + 1, j - 1));
+      i = j;
+    } else {
+      break;
+    }
+  }
+
+  return segments;
+}
+
+/**
+ * Finds interpolated variable names used in Ren'Py text like `[mc_name]`.
+ * This intentionally errs on the side of inclusion so the warp modal can
+ * surface likely missing values for debug launches.
+ */
+export function getInterpolatedVariableNames(strings: TranslatableString[]): string[] {
+  const names = new Set<string>();
+  const tokenRegex = /\b[a-zA-Z_][a-zA-Z0-9_.]*\b/g;
+  const ignored = new Set([
+    'and', 'as', 'assert', 'break', 'class', 'continue', 'def', 'del', 'elif',
+    'else', 'except', 'False', 'finally', 'for', 'from', 'global', 'if', 'import',
+    'in', 'is', 'lambda', 'None', 'nonlocal', 'not', 'or', 'pass', 'raise',
+    'return', 'True', 'try', 'while', 'with', 'yield',
+    'r', 's', 'q', 't', 'i', 'u', 'l', 'c',
+  ]);
+
+  for (const entry of strings) {
+    const fileName = entry.filePath.split(/[\\/]/).pop()?.toLowerCase() ?? '';
+    if (INTERPOLATION_SKIP_FILES.has(fileName)) {
+      continue;
+    }
+
+    for (const segment of extractInterpolationSegments(entry.sourceText)) {
+      for (const match of segment.matchAll(tokenRegex)) {
+        const token = match[0];
+        if (!ignored.has(token) && !token.includes('.')) {
+          names.add(token);
+        }
+      }
+    }
+  }
+
+  return Array.from(names).sort((a, b) => a.localeCompare(b));
+}
+
+export function getWarpVariableDrafts(
+  variables: Map<string, Variable>,
+  translatableStrings: TranslatableString[],
+): WarpVariableDraft[] {
+  const drafts = new Map<string, WarpVariableDraft>();
+
+  for (const variable of variables.values()) {
+    if (variable.type !== 'default') continue;
+    drafts.set(variable.name, {
+      name: variable.name,
+      value: variable.initialValue,
+      source: 'default',
+    });
+  }
+
+  for (const name of getInterpolatedVariableNames(translatableStrings)) {
+    if (!drafts.has(name)) {
+      drafts.set(name, {
+        name,
+        value: `default_${name}`,
+        source: 'interpolated',
+      });
+    }
+  }
+
+  return Array.from(drafts.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Converts a user-entered warp value into a valid Ren'Py/Python expression.
+ *
+ * The warp modal is text-based, so plain words like `Alex` or `default_mc_name`
+ * should become quoted string literals. Existing expressions like `0`,
+ * `True`, `persistent.mc_name`, or `"Player"` are left alone.
+ */
+function serializeWarpValue(value: string): string {
+  const trimmed = value.trim();
+
+  if (trimmed.length === 0) {
+    return '""';
+  }
+
+  if (
+    /^(['"]).*\1$/.test(trimmed) ||
+    /^(?:-?\d+(?:\.\d+)?)$/.test(trimmed) ||
+    /^(?:True|False|None)$/.test(trimmed) ||
+    /^[[{(].*[\]})]$/.test(trimmed) ||
+    trimmed.includes('.') ||
+    trimmed.includes('(') ||
+    trimmed.includes(')') ||
+    trimmed.includes('{') ||
+    trimmed.includes('}') ||
+    trimmed.includes('[') ||
+    trimmed.includes(']') ||
+    trimmed.includes(',') ||
+    trimmed.includes(':') ||
+    trimmed.includes('+') ||
+    trimmed.includes('-') ||
+    trimmed.includes('*') ||
+    trimmed.includes('/') ||
+    trimmed.includes('%') ||
+    trimmed.includes('<') ||
+    trimmed.includes('>') ||
+    trimmed.includes('=') ||
+    trimmed.includes('!')
+  ) {
+    return trimmed;
+  }
+
+  return JSON.stringify(trimmed);
+}
+
+/**
+ * Ren'Py only needs the fallback hook when the project does not already define
+ * its own `label after_warp`.
+ */
+export function hasAfterWarpLabel(labels: Record<string, LabelLocation>): boolean {
+  return labels.after_warp?.type === 'label';
+}
+
+/**
+ * Builds the temporary `_ide_after_warp.rpy` contents.
+ *
+ * The overrides must run from within `label after_warp:` because warp skips
+ * the normal script setup path before reaching the target statement.
+ */
+export function buildAfterWarpScript(
+  variableDrafts: WarpVariableDraft[],
+  includeAfterWarpLabel: boolean,
+): string {
+  const lines: string[] = [
+    '# Generated by RenIDE for temporary warp overrides.',
+    '# This file is removed automatically after the game stops.',
+  ];
+
+  if (includeAfterWarpLabel) {
+    lines.push('');
+    lines.push('label after_warp:');
+    for (const variable of variableDrafts) {
+      lines.push(`    $ ${variable.name} = ${serializeWarpValue(variable.value)}`);
+    }
+    lines.push('    return');
+  } else if (variableDrafts.length > 0) {
+    lines.push('');
+    lines.push('# Project already defines after_warp; keep overrides disabled to avoid duplicate labels.');
+  }
+
+  return `${lines.join('\n')}\n`;
+}

@@ -1132,7 +1132,7 @@ declare global {
           saveAppSettings: (settings: AppSettings) => Promise<{ success: boolean; error?: string }>;
           getUserDataPath: () => Promise<string>;
           selectRenpy: () => Promise<string | null>;
-          runGame: (renpyPath: string, projectPath: string) => void;
+          runGame: (renpyPath: string, projectPath: string, warpTarget?: string) => void;
           stopGame: () => void;
           checkRenpyPath: (path: string) => Promise<boolean>;
           generateTranslations: (sdkDir: string, projectPath: string, language: string) => Promise<{ success: boolean; output: string; error?: string }>;

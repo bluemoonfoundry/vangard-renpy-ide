@@ -18,6 +18,7 @@ import CanvasLayoutControls from './CanvasLayoutControls';
 import CanvasToolbox from './CanvasToolbox';
 import CanvasNavControls from './CanvasNavControls';
 import Minimap from './Minimap';
+import CanvasNodeContextMenu from './CanvasNodeContextMenu';
 import type { MinimapItem } from './Minimap';
 import type { LabelNode, RouteLink, MouseGestureSettings, RenpyAnalysisResult, StickyNote, StoryCanvasLayoutMode, StoryCanvasGroupingMode } from '../types';
 import { computeRouteCanvasLayout } from '../lib/routeCanvasLayout';
@@ -180,6 +181,7 @@ export interface ChoiceCanvasProps {
   groupingMode: StoryCanvasGroupingMode;
   onChangeLayoutMode: (mode: StoryCanvasLayoutMode) => void;
   onChangeGroupingMode: (mode: StoryCanvasGroupingMode) => void;
+  onWarpToLabel: (labelName: string) => void;
   centerOnStartRequest?: { key: number } | null;
   centerOnNodeRequest?: { nodeId: string; key: number } | null;
 }
@@ -201,6 +203,7 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
   groupingMode,
   onChangeLayoutMode,
   onChangeGroupingMode,
+  onWarpToLabel,
   centerOnStartRequest,
   centerOnNodeRequest,
 }) => {
@@ -212,6 +215,7 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   // Node selection for depth-1 highlight (single click)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [nodeContextMenu, setNodeContextMenu] = useState<{ x: number; y: number; node: LabelNode } | null>(null);
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0 });
   const [showLegend, setShowLegend] = useState(true);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -666,7 +670,9 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
   const handleContextMenu = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     e.preventDefault();
     if ((e.target as Element).closest('.sticky-note-wrapper') || (e.target as Element).closest('.cc-controls')) return;
+    if ((e.target as Element).closest('[data-ccnid]')) return;
     setSelectedNodeId(null);
+    setNodeContextMenu(null);
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
     const worldX = (e.clientX - rect.left - transform.x) / transform.scale;
@@ -1177,6 +1183,12 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
                     aria-pressed={isSelected}
                     style={{ cursor: 'pointer', transition: 'opacity 0.15s', outline: 'none' }}
                     opacity={isNodeHighlighted ? 1 : 0.2}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSelectedNodeId(id);
+                      setNodeContextMenu({ x: e.clientX, y: e.clientY, node });
+                    }}
                   >
                     {isMenuNode ? (
                       <>
@@ -1310,6 +1322,16 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
             y={canvasContextMenu.y}
             onClose={() => setCanvasContextMenu(null)}
             onAddStickyNote={() => onAddStickyNote(canvasContextMenu.worldPos)}
+          />
+        )}
+        {nodeContextMenu && (
+          <CanvasNodeContextMenu
+            x={nodeContextMenu.x}
+            y={nodeContextMenu.y}
+            label={nodeContextMenu.node.label}
+            onClose={() => setNodeContextMenu(null)}
+            onOpenEditor={() => onOpenEditor(nodeContextMenu.node.blockId, nodeContextMenu.node.startLine)}
+            onWarpToHere={() => onWarpToLabel(nodeContextMenu.node.label)}
           />
         )}
 

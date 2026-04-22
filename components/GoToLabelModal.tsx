@@ -21,6 +21,9 @@ interface GoToLabelModalProps {
   canvasName: string;
   onSelect: (id: string) => void;
   onClose: () => void;
+  title?: string;
+  placeholder?: string;
+  emptyStateText?: string;
 }
 
 const MAX_RESULTS = 10;
@@ -47,7 +50,16 @@ function score(candidate: string, query: string): number | null {
   return 10; // fuzzy match scores lowest but still matches
 }
 
-const GoToLabelModal: React.FC<GoToLabelModalProps> = ({ isOpen, items, canvasName, onSelect, onClose }) => {
+const GoToLabelModal: React.FC<GoToLabelModalProps> = ({
+  isOpen,
+  items,
+  canvasName,
+  onSelect,
+  onClose,
+  title = 'Go to Label',
+  placeholder = 'Go to label…',
+  emptyStateText = 'No labels match',
+}) => {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -122,12 +134,15 @@ const GoToLabelModal: React.FC<GoToLabelModalProps> = ({ isOpen, items, canvasNa
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
+          <span className="text-xs font-semibold uppercase tracking-widest text-gray-400 flex-shrink-0">
+            {title}
+          </span>
           <input
             ref={inputRef}
             value={query}
             onChange={e => { setQuery(e.target.value); setActiveIndex(0); }}
             onKeyDown={handleKeyDown}
-            placeholder="Go to label…"
+            placeholder={placeholder}
             className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm outline-none"
             autoComplete="off"
             spellCheck={false}
@@ -157,7 +172,7 @@ const GoToLabelModal: React.FC<GoToLabelModalProps> = ({ isOpen, items, canvasNa
             ))}
           </ul>
         ) : (
-          <div className="px-3 py-4 text-sm text-gray-500 text-center">No labels match</div>
+          <div className="px-3 py-4 text-sm text-gray-500 text-center">{emptyStateText}</div>
         )}
 
         {/* Footer hint */}
