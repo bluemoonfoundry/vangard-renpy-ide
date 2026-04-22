@@ -553,6 +553,10 @@ export interface TranslatedString {
   filePath: string;
   line: number;
   language: string;
+  /** Character tag from dialogue translation, null for narration/string-table entries. */
+  characterTag: string | null;
+  /** Source text from old/new string tables, null for block translations. */
+  sourceText: string | null;
 }
 
 /** Per-language translation coverage statistics. */

@@ -246,7 +246,7 @@ const TranslationDashboard: React.FC<TranslationDashboardProps> = ({ translation
               <span className="text-2xl font-bold text-primary">{cov.completionPercent}%</span>
               <ProgressBar percent={cov.completionPercent} />
               <div className="flex justify-between text-xs text-secondary">
-                <span>{cov.translatedCount}/{cov.totalStrings}</span>
+                <span>{cov.translatedCount - cov.staleCount}/{cov.totalStrings}</span>
                 {cov.staleCount > 0 && <span className="text-amber-500">{cov.staleCount} stale</span>}
               </div>
             </button>

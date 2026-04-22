@@ -175,6 +175,21 @@ export function extractTranslatableStrings(
 }
 
 /**
+ * Derive the source file path from a translation file path by stripping the
+ * `tl/<lang>/` segment. For example:
+ *   `game/tl/french/script.rpy` → `game/script.rpy`
+ *   `game/tl/japanese/chapter1.rpy` → `game/chapter1.rpy`
+ */
+export function deriveSourceFilePath(translationFilePath: string, language: string): string {
+  // Normalize to forward slashes for matching
+  const normalized = translationFilePath.replace(/\\/g, '/');
+  const tlSegment = `tl/${language}/`;
+  const idx = normalized.indexOf(tlSegment);
+  if (idx === -1) return translationFilePath;
+  return normalized.slice(0, idx) + normalized.slice(idx + tlSegment.length);
+}
+
+/**
  * Extract translated strings from translation blocks (files under `/tl/<lang>/`).
  * Parses both `translate <lang> <id>:` blocks and `translate <lang> strings:` tables.
  */
@@ -219,6 +234,8 @@ export function extractTranslatedStrings(
                 filePath: block.filePath,
                 line: j + 1,
                 language: lang,
+                characterTag: null,
+                sourceText: currentOld,
               };
               if (!translatedStrings.has(lang)) translatedStrings.set(lang, []);
               translatedStrings.get(lang)!.push(entry);
@@ -245,14 +262,15 @@ export function extractTranslatedStrings(
           // Look for dialogue or narration in the translated block
           const diaMatch = innerLine.match(DIALOGUE_REGEX);
           if (diaMatch) {
-            const text = diaMatch[2];
             const entry: TranslatedString = {
               id,
-              translatedText: text,
+              translatedText: diaMatch[2],
               blockId: block.id,
               filePath: block.filePath,
               line: j + 1,
               language: lang,
+              characterTag: diaMatch[1],
+              sourceText: null,
             };
             if (!translatedStrings.has(lang)) translatedStrings.set(lang, []);
             translatedStrings.get(lang)!.push(entry);
@@ -261,14 +279,15 @@ export function extractTranslatedStrings(
 
           const narMatch = innerLine.match(NARRATION_REGEX);
           if (narMatch) {
-            const text = narMatch[1];
             const entry: TranslatedString = {
               id,
-              translatedText: text,
+              translatedText: narMatch[1],
               blockId: block.id,
               filePath: block.filePath,
               line: j + 1,
               language: lang,
+              characterTag: null,
+              sourceText: null,
             };
             if (!translatedStrings.has(lang)) translatedStrings.set(lang, []);
             translatedStrings.get(lang)!.push(entry);
@@ -284,11 +303,109 @@ export function extractTranslatedStrings(
 }
 
 /**
- * Compute per-language coverage statistics.
+ * Build a map from source string ID to Map<language, TranslatedString> by matching
+ * translations to source strings using file path derivation and text/structure matching.
+ *
+ * This is the core matching logic. Ren'Py translation block IDs (`label_md5hash`)
+ * don't match our source string IDs (`blockId:lineNumber`), so we match by:
+ * 1. Deriving the source file path from the translation file path
+ * 2. Grouping source strings by file, character tag, and type
+ * 3. Matching translations to sources by file + character tag + text content
+ * 4. For string tables (menu choices): matching by the `old` text stored in sourceText
+ */
+export function buildStringTranslationMap(
+  translatableStrings: TranslatableString[],
+  translatedStrings: Map<string, TranslatedString[]>,
+  detectedLanguages: Set<string>,
+): Map<string, Map<string, TranslatedString>> {
+  const stringTranslations = new Map<string, Map<string, TranslatedString>>();
+
+  // Group source strings by file path for efficient lookup
+  const sourceByFile = new Map<string, TranslatableString[]>();
+  for (const s of translatableStrings) {
+    const normalized = s.filePath.replace(/\\/g, '/');
+    if (!sourceByFile.has(normalized)) sourceByFile.set(normalized, []);
+    sourceByFile.get(normalized)!.push(s);
+  }
+
+  for (const lang of detectedLanguages) {
+    const langTranslations = translatedStrings.get(lang) || [];
+    const claimed = new Set<string>(); // source string IDs already matched
+
+    for (const ts of langTranslations) {
+      // String table entries (menu choices) — match by old text
+      if (ts.id.startsWith('strings:') && ts.sourceText) {
+        // Find a source string whose text matches the old text
+        for (const sources of sourceByFile.values()) {
+          for (const src of sources) {
+            if (!claimed.has(src.id) && src.sourceText === ts.sourceText) {
+              claimed.add(src.id);
+              if (!stringTranslations.has(src.id)) stringTranslations.set(src.id, new Map());
+              stringTranslations.get(src.id)!.set(lang, ts);
+              break;
+            }
+          }
+        }
+        continue;
+      }
+
+      // Block translations — derive source file from translation file path
+      const derivedSourcePath = deriveSourceFilePath(ts.filePath, lang);
+      const fileSourceStrings = sourceByFile.get(derivedSourcePath);
+      if (!fileSourceStrings) continue;
+
+      // Find a matching source string in the same file
+      let matched = false;
+      for (const src of fileSourceStrings) {
+        if (claimed.has(src.id)) continue;
+
+        // Match by character tag + text for stale translations (text is identical to source)
+        const isStale = ts.translatedText === src.sourceText;
+
+        // Match by character tag alignment
+        const tagMatches = ts.characterTag === src.characterTag;
+        // For narration, both should have null character tag
+        const isNarrationMatch = ts.characterTag === null && src.characterTag === null && src.type === 'narration';
+
+        if (isStale && (tagMatches || isNarrationMatch)) {
+          claimed.add(src.id);
+          if (!stringTranslations.has(src.id)) stringTranslations.set(src.id, new Map());
+          stringTranslations.get(src.id)!.set(lang, ts);
+          matched = true;
+          break;
+        }
+      }
+
+      if (matched) continue;
+
+      // Non-stale: match by character tag + type within the same file
+      // Ren'Py translation blocks appear in the same order as source strings,
+      // so matching the first unclaimed source string with the right tag works.
+      for (const src of fileSourceStrings) {
+        if (claimed.has(src.id)) continue;
+
+        const tagMatches = ts.characterTag === src.characterTag;
+        const isNarrationMatch = ts.characterTag === null && src.characterTag === null && src.type === 'narration';
+
+        if (tagMatches || isNarrationMatch) {
+          claimed.add(src.id);
+          if (!stringTranslations.has(src.id)) stringTranslations.set(src.id, new Map());
+          stringTranslations.get(src.id)!.set(lang, ts);
+          break;
+        }
+      }
+    }
+  }
+
+  return stringTranslations;
+}
+
+/**
+ * Compute per-language coverage statistics from the matched string translation map.
  */
 export function computeLanguageCoverages(
   translatableStrings: TranslatableString[],
-  translatedStrings: Map<string, TranslatedString[]>,
+  stringTranslations: Map<string, Map<string, TranslatedString>>,
   detectedLanguages: Set<string>,
 ): LanguageCoverage[] {
   const totalStrings = translatableStrings.length;
@@ -303,24 +420,20 @@ export function computeLanguageCoverages(
   const coverages: LanguageCoverage[] = [];
 
   for (const lang of detectedLanguages) {
-    const langStrings = translatedStrings.get(lang) || [];
-    const translatedIds = new Set(langStrings.map(s => s.id));
-
-    // Count translated — match by translation block ID to source string IDs
-    // Simple heuristic: count how many unique IDs exist in the translation
-    const translatedCount = Math.min(translatedIds.size, totalStrings);
-
-    // Stale detection: translations whose text matches the source exactly
-    const sourceTextMap = new Map(translatableStrings.map(s => [s.sourceText, s]));
+    let translatedCount = 0;
     let staleCount = 0;
-    for (const ts of langStrings) {
-      if (sourceTextMap.has(ts.translatedText) && ts.translatedText === sourceTextMap.get(ts.translatedText)!.sourceText) {
-        staleCount++;
+
+    for (const src of translatableStrings) {
+      const translations = stringTranslations.get(src.id);
+      const t = translations?.get(lang);
+      if (t) {
+        translatedCount++;
+        if (t.translatedText === src.sourceText) {
+          staleCount++;
+        }
       }
     }
 
-    // Stale strings have a translation entry but the text is identical to the source,
-    // so they shouldn't count toward completion — they're just untranslated placeholders.
     const effectiveTranslated = translatedCount - staleCount;
     const untranslatedCount = totalStrings - translatedCount;
     const completionPercent = totalStrings > 0 ? Math.round((effectiveTranslated / totalStrings) * 100) : 0;
@@ -329,15 +442,14 @@ export function computeLanguageCoverages(
     const fileBreakdown: TranslationFileBreakdown[] = [];
     for (const [filePath, fileStrings] of stringsByFile) {
       const fileTotal = fileStrings.length;
-      // Check how many of this file's strings have translations
       let fileTranslated = 0;
       let fileStale = 0;
       for (const s of fileStrings) {
-        // Check if any translation id matches patterns for this source string
-        const matchingTranslation = langStrings.find(t => t.id === s.id || t.translatedText === s.sourceText);
-        if (matchingTranslation) {
+        const translations = stringTranslations.get(s.id);
+        const t = translations?.get(lang);
+        if (t) {
           fileTranslated++;
-          if (matchingTranslation.translatedText === s.sourceText) {
+          if (t.translatedText === s.sourceText) {
             fileStale++;
           }
         }
@@ -362,7 +474,6 @@ export function computeLanguageCoverages(
     });
   }
 
-  // Sort by language name
   coverages.sort((a, b) => a.language.localeCompare(b.language));
 
   return coverages;
@@ -378,16 +489,10 @@ export function performTranslationAnalysis(
 ): TranslationAnalysisResult {
   const translatableStrings = extractTranslatableStrings(blocks, dialogueLines, labels);
   const { translatedStrings, detectedLanguages } = extractTranslatedStrings(blocks);
-  const languageCoverages = computeLanguageCoverages(translatableStrings, translatedStrings, detectedLanguages);
 
-  // Build a lookup: sourceStringId -> Map<language, TranslatedString>
-  const stringTranslations = new Map<string, Map<string, TranslatedString>>();
-  for (const [lang, strings] of translatedStrings) {
-    for (const ts of strings) {
-      if (!stringTranslations.has(ts.id)) stringTranslations.set(ts.id, new Map());
-      stringTranslations.get(ts.id)!.set(lang, ts);
-    }
-  }
+  // Build the matched source→translation map FIRST, then derive coverages from it
+  const stringTranslations = buildStringTranslationMap(translatableStrings, translatedStrings, detectedLanguages);
+  const languageCoverages = computeLanguageCoverages(translatableStrings, stringTranslations, detectedLanguages);
 
   return {
     translatableStrings,
