@@ -49,7 +49,7 @@ describe('UserSnippetModal', () => {
     const user = userEvent.setup();
     render(<UserSnippetModal {...defaultProps} />);
     await user.type(screen.getByPlaceholderText('My Custom Snippet'), 'Test');
-    await user.type(screen.getByPlaceholderText('mysnippet'), 'bad-prefix');
+    await user.type(screen.getByPlaceholderText('mysnippet'), 'bad@prefix');
     await user.type(screen.getByPlaceholderText(/Hello, world/), 'show test');
     await user.click(screen.getByText('Create Snippet'));
     expect(screen.getByText('Prefix should only contain letters, numbers, and underscores.')).toBeInTheDocument();

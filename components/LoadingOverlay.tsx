@@ -4,7 +4,7 @@
  * Key features: animated progress bar, phase message display, optional Cancel button with a
  * "Cancelling…" spinner state.
  * Integration: rendered by `App.tsx` when `isScanningAssets` is true; progress props come from
- * `AssetContext`'s scan pipeline.
+ * `App.tsx` scan state.
  */
 import React, { useState } from 'react';
 

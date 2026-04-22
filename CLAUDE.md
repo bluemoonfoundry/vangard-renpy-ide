@@ -63,7 +63,7 @@ Key recent IPC additions:
 Main process watches the project folder for `.rpy` changes with 400ms debounce. If the block is clean in the editor, it auto-reloads silently. If dirty, it shows a persistent warning bar ("Reload" / "Keep"). Main suppresses change events for 3 seconds after the app writes a file to avoid false positives. Related feature: **Refresh Project** (File menu, explorer context menu) manually reconciles all files/assets with disk state via `project:refresh` IPC.
 
 ### Tab System
-`openTabs: EditorTab[]` tracks open panels. Tabs mount lazily on first activation, then stay mounted-but-hidden to preserve Monaco scroll/state. Valid tab types: `canvas`, `route-canvas`, `choice-canvas`, `editor`, `image`, `audio`, `character`, `scene-composer`, `image-map`, `screen-layout`, `markdown`, `stats`, `diagnostics`, `punchlist` (legacy, now diagnostics).
+`openTabs: EditorTab[]` tracks open panels. Tabs mount lazily on first activation, then stay mounted-but-hidden to preserve Monaco scroll/state. Valid tab types: `canvas`, `route-canvas`, `choice-canvas`, `editor`, `image`, `audio`, `character`, `scene-composer`, `imagemap-composer`, `screen-layout-composer`, `markdown`, `stats`, `diagnostics`, `punchlist` (legacy, now diagnostics).
 
 ### Context Providers
 Only `SearchContext` wraps the app in `App.tsx`:
@@ -129,8 +129,7 @@ The app supports 11 themes (`system`, `light`, `dark`, `solarized-light`, `solar
 | `renpySemanticTokens.ts` | Syntax highlighting via Monaco semantic tokens |
 | `screenCodeGenerator.ts` | Converts Screen Layout Composer tree → Ren'Py screen code |
 | `textmateGrammar.ts` | TextMate tokenization with Oniguruma WASM for syntax highlighting |
-| `renpyHoverProvider.ts` | Hover tooltips in Monaco for labels, characters, images, screens |
-| `colorUtils.ts` | Color conversion utilities and palette definitions |
+| `colorUtils.js` | Color conversion utilities and palette definitions |
 
 ## Major Features & Recent Updates
 

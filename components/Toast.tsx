@@ -3,8 +3,8 @@
  * @description Single toast notification card (~80 lines).
  * Key features: auto-dismisses after 5 s with a CSS fade-out animation, manual dismiss button,
  * four style variants (success/error/warning/info).
- * Integration: rendered by `ToastContext` in a fixed overlay stack; receives `ToastMessage`
- * from `useToast` and calls `onDismiss` when the timer or button fires.
+ * Integration: rendered by `App.tsx` in a fixed overlay stack; receives `ToastMessage`
+ * from toast state and calls `onDismiss` when the timer or button fires.
  */
 import React, { useEffect, useState } from 'react';
 import type { ToastMessage } from '../types';
