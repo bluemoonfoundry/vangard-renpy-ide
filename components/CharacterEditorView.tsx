@@ -182,12 +182,15 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
                             value={tag}
                             onChange={e => setTag(e.target.value)}
                             placeholder="e.g., e"
-                            readOnly={!isNew}
-                            title={!isNew ? 'Character tag cannot be changed after creation to prevent breaking references in your code.' : ''}
-                            className={`w-full mt-1 p-2 rounded bg-white dark:bg-gray-700 border ${tagError ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} focus:ring-indigo-500 focus:border-indigo-500 ${!isNew ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-70' : ''}`}
+                            className={`w-full mt-1 p-2 rounded bg-white dark:bg-gray-700 border ${tagError ? 'border-red-500' : (!isNew && tag !== character?.tag) ? 'border-amber-400 dark:border-amber-500' : 'border-gray-300 dark:border-gray-600'} focus:ring-indigo-500 focus:border-indigo-500`}
                         />
                         {tagError && <p className="text-red-500 text-xs mt-1">{tagError}</p>}
-                        {!isNew && <HelpText>The code tag is locked after creation to avoid breaking existing script references.</HelpText>}
+                        {!isNew && tag === character?.tag && <HelpText>Changing this tag will rename it across all script files when you save.</HelpText>}
+                        {!isNew && tag !== character?.tag && (
+                            <p className="text-xs text-amber-500 dark:text-amber-400 mt-1">
+                                Saving will rename &ldquo;{character?.tag}&rdquo; to &ldquo;{tag}&rdquo; in all script files.
+                            </p>
+                        )}
                     </div>
 
                     {/* Colors */}

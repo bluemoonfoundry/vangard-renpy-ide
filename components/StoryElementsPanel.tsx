@@ -273,7 +273,8 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                                             className="p-2 rounded-md bg-secondary border border-primary flex items-center justify-between cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
                                             onMouseEnter={() => onHoverHighlightStart(char.tag, 'character')}
                                             onMouseLeave={onHoverHighlightEnd}
-                                            title="Drag to editor to insert dialogue"
+                                            onDoubleClick={() => onOpenCharacterEditor(char.tag)}
+                                            title="Drag to insert dialogue · Double-click to edit"
                                         >
                                             <div className="flex items-center space-x-3 min-w-0 pointer-events-none">
                                                 <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: char.color }}></div>

@@ -342,6 +342,7 @@ const App: React.FC = () => {
   const secondaryTabBarRef = useRef<HTMLDivElement>(null);
   const pendingStoryLayoutRefreshRef = useRef<PendingStoryLayoutRefresh | null>(null);
   const pendingRouteLayoutRefreshRef = useRef<PendingRouteLayoutRefresh | null>(null);
+  const pendingTagRenameRef = useRef<{ oldTag: string; newTag: string } | null>(null);
   const pendingAutoCenterRef = useRef({ story: false, route: false, choice: false });
 
   // --- Utility Functions ---
@@ -3389,6 +3390,25 @@ const App: React.FC = () => {
     return { ...analysisResult, characters: newCharacters };
   }, [analysisResult, characterProfiles]);
 
+  // When a character tag rename is in-flight, wait until analysis has resolved the new
+  // tag before updating the open tab.  This avoids the flash of "New Character" form
+  // that would occur if we updated characterTag before the analysis re-run completes.
+  useEffect(() => {
+    const pending = pendingTagRenameRef.current;
+    if (!pending) return;
+    if (!analysisResult.characters.has(pending.newTag)) return;
+    const oldTabId = `char-${pending.oldTag}`;
+    const newTabId = `char-${pending.newTag}`;
+    setOpenTabs(prev => prev.map(t => t.id === oldTabId ? { ...t, id: newTabId, characterTag: pending.newTag } : t));
+    setActiveTabId(prev => prev === oldTabId ? newTabId : prev);
+    setSecondaryOpenTabs(prev => prev.map(t => t.id === oldTabId ? { ...t, id: newTabId, characterTag: pending.newTag } : t));
+    setSecondaryActiveTabId(prev => prev === oldTabId ? newTabId : prev);
+    // Also remove from lazy-mount sets so the new key gets a clean mount
+    primaryMountedTabsRef.current.delete(oldTabId);
+    secondaryMountedTabsRef.current.delete(oldTabId);
+    pendingTagRenameRef.current = null;
+  }, [analysisResult.characters]);
+
   // --- Character Editor ---
   const handleOpenCharacterEditor = useCallback((tag: string) => {
       const tabId = `char-${tag}`;
@@ -3432,7 +3452,7 @@ const App: React.FC = () => {
     const newCharString = buildCharacterString(char);
 
     setCharacterProfiles(draft => {
-        if (oldTag && oldTag !== char.tag) { // Should not happen with read-only tag
+        if (oldTag && oldTag !== char.tag) {
             delete draft[oldTag];
         }
         if (char.profile) {
@@ -3457,13 +3477,45 @@ const App: React.FC = () => {
         }
 
         const regex = new RegExp(`^(\\s*define\\s+${oldTag}\\s*=\\s*Character\\s*\\([\\s\\S]*?\\))`, 'm');
-        if (regex.test(blockToUpdate.content)) {
-            const newContent = blockToUpdate.content.replace(regex, newCharString);
-            updateBlock(blockToUpdate.id, { content: newContent });
-        } else {
+        if (!regex.test(blockToUpdate.content)) {
             addToast(`Error: Could not find the Character definition for '${oldTag}' to update.`, 'error');
             return;
         }
+
+        // Rename the define statement.
+        const newDefineContent = blockToUpdate.content.replace(regex, newCharString);
+
+        if (oldTag !== char.tag) {
+            // Scan every block directly for dialogue lines — same pattern as DIALOGUE_REGEX
+            // in useRenpyAnalysis.ts: indent + TAG + whitespace + opening quote.
+            // We do NOT use analysisResult.dialogueLines here because the analysis populates
+            // it in a single pass: if characters.rpy is processed after script.rpy, the
+            // dialogue lines for the old tag will be missing from the map.
+            const dialogueReplaceRegex = new RegExp(`^([ \\t]*)${oldTag}(\\s+")`, 'gm');
+            let renamedFileCount = 0;
+
+            blocks.forEach(block => {
+                // For the define block, start from already-renamed content so a combined
+                // file (define + dialogue in one .rpy) gets both changes in one write.
+                const base = block.id === blockToUpdate.id ? newDefineContent : block.content;
+                const updated = base.replace(dialogueReplaceRegex, `$1${char.tag}$2`);
+
+                if (block.id === blockToUpdate.id) {
+                    updateBlock(block.id, { content: updated });
+                    renamedFileCount++;
+                } else if (updated !== base) {
+                    updateBlock(block.id, { content: updated });
+                    renamedFileCount++;
+                }
+            });
+
+            // Defer tab update until analysis re-runs and recognises the new tag.
+            pendingTagRenameRef.current = { oldTag, newTag: char.tag };
+            addToast(`Renamed "${oldTag}" to "${char.tag}" in ${renamedFileCount} file(s).`, 'success');
+            return;
+        }
+
+        updateBlock(blockToUpdate.id, { content: newDefineContent });
     } else { // Creating new character
         const charFilePath = 'game/characters.rpy';
         const existingFileBlock = blocks.find(b => b.filePath === charFilePath);
@@ -3932,17 +3984,34 @@ const App: React.FC = () => {
 
   // --- Memoized callbacks for StoryElementsPanel and related JSX ---
 
-  const handleAddVariable = useCallback((v: { name: string; initialValue: string }) => {
+  const handleAddVariable = useCallback(async (v: { name: string; initialValue: string }) => {
     const varContent = `default ${v.name} = ${v.initialValue}\n`;
     const targetFile = 'game/variables.rpy';
     const existing = blocks.find(b => b.filePath === targetFile);
     if (existing) {
       updateBlock(existing.id, { content: existing.content + '\n' + varContent });
       addToast(`Added variable ${v.name} to variables.rpy`, 'success');
+    } else if (window.electronAPI && projectRootPath) {
+      try {
+        const fullPath = await window.electronAPI.path.join(projectRootPath, 'game', 'variables.rpy') as string;
+        const res = await window.electronAPI.writeFile(fullPath, varContent);
+        if (res.success) {
+          addBlock(targetFile, varContent);
+          const projData = await window.electronAPI.loadProject(projectRootPath);
+          setFileSystemTree(projData.tree);
+          addToast(`Created variables.rpy and added variable ${v.name}`, 'success');
+        } else {
+          const errorMsg = typeof res.error === 'string' ? res.error : 'Unknown error';
+          throw new Error(errorMsg);
+        }
+      } catch (e) {
+        addToast(`Failed to create variables.rpy: ${formatErrorMessage(e)}`, 'error');
+      }
     } else {
-      addToast(`Please create 'game/variables.rpy' first.`, 'warning');
+      addBlock(targetFile, varContent);
+      addToast(`Added variable ${v.name} to variables.rpy`, 'success');
     }
-  }, [blocks, updateBlock, addToast]);
+  }, [blocks, updateBlock, addToast, projectRootPath, addBlock, setFileSystemTree]);
 
   const handleFindScreenDefinition = useCallback((name: string) => {
     const def = analysisResult.screens.get(name);
@@ -4182,7 +4251,7 @@ const App: React.FC = () => {
     if (tab.type === 'scene-composer') return sceneNames[tab.sceneId!] || 'Scene';
     if (tab.type === 'imagemap-composer') return imagemapCompositions[tab.imagemapId!]?.screenName || 'ImageMap';
     if (tab.type === 'screen-layout-composer') return screenLayoutCompositions[tab.layoutId!]?.screenName || 'Screen Layout';
-    if (tab.type === 'character') return `Char: ${analysisResult.characters.get(tab.characterTag!)?.name || tab.characterTag}`;
+    if (tab.type === 'character') return `Char: ${tab.characterTag}`;
     if (tab.type === 'editor') return blocks.find(b => b.id === tab.blockId)?.title || 'Untitled';
     if (tab.type === 'markdown') return tab.filePath?.split('/').pop() ?? 'Markdown';
     return tab.filePath?.split('/').pop() ?? 'Untitled';
@@ -4307,7 +4376,16 @@ const App: React.FC = () => {
       />; }
     }
     if (tab.type === 'character' && tab.characterTag) {
-      const char = analysisResultWithProfiles.characters.get(tab.characterTag);
+      // Primary lookup by the tab's characterTag.  During the one-render window between
+      // analysis losing the old tag and the deferred useEffect flipping the tab ID, fall
+      // back to the pending-rename's new tag so the form never flashes "New Character".
+      let char = analysisResultWithProfiles.characters.get(tab.characterTag);
+      if (!char) {
+        const pending = pendingTagRenameRef.current;
+        if (pending?.oldTag === tab.characterTag) {
+          char = analysisResultWithProfiles.characters.get(pending.newTag);
+        }
+      }
       return <CharacterEditorView character={char} onSave={handleUpdateCharacter}
         existingTags={characterTagsArray}
         projectImages={imagesArray} imageMetadata={imageMetadata}
