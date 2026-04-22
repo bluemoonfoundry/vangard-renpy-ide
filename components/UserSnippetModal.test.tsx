@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import UserSnippetModal from './UserSnippetModal';
@@ -55,16 +55,14 @@ describe('UserSnippetModal', () => {
     expect(screen.getByText('Prefix should only contain letters, numbers, and underscores.')).toBeInTheDocument();
   });
 
-it('shows error when code is empty', async () => {
-  const user = userEvent.setup();
-  render(<UserSnippetModal {...defaultProps} />);
-  await user.type(screen.getByPlaceholderText('My Custom Snippet'), 'Test');
-  await user.type(screen.getByPlaceholderText('mysnippet'), 'tst');
-  await user.click(screen.getByText('Create Snippet'));
-  expect(screen.getByText((content, element) => {
-    return element?.textContent === 'Code is required.';
-  })).toBeInTheDocument();
-});
+  it('shows error when code is empty', async () => {
+    const user = userEvent.setup();
+    render(<UserSnippetModal {...defaultProps} />);
+    await user.type(screen.getByPlaceholderText('My Custom Snippet'), 'Test');
+    await user.type(screen.getByPlaceholderText('mysnippet'), 'tst');
+    await user.click(screen.getByRole('button', { name: 'Create Snippet' }));
+    expect(await screen.findByText('Code is required.')).toBeInTheDocument();
+  });
   
   // it('shows error when code is empty', async () => {
   //   const user = userEvent.setup();
@@ -84,15 +82,15 @@ it('shows error when code is empty', async () => {
     await user.type(screen.getByPlaceholderText('My Custom Snippet'), 'My Snippet');
     await user.type(screen.getByPlaceholderText('mysnippet'), 'mysnip');
     await user.type(screen.getByPlaceholderText(/Hello, world/), 'show eileen happy');
-    await user.click(screen.getByText('Create Snippet'));
+    await user.click(screen.getByRole('button', { name: 'Create Snippet' }));
 
-    expect(onSave).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     const saved = onSave.mock.calls[0][0];
     expect(saved.title).toBe('My Snippet');
     expect(saved.prefix).toBe('mysnip');
     expect(saved.code).toBe('show eileen happy');
     expect(saved.monacoBody).toBeUndefined();
-    expect(onClose).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 
   it('sets monacoBody when placeholders checkbox is checked', async () => {
@@ -104,8 +102,9 @@ it('shows error when code is empty', async () => {
     await user.type(screen.getByPlaceholderText('mysnippet'), 'labeled');
     fireEvent.change(screen.getByPlaceholderText(/Hello, world/), { target: { value: 'label ${1:name}:\n    $0' } });
     await user.click(screen.getByRole('checkbox'));
-    await user.click(screen.getByText('Create Snippet'));
+    await user.click(screen.getByRole('button', { name: 'Create Snippet' }));
 
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     const saved = onSave.mock.calls[0][0];
     expect(saved.monacoBody).toBe('label ${1:name}:\n    $0');
     // code should have placeholders stripped
