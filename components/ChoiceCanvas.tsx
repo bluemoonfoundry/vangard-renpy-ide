@@ -26,21 +26,21 @@ import { computeRouteCanvasLayout } from '../lib/routeCanvasLayout';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const NODE_W = 210;
-const NODE_H_SNIPPET = 58;
-const NODE_H_PLAIN = 40;
+const NODE_H = 58;
 const SNIPPET_MAX = 44;
 const LABEL_MAX = 26;
 const FAN_STEP = 36; // horizontal spread between sibling choice edges (non-menu sources)
 
 // Choice pill layout constants
-const CHOICE_PILL_W = 190;
-const CHOICE_PILL_GAP = 5;        // vertical gap between pills in the same column
-const CHOICE_PILL_OFFSET = 14;    // gap between menu node bottom and first pill row
-const CHOICE_PILL_H_PLAIN = 20;   // pill height without condition text
-const CHOICE_PILL_H_COND = 32;    // pill height when a condition guard is shown
-const PILL_LABEL_MAX = 28;
-const LAYOUT_PILL_MARGIN = 18;    // extra breathing room below pill stack in layout
+const CHOICE_PILL_W = NODE_W;
+const CHOICE_PILL_H = NODE_H;
+const CHOICE_PILL_GAP = 8;        // vertical gap between pills in the same column
+const CHOICE_PILL_OFFSET = 22;    // gap between menu node bottom and first pill row
+const CHOICE_COLUMN_GAP = 40;     // horizontal breathing room between choice columns
+const PILL_WRAP_CHARS = 28;
+const LAYOUT_PILL_MARGIN = 34;    // extra breathing room below pill stack in layout
 const TRUNK_TO_BRANCH = 10;       // vertical segment before the horizontal branch bar
+const MENU_CORRIDOR_PAD_X = 34;
 
 // Menu node shape
 const NODE_BEVEL = 8;
@@ -53,18 +53,57 @@ const NODE_BEVEL = 8;
  * All strings are static Tailwind class literals so JIT includes them.
  */
 const PILL_COLORS = [
-  { border: 'stroke-indigo-400 dark:stroke-indigo-500',  fill: 'fill-indigo-50  dark:fill-indigo-950',  text: 'fill-indigo-700  dark:fill-indigo-300',  arrow: 'stroke-indigo-400  dark:stroke-indigo-500'  },
-  { border: 'stroke-violet-400 dark:stroke-violet-500',  fill: 'fill-violet-50  dark:fill-violet-950',  text: 'fill-violet-700  dark:fill-violet-300',  arrow: 'stroke-violet-400  dark:stroke-violet-500'  },
-  { border: 'stroke-sky-400    dark:stroke-sky-500',     fill: 'fill-sky-50     dark:fill-sky-950',     text: 'fill-sky-700     dark:fill-sky-300',     arrow: 'stroke-sky-400     dark:stroke-sky-500'     },
-  { border: 'stroke-emerald-400 dark:stroke-emerald-500',fill: 'fill-emerald-50 dark:fill-emerald-950', text: 'fill-emerald-700 dark:fill-emerald-300',  arrow: 'stroke-emerald-400 dark:stroke-emerald-500' },
-  { border: 'stroke-orange-400 dark:stroke-orange-500',  fill: 'fill-orange-50  dark:fill-orange-950',  text: 'fill-orange-700  dark:fill-orange-300',  arrow: 'stroke-orange-400  dark:stroke-orange-500'  },
-  { border: 'stroke-pink-400   dark:stroke-pink-500',    fill: 'fill-pink-50    dark:fill-pink-950',    text: 'fill-pink-700    dark:fill-pink-300',    arrow: 'stroke-pink-400    dark:stroke-pink-500'    },
+  { border: 'stroke-indigo-400 dark:stroke-indigo-500',  fill: 'fill-indigo-50  dark:fill-indigo-950',  text: 'fill-indigo-700  dark:fill-indigo-300',  htmlText: 'text-indigo-700 dark:text-indigo-300',  arrow: 'stroke-indigo-400  dark:stroke-indigo-500'  },
+  { border: 'stroke-violet-400 dark:stroke-violet-500',  fill: 'fill-violet-50  dark:fill-violet-950',  text: 'fill-violet-700  dark:fill-violet-300',  htmlText: 'text-violet-700 dark:text-violet-300',  arrow: 'stroke-violet-400  dark:stroke-violet-500'  },
+  { border: 'stroke-sky-400    dark:stroke-sky-500',     fill: 'fill-sky-50     dark:fill-sky-950',     text: 'fill-sky-700     dark:fill-sky-300',     htmlText: 'text-sky-700 dark:text-sky-300',     arrow: 'stroke-sky-400     dark:stroke-sky-500'     },
+  { border: 'stroke-emerald-400 dark:stroke-emerald-500',fill: 'fill-emerald-50 dark:fill-emerald-950', text: 'fill-emerald-700 dark:fill-emerald-300',  htmlText: 'text-emerald-700 dark:text-emerald-300', arrow: 'stroke-emerald-400 dark:stroke-emerald-500' },
+  { border: 'stroke-orange-400 dark:stroke-orange-500',  fill: 'fill-orange-50  dark:fill-orange-950',  text: 'fill-orange-700  dark:fill-orange-300',  htmlText: 'text-orange-700 dark:text-orange-300',  arrow: 'stroke-orange-400  dark:stroke-orange-500'  },
+  { border: 'stroke-pink-400   dark:stroke-pink-500',    fill: 'fill-pink-50    dark:fill-pink-950',    text: 'fill-pink-700    dark:fill-pink-300',    htmlText: 'text-pink-700 dark:text-pink-300',    arrow: 'stroke-pink-400    dark:stroke-pink-500'    },
 ] as const;
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 function trunc(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+
+function wrapText(text: string, maxChars: number, maxLines: number): string[] {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+
+  const lines: string[] = [];
+  let current = '';
+
+  const pushCurrent = () => {
+    if (current) lines.push(current);
+    current = '';
+  };
+
+  words.forEach(word => {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= maxChars) {
+      current = candidate;
+      return;
+    }
+
+    if (current) pushCurrent();
+
+    if (word.length <= maxChars) {
+      current = word;
+      return;
+    }
+
+    let remaining = word;
+    while (remaining.length > maxChars && lines.length < maxLines - 1) {
+      lines.push(`${remaining.slice(0, maxChars - 1)}…`);
+      remaining = remaining.slice(maxChars - 1);
+    }
+    current = remaining.length > maxChars ? `${remaining.slice(0, maxChars - 1)}…` : remaining;
+  });
+
+  pushCurrent();
+  if (lines.length <= maxLines) return lines;
+  return [...lines.slice(0, maxLines - 1), `${lines[maxLines - 1].slice(0, Math.max(1, maxChars - 1))}…`];
 }
 
 const RE_CHAR_DLG = /^([a-zA-Z0-9_]+)\s+"([^"]+)"/;
@@ -122,14 +161,19 @@ function edgePath(
   srcX: number, srcY: number,
   tgtX: number, tgtY: number,
   fanOff: number,
+  straight = false,
 ): { d: string; mx: number; my: number } {
   const ox = srcX + fanOff;
-  const dy = tgtY - srcY;
-  const cp = Math.max(Math.abs(dy) * 0.42, 52);
-  const c1y = srcY + (dy >= 0 ? cp : -cp);
-  const c2y = tgtY - (dy >= 0 ? cp : -cp);
-  const d = `M ${ox} ${srcY} C ${ox} ${c1y}, ${tgtX} ${c2y}, ${tgtX} ${tgtY}`;
-  // Midpoint of this cubic bezier at t=0.5 simplifies to the arithmetic means
+  const d = straight
+    ? `M ${ox} ${srcY} L ${tgtX} ${tgtY}`
+    : (() => {
+        const dy = tgtY - srcY;
+        const cp = Math.max(Math.abs(dy) * 0.42, 52);
+        const c1y = srcY + (dy >= 0 ? cp : -cp);
+        const c2y = tgtY - (dy >= 0 ? cp : -cp);
+        return `M ${ox} ${srcY} C ${ox} ${c1y}, ${tgtX} ${c2y}, ${tgtX} ${tgtY}`;
+      })();
+  // Midpoint is used for the edge badge placement.
   const mx = (ox + tgtX) / 2;
   const my = (srcY + tgtY) / 2;
   return { d, mx, my };
@@ -155,11 +199,38 @@ interface ChoicePill {
   choiceText: string;
   condition: string | null;
   targetId: string;
+  targetLabel: string;
+  sourceBlockId: string;
+  sourceLine: number | null;
+  menuLine: number | null;
   linkId: string;
   x: number;
   y: number;
-  h: number;        // dynamic height: taller when condition is present
+  h: number;        // fixed block height shared by menu nodes and choice blocks
   colorIdx: number; // index into PILL_COLORS — shared by all pills targeting the same node
+}
+
+interface LayoutBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function boxesOverlap(a: LayoutBox, b: LayoutBox, padX = 0, padY = 0): boolean {
+  const aLeft = a.x - padX;
+  const aTop = a.y - padY;
+  const aRight = a.x + a.width + padX;
+  const aBottom = a.y + a.height + padY;
+  const bLeft = b.x - padX;
+  const bTop = b.y - padY;
+  const bRight = b.x + b.width + padX;
+  const bBottom = b.y + b.height + padY;
+  return !(aRight < bLeft || aLeft > bRight || aBottom < bTop || aTop > bBottom);
+}
+
+function nodeToBox(node: { position: { x: number; y: number }; width: number; height: number }): LayoutBox {
+  return { x: node.position.x, y: node.position.y, width: node.width, height: node.height };
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -215,6 +286,7 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   // Node selection for depth-1 highlight (single click)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedChoiceLinkId, setSelectedChoiceLinkId] = useState<string | null>(null);
   const [nodeContextMenu, setNodeContextMenu] = useState<{ x: number; y: number; node: LabelNode } | null>(null);
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0 });
   const [showLegend, setShowLegend] = useState(true);
@@ -264,45 +336,6 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
     [routeLinks],
   );
 
-  const nodeH = showSnippets ? NODE_H_SNIPPET : NODE_H_PLAIN;
-
-  // ── Derived: extra vertical space needed by each menu node's pill stack ──
-  // Computed from explicitLinks (before layout) so the layout engine can push
-  // target nodes far enough below to prevent pills from overlapping them.
-  const menuPillLayoutHeights = useMemo(() => {
-    const byNode = new Map<string, number[]>();
-    explicitLinks.forEach(l => {
-      if (!l.choiceText) return;
-      const arr = byNode.get(l.sourceId) ?? [];
-      arr.push(l.choiceCondition ? CHOICE_PILL_H_COND : CHOICE_PILL_H_PLAIN);
-      byNode.set(l.sourceId, arr);
-    });
-    const heights = new Map<string, number>();
-    byNode.forEach((pillHeights, id) => {
-      const stackH = pillHeights.reduce((s, h, i) => s + h + (i > 0 ? CHOICE_PILL_GAP : 0), 0);
-      heights.set(id, CHOICE_PILL_OFFSET + stackH + LAYOUT_PILL_MARGIN);
-    });
-    return heights;
-  }, [explicitLinks]);
-
-  const layoutedNodes = useMemo(() => {
-    const src = labelNodes.map(n => ({
-      ...n,
-      width: NODE_W,
-      // Menu nodes get extra layout height to reserve space for their pill stack.
-      // Target nodes are then placed below the pills, not on top of them.
-      height: nodeH + (menuPillLayoutHeights.get(n.id) ?? 0),
-      position: { x: 0, y: 0 },
-    }));
-    return computeRouteCanvasLayout(src, explicitLinks, layoutMode, groupingMode);
-  }, [labelNodes, explicitLinks, nodeH, layoutMode, groupingMode, menuPillLayoutHeights]);
-
-  const nodeMap = useMemo(
-    () => new Map(layoutedNodes.map(n => [n.id, n])),
-    [layoutedNodes],
-  );
-  nodeMapRef.current = nodeMap;
-
   // ── Derived: visible links ──
   const visibleLinks = useMemo(
     () => (showImplicit ? routeLinks : explicitLinks),
@@ -323,6 +356,15 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
     return ids;
   }, [visibleLinks]);
 
+  const menuLineByNodeId = useMemo(() => {
+    const map = new Map<string, number>();
+    visibleLinks.forEach(link => {
+      if (!link.choiceText || link.menuLine === undefined) return;
+      if (!map.has(link.sourceId)) map.set(link.sourceId, link.menuLine);
+    });
+    return map;
+  }, [visibleLinks]);
+
   // ── Derived: fan info for sibling choice edges from non-menu sources ──
   const fanMap = useMemo(() => {
     const groups = new Map<string, string[]>(); // "srcId::menuLine" → [linkIds]
@@ -339,48 +381,53 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
     return info;
   }, [routeLinks, menuNodeIds]);
 
-  // ── Derived: choice pills per menu node ──
-  // Pills replace the mid-edge badge for menu choice edges.
-  // When all choices lead to the same target: vertical stack centred on the menu.
-  // When choices lead to different targets: pills spread horizontally toward their
-  // respective destinations (like tree branches) and each destination gets its own
-  // colour so writers can trace which choice leads where at a glance.
-  const choicePillsByMenu = useMemo(() => {
+  const nodeH = NODE_H;
+
+  const baseLayoutNodes = useMemo(() => {
+    const src = labelNodes.map(n => ({
+      ...n,
+      width: NODE_W,
+      height: nodeH,
+      position: { x: 0, y: 0 },
+    }));
+    return computeRouteCanvasLayout(src, explicitLinks, layoutMode, groupingMode);
+  }, [labelNodes, explicitLinks, nodeH, layoutMode, groupingMode]);
+
+  const buildChoicePillsForNodeMap = useCallback((srcNodeMap: Map<string, LabelNode>) => {
     const map = new Map<string, ChoicePill[]>();
 
-    // Build flat pill list per menu node
     visibleLinks.forEach(link => {
       if (!link.choiceText || !menuNodeIds.has(link.sourceId)) return;
-      if (!nodeMap.get(link.sourceId)) return;
+      if (!srcNodeMap.get(link.sourceId)) return;
       const arr = map.get(link.sourceId) ?? [];
       arr.push({
         id: `pill-${link.id}`,
         choiceText: link.choiceText,
         condition: link.choiceCondition ?? null,
         targetId: link.targetId,
+        targetLabel: srcNodeMap.get(link.targetId)?.label ?? link.targetId.split(':').slice(1).join(':'),
+        sourceBlockId: link.sourceId.split(':')[0],
+        sourceLine: link.sourceLine ?? null,
+        menuLine: link.menuLine ?? null,
         linkId: link.id,
-        x: 0, y: 0,
-        h: link.choiceCondition ? CHOICE_PILL_H_COND : CHOICE_PILL_H_PLAIN,
+        x: 0,
+        y: 0,
+        h: CHOICE_PILL_H,
         colorIdx: 0,
       });
       map.set(link.sourceId, arr);
     });
 
-    // Position pills and assign colours
     map.forEach((pills, srcId) => {
-      const src = nodeMap.get(srcId)!;
+      const src = srcNodeMap.get(srcId)!;
       const menuCX = src.position.x + src.width / 2;
-      // Pills start below the *visual* node rect (nodeH), not below the extended
-      // layout height — the extra space was reserved for layout only.
       const baseY = src.position.y + nodeH + CHOICE_PILL_OFFSET;
 
-      // Assign a colour per unique target (same target → same colour)
       const uniqueTargets = [...new Set(pills.map(p => p.targetId))];
       const colorByTarget = new Map(uniqueTargets.map((tid, i) => [tid, i % PILL_COLORS.length]));
       pills.forEach(p => { p.colorIdx = colorByTarget.get(p.targetId) ?? 0; });
 
       if (uniqueTargets.length <= 1) {
-        // ── Single target: simple vertical stack centred on menu ──
         const startX = menuCX - CHOICE_PILL_W / 2;
         let y = baseY;
         pills.forEach(pill => {
@@ -388,49 +435,155 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
           pill.y = y;
           y += pill.h + CHOICE_PILL_GAP;
         });
-      } else {
-        // ── Multiple targets: spread pill columns toward each target ──
-        // Group pills by target and sort groups left-to-right by target X.
-        const groupMap = new Map<string, ChoicePill[]>();
-        pills.forEach(p => {
-          const arr = groupMap.get(p.targetId) ?? [];
-          arr.push(p);
-          groupMap.set(p.targetId, arr);
-        });
-        const sortedGroups = [...groupMap.entries()].sort(([a], [b]) => {
-          const tA = nodeMap.get(a), tB = nodeMap.get(b);
-          return ((tA?.position.x ?? 0) + (tA?.width ?? 0) / 2) -
-                 ((tB?.position.x ?? 0) + (tB?.width ?? 0) / 2);
-        });
-
-        // Ideal X: centre of pill column aligns with target centre
-        const colXs = sortedGroups.map(([tgtId]) => {
-          const tgt = nodeMap.get(tgtId);
-          return tgt
-            ? tgt.position.x + tgt.width / 2 - CHOICE_PILL_W / 2
-            : menuCX - CHOICE_PILL_W / 2;
-        });
-
-        // Push columns apart if they overlap
-        for (let i = 1; i < colXs.length; i++) {
-          const minX = colXs[i - 1] + CHOICE_PILL_W + CHOICE_PILL_GAP * 2;
-          if (colXs[i] < minX) colXs[i] = minX;
-        }
-
-        // Assign positions within each column
-        sortedGroups.forEach(([_tgtId, groupPills], gi) => {
-          let y = baseY;
-          groupPills.forEach(pill => {
-            pill.x = colXs[gi];
-            pill.y = y;
-            y += pill.h + CHOICE_PILL_GAP;
-          });
-        });
+        return;
       }
+
+      const grouped = new Map<string, ChoicePill[]>();
+      pills.forEach(pill => {
+        const arr = grouped.get(pill.targetId) ?? [];
+        arr.push(pill);
+        grouped.set(pill.targetId, arr);
+      });
+
+      const sortedGroups = [...grouped.entries()].sort((a, b) => {
+        const ax = srcNodeMap.get(a[0])?.position.x ?? 0;
+        const bx = srcNodeMap.get(b[0])?.position.x ?? 0;
+        return ax - bx;
+      });
+
+      const colXs = sortedGroups.map(([targetId, _groupPills]) => {
+        const targetNode = srcNodeMap.get(targetId);
+        if (!targetNode) return menuCX - CHOICE_PILL_W / 2;
+        const targetCX = targetNode.position.x + targetNode.width / 2;
+        return targetCX - CHOICE_PILL_W / 2;
+      });
+
+      for (let i = 1; i < colXs.length; i++) {
+        const minX = colXs[i - 1] + CHOICE_PILL_W + CHOICE_COLUMN_GAP;
+        if (colXs[i] < minX) colXs[i] = minX;
+      }
+
+      sortedGroups.forEach(([_targetId, groupPills], gi) => {
+        let y = baseY;
+        groupPills.forEach(pill => {
+          pill.x = colXs[gi];
+          pill.y = y;
+          y += pill.h + CHOICE_PILL_GAP;
+        });
+      });
     });
 
     return map;
-  }, [visibleLinks, nodeMap, menuNodeIds, nodeH]);
+  }, [visibleLinks, menuNodeIds, nodeH]);
+
+  const baseNodeMap = useMemo(
+    () => new Map(baseLayoutNodes.map(n => [n.id, n])),
+    [baseLayoutNodes],
+  );
+
+  const baseChoicePillsByMenu = useMemo(
+    () => buildChoicePillsForNodeMap(baseNodeMap),
+    [buildChoicePillsForNodeMap, baseNodeMap],
+  );
+
+  const menuReserveBoxes = useMemo(() => {
+    const boxes: LayoutBox[] = [];
+    baseChoicePillsByMenu.forEach((pills, menuId) => {
+      const src = baseNodeMap.get(menuId);
+      if (!src || pills.length === 0) return;
+
+      const minX = Math.min(src.position.x, ...pills.map(p => p.x));
+      const maxX = Math.max(src.position.x + src.width, ...pills.map(p => p.x + CHOICE_PILL_W));
+      const maxY = Math.max(src.position.y + nodeH, ...pills.map(p => p.y + p.h));
+
+      boxes.push({
+        x: minX - MENU_CORRIDOR_PAD_X,
+        y: src.position.y + nodeH,
+        width: (maxX - minX) + MENU_CORRIDOR_PAD_X * 2,
+        height: (maxY - (src.position.y + nodeH)) + LAYOUT_PILL_MARGIN,
+      });
+    });
+    return boxes;
+  }, [baseChoicePillsByMenu, baseNodeMap, nodeH]);
+
+  const layoutedNodes = useMemo(() => {
+    const primaryAxis = layoutMode === 'flow-lr' ? 'x' : 'y';
+    const crossAxis = layoutMode === 'flow-lr' ? 'y' : 'x';
+    const primaryPad = 68;
+    const crossPad = 76;
+    const sorted = [...baseLayoutNodes].sort((a, b) => {
+      const aMenu = menuNodeIds.has(a.id) ? 0 : 1;
+      const bMenu = menuNodeIds.has(b.id) ? 0 : 1;
+      if (aMenu !== bMenu) return aMenu - bMenu;
+      const aPrimary = a.position[primaryAxis];
+      const bPrimary = b.position[primaryAxis];
+      if (aPrimary !== bPrimary) return aPrimary - bPrimary;
+      return a.position[crossAxis] - b.position[crossAxis];
+    });
+
+    const resolved: typeof baseLayoutNodes = [];
+    const fixedObstacles: LayoutBox[] = [
+      ...menuReserveBoxes,
+    ];
+
+    const nodeBoxes = (node: typeof baseLayoutNodes[number]): LayoutBox => nodeToBox(node);
+    const overlapCandidates = (box: LayoutBox) => [
+      ...fixedObstacles,
+      ...resolved.map(nodeBoxes),
+    ].filter(candidate => boxesOverlap(box, candidate));
+
+    sorted.forEach(node => {
+      const next = { ...node };
+      const isMenuNode = menuNodeIds.has(node.id);
+      if (!isMenuNode) {
+        let moved = true;
+        while (moved) {
+          moved = false;
+          const overlaps = overlapCandidates(nodeBoxes(next));
+          for (const obstacle of overlaps) {
+            const primaryDelta = Math.abs((next.position as Record<string, number>)[primaryAxis] - obstacle[primaryAxis as keyof LayoutBox]);
+            const primarySpan = ((next[primaryAxis === 'x' ? 'width' : 'height'] ?? 0) + obstacle[primaryAxis === 'x' ? 'width' : 'height']) / 2 + primaryPad;
+            if (primaryDelta > primarySpan) continue;
+            const obstacleCrossEnd = obstacle[crossAxis as keyof LayoutBox] + obstacle[crossAxis === 'x' ? 'width' : 'height'];
+            const currentCross = (next.position as Record<string, number>)[crossAxis];
+            const requiredCross = obstacleCrossEnd + crossPad;
+            if (currentCross < requiredCross) {
+              (next.position as Record<string, number>)[crossAxis] = requiredCross;
+              moved = true;
+            }
+          }
+        }
+      }
+      resolved.push(next);
+    });
+
+    return resolved;
+  }, [baseLayoutNodes, layoutMode, menuNodeIds, menuReserveBoxes]);
+
+  const nodeMap = useMemo(
+    () => new Map(layoutedNodes.map(n => [n.id, n])),
+    [layoutedNodes],
+  );
+  nodeMapRef.current = nodeMap;
+
+  const choicePillsByMenu = useMemo(
+    () => buildChoicePillsForNodeMap(nodeMap),
+    [buildChoicePillsForNodeMap, nodeMap],
+  );
+
+  const openNodeEditor = useCallback((nodeId: string) => {
+    const node = nodeMapRef.current.get(nodeId);
+    if (!node) return;
+    const line = menuLineByNodeId.get(nodeId) ?? node.startLine;
+    onOpenEditor(node.blockId, line);
+  }, [menuLineByNodeId, onOpenEditor]);
+
+  const openChoiceEditor = useCallback((pill: ChoicePill) => {
+    const line = pill.sourceLine ?? pill.menuLine;
+    if (line !== null && line !== undefined) {
+      onOpenEditor(pill.sourceBlockId, line);
+    }
+  }, [onOpenEditor]);
 
   // ── Derived: depth-1 highlight sets (null = no selection) ──
   const { highlightedNodeIds, highlightedLinkIds } = useMemo(() => {
@@ -457,6 +610,33 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
     });
     return ids;
   }, [selectedNodeId, menuNodeIds, visibleLinks]);
+
+  const selectedMenuChoices = useMemo(() => {
+    if (!selectedNodeId || !menuNodeIds.has(selectedNodeId)) return [];
+    return visibleLinks
+      .filter(link => link.sourceId === selectedNodeId && !!link.choiceText)
+      .map(link => ({
+        ...link,
+        targetLabel: nodeMap.get(link.targetId)?.label ?? link.targetId.split(':').slice(1).join(':'),
+        sourceBlockId: link.sourceId.split(':')[0],
+      }));
+  }, [selectedNodeId, menuNodeIds, visibleLinks, nodeMap]);
+
+  const selectedMenuSummary = useMemo(() => {
+    if (!selectedNodeId || !menuNodeIds.has(selectedNodeId)) return null;
+    const selectedNode = nodeMap.get(selectedNodeId);
+    if (!selectedNode) return null;
+    const uniqueTargets = new Set(selectedMenuChoices.map(choice => choice.targetId));
+    const conditionalCount = selectedMenuChoices.filter(choice => !!choice.choiceCondition).length;
+    return {
+      node: selectedNode,
+      menuLine: menuLineByNodeId.get(selectedNodeId) ?? selectedNode.startLine,
+      choiceCount: selectedMenuChoices.length,
+      uniqueTargetCount: uniqueTargets.size,
+      conditionalCount,
+      reconverges: uniqueTargets.size > 0 && uniqueTargets.size < selectedMenuChoices.length,
+    };
+  }, [selectedNodeId, menuNodeIds, nodeMap, selectedMenuChoices, menuLineByNodeId]);
 
   // ── Derived: minimap items ──
   const minimapItems = useMemo((): MinimapItem[] =>
@@ -642,6 +822,14 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
   }, [onTransformChange]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+    const choiceEl = (e.target as Element).closest('[data-ccchoiceid]');
+    if (choiceEl) {
+      istate.current = { type: 'idle' };
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+      return;
+    }
     const s = istate.current;
     if (s.type === 'node' && !didMove.current && s.nodeId) {
       const nodeId = s.nodeId;
@@ -652,26 +840,30 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
         clickCountRef.current = 0;
         if (count >= 2) {
           // Double click: open editor
-          const node = nodeMapRef.current.get(nodeId);
-          if (node) onOpenEditor(node.blockId, node.startLine);
+          openNodeEditor(nodeId);
         } else {
           // Single click: toggle selection highlight
           setSelectedNodeId(prev => (prev === nodeId ? null : nodeId));
+          setSelectedChoiceLinkId(null);
         }
       }, 250);
     } else if (s.type === 'idle' || (s.type === 'panning' && !didMove.current)) {
       // Click on empty canvas: deselect
       setSelectedNodeId(null);
+      setSelectedChoiceLinkId(null);
     }
     istate.current = { type: 'idle' };
-    e.currentTarget.releasePointerCapture(e.pointerId);
-  }, [onOpenEditor]);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  }, [openNodeEditor]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     e.preventDefault();
     if ((e.target as Element).closest('.sticky-note-wrapper') || (e.target as Element).closest('.cc-controls')) return;
     if ((e.target as Element).closest('[data-ccnid]')) return;
     setSelectedNodeId(null);
+    setSelectedChoiceLinkId(null);
     setNodeContextMenu(null);
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -738,7 +930,7 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
 
     if (e.key === 'Enter') {
       e.preventDefault();
-      onOpenEditor(node.blockId, node.startLine);
+      openNodeEditor(node.id);
       return;
     }
 
@@ -772,7 +964,7 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
       setSelectedNodeId(best.id);
       announce(`${best.label} focused`);
     }
-  }, [layoutedNodes, onOpenEditor, setSelectedNodeId, announce]);
+  }, [layoutedNodes, openNodeEditor, setSelectedNodeId, announce]);
 
   return (
     <div className="relative w-full h-full flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden select-none">
@@ -853,6 +1045,110 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
               </div>
             )}
           </div>
+
+          {/* Choice Inspector */}
+          <div className="p-3 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <h4 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Choice Inspector</h4>
+              {selectedMenuSummary && (
+                <button
+                  className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 hover:underline"
+                  onClick={() => openNodeEditor(selectedMenuSummary.node.id)}
+                >
+                  Open menu source
+                </button>
+              )}
+            </div>
+
+            {!selectedMenuSummary ? (
+              <div className="rounded-md border border-dashed border-gray-200 dark:border-gray-700 px-3 py-3 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                Select a menu node to inspect its choices, destinations, and source lines.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 px-3 py-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-mono text-sm text-gray-900 dark:text-gray-100 truncate">{selectedMenuSummary.node.label}</div>
+                      <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                        line {selectedMenuSummary.menuLine} · {selectedMenuSummary.choiceCount} choice{selectedMenuSummary.choiceCount === 1 ? '' : 's'}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 text-[10px]">
+                      {selectedMenuSummary.conditionalCount > 0 && (
+                        <span className="rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5">
+                          {selectedMenuSummary.conditionalCount} conditional
+                        </span>
+                      )}
+                      {selectedMenuSummary.reconverges && (
+                        <span className="rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-2 py-0.5">
+                          {selectedMenuSummary.uniqueTargetCount} destinations
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="max-h-64 overflow-y-auto rounded-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+                  {selectedMenuChoices.map((choice, idx) => (
+                    <div
+                      key={choice.id}
+                      className={`px-3 py-2 space-y-1.5 transition-colors ${selectedChoiceLinkId === choice.id ? 'bg-amber-50/70 dark:bg-amber-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/40'}`}
+                      onClick={() => {
+                        setSelectedNodeId(choice.sourceId);
+                        setSelectedChoiceLinkId(choice.id);
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className={`text-xs break-words ${selectedChoiceLinkId === choice.id ? 'text-amber-900 dark:text-amber-100' : 'text-gray-900 dark:text-gray-100'}`}>
+                            {idx + 1}. &ldquo;{choice.choiceText}&rdquo;
+                          </div>
+                          {choice.choiceCondition && (
+                            <div className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-mono break-words ${selectedChoiceLinkId === choice.id ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300' : 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}`}>
+                              if {choice.choiceCondition}
+                            </div>
+                          )}
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className="text-[10px] text-gray-400 dark:text-gray-500">line {choice.sourceLine ?? choice.menuLine ?? selectedMenuSummary.menuLine}</div>
+                          <div className="font-mono text-[10px] text-indigo-600 dark:text-indigo-400 truncate max-w-[7rem]">
+                            {choice.targetLabel}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          className="rounded-md border border-gray-200 dark:border-gray-700 px-2 py-1 text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700"
+                          onClick={() => {
+                            const line = choice.sourceLine ?? choice.menuLine;
+                            if (line !== undefined && line !== null) {
+                              onOpenEditor(choice.sourceId.split(':')[0], line);
+                            }
+                          }}
+                        >
+                          Open source
+                        </button>
+                        <button
+                          className="rounded-md border border-gray-200 dark:border-gray-700 px-2 py-1 text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700"
+                          onClick={() => onWarpToLabel(choice.targetLabel)}
+                        >
+                          Warp target
+                        </button>
+                        <button
+                          className="rounded-md border border-gray-200 dark:border-gray-700 px-2 py-1 text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700"
+                          onClick={() => openNodeEditor(choice.targetId)}
+                        >
+                          Open target source
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </CanvasToolbox>
 
         {/* ── Legend (top-right) ── */}
@@ -902,7 +1198,7 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
                   </div>
                 )}
                 <div className="pt-1 text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-gray-700">
-                  Click a node to highlight · double-click to open
+                  Click a node to highlight · double-click to open the source
                 </div>
               </div>
             )}
@@ -923,7 +1219,7 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
             onContextMenu={handleContextMenu}
             onClick={e => { if (!(e.target as Element).closest('[data-ccnid]')) setSelectedNodeId(null); }}
           >
-            <defs>
+    <defs>
               {/*
                 Single arrowhead marker that inherits the stroke color of the
                 element using it via `context-stroke` (Chromium 99+).
@@ -948,6 +1244,23 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
                 <stop offset="0%" stopColor="#818cf8" stopOpacity="0.32" />
                 <stop offset="100%" stopColor="#818cf8" stopOpacity="0.06" />
               </linearGradient>
+
+              <filter id="cc-choice-glow" x="-40%" y="-40%" width="180%" height="180%">
+                <feGaussianBlur stdDeviation="2.5" result="blur" />
+                <feColorMatrix
+                  in="blur"
+                  type="matrix"
+                  values="
+                    1 0 0 0 0.96
+                    0 1 0 0 0.72
+                    0 0 1 0 0.18
+                    0 0 0 0.95 0"
+                />
+                <feMerge>
+                  <feMergeNode />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
             </defs>
 
             <g transform={`translate(${transform.x},${transform.y}) scale(${transform.scale})`}>
@@ -1071,20 +1384,24 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
                       <>
                         {/* Vertical segment from menu bottom to horizontal bar */}
                         <line x1={menuCX} y1={menuBottom} x2={menuCX} y2={branchY}
-                          className="stroke-gray-300 dark:stroke-gray-600" strokeWidth={1.5} />
+                          className="stroke-gray-300 dark:stroke-gray-600"
+                          strokeWidth={1.5} />
                         {/* Horizontal bar spanning all column centres */}
                         <line x1={colCXs[0]} y1={branchY} x2={colCXs[colCXs.length - 1]} y2={branchY}
-                          className="stroke-gray-300 dark:stroke-gray-600" strokeWidth={1.5} />
+                          className="stroke-gray-300 dark:stroke-gray-600"
+                          strokeWidth={1.5} />
                         {/* Vertical drops from bar down to each column's first pill */}
                         {colCXs.map(cx => (
                           <line key={cx} x1={cx} y1={branchY} x2={cx} y2={firstPillY}
-                            className="stroke-gray-300 dark:stroke-gray-600" strokeWidth={1.5} />
+                            className="stroke-gray-300 dark:stroke-gray-600"
+                            strokeWidth={1.5} />
                         ))}
                       </>
                     ) : (
                       /* Single column: plain vertical trunk */
                       <line x1={menuCX} y1={menuBottom} x2={colCXs[0] ?? menuCX} y2={firstPillY}
-                        className="stroke-indigo-300 dark:stroke-indigo-600" strokeWidth={1.5} />
+                        className="stroke-indigo-300 dark:stroke-indigo-600"
+                        strokeWidth={1.5} />
                     )}
 
                     {pills.map(pill => {
@@ -1092,6 +1409,12 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
                       const pillCX = pill.x + CHOICE_PILL_W / 2;
                       const pillBottom = pill.y + pill.h;
                       const colors = PILL_COLORS[pill.colorIdx];
+                      const wrappedChoice = wrapText(pill.choiceText, PILL_WRAP_CHARS, 2);
+                      const wrappedCondition = pill.condition ? wrapText(`if ${pill.condition}`, PILL_WRAP_CHARS, 1) : [];
+                      const isSelectedChoice = selectedChoiceLinkId === pill.linkId;
+                      const sourceGlowPath = isSelectedChoice
+                        ? edgePath(menuCX, menuBottom, pillCX, pill.y, 0)
+                        : null;
 
                       // Arrow from pill bottom-center to target node top-center
                       const pillEdge = tgt
@@ -1101,14 +1424,48 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
                       const isLinkHighlighted = !highlightedLinkIds || highlightedLinkIds.has(pill.linkId);
 
                       return (
-                        <g key={pill.id}>
+                        <g
+                          key={pill.id}
+                          data-ccchoiceid={pill.linkId}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Choice: ${pill.choiceText}${pill.condition ? `, if ${pill.condition}` : ''}`}
+                          style={{ cursor: 'pointer' }}
+                          aria-pressed={isSelectedChoice}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedNodeId(menuId);
+                            setSelectedChoiceLinkId(pill.linkId);
+                          }}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            openChoiceEditor(pill);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key !== 'Enter') return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openChoiceEditor(pill);
+                          }}
+                        >
+                          {sourceGlowPath && (
+                            <path
+                              d={sourceGlowPath.d}
+                              className="fill-none stroke-amber-400 dark:stroke-amber-300"
+                              strokeWidth={2.5}
+                              markerEnd="url(#cc-arr)"
+                              filter="url(#cc-choice-glow)"
+                            />
+                          )}
+
                           {/* Pill → target arrow (colour-matched to pill) */}
                           {pillEdge && (
                             <path
                               d={pillEdge.d}
                               className={`fill-none ${colors.arrow}`}
-                              strokeWidth={isLinkHighlighted && highlightedLinkIds ? 2 : 1.5}
+                              strokeWidth={isSelectedChoice ? 3 : isLinkHighlighted && highlightedLinkIds ? 2 : 1.5}
                               markerEnd="url(#cc-arr)"
+                              filter={isSelectedChoice ? 'url(#cc-choice-glow)' : undefined}
                             />
                           )}
 
@@ -1119,36 +1476,56 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
                             width={CHOICE_PILL_W}
                             height={pill.h}
                             rx={10}
-                            className={`${colors.fill} ${colors.border}`}
-                            strokeWidth={1}
+                            className={`${colors.fill} ${isSelectedChoice ? 'stroke-amber-400 dark:stroke-amber-300' : colors.border}`}
+                            strokeWidth={isSelectedChoice ? 2 : 1}
                           />
 
-                          {/* Choice text */}
-                          <text
-                            x={pillCX}
-                            y={pill.y + (pill.condition ? 10 : pill.h / 2)}
-                            textAnchor="middle"
-                            dominantBaseline="middle"
-                            fontSize={9}
-                            fontStyle="italic"
-                            className={colors.text}
+                          <foreignObject
+                            x={pill.x + 7}
+                            y={pill.y + 4}
+                            width={CHOICE_PILL_W - 14}
+                            height={pill.h - 8}
+                            pointerEvents="none"
                           >
-                            {`"${trunc(pill.choiceText, PILL_LABEL_MAX)}"`}
-                          </text>
-
-                          {/* Condition (if any) — second line inside taller pill */}
-                          {pill.condition && (
-                            <text
-                              x={pillCX}
-                              y={pill.y + 22}
-                              textAnchor="middle"
-                              dominantBaseline="middle"
-                              fontSize={8}
-                              className="fill-amber-700 dark:fill-amber-400"
+                            <div
+                              xmlns="http://www.w3.org/1999/xhtml"
+                              className="h-full w-full flex flex-col items-center justify-center text-center overflow-hidden select-none"
+                              title={pill.condition ? `"${pill.choiceText}" if ${pill.condition}` : `"${pill.choiceText}"`}
                             >
-                              {`if ${trunc(pill.condition, 22)}`}
-                            </text>
-                          )}
+                              <div
+                                className={`font-medium italic break-words ${colors.htmlText}`}
+                                style={{
+                                  fontSize: '9px',
+                                  lineHeight: '1.12',
+                                  display: '-webkit-box',
+                                  WebkitBoxOrient: 'vertical',
+                                  WebkitLineClamp: 2,
+                                  overflow: 'hidden',
+                                  maxWidth: '100%',
+                                }}
+                              >
+                                {wrappedChoice.map((line, idx) => (
+                                  <span key={idx} className="block">
+                                    {idx === 0 ? `“${line}` : line}{idx === wrappedChoice.length - 1 ? '”' : ''}
+                                  </span>
+                                ))}
+                              </div>
+                              {wrappedCondition.length > 0 && (
+                                <div
+                                  className="mt-0.5 font-mono text-[8px] leading-tight text-amber-700 dark:text-amber-400 break-words"
+                                  style={{
+                                    display: '-webkit-box',
+                                    WebkitBoxOrient: 'vertical',
+                                    WebkitLineClamp: 1,
+                                    overflow: 'hidden',
+                                    maxWidth: '100%',
+                                  }}
+                                >
+                                  {wrappedCondition[0]}
+                                </div>
+                              )}
+                            </div>
+                          </foreignObject>
                         </g>
                       );
                     })}
@@ -1161,13 +1538,12 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
                 const { id, label, position: { x, y } } = node;
                 const snippet = snippetMap.get(id);
                 const showSnip = showSnippets && !!snippet;
-                const h = showSnip ? NODE_H_SNIPPET : NODE_H_PLAIN;
+                const h = NODE_H;
                 const snipDisplay = snippet ? `"${trunc(snippet, SNIPPET_MAX)}"` : null;
                 const isSelected = id === selectedNodeId;
                 const isNodeHighlighted = !highlightedNodeIds || highlightedNodeIds.has(id);
                 const isMenuNode = menuNodeIds.has(id);
                 const isConnectedTarget = !!connectedTargetIds?.has(id);
-
                 const bodyFillClass = isSelected
                   ? 'fill-indigo-50 dark:fill-indigo-950 stroke-indigo-500 dark:stroke-indigo-400'
                   : 'fill-white dark:fill-gray-800 stroke-gray-300 dark:stroke-gray-600';
@@ -1276,6 +1652,12 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
                         {snipDisplay}
                       </text>
                     )}
+
+                    <title>
+                      {isMenuNode
+                        ? `Menu: ${label}\nDouble-click to open the menu source`
+                        : `Label: ${label}\nDouble-click to open in editor`}
+                    </title>
                   </g>
                 );
               })}
@@ -1330,7 +1712,7 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
             y={nodeContextMenu.y}
             label={nodeContextMenu.node.label}
             onClose={() => setNodeContextMenu(null)}
-            onOpenEditor={() => onOpenEditor(nodeContextMenu.node.blockId, nodeContextMenu.node.startLine)}
+            onOpenEditor={() => openNodeEditor(nodeContextMenu.node.id)}
             onWarpToHere={() => onWarpToLabel(nodeContextMenu.node.label)}
           />
         )}
@@ -1358,3 +1740,4 @@ const ChoiceCanvas: React.FC<ChoiceCanvasProps> = ({
 };
 
 export default ChoiceCanvas;
+
