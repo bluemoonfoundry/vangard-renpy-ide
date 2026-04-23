@@ -1,6 +1,6 @@
 [![Build/Release](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/build.yml/badge.svg)](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/build.yml)
 [![CodeQL](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/bluemoonfoundry/vangard-renpy-ide/actions/workflows/github-code-scanning/codeql)
-![Version](https://img.shields.io/badge/version-0.6.0_Public_Beta_3-blue)
+![Version](https://img.shields.io/badge/version-0.7.1_Public_Beta_4-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows_%7C_macOS_%7C_Linux-lightgrey)
 
 # Ren'IDE : The Ren'Py Visual Designer
@@ -13,7 +13,7 @@ It works **alongside** the Ren'Py SDK. Your `.rpy` files stay as `.rpy` files. N
 
 **[Watch the Beta 4 demo reel on YouTube →](https://youtube.com/watch?v=bZ-Wy1cFaYg&si=mxKo5r4Us4XV5brJ)**
 
-**[Download the latest release (v0.6.0 - Beta 3)](https://github.com/bluemoonfoundry/vangard-renpy-ide/releases/latest)**  
+**[Download the latest release (v0.7.1 - Beta 4)](https://github.com/bluemoonfoundry/vangard-renpy-ide/releases/latest)**
 
 **[Download the latest nightly release (bleeding edge, tread carefully!)](https://github.com/bluemoonfoundry/bmf-vangard-renpy-ide/releases/tag/nightly)**
 
@@ -60,6 +60,8 @@ A full Monaco editor (the VS Code engine) built right in. Split panes let you ed
 
 - **TextMate syntax highlighting** — accurate, context-aware Ren'Py coloring with semantic token support for labels, variables, and screen references
 - **Context-aware IntelliSense** — autocomplete for `jump`/`call` targets, `show`/`scene` images, character tags, screen names, and variables
+- **Go to Definition** — `Ctrl+Click` on a label, character, or screen reference to jump to its definition
+- **Dialogue Preview** — an inline "Player View" panel below the editor shows a mock Ren'Py textbox (or choice menu) that updates in real time as the cursor moves through dialogue lines
 - **28+ built-in Ren'Py snippets** with tab-stop placeholders
 - **User-defined snippets** — create custom snippets with trigger prefixes that integrate with IntelliSense
 - Cursor position (Ln/Col) in status bar
@@ -127,6 +129,29 @@ Click any issue to jump directly to the source. Filter by severity (error / warn
 
 ---
 
+### Warp to Label
+
+Jump straight into any point in your game without playing through from the start. Press `Ctrl+Shift+G` (or click the toolbar button) to open a label picker, select a target, and Ren'IDE launches the game at that label using Ren'Py's `--warp` flag.
+
+Before warping, a **Variable Overrides** modal lets you set values for any `default` variables and interpolated text variables (like `[mc_name]`) that the game would normally set during earlier scenes. Ren'IDE writes a temporary `_ide_after_warp.rpy` that applies these overrides in Ren'Py's `after_warp` hook, then removes the file automatically when the game stops. If your project already defines its own `label after_warp`, the IDE detects it and avoids creating a conflicting label.
+
+You can also warp from within the code editor — right-click a label line and choose **"Warp to here"** — or from any canvas node's context menu.
+
+---
+
+### Translation Dashboard
+
+A dedicated dashboard for tracking and managing Ren'Py translation coverage across every language in your project. Open it from the toolbar.
+
+- **Language overview cards** — one card per detected language showing total strings, translated count, stale (untranslated-identical) count, and a completion percentage bar
+- **File breakdown table** — sortable by file, total strings, translated, untranslated, stale, and completion percentage so you can focus effort where it matters
+- **String-level view** — a virtual-scrolling list of every translatable string with its translation status. Filter by status (all / translated / untranslated / stale) and search by text
+- **Generate translations** — trigger Ren'Py's translation scaffolding for a language directly from the dashboard (requires a valid SDK path in Settings)
+
+The parser automatically detects languages from `tl/<language>/` directories, matches translated blocks back to source strings, and identifies stale translations where the translated text is identical to the source.
+
+---
+
 ### Project Statistics
 
 Word counts, estimated play time, lines of dialogue, per-character dialogue breakdown (bar chart), scene and route counts, and branching complexity scores. Statistics are computed asynchronously after the tab opens — each metric shows an inline spinner until ready, so the Stats tab appears instantly even for large projects. An **IDE Performance** section at the bottom of the Stats tab shows live diagnostics: project load time, analysis worker duration, asset scan time, canvas FPS, and JS heap memory.
@@ -144,7 +169,10 @@ Word counts, estimated play time, lines of dialogue, per-character dialogue brea
 - **External File Change Detection** — detects when `.rpy` files are modified outside the app. Non-dirty files reload silently; dirty files show a persistent warning bar with Reload / Keep options.
 - **Undo/Redo** — full history for canvas moves, block creation/deletion, and composition edits (`Ctrl+Z` / `Ctrl+Y`).
 - **Drafting Mode** — adds placeholders for missing images and audio so the game runs during development.
-- **Run Game** — launch Ren'Py as a child process directly from the toolbar.
+- **Run Game** — launch Ren'Py as a child process directly from the toolbar (`F5` to run, `Shift+F5` to stop).
+- **Sticky notes** — per-canvas markdown notes in 6 colors. Drag to reposition. Promote a note to a diagnostics task via its checkbox.
+- **Character profile editor** — a dedicated editor view for each character with all Ren'Py `Character()` parameters: name/dialogue styling, text speed, CTC, window properties, and a free-form notes field.
+- **Canvas minimap** — a toggle-able minimap overlay on each canvas showing your viewport position within the full graph.
 - **Keyboard-accessible canvases** — Tab to move focus between blocks/nodes, Arrow keys for spatial navigation, Enter to open in editor, Escape to deselect. Every canvas element has an `aria-label` for screen readers (NVDA, VoiceOver, JAWS). Visible focus indicators for keyboard-only users.
 - **11 Themes** — system, light, dark, solarized light/dark, colorful, colorful light, neon dark, ocean dark, candy light, forest light.
 - **Auto-updater** — checks for new releases on launch and prompts to install.
@@ -161,9 +189,16 @@ Word counts, estimated play time, lines of dialogue, per-character dialogue brea
 | Close Active Tab | `Ctrl+W` / `Cmd+W` |
 | Quit Application | `Ctrl+Q` / `Cmd+Q` |
 | Undo / Redo | `Ctrl+Z` / `Ctrl+Y` |
+| Run Project | `F5` |
+| Stop Project | `Shift+F5` |
+| Warp to Label | `Ctrl+Shift+G` |
+| Search in Files | `Ctrl+Shift+F` |
+| Go to Label | `Ctrl+G` / `Cmd+G` |
+| Go to Definition | `Ctrl+Click` (in editor) |
+| Settings | `Ctrl+,` |
+| Keyboard Shortcuts | `Ctrl+/` |
 | New Block | `N` |
 | Group selected blocks | `G` |
-| Go to Label | `Ctrl+G` / `Cmd+G` |
 | Pan canvas | `Shift+Drag` (configurable) |
 | Zoom canvas | Mouse scroll |
 | Select multiple blocks | `Ctrl+Click` or rubber-band drag |
@@ -237,16 +272,18 @@ Buttons are arranged left-to-right. The canvas switcher (Story / Route / Choice)
 | ![Pencil](https://img.shields.io/badge/-✎-gray?style=flat-square) | **Add Note** | Add a sticky note to the active canvas | — |
 | ![Arrows](https://img.shields.io/badge/-⟲-gray?style=flat-square) | **Organize Layout** | Auto-layout blocks on the active canvas by story flow | — |
 | ![Alert Circle](https://img.shields.io/badge/-⚠-gray?style=flat-square) | **Diagnostics** | Open the diagnostics panel (errors, warnings, info, tasks); shows a red badge when errors are present | — |
+| ![Globe](https://img.shields.io/badge/-🌐-gray?style=flat-square) | **Translations** | Open the Translation Dashboard — coverage stats and string-level tracking per language | — |
 | ![Bar Chart](https://img.shields.io/badge/-▦-gray?style=flat-square) | **Stats** | Open the project statistics visualization | — |
 | ![Layers](https://img.shields.io/badge/-⫶-gray?style=flat-square) | **Project Canvas** | Switch to the Project Canvas — bird's-eye view of script files | — |
 | ![Network](https://img.shields.io/badge/-⬡-gray?style=flat-square) | **Flow Canvas** | Switch to the Flow Canvas — trace narrative flow | — |
 | ![Grid](https://img.shields.io/badge/-⊞-gray?style=flat-square) | **Choices Canvas** | Switch to the Choices Canvas — player decision tree | — |
 | ![Pencil](https://img.shields.io/badge/-✏-green?style=flat-square) + Toggle | **Drafting Mode** | Toggle placeholder images/audio for missing assets; green toggle = on | — |
+| ![Warp](https://img.shields.io/badge/-⤯-purple?style=flat-square) | **Warp to Label** | Jump into the game at a specific label with variable overrides | `Ctrl+Shift+G` |
 | ![Play](https://img.shields.io/badge/-▶-green?style=flat-square) | **Run** | Launch the Ren'Py game as a child process (requires SDK path in Settings) | `F5` |
-| ![Stop](https://img.shields.io/badge/-⏸-red?style=flat-square) | **Stop** | Stop the running game — replaces Run while the game is active | — |
+| ![Stop](https://img.shields.io/badge/-⏸-red?style=flat-square) | **Stop** | Stop the running game — replaces Run while the game is active | `Shift+F5` |
 | ![Save](https://img.shields.io/badge/-💾-gray?style=flat-square) | **Save All** | Save all unsaved changes to disk; button highlights when there are unsaved changes | `Ctrl+S` |
-| ![Gear](https://img.shields.io/badge/-⚙-gray?style=flat-square) | **Settings** | Theme, editor font, SDK path, AI keys, mouse preferences | — |
+| ![Gear](https://img.shields.io/badge/-⚙-gray?style=flat-square) | **Settings** | Theme, editor font, SDK path, mouse preferences | `Ctrl+,` |
 
 ---
 
-*Ren'IDE — v0.7.1 Public Beta 4 (not yet released) · last release: v0.6.0 Public Beta 3*
+*Ren'IDE — v0.7.1 Public Beta 4*
