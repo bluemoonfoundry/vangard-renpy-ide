@@ -714,7 +714,12 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             const bgEffects = spriteEffectCode(bg, ind);
             let bgCode: string;
             if (transforms.length > 0 || bgEffects) {
-                bgCode = `scene ${tag}:\n${ind}${transforms.join(`\n${ind}`)}${transforms.length > 0 ? '\n' : ''}${bgEffects}`;
+                // Build transforms and effects separately: spriteEffectCode already
+                // includes its own indentation, so don't prepend ${ind} before it.
+                const transformBlock = transforms.length > 0
+                    ? transforms.map(t => `${ind}${t}`).join('\n') + '\n'
+                    : '';
+                bgCode = `scene ${tag}:\n${transformBlock}${bgEffects}`;
                 if (!bgCode.endsWith('\n')) bgCode += '\n';
             } else {
                 bgCode = `scene ${tag}\n`;
