@@ -11,7 +11,7 @@ Vangard is a desktop IDE for Ren'Py visual novel development. Your `.rpy` files 
 
 It works **alongside** the Ren'Py SDK. Your `.rpy` files stay as `.rpy` files. No lock-in.
 
-**[Watch the Beta 4 demo reel on YouTube →](https://youtube.com/watch?v=bZ-Wy1cFaYg&si=mxKo5r4Us4XV5brJ)**
+**[Watch the Full Beta 4 Walkthrough Video @ YouTube →](https://youtu.be/PNgV-JjFNag)**
 
 **[Download the latest release (v0.8.0 - Beta 4)](https://github.com/bluemoonfoundry/vangard-renpy-ide/releases/latest)**
 
