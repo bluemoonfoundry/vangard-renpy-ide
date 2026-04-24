@@ -10,6 +10,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import Editor from '@monaco-editor/react';
+import { logger } from '../lib/logger';
 
 interface MarkdownPreviewViewProps {
   filePath: string;
@@ -38,7 +39,7 @@ const MarkdownPreviewView: React.FC<MarkdownPreviewViewProps> = ({ filePath, pro
         setContent(text);
         savedContentRef.current = text;
       } catch (err) {
-        console.error('Failed to load markdown file:', err);
+        logger.error('Failed to load markdown file', err);
         setError('Failed to load file.');
       } finally {
         setIsLoading(false);
@@ -57,7 +58,7 @@ const MarkdownPreviewView: React.FC<MarkdownPreviewViewProps> = ({ filePath, pro
       setIsDirty(false);
       addToast?.('File saved', 'success');
     } catch (err) {
-      console.error('Failed to save markdown file:', err);
+      logger.error('Failed to save markdown file', err);
       addToast?.('Failed to save file', 'error');
     }
   }, [content, filePath, projectRootPath, isDirty, addToast]);
@@ -95,7 +96,7 @@ const MarkdownPreviewView: React.FC<MarkdownPreviewViewProps> = ({ filePath, pro
         ALLOWED_ATTR: ['href', 'class', 'src', 'alt', 'title', 'id', 'type', 'checked', 'disabled']
       });
     } catch (e) {
-      console.error('Failed to parse markdown:', e);
+      logger.error('Failed to parse markdown', e);
       return '<p>Failed to parse markdown.</p>';
     }
   }, [content]);

@@ -4,11 +4,18 @@ All notable changes to Ren'IDE are documented here.
 
 ## [Unreleased]
 
+### Added
+- **NEW:** Centralized logging system using electron-log - Logs persist to disk for bug reports and debugging (#137)
+- **NEW:** Help → Show Logs menu item - Opens log directory for easy access to diagnostic logs
+
 ### Security
 - **FIXED:** XSS vulnerability in Markdown preview - Added DOMPurify sanitization to prevent potential script injection through user-controlled Markdown files (#134)
 
 ### Fixed
 - **FIXED:** Memory leak in CanvasNodeContextMenu - Event listeners no longer re-register on every prop change, preventing memory leaks during canvas interactions (#138)
+
+### Changed
+- **IMPROVED:** Console logging replaced with structured file-based logging system for better debugging and support
 
 ## [v0.8.0] - Current Feature Set
 

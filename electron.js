@@ -10,6 +10,7 @@ import { spawn } from 'child_process';
 import { Worker } from 'worker_threads';
 import { deriveGuiColors } from './lib/colorUtils.js';
 import { updateGuiRpy, updateOptionsRpy, generateSaveDirectory } from './lib/templateProcessor.js';
+import { logger, electronLog } from './lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -638,6 +639,25 @@ async function updateApplicationMenu() {
             {
                 label: 'Documentation',
                 click: () => shell.openExternal('https://github.com/bluemoonfoundry/vangard-renpy-ide/wiki'),
+            },
+            { type: 'separator' },
+            {
+                label: 'Show Logs',
+                click: async () => {
+                    try {
+                        const logPath = electronLog.transports.file.getFile()?.path;
+                        if (logPath) {
+                            // Open the directory containing the log file
+                            const logDir = path.dirname(logPath);
+                            await shell.openPath(logDir);
+                        } else {
+                            dialog.showErrorBox('Error', 'Log file not found.');
+                        }
+                    } catch (err) {
+                        logger.error('Failed to open log directory', err);
+                        dialog.showErrorBox('Error', 'Could not open log directory.');
+                    }
+                }
             },
             { type: 'separator' },
             {
@@ -1330,7 +1350,53 @@ app.whenReady().then(() => {
     try {
       await shell.openExternal(url);
     } catch (error) {
-      console.error('Failed to open external URL:', error);
+      logger.error('Failed to open external URL', error);
+    }
+  });
+
+  // Logging IPC handlers
+  ipcMain.handle('app:get-log-path', () => {
+    try {
+      return electronLog.transports.file.getFile()?.path || null;
+    } catch (error) {
+      logger.error('Failed to get log path', error);
+      return null;
+    }
+  });
+
+  ipcMain.handle('app:open-log-directory', async () => {
+    try {
+      const logPath = electronLog.transports.file.getFile()?.path;
+      if (logPath) {
+        const logDir = path.dirname(logPath);
+        await shell.openPath(logDir);
+        return { success: true };
+      } else {
+        return { success: false, error: 'Log file not found' };
+      }
+    } catch (error) {
+      logger.error('Failed to open log directory', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Handle logging from renderer process
+  ipcMain.on('app:log', (_event, level, ...args) => {
+    switch (level) {
+      case 'error':
+        electronLog.error(...args);
+        break;
+      case 'warn':
+        electronLog.warn(...args);
+        break;
+      case 'info':
+        electronLog.info(...args);
+        break;
+      case 'debug':
+        electronLog.debug(...args);
+        break;
+      default:
+        electronLog.info(...args);
     }
   });
 

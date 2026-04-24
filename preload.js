@@ -125,4 +125,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('fs:file-changed-externally', subscription);
     return () => ipcRenderer.removeListener('fs:file-changed-externally', subscription);
   },
+  // --- Logging ---
+  log: (level, ...args) => ipcRenderer.send('app:log', level, ...args),
+  getLogPath: () => ipcRenderer.invoke('app:get-log-path'),
+  openLogDirectory: () => ipcRenderer.invoke('app:open-log-directory'),
 });
