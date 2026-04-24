@@ -79,9 +79,16 @@ describe('UserSnippetModal', () => {
     const user = userEvent.setup();
     render(<UserSnippetModal isOpen={true} onClose={onClose} onSave={onSave} existingSnippet={null} />);
 
-    await user.type(screen.getByPlaceholderText('My Custom Snippet'), 'My Snippet');
-    await user.type(screen.getByPlaceholderText('mysnippet'), 'mysnip');
-    await user.type(screen.getByPlaceholderText(/Hello, world/), 'show eileen happy');
+    const titleInput = screen.getByPlaceholderText('My Custom Snippet');
+    const prefixInput = screen.getByPlaceholderText('mysnippet');
+    const codeInput = screen.getByPlaceholderText(/Hello, world/);
+
+    await user.click(titleInput);
+    await user.type(titleInput, 'My Snippet');
+    await user.click(prefixInput);
+    await user.type(prefixInput, 'mysnip');
+    await user.click(codeInput);
+    await user.type(codeInput, 'show eileen happy');
     await user.click(screen.getByRole('button', { name: 'Create Snippet' }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
@@ -98,9 +105,15 @@ describe('UserSnippetModal', () => {
     const user = userEvent.setup();
     render(<UserSnippetModal isOpen={true} onClose={vi.fn()} onSave={onSave} existingSnippet={null} />);
 
-    await user.type(screen.getByPlaceholderText('My Custom Snippet'), 'Labeled');
-    await user.type(screen.getByPlaceholderText('mysnippet'), 'labeled');
-    fireEvent.change(screen.getByPlaceholderText(/Hello, world/), { target: { value: 'label ${1:name}:\n    $0' } });
+    const titleInput = screen.getByPlaceholderText('My Custom Snippet');
+    const prefixInput = screen.getByPlaceholderText('mysnippet');
+    const codeInput = screen.getByPlaceholderText(/Hello, world/);
+
+    await user.click(titleInput);
+    await user.type(titleInput, 'Labeled');
+    await user.click(prefixInput);
+    await user.type(prefixInput, 'labeled');
+    fireEvent.change(codeInput, { target: { value: 'label ${1:name}:\n    $0' } });
     await user.click(screen.getByRole('checkbox'));
     await user.click(screen.getByRole('button', { name: 'Create Snippet' }));
 
