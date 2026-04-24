@@ -2,6 +2,11 @@
 
 All notable changes to Ren'IDE are documented here.
 
+## [Unreleased]
+
+### Security
+- **FIXED:** XSS vulnerability in Markdown preview - Added DOMPurify sanitization to prevent potential script injection through user-controlled Markdown files (#134)
+
 ## [v0.8.0] - Current Feature Set
 
 ### Added

@@ -2,7 +2,7 @@
 
 **The Visual IDE for Ren'Py Development**
 
-Version 0.7.1 Public Beta 4
+Version 0.8.0 Public Beta 4
 
 ---
 
