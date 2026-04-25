@@ -86,7 +86,7 @@
     "publish": {
       "provider": "github",
       "owner": "bluemoonfoundry",
-      "repo": "vangard-renpy-ide"
+      "repo": "bmf-vangard-renpy-ide"
     },
     "files": [
       "dist/**/*",

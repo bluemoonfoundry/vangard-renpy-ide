@@ -1334,9 +1334,14 @@ app.whenReady().then(() => {
         logger.warn('Auto-updater: transient server error, will retry next launch', err);
         return;
       }
+      if (isNoRelease) {
+        logger.info('Auto-updater: no release published yet, skipping update check');
+        if (mainWindowRef) mainWindowRef.webContents.send('update-not-available');
+        return;
+      }
       logger.error('Auto-updater error:', err);
       if (mainWindowRef) {
-        mainWindowRef.webContents.send(isNoRelease ? 'update-not-available' : 'update-error');
+        mainWindowRef.webContents.send('update-error');
       }
     });
     // Delay the initial check so it doesn't compete with app startup.
