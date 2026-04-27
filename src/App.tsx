@@ -44,7 +44,7 @@ import { useRenpyAnalysis, performRouteAnalysis } from '@/hooks/useRenpyAnalysis
 import { useHistory } from '@/hooks/useHistory';
 import { useProjectColorScan } from '@/hooks/useProjectColorScan';
 import { usePerformanceMetrics } from '@/hooks/usePerformanceMetrics';
-import { createId } from '@/lib/createId';
+import { useToasts } from '@/hooks/useToasts';
 import { formatErrorMessage } from '@/lib/formatErrorMessage';
 import {
   buildSavedStoryBlockLayouts,
@@ -196,10 +196,10 @@ const App: React.FC = () => {
   const [dirtyEditors, setDirtyEditors] = useState<Set<string>>(new Set()); // Blocks modified in editor but not synced to block state yet
   const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false); // Track project setting changes like sticky notes
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saved');
-  const [, setStatusBarMessage] = useState('');
   const [isScanningAssets, setIsScanningAssets] = useState(false);
-  
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Toast notifications
+  const { toasts, addToast, removeToast } = useToasts();
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialAnalysisPending, setIsInitialAnalysisPending] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -860,12 +860,6 @@ const App: React.FC = () => {
     }
   }, [appSettings.renpyPath]);
 
-  // --- Toast Helper ---
-  const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
-    const id = createId('toast');
-    setToasts(prev => [...prev, { id, message, type }]);
-  }, []);
-
   const buildNewBlockContent = useCallback((name: string, type: BlockType) => {
     switch (type) {
       case 'story':
@@ -875,10 +869,6 @@ const App: React.FC = () => {
         return '';
     }
     return '';
-  }, []);
-
-  const removeToast = useCallback((id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
   // Safety timeout: dismiss the analysis overlay if the worker hasn't finished
@@ -1236,7 +1226,6 @@ const App: React.FC = () => {
     groupingMode: StoryCanvasGroupingMode,
     options?: { showToast?: boolean; successMessage?: string; statusMessage?: string; toastType?: ToastMessage['type']; },
   ) => {
-    setStatusBarMessage('Organizing layout...');
     try {
         const links = analysisResult.links;
         const newLayout = computeStoryLayout(blocksForLayoutRef.current, links, layoutMode, groupingMode);
@@ -1253,14 +1242,11 @@ const App: React.FC = () => {
         if (options?.showToast ?? true) {
             addToast(options?.successMessage ?? 'Layout organized', options?.toastType ?? 'success');
         }
-        setStatusBarMessage(options?.statusMessage ?? 'Layout organized.');
-        setTimeout(() => setStatusBarMessage(''), 2000);
     } catch (e) {
         logger.error("Failed to tidy up layout:", e);
         if (options?.showToast ?? true) {
             addToast('Failed to organize layout', 'error');
         }
-        setStatusBarMessage('Error organizing layout.');
     }
   }, [analysisResult.links, setBlocks, addToast, updateProjectSettings]);
 
@@ -1336,7 +1322,6 @@ const App: React.FC = () => {
     groupingMode: StoryCanvasGroupingMode,
     options?: { showToast?: boolean; successMessage?: string; statusMessage?: string; toastType?: ToastMessage['type']; },
   ) => {
-    setStatusBarMessage('Organizing route layout...');
     try {
         const sourceNodes = routeAnalysisResult.labelNodes.map(node => ({
             ...node,
@@ -1356,14 +1341,11 @@ const App: React.FC = () => {
         if (options?.showToast ?? true) {
             addToast(options?.successMessage ?? 'Route layout organized', options?.toastType ?? 'success');
         }
-        setStatusBarMessage(options?.statusMessage ?? 'Route layout organized.');
-        setTimeout(() => setStatusBarMessage(''), 2000);
     } catch (error) {
         logger.error('Failed to organize route layout:', error);
         if (options?.showToast ?? true) {
             addToast('Failed to organize route layout', 'error');
         }
-        setStatusBarMessage('Error organizing route layout.');
     }
   }, [routeAnalysisResult.labelNodes, routeAnalysisResult.routeLinks, routeNodeLayoutCache, updateProjectSettings, addToast]);
 
@@ -1602,7 +1584,6 @@ const App: React.FC = () => {
       setIsLoading(true);
       setLoadingProgress(5);
       setLoadingMessage('Reading project files...');
-      setStatusBarMessage(`Loading project from ${path}...`);
       const unsubscribeProgress = window.electronAPI?.onLoadProgress?.((value, message) => {
           setLoadingProgress(value);
           setLoadingMessage(message);
@@ -1612,7 +1593,6 @@ const App: React.FC = () => {
 
           // If the user cancelled while the directory was being read, discard results.
           if (loadCancelRef.current) {
-              setStatusBarMessage('');
               return;
           }
 
@@ -2004,16 +1984,12 @@ const App: React.FC = () => {
           setHasUnsavedSettings(false);
           perfRecorders.recordLoad(performance.now() - loadStartTime);
           addToast('Project loaded successfully', 'success');
-          setStatusBarMessage('Project loaded.');
-          setTimeout(() => setStatusBarMessage(''), 3000);
       } catch (err) {
           if (loadCancelRef.current) {
-              setStatusBarMessage('');
               return;
           }
           logger.error('Failed to load project', err);
           addToast('Failed to load project', 'error');
-          setStatusBarMessage('Error loading project.');
       } finally {
           unsubscribeProgress?.();
           setIsLoading(false);
@@ -2559,7 +2535,6 @@ const App: React.FC = () => {
 
     const doSaveAll = async () => {
       setSaveStatus('saving');
-      setStatusBarMessage('Saving files...');
       try {
           const currentBlocks = [...blocks];
           const editorUpdates = new Map<string, string>();
@@ -2593,8 +2568,6 @@ const App: React.FC = () => {
                setHasUnsavedSettings(false);
                setSaveStatus('saved');
                addToast('Changes saved to memory', 'success');
-               setStatusBarMessage('Saved to memory.');
-               setTimeout(() => { setSaveStatus('saved'); setStatusBarMessage(''); }, 2000);
                return;
           }
 
@@ -2614,13 +2587,10 @@ const App: React.FC = () => {
           setDirtyEditors(new Set());
           setSaveStatus('saved');
           addToast('All changes saved', 'success');
-          setStatusBarMessage('All files saved.');
-          setTimeout(() => { setSaveStatus('saved'); setStatusBarMessage(''); }, 2000);
       } catch (err) {
           logger.error('Failed to save changes', err);
           setSaveStatus('error');
           addToast('Failed to save changes', 'error');
-          setStatusBarMessage('Error saving files.');
       }
     };
 
