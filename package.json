@@ -137,8 +137,7 @@
       "category": "Development"
     },
     "appImage": {
-      "license": "AGPL-3.0-only",
-      "args": ["--no-sandbox"]
+      "license": "AGPL-3.0-only"
     },
     "deb": {
       "depends": []
