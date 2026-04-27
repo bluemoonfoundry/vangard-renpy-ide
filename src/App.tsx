@@ -51,6 +51,7 @@ import { useCanvasInteraction } from '@/hooks/useCanvasInteraction';
 import { useAssetManagement } from '@/hooks/useAssetManagement';
 import { useCompositionState } from '@/hooks/useCompositionState';
 import { useSettingsManagement } from '@/hooks/useSettingsManagement';
+import { useFileSystemState } from '@/hooks/useFileSystemState';
 import { formatErrorMessage } from '@/lib/formatErrorMessage';
 import {
   buildSavedStoryBlockLayouts,
@@ -125,8 +126,38 @@ const App: React.FC = () => {
   useEffect(() => { blocksRef.current = blocks; }, [blocks]);
 
   // --- State: File System & Environment ---
-  const [projectRootPath, setProjectRootPath] = useState<string | null>(null);
-  
+  const {
+    projectRootPath,
+    setProjectRootPath,
+    fileSystemTree,
+    setFileSystemTree,
+    explorerSelectedPaths,
+    explorerLastClickedPath,
+    setExplorerSelectedPaths,
+    setExplorerLastClickedPath,
+    explorerExpandedPaths,
+    setExplorerExpandedPaths,
+    explorerExternalAction,
+    setExplorerExternalAction,
+    clipboard,
+    setClipboard,
+    selectPath,
+    selectPaths,
+    clearExplorerSelection,
+    expandPath,
+    collapsePath,
+    toggleExpansion,
+    expandAll,
+    collapseAll,
+    triggerNewFile,
+    triggerNewFolder,
+    triggerRename,
+    copyToClipboard,
+    cutToClipboard,
+    clearClipboard,
+    closeProject: closeFileSystemProject,
+  } = useFileSystemState();
+
   // Update window title based on project path
   useEffect(() => {
     if (projectRootPath) {
@@ -137,7 +168,6 @@ const App: React.FC = () => {
   }, [projectRootPath]);
 
   const [directoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
-  const [fileSystemTree, setFileSystemTree] = useState<FileSystemTreeNode | null>(null);
   
   // Asset management state
   const {
@@ -170,12 +200,6 @@ const App: React.FC = () => {
     clearImages,
     clearAudios,
   } = useAssetManagement();
-
-  // --- State: File Explorer Selection & Expansion ---
-  const [explorerSelectedPaths, setExplorerSelectedPaths] = useState<Set<string>>(new Set());
-  const [explorerLastClickedPath, setExplorerLastClickedPath] = useState<string | null>(null);
-  const [explorerExpandedPaths, setExplorerExpandedPaths] = useState<Set<string>>(new Set());
-  const [explorerExternalAction, setExplorerExternalAction] = useState<{ type: 'new-file' | 'new-folder' | 'rename'; key: number } | null>(null);
 
   // --- State: UI & Editor ---
   const {
@@ -385,8 +409,7 @@ const App: React.FC = () => {
     resetProjectSettings,
   } = useSettingsManagement();
 
-  // --- State: Clipboard & Highlights ---
-  const [clipboard, setClipboard] = useState<ClipboardState>(null);
+  // --- State: Misc ---
   const [pendingWarpLabelName, setPendingWarpLabelName] = useState<string | null>(null);
   const [pendingWarpTarget, setPendingWarpTarget] = useState<string | null>(null);
   const [pendingWarpVariableDrafts, setPendingWarpVariableDrafts] = useState<WarpVariableDraft[]>([]);
