@@ -93,7 +93,7 @@
       "electron.js",
       "preload.js",
       "renide-512x512.png",
-      "lib/**/*"
+      "src/lib/**/*"
     ],
     "asarUnpack": [
       "node_modules/sharp/**/*"

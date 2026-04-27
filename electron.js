@@ -8,9 +8,9 @@ import { createReadStream, watch } from 'fs';
 import { Readable } from 'stream';
 import { spawn } from 'child_process';
 import { Worker } from 'worker_threads';
-import { deriveGuiColors } from './lib/colorUtils.js';
-import { updateGuiRpy, updateOptionsRpy, generateSaveDirectory } from './lib/templateProcessor.js';
-import { logger, electronLog } from './lib/logger.main.js';
+import { deriveGuiColors } from './src/lib/colorUtils.js';
+import { updateGuiRpy, updateOptionsRpy, generateSaveDirectory } from './src/lib/templateProcessor.js';
+import { logger, electronLog } from './src/lib/logger.main.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1007,7 +1007,7 @@ app.whenReady().then(() => {
         // Lazy-load the image generator on first use
         if (!generateGuiImages && !sharpLoadError) {
           try {
-            const imageGenModule = await import('./lib/guiImageGenerator.js');
+            const imageGenModule = await import('./src/lib/guiImageGenerator.js');
             generateGuiImages = imageGenModule.generateGuiImages;
             logger.info('Successfully loaded Sharp for GUI image generation');
           } catch (loadError) {
