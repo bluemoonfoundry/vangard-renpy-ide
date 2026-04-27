@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
 import { useDiagnostics } from './useDiagnostics';
-import { createBlock, createEmptyAnalysisResult } from '../../test/mocks/sampleData';
+import { createBlock, createEmptyAnalysisResult } from '@/test/mocks/sampleData';
 import type { IgnoredDiagnosticRule } from '@/types';
 
 describe('useDiagnostics', () => {

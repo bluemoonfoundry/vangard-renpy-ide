@@ -91,13 +91,13 @@ export default defineConfig(({ mode }) => {
     test: {
       globals: true,
       environment: 'jsdom',
-      setupFiles: ['./test/setup.ts'],
+      setupFiles: ['./src/test/setup.ts'],
       include: ['**/*.test.{ts,tsx}'],
       exclude: ['node_modules', 'dist', 'release'],
       coverage: {
         provider: 'v8',
-        include: ['components/**', 'hooks/**', 'contexts/**', 'App.tsx'],
-        exclude: ['**/*.test.{ts,tsx}', 'test/**'],
+        include: ['src/**'],
+        exclude: ['**/*.test.{ts,tsx}', 'src/test/**'],
       },
     },
   }

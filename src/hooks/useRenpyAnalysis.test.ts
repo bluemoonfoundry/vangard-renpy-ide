@@ -7,7 +7,7 @@
 
 import { performRenpyAnalysis, performRouteAnalysis } from './useRenpyAnalysis';
 import type { Block } from '@/types';
-import { createBlock } from '../../test/mocks/sampleData';
+import { createBlock } from '@/test/mocks/sampleData';
 
 /** Helper: create a block with just content (and optionally other overrides). */
 function block(content: string, overrides: Partial<Block> = {}): Block {
