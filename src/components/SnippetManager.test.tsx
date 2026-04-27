@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import SnippetManager from './SnippetManager';
 import type { UserSnippet } from '@/types';
-import { installElectronAPI, uninstallElectronAPI } from '../test/mocks/electronAPI';
+import { installElectronAPI, uninstallElectronAPI } from '../../test/mocks/electronAPI';
 
 describe('SnippetManager', () => {
   beforeEach(() => {

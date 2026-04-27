@@ -5,7 +5,7 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup, waitFor } from '@testing-library/react';
-import CanvasNodeContextMenu from '../components/CanvasNodeContextMenu';
+import CanvasNodeContextMenu from '@/components/CanvasNodeContextMenu';
 import { installElectronAPI, uninstallElectronAPI } from './mocks/electronAPI';
 
 describe('Memory Leak Prevention', () => {

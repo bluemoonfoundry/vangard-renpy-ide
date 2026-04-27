@@ -7,9 +7,9 @@
 
 import React from 'react';
 import { useModalAccessibility } from '@/hooks/useModalAccessibility';
-import packageJson from '../package.json';
+import packageJson from '../../package.json';
 const BUILD_NUMBER = process.env.BUILD_NUMBER || 'dev';
-import logo from '../renide-512x512.png';
+import logo from '../../renide-512x512.png';
 
 interface AboutModalProps {
   isOpen: boolean;

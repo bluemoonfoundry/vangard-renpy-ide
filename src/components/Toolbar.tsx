@@ -7,7 +7,7 @@
  * and all action callbacks directly from `App.tsx` state.
  */
 import React, { useMemo } from 'react';
-import logo from '../renide-512x512.png';
+import logo from '../../renide-512x512.png';
 type SaveStatus = 'saving' | 'saved' | 'error';
 
 interface ToolbarProps {
