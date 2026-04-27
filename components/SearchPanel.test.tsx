@@ -24,7 +24,7 @@ const mockUseSearch = {
   handleFindUsages: vi.fn(),
 };
 
-vi.mock('../contexts/SearchContext', () => ({
+vi.mock('@/contexts/SearchContext', () => ({
   useSearch: () => mockUseSearch,
 }));
 

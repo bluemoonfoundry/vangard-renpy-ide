@@ -36,7 +36,7 @@ import UserSnippetModal from './components/UserSnippetModal';
 import NewProjectWizardModal from './components/NewProjectWizardModal';
 import { MenuConstructorModal } from './components/MenuConstructorModal';
 import FirstRunTutorial from './components/FirstRunTutorial';
-import { SearchProvider } from './contexts/SearchContext';
+import { SearchProvider } from '@/contexts/SearchContext';
 import StatsView from './components/StatsView';
 import TranslationDashboard from './components/TranslationDashboard';
 import GoToLabelModal, { GoToLabelItem } from './components/GoToLabelModal';

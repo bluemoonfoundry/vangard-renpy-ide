@@ -9,7 +9,7 @@
 
 
 import React, { useState, useMemo } from 'react';
-import { useSearch } from '../contexts/SearchContext';
+import { useSearch } from '@/contexts/SearchContext';
 
 const SearchOptionButton: React.FC<{ title: string; isActive: boolean; onClick: () => void; children: React.ReactNode }> = ({ title, isActive, onClick, children }) => (
     <button
