@@ -696,7 +696,7 @@ const getAnalysisWorker = (): Worker | null => {
   if (!_analysisWorker) {
     try {
       _analysisWorker = new Worker(
-        new URL('../../workers/renpyAnalysis.worker.ts', import.meta.url),
+        new URL('../workers/renpyAnalysis.worker.ts', import.meta.url),
         { type: 'module' }
       );
     } catch {
