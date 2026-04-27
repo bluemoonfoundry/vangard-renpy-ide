@@ -101,7 +101,7 @@ export function MenuConstructorModal({
   labels,
   variables,
   mode,
-  activeEditor,
+  activeEditor: _activeEditor,
 }: MenuConstructorModalProps) {
   const { contentRef: modalRef } = useModalAccessibility({ isOpen, onClose });
 

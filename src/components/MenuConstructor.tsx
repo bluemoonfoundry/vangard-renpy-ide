@@ -24,7 +24,7 @@ interface MenuChoice {
     logic: string;
 }
 
-const MenuConstructor: React.FC<MenuConstructorProps> = ({ analysisResult, activeEditor }) => {
+const MenuConstructor: React.FC<MenuConstructorProps> = ({ analysisResult, activeEditor: _activeEditor }) => {
     const [caption, setCaption] = useState('');
     const [choices, setChoices] = useState<MenuChoice[]>([
         { id: '1', text: 'Option 1', condition: '', logic: 'jump label_1' },
