@@ -91,6 +91,7 @@ jobs:
             release/*.exe
             release/*.dmg
             release/*.AppImage
+            release/*.deb
 
   publish:
     name: Publish Release
@@ -144,11 +145,13 @@ jobs:
             | macOS (Apple Silicon) | `renide-*.dmg` (from `macos-arm64`) |
             | macOS (Intel) | `renide-*.dmg` (from `macos-intel`) |
             | Windows | `renide-Setup-*.exe` |
-            | Linux | `renide-*.AppImage` |
+            | Linux (Universal) | `renide-*.AppImage` |
+            | Linux (Debian/Ubuntu) | `renide_*_amd64.deb` |
 
             **Checksums:** See `SHA256SUMS.txt` below.
           files: |
             artifacts/*.exe
             artifacts/*.dmg
             artifacts/*.AppImage
+            artifacts/*.deb
             artifacts/SHA256SUMS.txt

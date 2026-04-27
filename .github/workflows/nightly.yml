@@ -75,7 +75,7 @@ jobs:
           PLATFORM="${{ matrix.platform }}"
           mkdir -p final-artifacts
           # We move files to a new folder with generic names (no version, no date)
-          for f in release/*.exe release/*.dmg release/*.AppImage release/*.zip; do
+          for f in release/*.exe release/*.dmg release/*.AppImage release/*.deb release/*.zip; do
             [ -f "$f" ] || continue
             ext="${f##*.}"
             mv "$f" "final-artifacts/renide-nightly-${PLATFORM}.${ext}"
@@ -155,11 +155,13 @@ jobs:
             | macOS (Apple Silicon) | `renide-nightly-macos-arm64.dmg` |
             | macOS (Intel) | `renide-nightly-macos-intel.dmg` |
             | Windows | `renide-nightly-win.exe` |
-            | Linux | `renide-nightly-linux.AppImage` |
+            | Linux (Universal) | `renide-nightly-linux.AppImage` |
+            | Linux (Debian/Ubuntu) | `renide-nightly-linux.deb` |
 
             **Checksums:** See `SHA256SUMS.txt` below.
           files: |
             artifacts/*.exe
             artifacts/*.dmg
             artifacts/*.AppImage
+            artifacts/*.deb
             artifacts/SHA256SUMS.txt
