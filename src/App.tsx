@@ -52,6 +52,7 @@ import { useAssetManagement } from '@/hooks/useAssetManagement';
 import { useCompositionState } from '@/hooks/useCompositionState';
 import { useSettingsManagement } from '@/hooks/useSettingsManagement';
 import { useFileSystemState } from '@/hooks/useFileSystemState';
+import { useStickyNotes } from '@/hooks/useStickyNotes';
 import { formatErrorMessage } from '@/lib/formatErrorMessage';
 import {
   buildSavedStoryBlockLayouts,
@@ -117,9 +118,6 @@ const App: React.FC = () => {
   // --- State: Blocks & Groups (Undo/Redo) ---
   const { state: blocks, setState: setBlocks, undo, redo, canUndo, canRedo } = useHistory<Block[]>([]);
   const [groups, setGroups] = useImmer<BlockGroup[]>([]);
-  const [stickyNotes, setStickyNotes] = useImmer<StickyNote[]>([]);
-  const [routeStickyNotes, setRouteStickyNotes] = useImmer<StickyNote[]>([]);
-  const [choiceStickyNotes, setChoiceStickyNotes] = useImmer<StickyNote[]>([]);
   
   // Use a ref to track blocks for effects that need current blocks without triggering updates
   const blocksRef = useRef(blocks);
@@ -408,6 +406,30 @@ const App: React.FC = () => {
     resetAppSettings,
     resetProjectSettings,
   } = useSettingsManagement();
+
+  // Sticky notes (managed separately from composition state)
+  const {
+    stickyNotes,
+    routeStickyNotes,
+    choiceStickyNotes,
+    setStickyNotes,
+    setRouteStickyNotes,
+    setChoiceStickyNotes,
+    addStickyNote,
+    updateStickyNote,
+    deleteStickyNote,
+    addRouteStickyNote,
+    updateRouteStickyNote,
+    deleteRouteStickyNote,
+    addChoiceStickyNote,
+    updateChoiceStickyNote,
+    deleteChoiceStickyNote,
+    clearAllStickyNotes,
+  } = useStickyNotes({
+    appSettings,
+    storyCanvasTransform,
+    onStickyNoteChange: () => setHasUnsavedSettings(true),
+  });
 
   // --- State: Misc ---
   const [pendingWarpLabelName, setPendingWarpLabelName] = useState<string | null>(null);
@@ -1145,112 +1167,7 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Sticky Note Management ---
-  const addStickyNote = useCallback((initialPosition?: Position) => {
-      const id = `note-${Date.now()}`;
-      const width = 200;
-      const height = 200;
-
-      let position: Position;
-      if (initialPosition) {
-          position = initialPosition;
-          // Center the note on the click position
-          position.x -= width / 2;
-          position.y -= height / 2;
-      } else {
-          const leftOffset = appSettings.isLeftSidebarOpen ? appSettings.leftSidebarWidth : 0;
-          const rightOffset = appSettings.isRightSidebarOpen ? appSettings.rightSidebarWidth : 0;
-          const topOffset = 64; 
-
-          const visibleWidth = window.innerWidth - leftOffset - rightOffset;
-          const visibleHeight = window.innerHeight - topOffset;
-
-          const screenCenterX = leftOffset + (visibleWidth / 2);
-          const screenCenterY = topOffset + (visibleHeight / 2);
-
-          const worldCenterX = (screenCenterX - storyCanvasTransform.x) / storyCanvasTransform.scale;
-          const worldCenterY = (screenCenterY - storyCanvasTransform.y) / storyCanvasTransform.scale;
-
-          position = {
-              x: worldCenterX - (width / 2),
-              y: worldCenterY - (height / 2)
-          };
-      }
-
-      const newNote: StickyNote = {
-          id,
-          content: '',
-          position,
-          width,
-          height,
-          color: 'yellow'
-      };
-
-      setStickyNotes(draft => {
-          draft.push(newNote);
-      });
-      setHasUnsavedSettings(true);
-  }, [appSettings, storyCanvasTransform, setStickyNotes]);
-
-  const updateStickyNote = useCallback((id: string, data: Partial<StickyNote>) => {
-      setStickyNotes(draft => {
-          const idx = draft.findIndex(n => n.id === id);
-          if (idx !== -1) Object.assign(draft[idx], data);
-      });
-      setHasUnsavedSettings(true);
-  }, [setStickyNotes]);
-
-  const deleteStickyNote = useCallback((id: string) => {
-      setStickyNotes(draft => {
-          const idx = draft.findIndex(n => n.id === id);
-          if (idx !== -1) draft.splice(idx, 1);
-      });
-      setHasUnsavedSettings(true);
-  }, [setStickyNotes]);
-
-  // --- Flow Canvas Sticky Note Management ---
-  const addRouteStickyNote = useCallback((initialPosition?: Position) => {
-      const id = `rnote-${Date.now()}`;
-      const width = 200;
-      const height = 200;
-      const pos = initialPosition
-        ? { x: initialPosition.x - width / 2, y: initialPosition.y - height / 2 }
-        : { x: 0, y: 0 };
-      setRouteStickyNotes(draft => { draft.push({ id, content: '', position: pos, width, height, color: 'yellow' }); });
-      setHasUnsavedSettings(true);
-  }, [setRouteStickyNotes]);
-
-  const updateRouteStickyNote = useCallback((id: string, data: Partial<StickyNote>) => {
-      setRouteStickyNotes(draft => { const idx = draft.findIndex(n => n.id === id); if (idx !== -1) Object.assign(draft[idx], data); });
-      setHasUnsavedSettings(true);
-  }, [setRouteStickyNotes]);
-
-  const deleteRouteStickyNote = useCallback((id: string) => {
-      setRouteStickyNotes(draft => { const idx = draft.findIndex(n => n.id === id); if (idx !== -1) draft.splice(idx, 1); });
-      setHasUnsavedSettings(true);
-  }, [setRouteStickyNotes]);
-
-  // --- Choices Canvas Sticky Note Management ---
-  const addChoiceStickyNote = useCallback((initialPosition?: Position) => {
-      const id = `cnote-${Date.now()}`;
-      const width = 200;
-      const height = 200;
-      const pos = initialPosition
-        ? { x: initialPosition.x - width / 2, y: initialPosition.y - height / 2 }
-        : { x: 0, y: 0 };
-      setChoiceStickyNotes(draft => { draft.push({ id, content: '', position: pos, width, height, color: 'yellow' }); });
-      setHasUnsavedSettings(true);
-  }, [setChoiceStickyNotes]);
-
-  const updateChoiceStickyNote = useCallback((id: string, data: Partial<StickyNote>) => {
-      setChoiceStickyNotes(draft => { const idx = draft.findIndex(n => n.id === id); if (idx !== -1) Object.assign(draft[idx], data); });
-      setHasUnsavedSettings(true);
-  }, [setChoiceStickyNotes]);
-
-  const deleteChoiceStickyNote = useCallback((id: string) => {
-      setChoiceStickyNotes(draft => { const idx = draft.findIndex(n => n.id === id); if (idx !== -1) draft.splice(idx, 1); });
-      setHasUnsavedSettings(true);
-  }, [setChoiceStickyNotes]);
+  // Sticky note handlers now provided by useStickyNotes hook
 
 
   const getSelectedFolderForNewBlock = useCallback(() => {
