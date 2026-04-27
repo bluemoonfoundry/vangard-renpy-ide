@@ -44,7 +44,15 @@ import { useRenpyAnalysis, performRouteAnalysis } from '@/hooks/useRenpyAnalysis
 import { useHistory } from '@/hooks/useHistory';
 import { useProjectColorScan } from '@/hooks/useProjectColorScan';
 import { usePerformanceMetrics } from '@/hooks/usePerformanceMetrics';
-import { createId } from '@/lib/createId';
+import { useToasts } from '@/hooks/useToasts';
+import { useModalState } from '@/hooks/useModalState';
+import { useTabManagement } from '@/hooks/useTabManagement';
+import { useCanvasInteraction } from '@/hooks/useCanvasInteraction';
+import { useAssetManagement } from '@/hooks/useAssetManagement';
+import { useCompositionState } from '@/hooks/useCompositionState';
+import { useSettingsManagement } from '@/hooks/useSettingsManagement';
+import { useFileSystemState } from '@/hooks/useFileSystemState';
+import { useStickyNotes } from '@/hooks/useStickyNotes';
 import { formatErrorMessage } from '@/lib/formatErrorMessage';
 import {
   buildSavedStoryBlockLayouts,
@@ -91,16 +99,6 @@ interface SerializedImageMapComposition {
 
 // --- Main App Component ---
 
-interface UnsavedChangesModalInfo {
-    title: string;
-    message: string;
-    confirmText: string;
-    dontSaveText: string;
-    onConfirm: () => Promise<void> | void;
-    onDontSave: () => void;
-    onCancel: () => void;
-}
-
 interface PendingStoryLayoutRefresh {
     hasSavedLayouts: boolean;
     savedFingerprint?: string;
@@ -120,17 +118,44 @@ const App: React.FC = () => {
   // --- State: Blocks & Groups (Undo/Redo) ---
   const { state: blocks, setState: setBlocks, undo, redo, canUndo, canRedo } = useHistory<Block[]>([]);
   const [groups, setGroups] = useImmer<BlockGroup[]>([]);
-  const [stickyNotes, setStickyNotes] = useImmer<StickyNote[]>([]);
-  const [routeStickyNotes, setRouteStickyNotes] = useImmer<StickyNote[]>([]);
-  const [choiceStickyNotes, setChoiceStickyNotes] = useImmer<StickyNote[]>([]);
   
   // Use a ref to track blocks for effects that need current blocks without triggering updates
   const blocksRef = useRef(blocks);
   useEffect(() => { blocksRef.current = blocks; }, [blocks]);
 
   // --- State: File System & Environment ---
-  const [projectRootPath, setProjectRootPath] = useState<string | null>(null);
-  
+  const {
+    projectRootPath,
+    setProjectRootPath,
+    fileSystemTree,
+    setFileSystemTree,
+    explorerSelectedPaths,
+    explorerLastClickedPath,
+    setExplorerSelectedPaths,
+    setExplorerLastClickedPath,
+    explorerExpandedPaths,
+    setExplorerExpandedPaths,
+    explorerExternalAction,
+    setExplorerExternalAction,
+    clipboard,
+    setClipboard,
+    selectPath,
+    selectPaths,
+    clearExplorerSelection,
+    expandPath,
+    collapsePath,
+    toggleExpansion,
+    expandAll,
+    collapseAll,
+    triggerNewFile,
+    triggerNewFolder,
+    triggerRename,
+    copyToClipboard,
+    cutToClipboard,
+    clearClipboard,
+    closeProject: closeFileSystemProject,
+  } = useFileSystemState();
+
   // Update window title based on project path
   useEffect(() => {
     if (projectRootPath) {
@@ -141,50 +166,139 @@ const App: React.FC = () => {
   }, [projectRootPath]);
 
   const [directoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
-  const [fileSystemTree, setFileSystemTree] = useState<FileSystemTreeNode | null>(null);
   
-  // Use standard useState for Maps to avoid Immer proxy issues with native Maps
-  const [images, setImages] = useState<Map<string, ProjectImage>>(new Map());
-  const [audios, setAudios] = useState<Map<string, RenpyAudio>>(new Map());
-  const [imageMetadata, setImageMetadata] = useState<Map<string, ImageMetadata>>(new Map());
-  const [audioMetadata, setAudioMetadata] = useState<Map<string, AudioMetadata>>(new Map());
-  
-  // --- State: File Explorer Selection & Expansion ---
-  const [explorerSelectedPaths, setExplorerSelectedPaths] = useState<Set<string>>(new Set());
-  const [explorerLastClickedPath, setExplorerLastClickedPath] = useState<string | null>(null);
-  const [explorerExpandedPaths, setExplorerExpandedPaths] = useState<Set<string>>(new Set());
-  const [explorerExternalAction, setExplorerExternalAction] = useState<{ type: 'new-file' | 'new-folder' | 'rename'; key: number } | null>(null);
-
-  // --- State: Scanning ---
-  const [imageScanDirectories, setImageScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
-  const [audioScanDirectories, setAudioScanDirectories] = useState<Map<string, FileSystemDirectoryHandle>>(new Map());
-  const [imagesLastScanned, setImagesLastScanned] = useState<number | null>(null);
-  const [audiosLastScanned, setAudiosLastScanned] = useState<number | null>(null);
-  const [isRefreshingImages, setIsRefreshingImages] = useState(false);
-  const [isRefreshingAudios, setIsRefreshingAudios] = useState(false);
+  // Asset management state
+  const {
+    images,
+    imageMetadata,
+    imageScanDirectories,
+    imagesLastScanned,
+    isRefreshingImages,
+    setImages,
+    setImageMetadata,
+    setImageScanDirectories,
+    setImagesLastScanned,
+    setIsRefreshingImages,
+    audios,
+    audioMetadata,
+    audioScanDirectories,
+    audiosLastScanned,
+    isRefreshingAudios,
+    setAudios,
+    setAudioMetadata,
+    setAudioScanDirectories,
+    setAudiosLastScanned,
+    setIsRefreshingAudios,
+    addImage,
+    removeImage,
+    updateImageMetadata,
+    addAudio,
+    removeAudio,
+    updateAudioMetadata,
+    clearImages,
+    clearAudios,
+  } = useAssetManagement();
 
   // --- State: UI & Editor ---
-  const [openTabs, setOpenTabs] = useState<EditorTab[]>([{ id: 'canvas', type: 'canvas' }]);
-  const [activeTabId, setActiveTabId] = useState<string>('canvas');
-  const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
-  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
-  const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
-  const [dragSourcePaneId, setDragSourcePaneId] = useState<'primary' | 'secondary'>('primary');
-  const [splitLayout, setSplitLayout] = useState<'none' | 'right' | 'bottom'>('none');
-  const [splitPrimarySize, setSplitPrimarySize] = useState<number>(600);
-  const [secondaryOpenTabs, setSecondaryOpenTabs] = useState<EditorTab[]>([]);
-  const [secondaryActiveTabId, setSecondaryActiveTabId] = useState<string>('');
-  const [activePaneId, setActivePaneId] = useState<'primary' | 'secondary'>('primary');
+  const {
+    openTabs,
+    activeTabId,
+    setOpenTabs,
+    setActiveTabId,
+    secondaryOpenTabs,
+    secondaryActiveTabId,
+    activePaneId,
+    setSecondaryOpenTabs,
+    setSecondaryActiveTabId,
+    setActivePaneId,
+    splitLayout,
+    splitPrimarySize,
+    setSplitLayout,
+    setSplitPrimarySize,
+    draggedTabId,
+    dragSourcePaneId,
+    setDraggedTabId,
+    setDragSourcePaneId,
+    openTab,
+    closeTab,
+    switchTab,
+    updateTab,
+    closeTabs,
+    setTabs,
+    createSplit,
+    closeSplit,
+    setSplitSize,
+    moveTabToPane,
+    startDrag: startTabDrag,
+    endDrag: endTabDrag,
+    findTab,
+    getActiveTab,
+  } = useTabManagement();
+
+  // Canvas interaction state
+  const {
+    storyCanvasTransform,
+    routeCanvasTransform,
+    choiceCanvasTransform,
+    setStoryCanvasTransform,
+    setRouteCanvasTransform,
+    setChoiceCanvasTransform,
+    selectedBlockIds,
+    selectedGroupIds,
+    setSelectedBlockIds,
+    setSelectedGroupIds,
+    findUsagesHighlightIds,
+    hoverHighlightIds,
+    setFindUsagesHighlightIds,
+    setHoverHighlightIds,
+    centerOnBlockRequest,
+    centerOnRouteStartRequest,
+    centerOnChoiceStartRequest,
+    centerOnRouteNodeRequest,
+    centerOnChoiceNodeRequest,
+    flashBlockRequest,
+    setCenterOnBlockRequest,
+    setCenterOnRouteStartRequest,
+    setCenterOnChoiceStartRequest,
+    setCenterOnRouteNodeRequest,
+    setCenterOnChoiceNodeRequest,
+    setFlashBlockRequest,
+    canvasFilters,
+    setCanvasFilters,
+    centerOnBlock,
+    flashBlock,
+    centerOnRouteNode,
+    centerOnChoiceNode,
+    centerOnRouteStart,
+    centerOnChoiceStart,
+    clearSelection,
+    selectBlocks,
+    selectGroups,
+    toggleBlockSelection,
+  } = useCanvasInteraction();
   
-  // Scene Composer State
-  const [sceneCompositions, setSceneCompositions] = useImmer<Record<string, SceneComposition>>({});
-  const [sceneNames, setSceneNames] = useImmer<Record<string, string>>({});
-
-  // ImageMap Composer State
-  const [imagemapCompositions, setImagemapCompositions] = useImmer<Record<string, ImageMapComposition>>({});
-
-  // Screen Layout Composer State
-  const [screenLayoutCompositions, setScreenLayoutCompositions] = useImmer<Record<string, ScreenLayoutComposition>>({});
+  // Composition state (Scene/ImageMap/ScreenLayout composers)
+  const {
+    sceneCompositions,
+    sceneNames,
+    setSceneCompositions,
+    setSceneNames,
+    imagemapCompositions,
+    setImagemapCompositions,
+    screenLayoutCompositions,
+    setScreenLayoutCompositions,
+    addScene,
+    updateScene,
+    removeScene,
+    renameScene,
+    addImagemap,
+    updateImagemap,
+    removeImagemap,
+    addScreenLayout,
+    updateScreenLayout,
+    removeScreenLayout,
+    clearAllCompositions,
+  } = useCompositionState();
 
   // Punchlist State (kept for migration — not written on save)
   const [punchlistMetadata, setPunchlistMetadata] = useImmer<Record<string, PunchlistMetadata>>({});
@@ -196,100 +310,132 @@ const App: React.FC = () => {
   const [dirtyEditors, setDirtyEditors] = useState<Set<string>>(new Set()); // Blocks modified in editor but not synced to block state yet
   const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false); // Track project setting changes like sticky notes
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saved');
-  const [, setStatusBarMessage] = useState('');
   const [isScanningAssets, setIsScanningAssets] = useState(false);
-  
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Toast notifications
+  const { toasts, addToast, removeToast } = useToasts();
+
+  // Modal state
+  const {
+    createBlockModalOpen,
+    createBlockModalType,
+    createBlockModalPosition,
+    createBlockModalFolderPath,
+    openCreateBlockModal,
+    closeCreateBlockModal,
+    deleteConfirmInfo,
+    openDeleteConfirmModal,
+    closeDeleteConfirmModal,
+    unsavedChangesModalInfo,
+    openUnsavedChangesModal,
+    closeUnsavedChangesModal,
+    contextMenuInfo,
+    openContextMenu,
+    closeContextMenu,
+    settingsModalOpen,
+    openSettingsModal,
+    closeSettingsModal,
+    shortcutsModalOpen,
+    openShortcutsModal,
+    closeShortcutsModal,
+    aboutModalOpen,
+    openAboutModal,
+    closeAboutModal,
+    showConfigureRenpyModal,
+    closeConfigureRenpyModal,
+    wizardModalOpen,
+    openWizardModal,
+    closeWizardModal,
+    showTutorial,
+    openTutorial,
+    closeTutorial,
+    isGoToLabelOpen,
+    openGoToLabelModal,
+    closeGoToLabelModal,
+    isWarpToLabelOpen,
+    openWarpToLabelModal,
+    closeWarpToLabelModal,
+    isWarpVariablesOpen,
+    openWarpVariablesModal,
+    closeWarpVariablesModal,
+    userSnippetModalOpen,
+    editingSnippet,
+    openUserSnippetModal,
+    closeUserSnippetModal,
+    menuConstructorModalOpen,
+    editingMenuTemplate,
+    openMenuConstructorModal,
+    closeMenuConstructorModal,
+  } = useModalState();
+
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialAnalysisPending, setIsInitialAnalysisPending] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [loadingProgress, setLoadingProgress] = useState(0);
   const loadCancelRef = useRef(false);
   const [nonRenpyWarningPath, setNonRenpyWarningPath] = useState<string | null>(null);
-  
-  const [deleteConfirmInfo, setDeleteConfirmInfo] = useState<{ paths: string[]; onConfirm: () => void; } | null>(null);
-  const [createBlockModalOpen, setCreateBlockModalOpen] = useState(false);
-  const [createBlockModalType, setCreateBlockModalType] = useState<BlockType>('story');
-  const [createBlockModalPosition, setCreateBlockModalPosition] = useState<Position | undefined>(undefined);
-  const [createBlockModalFolderPath, setCreateBlockModalFolderPath] = useState('');
-  const [unsavedChangesModalInfo, setUnsavedChangesModalInfo] = useState<UnsavedChangesModalInfo | null>(null);
-  const [contextMenuInfo, setContextMenuInfo] = useState<{ x: number; y: number; tabId: string; paneId: 'primary' | 'secondary' } | null>(null);
-  const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false);
-  const [aboutModalOpen, setAboutModalOpen] = useState(false);
   const [externallyChangedFiles, setExternallyChangedFiles] = useState<Array<{ relativePath: string; absolutePath: string }>>([]);
   // Tracks files where the user chose "Keep current" after a disk change, so we can warn before overwriting.
   const [filesWithDiskConflict, setFilesWithDiskConflict] = useState<Set<string>>(new Set());
   
-  // --- State: View Transforms ---
-  const [storyCanvasTransform, setStoryCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
-  const [routeCanvasTransform, setRouteCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
-  const [choiceCanvasTransform, setChoiceCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
-
   // --- State: Game Execution ---
   const [isGameRunning, setIsGameRunning] = useState(false);
-  const [showConfigureRenpyModal, setShowConfigureRenpyModal] = useState(false);
-
-  // --- State: User Snippet Modal ---
-  const [userSnippetModalOpen, setUserSnippetModalOpen] = useState(false);
-  const [editingSnippet, setEditingSnippet] = useState<UserSnippet | null>(null);
-
-  // --- State: Menu Constructor Modal ---
-  const [menuConstructorModalOpen, setMenuConstructorModalOpen] = useState(false);
-  const [editingMenuTemplate, setEditingMenuTemplate] = useState<MenuTemplate | null>(null);
-
-  // --- State: First Run Tutorial ---
-  const [showTutorial, setShowTutorial] = useState(false);
 
   // --- State: Application and Project Settings ---
-  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
-  const [wizardModalOpen, setWizardModalOpen] = useState(false);
-  const [appSettingsLoaded, setAppSettingsLoaded] = useState(false);
-  const [characterProfiles, setCharacterProfiles] = useImmer<Record<string, string>>({});
-  const [appSettings, updateAppSettings] = useImmer<AppSettings>({
-    theme: 'system',
-    isLeftSidebarOpen: true,
-    leftSidebarWidth: 250,
-    isRightSidebarOpen: true,
-    rightSidebarWidth: 300,
-    renpyPath: '',
-    recentProjects: [],
-    editorFontFamily: "'Consolas', 'Courier New', monospace",
-    editorFontSize: 14,
-    mouseGestures: { canvasPanGesture: 'shift-drag', middleMouseAlwaysPans: false, zoomScrollDirection: 'normal', zoomScrollSensitivity: 1.0 },
-    lastProjectDir: '',
-  });
-  const [isRenpyPathValid, setIsRenpyPathValid] = useState(false);
-  const [isGeneratingTranslations, setIsGeneratingTranslations] = useState(false);
-  const [projectSettings, updateProjectSettings] = useImmer<Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'punchlistMetadata' | 'diagnosticsTasks' | 'ignoredDiagnostics' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>>({
-    draftingMode: false,
-    storyCanvasLayoutMode: 'flow-lr',
-    storyCanvasGroupingMode: 'none',
-    storyCanvasLayoutVersion: getStoryLayoutVersion(),
-    storyCanvasLayoutWasUserAdjusted: false,
-    routeCanvasLayoutMode: 'flow-lr',
-    routeCanvasGroupingMode: 'none',
-    routeCanvasLayoutVersion: getRouteCanvasLayoutVersion(),
-    routeCanvasLayoutWasUserAdjusted: false,
+  const {
+    appSettings,
+    updateAppSettings,
+    appSettingsLoaded,
+    setAppSettingsLoaded,
+    projectSettings,
+    updateProjectSettings,
+    characterProfiles,
+    setCharacterProfiles,
+    isRenpyPathValid,
+    setIsRenpyPathValid,
+    isGeneratingTranslations,
+    setIsGeneratingTranslations,
+    updateTheme,
+    updateRenpyPath,
+    updateEditorFont,
+    toggleSidebar,
+    updateSidebarWidth,
+    addRecentProject,
+    removeRecentProject,
+    clearRecentProjects,
+    resetAppSettings,
+    resetProjectSettings,
+  } = useSettingsManagement();
+
+  // Sticky notes (managed separately from composition state)
+  const {
+    stickyNotes,
+    routeStickyNotes,
+    choiceStickyNotes,
+    setStickyNotes,
+    setRouteStickyNotes,
+    setChoiceStickyNotes,
+    addStickyNote,
+    updateStickyNote,
+    deleteStickyNote,
+    addRouteStickyNote,
+    updateRouteStickyNote,
+    deleteRouteStickyNote,
+    addChoiceStickyNote,
+    updateChoiceStickyNote,
+    deleteChoiceStickyNote,
+    clearAllStickyNotes,
+  } = useStickyNotes({
+    appSettings,
+    storyCanvasTransform,
+    onStickyNoteChange: () => setHasUnsavedSettings(true),
   });
 
-  // --- State: Clipboard & Highlights ---
-  const [clipboard, setClipboard] = useState<ClipboardState>(null);
-  const [findUsagesHighlightIds, setFindUsagesHighlightIds] = useState<Set<string> | null>(null);
-  const [centerOnBlockRequest, setCenterOnBlockRequest] = useState<{ blockId: string, key: number } | null>(null);
-  const [centerOnRouteStartRequest, setCenterOnRouteStartRequest] = useState<{ key: number } | null>(null);
-  const [centerOnChoiceStartRequest, setCenterOnChoiceStartRequest] = useState<{ key: number } | null>(null);
-  const [centerOnRouteNodeRequest, setCenterOnRouteNodeRequest] = useState<{ nodeId: string; key: number } | null>(null);
-  const [centerOnChoiceNodeRequest, setCenterOnChoiceNodeRequest] = useState<{ nodeId: string; key: number } | null>(null);
-  const [isGoToLabelOpen, setIsGoToLabelOpen] = useState(false);
-  const [isWarpToLabelOpen, setIsWarpToLabelOpen] = useState(false);
-  const [isWarpVariablesOpen, setIsWarpVariablesOpen] = useState(false);
+  // --- State: Misc ---
   const [pendingWarpLabelName, setPendingWarpLabelName] = useState<string | null>(null);
   const [pendingWarpTarget, setPendingWarpTarget] = useState<string | null>(null);
   const [pendingWarpVariableDrafts, setPendingWarpVariableDrafts] = useState<WarpVariableDraft[]>([]);
-  const [flashBlockRequest, setFlashBlockRequest] = useState<{ blockId: string, key: number } | null>(null);
-  const [canvasFilters, setCanvasFilters] = useState({ story: true, screens: true, config: false, notes: true, minimap: true });
   const [_editorCursorPosition, setEditorCursorPosition] = useState<{ line: number; column: number } | null>(null);
-  const [hoverHighlightIds, setHoverHighlightIds] = useState<Set<string> | null>(null);
   const warpTempFilePathRef = useRef<string | null>(null);
 
   // --- State: Flow Canvas (label-level flow graph) ---
@@ -860,12 +1006,6 @@ const App: React.FC = () => {
     }
   }, [appSettings.renpyPath]);
 
-  // --- Toast Helper ---
-  const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
-    const id = createId('toast');
-    setToasts(prev => [...prev, { id, message, type }]);
-  }, []);
-
   const buildNewBlockContent = useCallback((name: string, type: BlockType) => {
     switch (type) {
       case 'story':
@@ -875,10 +1015,6 @@ const App: React.FC = () => {
         return '';
     }
     return '';
-  }, []);
-
-  const removeToast = useCallback((id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
   // Safety timeout: dismiss the analysis overlay if the worker hasn't finished
@@ -1031,112 +1167,7 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Sticky Note Management ---
-  const addStickyNote = useCallback((initialPosition?: Position) => {
-      const id = `note-${Date.now()}`;
-      const width = 200;
-      const height = 200;
-
-      let position: Position;
-      if (initialPosition) {
-          position = initialPosition;
-          // Center the note on the click position
-          position.x -= width / 2;
-          position.y -= height / 2;
-      } else {
-          const leftOffset = appSettings.isLeftSidebarOpen ? appSettings.leftSidebarWidth : 0;
-          const rightOffset = appSettings.isRightSidebarOpen ? appSettings.rightSidebarWidth : 0;
-          const topOffset = 64; 
-
-          const visibleWidth = window.innerWidth - leftOffset - rightOffset;
-          const visibleHeight = window.innerHeight - topOffset;
-
-          const screenCenterX = leftOffset + (visibleWidth / 2);
-          const screenCenterY = topOffset + (visibleHeight / 2);
-
-          const worldCenterX = (screenCenterX - storyCanvasTransform.x) / storyCanvasTransform.scale;
-          const worldCenterY = (screenCenterY - storyCanvasTransform.y) / storyCanvasTransform.scale;
-
-          position = {
-              x: worldCenterX - (width / 2),
-              y: worldCenterY - (height / 2)
-          };
-      }
-
-      const newNote: StickyNote = {
-          id,
-          content: '',
-          position,
-          width,
-          height,
-          color: 'yellow'
-      };
-
-      setStickyNotes(draft => {
-          draft.push(newNote);
-      });
-      setHasUnsavedSettings(true);
-  }, [appSettings, storyCanvasTransform, setStickyNotes]);
-
-  const updateStickyNote = useCallback((id: string, data: Partial<StickyNote>) => {
-      setStickyNotes(draft => {
-          const idx = draft.findIndex(n => n.id === id);
-          if (idx !== -1) Object.assign(draft[idx], data);
-      });
-      setHasUnsavedSettings(true);
-  }, [setStickyNotes]);
-
-  const deleteStickyNote = useCallback((id: string) => {
-      setStickyNotes(draft => {
-          const idx = draft.findIndex(n => n.id === id);
-          if (idx !== -1) draft.splice(idx, 1);
-      });
-      setHasUnsavedSettings(true);
-  }, [setStickyNotes]);
-
-  // --- Flow Canvas Sticky Note Management ---
-  const addRouteStickyNote = useCallback((initialPosition?: Position) => {
-      const id = `rnote-${Date.now()}`;
-      const width = 200;
-      const height = 200;
-      const pos = initialPosition
-        ? { x: initialPosition.x - width / 2, y: initialPosition.y - height / 2 }
-        : { x: 0, y: 0 };
-      setRouteStickyNotes(draft => { draft.push({ id, content: '', position: pos, width, height, color: 'yellow' }); });
-      setHasUnsavedSettings(true);
-  }, [setRouteStickyNotes]);
-
-  const updateRouteStickyNote = useCallback((id: string, data: Partial<StickyNote>) => {
-      setRouteStickyNotes(draft => { const idx = draft.findIndex(n => n.id === id); if (idx !== -1) Object.assign(draft[idx], data); });
-      setHasUnsavedSettings(true);
-  }, [setRouteStickyNotes]);
-
-  const deleteRouteStickyNote = useCallback((id: string) => {
-      setRouteStickyNotes(draft => { const idx = draft.findIndex(n => n.id === id); if (idx !== -1) draft.splice(idx, 1); });
-      setHasUnsavedSettings(true);
-  }, [setRouteStickyNotes]);
-
-  // --- Choices Canvas Sticky Note Management ---
-  const addChoiceStickyNote = useCallback((initialPosition?: Position) => {
-      const id = `cnote-${Date.now()}`;
-      const width = 200;
-      const height = 200;
-      const pos = initialPosition
-        ? { x: initialPosition.x - width / 2, y: initialPosition.y - height / 2 }
-        : { x: 0, y: 0 };
-      setChoiceStickyNotes(draft => { draft.push({ id, content: '', position: pos, width, height, color: 'yellow' }); });
-      setHasUnsavedSettings(true);
-  }, [setChoiceStickyNotes]);
-
-  const updateChoiceStickyNote = useCallback((id: string, data: Partial<StickyNote>) => {
-      setChoiceStickyNotes(draft => { const idx = draft.findIndex(n => n.id === id); if (idx !== -1) Object.assign(draft[idx], data); });
-      setHasUnsavedSettings(true);
-  }, [setChoiceStickyNotes]);
-
-  const deleteChoiceStickyNote = useCallback((id: string) => {
-      setChoiceStickyNotes(draft => { const idx = draft.findIndex(n => n.id === id); if (idx !== -1) draft.splice(idx, 1); });
-      setHasUnsavedSettings(true);
-  }, [setChoiceStickyNotes]);
+  // Sticky note handlers now provided by useStickyNotes hook
 
 
   const getSelectedFolderForNewBlock = useCallback(() => {
@@ -1167,16 +1198,9 @@ const App: React.FC = () => {
     return 'game/';
   }, [explorerSelectedPaths, fileSystemTree]);
 
-  const openCreateBlockModal = useCallback((type: BlockType, position?: Position) => {
-    setCreateBlockModalType(type);
-    setCreateBlockModalPosition(position);
-    setCreateBlockModalFolderPath(getSelectedFolderForNewBlock());
-    setCreateBlockModalOpen(true);
-  }, [getSelectedFolderForNewBlock]);
-
   const handleCreateBlockFromCanvas = useCallback((type: BlockType, position: Position) => {
-      openCreateBlockModal(type, position);
-  }, [openCreateBlockModal]);
+      openCreateBlockModal(type, position, getSelectedFolderForNewBlock());
+  }, [openCreateBlockModal, getSelectedFolderForNewBlock]);
 
   const deleteBlock = useCallback((id: string) => {
     setGroups(draft => {
@@ -1200,9 +1224,7 @@ const App: React.FC = () => {
     }
 
     // Show confirmation modal
-    setDeleteConfirmInfo({
-      paths: [block.filePath],
-      onConfirm: async () => {
+    openDeleteConfirmModal([block.filePath], async () => {
         try {
           // Delete the file from disk
           const fullPath = await window.electronAPI.path.join(projectRootPath, block.filePath) as string;
@@ -1220,7 +1242,6 @@ const App: React.FC = () => {
           logger.error('Failed to delete file:', err);
           addToast(`Failed to delete ${block.filePath}`, 'error');
         }
-      }
     });
   }, [blocks, projectRootPath, deleteBlock, addToast]);
 
@@ -1236,7 +1257,6 @@ const App: React.FC = () => {
     groupingMode: StoryCanvasGroupingMode,
     options?: { showToast?: boolean; successMessage?: string; statusMessage?: string; toastType?: ToastMessage['type']; },
   ) => {
-    setStatusBarMessage('Organizing layout...');
     try {
         const links = analysisResult.links;
         const newLayout = computeStoryLayout(blocksForLayoutRef.current, links, layoutMode, groupingMode);
@@ -1253,14 +1273,11 @@ const App: React.FC = () => {
         if (options?.showToast ?? true) {
             addToast(options?.successMessage ?? 'Layout organized', options?.toastType ?? 'success');
         }
-        setStatusBarMessage(options?.statusMessage ?? 'Layout organized.');
-        setTimeout(() => setStatusBarMessage(''), 2000);
     } catch (e) {
         logger.error("Failed to tidy up layout:", e);
         if (options?.showToast ?? true) {
             addToast('Failed to organize layout', 'error');
         }
-        setStatusBarMessage('Error organizing layout.');
     }
   }, [analysisResult.links, setBlocks, addToast, updateProjectSettings]);
 
@@ -1336,7 +1353,6 @@ const App: React.FC = () => {
     groupingMode: StoryCanvasGroupingMode,
     options?: { showToast?: boolean; successMessage?: string; statusMessage?: string; toastType?: ToastMessage['type']; },
   ) => {
-    setStatusBarMessage('Organizing route layout...');
     try {
         const sourceNodes = routeAnalysisResult.labelNodes.map(node => ({
             ...node,
@@ -1356,14 +1372,11 @@ const App: React.FC = () => {
         if (options?.showToast ?? true) {
             addToast(options?.successMessage ?? 'Route layout organized', options?.toastType ?? 'success');
         }
-        setStatusBarMessage(options?.statusMessage ?? 'Route layout organized.');
-        setTimeout(() => setStatusBarMessage(''), 2000);
     } catch (error) {
         logger.error('Failed to organize route layout:', error);
         if (options?.showToast ?? true) {
             addToast('Failed to organize route layout', 'error');
         }
-        setStatusBarMessage('Error organizing route layout.');
     }
   }, [routeAnalysisResult.labelNodes, routeAnalysisResult.routeLinks, routeNodeLayoutCache, updateProjectSettings, addToast]);
 
@@ -1602,7 +1615,6 @@ const App: React.FC = () => {
       setIsLoading(true);
       setLoadingProgress(5);
       setLoadingMessage('Reading project files...');
-      setStatusBarMessage(`Loading project from ${path}...`);
       const unsubscribeProgress = window.electronAPI?.onLoadProgress?.((value, message) => {
           setLoadingProgress(value);
           setLoadingMessage(message);
@@ -1612,7 +1624,6 @@ const App: React.FC = () => {
 
           // If the user cancelled while the directory was being read, discard results.
           if (loadCancelRef.current) {
-              setStatusBarMessage('');
               return;
           }
 
@@ -1945,10 +1956,8 @@ const App: React.FC = () => {
                   return tab;
               });
 
-              setOpenTabs(rehydratedTabs);
-
               const activeTabIsValid = rehydratedTabs.some(t => t.id === projectData.settings.activeTabId);
-              setActiveTabId(activeTabIsValid ? projectData.settings.activeTabId : 'canvas');
+              setTabs(rehydratedTabs, activeTabIsValid ? projectData.settings.activeTabId : 'canvas', 'primary');
 
               // Restore split state
               const savedSplitLayout = projectData.settings.splitLayout ?? 'none';
@@ -2004,16 +2013,12 @@ const App: React.FC = () => {
           setHasUnsavedSettings(false);
           perfRecorders.recordLoad(performance.now() - loadStartTime);
           addToast('Project loaded successfully', 'success');
-          setStatusBarMessage('Project loaded.');
-          setTimeout(() => setStatusBarMessage(''), 3000);
       } catch (err) {
           if (loadCancelRef.current) {
-              setStatusBarMessage('');
               return;
           }
           logger.error('Failed to load project', err);
           addToast('Failed to load project', 'error');
-          setStatusBarMessage('Error loading project.');
       } finally {
           unsubscribeProgress?.();
           setIsLoading(false);
@@ -2070,11 +2075,11 @@ const App: React.FC = () => {
 
   const handleCreateProject = useCallback(() => {
       // Open the new project wizard modal
-      setWizardModalOpen(true);
+      openWizardModal();
   }, []);
 
   const handleWizardComplete = useCallback(async (projectPath: string) => {
-      setWizardModalOpen(false);
+      closeWizardModal();
       try {
           await loadProject(projectPath);
           addToast('Project created successfully', 'success');
@@ -2471,14 +2476,14 @@ const App: React.FC = () => {
     };
 
     if (block?.filePath && filesWithDiskConflict.has(block.filePath)) {
-      setUnsavedChangesModalInfo({
+      openUnsavedChangesModal({
         title: 'Overwrite External Changes?',
         message: `"${block.title || block.filePath}" was changed on disk after you last loaded it. Your editor version will overwrite those changes.`,
         confirmText: 'Overwrite and Save',
         dontSaveText: 'Cancel',
-        onConfirm: async () => { setUnsavedChangesModalInfo(null); await doSave(); },
-        onDontSave: () => setUnsavedChangesModalInfo(null),
-        onCancel: () => setUnsavedChangesModalInfo(null),
+        onConfirm: async () => { closeUnsavedChangesModal(); await doSave(); },
+        onDontSave: () => closeUnsavedChangesModal(),
+        onCancel: () => closeUnsavedChangesModal(),
       });
       return;
     }
@@ -2559,7 +2564,6 @@ const App: React.FC = () => {
 
     const doSaveAll = async () => {
       setSaveStatus('saving');
-      setStatusBarMessage('Saving files...');
       try {
           const currentBlocks = [...blocks];
           const editorUpdates = new Map<string, string>();
@@ -2593,8 +2597,6 @@ const App: React.FC = () => {
                setHasUnsavedSettings(false);
                setSaveStatus('saved');
                addToast('Changes saved to memory', 'success');
-               setStatusBarMessage('Saved to memory.');
-               setTimeout(() => { setSaveStatus('saved'); setStatusBarMessage(''); }, 2000);
                return;
           }
 
@@ -2614,25 +2616,22 @@ const App: React.FC = () => {
           setDirtyEditors(new Set());
           setSaveStatus('saved');
           addToast('All changes saved', 'success');
-          setStatusBarMessage('All files saved.');
-          setTimeout(() => { setSaveStatus('saved'); setStatusBarMessage(''); }, 2000);
       } catch (err) {
           logger.error('Failed to save changes', err);
           setSaveStatus('error');
           addToast('Failed to save changes', 'error');
-          setStatusBarMessage('Error saving files.');
       }
     };
 
     if (conflictingPaths.length > 0) {
       const names = conflictingPaths.map(p => p.split('/').pop()).join(', ');
-      setUnsavedChangesModalInfo({
+      openUnsavedChangesModal({
         title: 'Overwrite External Changes?',
         message: `${conflictingPaths.length} file(s) were modified on disk: ${names}. Save All will overwrite those changes with your editor versions.`,
         confirmText: 'Save All',
         dontSaveText: 'Cancel',
         onConfirm: async () => {
-          setUnsavedChangesModalInfo(null);
+          closeUnsavedChangesModal();
           setFilesWithDiskConflict(prev => {
             const next = new Set(prev);
             conflictingPaths.forEach(p => next.delete(p));
@@ -2640,8 +2639,8 @@ const App: React.FC = () => {
           });
           await doSaveAll();
         },
-        onDontSave: () => setUnsavedChangesModalInfo(null),
-        onCancel: () => setUnsavedChangesModalInfo(null),
+        onDontSave: () => closeUnsavedChangesModal(),
+        onCancel: () => closeUnsavedChangesModal(),
       });
       return;
     }
@@ -2834,7 +2833,7 @@ const App: React.FC = () => {
     const hasUnsaved = dirtyBlockIds.size > 0 || dirtyEditors.size > 0 || hasUnsavedSettings;
     
     if (hasUnsaved) {
-      setUnsavedChangesModalInfo({
+      openUnsavedChangesModal({
         title: 'Unsaved Changes',
         message: 'You have unsaved changes. Do you want to save them before creating a new project?',
         confirmText: 'Save & Create',
@@ -2842,14 +2841,14 @@ const App: React.FC = () => {
         onConfirm: async () => {
           await handleSaveAll();
           handleCreateProject();
-          setUnsavedChangesModalInfo(null);
+          closeUnsavedChangesModal();
         },
         onDontSave: () => {
           handleCreateProject();
-          setUnsavedChangesModalInfo(null);
+          closeUnsavedChangesModal();
         },
         onCancel: () => {
-          setUnsavedChangesModalInfo(null);
+          closeUnsavedChangesModal();
         }
       });
     } else {
@@ -2962,7 +2961,7 @@ const App: React.FC = () => {
 
   const handleTabContextMenu = useCallback((e: React.MouseEvent, tabId: string, paneId: 'primary' | 'secondary' = 'primary') => {
       e.preventDefault();
-      setContextMenuInfo({ x: e.clientX, y: e.clientY, tabId, paneId });
+      openContextMenu(e.clientX, e.clientY, tabId, paneId);
   }, []);
 
   const processTabCloseRequest = useCallback((tabsToClose: EditorTab[], fallbackTabId: string, paneId: 'primary' | 'secondary' = 'primary') => {
@@ -2998,7 +2997,7 @@ const App: React.FC = () => {
     };
 
     if (hasUnsaved) {
-        setUnsavedChangesModalInfo({
+        openUnsavedChangesModal({
             title: `Close ${tabsToClose.length > 1 ? 'Tabs' : 'Tab'}`,
             message: `You have unsaved changes in ${tabsToClose.length > 1 ? 'some tabs' : 'this tab'}. Do you want to save them before closing?`,
             confirmText: 'Save & Close',
@@ -3006,7 +3005,7 @@ const App: React.FC = () => {
             onConfirm: async () => {
                 await handleSaveAll();
                 performClose();
-                setUnsavedChangesModalInfo(null);
+                closeUnsavedChangesModal();
             },
             onDontSave: () => {
                 // Clear dirty state for closed tabs without saving
@@ -3022,10 +3021,10 @@ const App: React.FC = () => {
                     return next;
                 });
                 performClose();
-                setUnsavedChangesModalInfo(null);
+                closeUnsavedChangesModal();
             },
             onCancel: () => {
-                setUnsavedChangesModalInfo(null);
+                closeUnsavedChangesModal();
             }
         });
     } else {
@@ -3248,7 +3247,7 @@ const App: React.FC = () => {
   }, [analysisResult.labels]);
 
   const handleGoToLabel = useCallback((id: string) => {
-    setIsGoToLabelOpen(false);
+    closeGoToLabelModal();
     if (activeCanvasTabId === 'canvas') {
       setCenterOnBlockRequest({ blockId: id, key: Date.now() });
     } else if (activeCanvasTabId === 'route-canvas') {
@@ -3283,7 +3282,7 @@ const App: React.FC = () => {
   }, [projectRootPath]);
 
   const resetWarpLaunchState = useCallback(() => {
-    setIsWarpVariablesOpen(false);
+    closeWarpVariablesModal();
     setPendingWarpLabelName(null);
     setPendingWarpTarget(null);
     setPendingWarpVariableDrafts([]);
@@ -3323,7 +3322,7 @@ const App: React.FC = () => {
     if (!window.electronAPI || !projectRootPath) return;
 
     const warpTarget = resolveWarpTarget(blocks, analysisResult.labels, labelName);
-    setIsWarpToLabelOpen(false);
+    closeWarpToLabelModal();
 
     if (!warpTarget) {
       addToast(`Could not resolve warp target for "${labelName}"`, 'warning');
@@ -3336,7 +3335,7 @@ const App: React.FC = () => {
       analysisResult.variables,
       analysisResult.translationData.translatableStrings,
     ));
-    setIsWarpVariablesOpen(true);
+    openWarpVariablesModal();
   }, [analysisResult.labels, analysisResult.translationData.translatableStrings, analysisResult.variables, addToast, blocks, projectRootPath]);
 
   useEffect(() => {
@@ -3348,13 +3347,17 @@ const App: React.FC = () => {
         if (tag === 'INPUT' || tag === 'TEXTAREA') return;
         if (!projectRootPath) return;
         e.preventDefault();
-        setIsWarpToLabelOpen(true);
+        openWarpToLabelModal();
       } else if (isMetaShortcut && isG) {
         const tag = (e.target as HTMLElement).tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA') return;
         if (!activeCanvasTabId) return;
         e.preventDefault();
-        setIsGoToLabelOpen(prev => !prev);
+        if (isGoToLabelOpen) {
+          closeGoToLabelModal();
+        } else {
+          openGoToLabelModal();
+        }
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
         // Close the currently active tab
@@ -3368,8 +3371,8 @@ const App: React.FC = () => {
         }
       }
       if (e.key === 'Escape') {
-        setIsGoToLabelOpen(false);
-        setIsWarpToLabelOpen(false);
+        closeGoToLabelModal();
+        closeWarpToLabelModal();
         resetWarpLaunchState();
       }
     };
@@ -3711,9 +3714,7 @@ const App: React.FC = () => {
       ).filter(Boolean) as Block[];
       
       // Show confirmation modal
-      setDeleteConfirmInfo({
-          paths,
-          onConfirm: async () => {
+      openDeleteConfirmModal(paths, async () => {
               try {
                   // Delete the files
                   for (const p of paths) {
@@ -3741,7 +3742,6 @@ const App: React.FC = () => {
                   logger.error('Failed to delete:', err);
                   addToast('Failed to delete file(s)', 'error');
               }
-          }
       });
   }, [projectRootPath, blocks, deleteBlock, addToast]);
 
@@ -3943,10 +3943,10 @@ const App: React.FC = () => {
             if (data.command === 'stop-project') window.electronAPI?.stopGame();
             if (data.command === 'open-static-tab' && data.type) handleOpenStaticTab(data.type as 'canvas' | 'route-canvas' | 'diagnostics' | 'translations');
             if (data.command === 'toggle-search') handleToggleSearch();
-            if (data.command === 'open-settings') setSettingsModalOpen(true);
-            if (data.command === 'open-shortcuts') setShortcutsModalOpen(true);
-            if (data.command === 'open-about') setAboutModalOpen(true);
-            if (data.command === 'show-tutorial') setShowTutorial(true);
+            if (data.command === 'open-settings') openSettingsModal();
+            if (data.command === 'open-shortcuts') openShortcutsModal();
+            if (data.command === 'open-about') openAboutModal();
+            if (data.command === 'show-tutorial') openTutorial();
             if (data.command === 'toggle-left-sidebar') updateAppSettings(draft => { draft.isLeftSidebarOpen = !draft.isLeftSidebarOpen; });
             if (data.command === 'toggle-right-sidebar') updateAppSettings(draft => { draft.isRightSidebarOpen = !draft.isRightSidebarOpen; });
             if (data.command === 'explorer-new-file') setExplorerExternalAction({ type: 'new-file', key: Date.now() });
@@ -4057,7 +4057,7 @@ const App: React.FC = () => {
       });
 
       const removeShowModal = window.electronAPI.onShowExitModal(() => {
-          setUnsavedChangesModalInfo({
+          openUnsavedChangesModal({
               title: 'Unsaved Changes',
               message: 'You have unsaved changes. Do you want to save them before exiting?',
               confirmText: 'Save & Exit',
@@ -4074,7 +4074,7 @@ const App: React.FC = () => {
                   window.electronAPI!.ideStateSavedForQuit();
               },
               onCancel: () => {
-                  setUnsavedChangesModalInfo(null);
+                  closeUnsavedChangesModal();
               }
           });
       });
@@ -4778,13 +4778,13 @@ const App: React.FC = () => {
         addBlock={() => openCreateBlockModal('story')}
         handleTidyUp={handleActiveCanvasTidyUp}
         handleSave={handleSaveAll}
-        onOpenSettings={() => setSettingsModalOpen(true)}
+        onOpenSettings={() => openSettingsModal()}
         onOpenStaticTab={handleOpenStaticTab as (type: 'canvas' | 'route-canvas' | 'choice-canvas' | 'stats' | 'diagnostics' | 'translations') => void}
         diagnosticsErrorCount={diagnosticsResult.errorCount}
         onAddStickyNote={activeCanvasOnAddStickyNote}
         isGameRunning={isGameRunning}
         onRunGame={handleRunGame}
-        onWarpToLabel={() => setIsWarpToLabelOpen(true)}
+        onWarpToLabel={() => openWarpToLabelModal()}
         onStopGame={() => window.electronAPI?.stopGame()}
         isRenpyPathValid={isRenpyPathValid}
         draftingMode={projectSettings.draftingMode}
@@ -5078,14 +5078,14 @@ const App: React.FC = () => {
                 onDuplicateScreenLayout={handleDuplicateScreenLayout}
                 // Snippet Props
                 userSnippets={appSettings.userSnippets}
-                onCreateSnippet={() => { setEditingSnippet(null); setUserSnippetModalOpen(true); }}
-                onEditSnippet={(snippet) => { setEditingSnippet(snippet); setUserSnippetModalOpen(true); }}
+                onCreateSnippet={() => openUserSnippetModal()}
+                onEditSnippet={(snippet) => openUserSnippetModal(snippet)}
                 onDeleteSnippet={handleDeleteSnippet}
                 projectRootPath={projectRootPath}
                 // Menu Template Props
                 menuTemplates={appSettings.menuTemplates || []}
-                onCreateMenuTemplate={() => { setEditingMenuTemplate(null); setMenuConstructorModalOpen(true); }}
-                onEditMenuTemplate={(template) => { setEditingMenuTemplate(template); setMenuConstructorModalOpen(true); }}
+                onCreateMenuTemplate={() => openMenuConstructorModal()}
+                onEditMenuTemplate={(template) => openMenuConstructorModal(template)}
                 onDeleteMenuTemplate={handleDeleteMenuTemplate}
                 // Color Picker
                 onInsertColorAtCursor={handleInsertColor}
@@ -5145,10 +5145,7 @@ const App: React.FC = () => {
 
       <CreateBlockModal
         isOpen={createBlockModalOpen}
-        onClose={() => {
-          setCreateBlockModalOpen(false);
-          setCreateBlockModalPosition(undefined);
-        }}
+        onClose={closeCreateBlockModal}
         onConfirm={(name, type) => handleCreateBlockConfirm(name, type, createBlockModalFolderPath, createBlockModalPosition)}
         defaultPath={createBlockModalFolderPath || getSelectedFolderForNewBlock()}
         initialType={createBlockModalType}
@@ -5156,10 +5153,10 @@ const App: React.FC = () => {
 
       <ConfigureRenpyModal
         isOpen={showConfigureRenpyModal}
-        onClose={() => setShowConfigureRenpyModal(false)}
+        onClose={() => closeConfigureRenpyModal()}
         onSave={(path) => {
             updateAppSettings(draft => { draft.renpyPath = path; });
-            setShowConfigureRenpyModal(false);
+            closeConfigureRenpyModal();
             if (projectRootPath && window.electronAPI) {
                 window.electronAPI.runGame(path, projectRootPath);
             }
@@ -5189,9 +5186,9 @@ const App: React.FC = () => {
             title="Confirm Deletion"
             onConfirm={() => {
                 deleteConfirmInfo.onConfirm();
-                setDeleteConfirmInfo(null);
+                closeDeleteConfirmModal();
             }}
-            onClose={() => setDeleteConfirmInfo(null)}
+            onClose={() => closeDeleteConfirmModal()}
             confirmText="Delete"
             confirmClassName="bg-red-600 hover:bg-red-700"
           >
@@ -5206,7 +5203,7 @@ const App: React.FC = () => {
               tabId={contextMenuInfo.tabId}
               paneId={contextMenuInfo.paneId}
               splitLayout={splitLayout}
-              onClose={() => setContextMenuInfo(null)}
+              onClose={() => closeContextMenu()}
               onCloseTab={(id) => handleCloseTab(id, contextMenuInfo.paneId)}
               onCloseOthers={(id) => handleCloseOthersRequest(id, contextMenuInfo.paneId)}
               onCloseLeft={(id) => handleCloseLeftRequest(id, contextMenuInfo.paneId)}
@@ -5221,7 +5218,7 @@ const App: React.FC = () => {
 
       <SettingsModal 
         isOpen={settingsModalOpen} 
-        onClose={() => setSettingsModalOpen(false)}
+        onClose={() => closeSettingsModal()}
         settings={settingsMerged}
         onSettingsChange={(key, value) => {
             if (key in appSettings) {
@@ -5239,21 +5236,21 @@ const App: React.FC = () => {
 
       <KeyboardShortcutsModal
         isOpen={shortcutsModalOpen}
-        onClose={() => setShortcutsModalOpen(false)}
+        onClose={() => closeShortcutsModal()}
         mouseGestures={appSettings.mouseGestures}
-        onOpenSettings={() => { setShortcutsModalOpen(false); setSettingsModalOpen(true); }}
+        onOpenSettings={() => { closeShortcutsModal(); openSettingsModal(); }}
       />
 
       <UserSnippetModal
         isOpen={userSnippetModalOpen}
-        onClose={() => setUserSnippetModalOpen(false)}
+        onClose={() => closeUserSnippetModal()}
         onSave={handleSaveSnippet}
         existingSnippet={editingSnippet}
       />
 
       <MenuConstructorModal
         isOpen={menuConstructorModalOpen}
-        onClose={() => setMenuConstructorModalOpen(false)}
+        onClose={() => closeMenuConstructorModal()}
         onInsert={(code, templateData) => {
           if (templateData) {
             const now = Date.now();
@@ -5268,7 +5265,7 @@ const App: React.FC = () => {
             };
             handleSaveMenuTemplate(template);
           }
-          setMenuConstructorModalOpen(false);
+          closeMenuConstructorModal();
         }}
         initialTemplate={editingMenuTemplate || undefined}
         labels={menuLabels}
@@ -5279,7 +5276,7 @@ const App: React.FC = () => {
 
       <NewProjectWizardModal
         isOpen={wizardModalOpen}
-        onClose={() => setWizardModalOpen(false)}
+        onClose={() => closeWizardModal()}
         onComplete={handleWizardComplete}
         sdkPath={appSettings.renpyPath}
         lastProjectDir={appSettings.lastProjectDir || ''}
@@ -5288,14 +5285,14 @@ const App: React.FC = () => {
 
       <AboutModal
         isOpen={aboutModalOpen}
-        onClose={() => setAboutModalOpen(false)}
+        onClose={() => closeAboutModal()}
       />
       <GoToLabelModal
         isOpen={isGoToLabelOpen}
         items={goToLabelItems}
         canvasName={goToLabelCanvasName}
         onSelect={handleGoToLabel}
-        onClose={() => setIsGoToLabelOpen(false)}
+        onClose={() => closeGoToLabelModal()}
       />
       <GoToLabelModal
         isOpen={isWarpToLabelOpen}
@@ -5305,7 +5302,7 @@ const App: React.FC = () => {
         placeholder="Warp to label…"
         emptyStateText="No labels available"
         onSelect={handleWarpToLabel}
-        onClose={() => setIsWarpToLabelOpen(false)}
+        onClose={() => closeWarpToLabelModal()}
       />
       <WarpVariablesModal
         isOpen={isWarpVariablesOpen}
@@ -5318,7 +5315,7 @@ const App: React.FC = () => {
 
       <FirstRunTutorial
         forceShow={showTutorial}
-        onComplete={() => setShowTutorial(false)}
+        onComplete={() => closeTutorial()}
       />
     </div>
     </SearchProvider>
