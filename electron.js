@@ -15,10 +15,12 @@ import { logger, electronLog } from './src/lib/logger.main.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Fix AppImage sandbox issue: Disable Chromium sandbox when running in AppImage
+// Fix AppImage sandbox and shared memory issues
 // AppImage sets the APPIMAGE environment variable
 if (process.env.APPIMAGE) {
     app.commandLine.appendSwitch('no-sandbox');
+    // Fix shared memory errors in restricted AppImage environments
+    app.commandLine.appendSwitch('disable-dev-shm-usage');
 }
 
 // Lazy-load image generator to avoid blocking app startup if Sharp fails
