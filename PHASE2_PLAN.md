@@ -1,5 +1,7 @@
 # Phase 2: App.tsx Decomposition Plan
 
+**Tracking Issue:** [#144](https://github.com/bluemoonfoundry/bmf-vangard-renpy-ide/issues/144)
+
 ## Overview
 
 Decompose the 5,328-line App.tsx component into manageable custom hooks to improve maintainability, testability, and code organization. This builds on Phase 1's src/ directory migration.
