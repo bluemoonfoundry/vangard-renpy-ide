@@ -49,6 +49,7 @@ import { useModalState } from '@/hooks/useModalState';
 import { useTabManagement } from '@/hooks/useTabManagement';
 import { useCanvasInteraction } from '@/hooks/useCanvasInteraction';
 import { useAssetManagement } from '@/hooks/useAssetManagement';
+import { useCompositionState } from '@/hooks/useCompositionState';
 import { formatErrorMessage } from '@/lib/formatErrorMessage';
 import {
   buildSavedStoryBlockLayouts,
@@ -253,15 +254,28 @@ const App: React.FC = () => {
     toggleBlockSelection,
   } = useCanvasInteraction();
   
-  // Scene Composer State
-  const [sceneCompositions, setSceneCompositions] = useImmer<Record<string, SceneComposition>>({});
-  const [sceneNames, setSceneNames] = useImmer<Record<string, string>>({});
-
-  // ImageMap Composer State
-  const [imagemapCompositions, setImagemapCompositions] = useImmer<Record<string, ImageMapComposition>>({});
-
-  // Screen Layout Composer State
-  const [screenLayoutCompositions, setScreenLayoutCompositions] = useImmer<Record<string, ScreenLayoutComposition>>({});
+  // Composition state (Scene/ImageMap/ScreenLayout composers)
+  const {
+    sceneCompositions,
+    sceneNames,
+    setSceneCompositions,
+    setSceneNames,
+    imagemapCompositions,
+    setImagemapCompositions,
+    screenLayoutCompositions,
+    setScreenLayoutCompositions,
+    addScene,
+    updateScene,
+    removeScene,
+    renameScene,
+    addImagemap,
+    updateImagemap,
+    removeImagemap,
+    addScreenLayout,
+    updateScreenLayout,
+    removeScreenLayout,
+    clearAllCompositions,
+  } = useCompositionState();
 
   // Punchlist State (kept for migration — not written on save)
   const [punchlistMetadata, setPunchlistMetadata] = useImmer<Record<string, PunchlistMetadata>>({});
