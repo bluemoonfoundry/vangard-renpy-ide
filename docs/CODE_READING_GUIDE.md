@@ -835,7 +835,7 @@ Check whether the relevant data is saved to:
 
 - `.rpy` files;
 - `.renide/project.json`;
-- - app settings;
+- app settings;
 - asset metadata;
 - composer state.
 
