@@ -210,13 +210,133 @@ Word counts, estimated play time, lines of dialogue, per-character dialogue brea
 
 ### Install (Recommended)
 
-1. Go to the **[releases page](https://github.com/bluemoonfoundry/vangard-renpy-ide/releases/latest)**
-2. Download the zip for your OS and unzip it
-3. **Windows**: run the `.exe` installer
-4. **macOS**: open the `.dmg` and move the app to your Applications folder
-5. **Linux**: make the `.AppImage` executable and run it
+Go to the **[releases page](https://github.com/bluemoonfoundry/vangard-renpy-ide/releases/latest)** and download the appropriate package for your operating system.
 
-On first launch, open an existing Ren'Py project folder or create a new project with the wizard.
+#### Windows
+
+**Download:** `renide-Setup-<version>.exe`
+
+1. Run the installer executable
+2. Follow the installation wizard
+3. Launch Ren'IDE from the Start Menu or desktop shortcut
+
+**⚠️ Security Warning:** Windows SmartScreen will show "Windows protected your PC" because the application is not code-signed. This is expected behavior for open-source software.
+
+**To proceed:**
+- Click **"More info"**
+- Click **"Run anyway"**
+
+The app is safe - Windows blocks it only because it doesn't have a commercial code-signing certificate ($300-400/year).
+
+#### macOS
+
+**Download:** `renide-<version>.dmg` (choose `macos-arm64` for Apple Silicon or `macos-intel` for Intel Macs)
+
+1. Open the `.dmg` file
+2. Drag **RenIDE.app** to your **Applications** folder
+3. Launch from Applications
+
+**⚠️ Security Warning:** macOS Gatekeeper will block unsigned applications on first launch.
+
+**To run RenIDE:**
+
+**Method 1 (Recommended):**
+1. Right-click (or Control+click) **RenIDE.app** in Applications
+2. Select **"Open"** from the context menu
+3. Click **"Open"** in the security dialog that appears
+
+**Method 2 (System Settings):**
+1. Try to launch RenIDE normally (it will be blocked)
+2. Go to **System Settings → Privacy & Security**
+3. Scroll down to the **Security** section
+4. Click **"Open Anyway"** next to the RenIDE message
+5. Click **"Open"** in the confirmation dialog
+
+After the first successful launch, macOS will remember your choice and allow the app to run normally.
+
+#### Linux
+
+**Two installation options available:**
+
+##### Option 1: .deb Package (Recommended for Debian/Ubuntu)
+
+**Download:** `renide_<version>_amd64.deb`
+
+**Installation:**
+```bash
+# Install the package
+sudo apt install ./renide_<version>_amd64.deb
+
+# Launch from terminal
+renide
+
+# Or launch from your application menu
+```
+
+**Advantages:**
+- ✅ No additional dependencies required
+- ✅ Integrates with system menus and file associations
+- ✅ Automatic updates via APT package manager
+- ✅ Cleaner uninstallation (`sudo apt remove renide`)
+
+**Best for:** Ubuntu, Debian, Linux Mint, Pop!_OS, elementary OS, and other Debian-based distributions
+
+##### Option 2: AppImage (Universal - All Distros)
+
+**Download:** `renide-<version>.AppImage`
+
+**Method A: With FUSE (Traditional)**
+
+Most modern Linux distributions don't include FUSE2 by default. Install it first:
+
+```bash
+# Ubuntu/Debian/Mint
+sudo apt install libfuse2
+
+# Fedora/RHEL
+sudo dnf install fuse-libs
+
+# Arch/Manjaro
+sudo pacman -S fuse2
+
+# openSUSE
+sudo zypper install fuse
+```
+
+Then run the AppImage:
+```bash
+chmod +x renide-<version>.AppImage
+./renide-<version>.AppImage
+```
+
+**Method B: Without FUSE (Extract Mode)**
+
+If you don't want to install FUSE, use extract mode:
+
+```bash
+chmod +x renide-<version>.AppImage
+./renide-<version>.AppImage --appimage-extract-and-run
+```
+
+This extracts the AppImage to a temporary directory each time it runs (slightly slower startup, but requires no system dependencies).
+
+**Advantages:**
+- ✅ Works on all Linux distributions (Fedora, Arch, openSUSE, etc.)
+- ✅ No installation required - just download and run
+- ✅ Portable - can run from USB drive or external storage
+- ✅ Easy to test multiple versions side-by-side
+
+**Best for:** Non-Debian distributions, portable installations, or users who prefer not to install packages system-wide
+
+---
+
+### First Launch
+
+On first launch, Ren'IDE will prompt you to either:
+1. **Open an existing Ren'Py project folder**, or
+2. **Create a new project** using the 3-step wizard (name + location, resolution, theme + color)
+
+You'll also be asked to locate your Ren'Py SDK installation directory in Settings (`Ctrl+,` or `Cmd+,`) to enable the Run Game and Warp to Label features.
 
 ---
 

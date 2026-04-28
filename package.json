@@ -1,7 +1,10 @@
 {
   "name": "renide",
   "version": "0.8.2",
-  "author": "Blue Moon Foundry Software",
+  "author": {
+    "name": "Blue Moon Foundry Software",
+    "email": "support@bluemoonfoundry.com"
+  },
   "license": "AGPL-3.0-only",
   "type": "module",
   "main": "electron.js",
@@ -119,9 +122,10 @@
       "artifactName": "${name}-${version}.${ext}"
     },
     "linux": {
-      "target": "AppImage",
+      "target": ["AppImage", "deb"],
       "icon": "renide-512x512.png",
-      "artifactName": "${name}-${version}.${ext}"
+      "artifactName": "${name}-${version}.${ext}",
+      "category": "Development"
     },
     "extraResources": [
       {
