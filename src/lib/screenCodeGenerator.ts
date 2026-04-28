@@ -1,5 +1,24 @@
 import type { ScreenLayoutComposition, ScreenWidget } from '@/types';
 
+/**
+ * Recursively generates Ren'Py screen language code for a widget and its children.
+ *
+ * Handles all widget types supported by the Screen Layout Composer:
+ * - Simple widgets: text, image, textbutton, imagebutton, bar, input, null
+ * - Container widgets: vbox, hbox, frame, button (each recursively renders children)
+ *
+ * Positioning attributes (xpos/ypos/xalign/yalign) are only rendered for top-level widgets;
+ * widgets inside containers inherit layout from their parent container. Style attributes
+ * and action callbacks are rendered inline on the widget declaration line.
+ *
+ * @param widget - The widget to render
+ * @param depth - Current indentation depth (number of indent strings)
+ * @param insideContainer - Whether this widget is inside a container (suppresses positioning)
+ * @param indent - Indentation string (typically 4 spaces)
+ * @returns Multi-line Ren'Py screen language code
+ *
+ * @complexity O(w) time where w = total widget count (recursive tree traversal), O(d) space where d = tree depth
+ */
 function generateWidget(widget: ScreenWidget, depth: number, insideContainer: boolean, indent: string): string {
     const pad = indent.repeat(depth);
     const lines: string[] = [];
@@ -84,6 +103,29 @@ function generateWidget(widget: ScreenWidget, depth: number, insideContainer: bo
     return lines.join('\n');
 }
 
+/**
+ * Generates complete Ren'Py screen code from a Screen Layout Composition.
+ *
+ * Produces a fully-formed `screen` block with:
+ * - Screen declaration with name and attributes (modal, zorder)
+ * - All top-level widgets recursively rendered
+ * - `pass` statement if no widgets exist (empty screen)
+ *
+ * @param comp - The screen layout composition to render
+ * @param indent - Indentation string (default: 4 spaces)
+ * @returns Multi-line Ren'Py screen code ready to copy/paste into `.rpy` files
+ *
+ * @example
+ * ```typescript
+ * const code = generateScreenCode(composition);
+ * // screen my_menu():
+ * //     vbox:
+ * //         text "Hello"
+ * //         textbutton "Start" action Start()
+ * ```
+ *
+ * @complexity O(w) time where w = total widget count, O(w) space
+ */
 export function generateScreenCode(comp: ScreenLayoutComposition, indent = '    '): string {
     const lines: string[] = [];
 

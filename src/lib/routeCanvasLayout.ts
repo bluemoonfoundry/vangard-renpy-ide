@@ -23,6 +23,27 @@ const ROUTE_CONFIG: LayoutConfig = {
   crossAxisBase: 100,
 };
 
+/**
+ * Infers a container prefix for clustering label nodes by container filename patterns.
+ *
+ * Similar to `inferFilenamePrefix` but operates on `LabelNode.containerName` (the file
+ * containing the label). Supports the same five prefix extraction modes as storyCanvasLayout.
+ * If no pattern matches, returns the full container name (unlike storyCanvasLayout, which
+ * returns null for singletons).
+ *
+ * @param node - Label node to extract prefix from
+ * @returns Extracted prefix string, or the full container name if no pattern matches
+ *
+ * @example
+ * ```typescript
+ * inferContainerPrefix({ containerName: 'ch1_intro', ... }) // → 'ch1'
+ * inferContainerPrefix({ containerName: 'route_luna', ... }) // → 'route_luna'
+ * inferContainerPrefix({ containerName: 'standalone', ... }) // → 'standalone'
+ * ```
+ *
+ * @complexity O(n) time where n = container name length, O(1) space
+ * @see inferFilenamePrefix in storyCanvasLayout.ts for similar logic
+ */
 function inferContainerPrefix(node: LabelNode): string | null {
   const container = (node.containerName ?? '').replace(/\.[^.]+$/, '').trim();
   if (!container) return null;
@@ -58,6 +79,26 @@ function inferContainerPrefix(node: LabelNode): string | null {
   return base;
 }
 
+/**
+ * Computes a two-level hierarchical clustered layout for label nodes.
+ *
+ * Identical algorithm to storyCanvasLayout's `computeClusteredLayout`, but operates on
+ * label nodes instead of blocks. Performs layout in two stages:
+ * 1. **Intra-cluster layout**: Each cluster laid out independently
+ * 2. **Inter-cluster layout**: Clusters treated as meta-nodes
+ *
+ * Final node positions = cluster position + local position + padding offset (40, 50).
+ *
+ * @param nodes - Array of label nodes to layout
+ * @param edges - Array of route links between labels
+ * @param groupingMode - Clustering strategy (connected-component or filename-prefix)
+ * @returns Array of label nodes with updated positions
+ *
+ * @complexity O(n²) worst case (nested layout calls), O(n log n) typical case
+ * @see computeLayeredLayoutGeneric for the underlying layout algorithm
+ * @see buildClustersGeneric for clustering logic
+ * @see computeClusteredLayout in storyCanvasLayout.ts for block-level equivalent
+ */
 function computeClusteredLayout(
   nodes: LabelNode[],
   edges: RouteLink[],
@@ -142,6 +183,25 @@ function computeClusteredLayout(
   });
 }
 
+/**
+ * Computes Flow Canvas (route canvas) layout with the specified mode and grouping strategy.
+ *
+ * This is the main entry point for Flow Canvas layout. Identical algorithm to
+ * `computeStoryLayout` but operates on label nodes instead of blocks. Supports four layout modes:
+ * - `'flow-lr'`: Left-to-right Sugiyama layout (default)
+ * - `'flow-td'`: Top-down Sugiyama layout
+ * - `'connected-components'`: Left-to-right with disconnected components spaced apart
+ * - `'clustered-flow'`: Two-level hierarchical layout with clustering
+ *
+ * @param nodes - Array of label nodes to layout
+ * @param edges - Array of route links between labels
+ * @param layoutMode - Layout algorithm to use
+ * @param groupingMode - Clustering strategy (only used for clustered-flow mode)
+ * @returns Array of label nodes with updated positions
+ *
+ * @complexity O(n²) worst case (clustered-flow), O(n log n) typical case
+ * @see computeStoryLayout in storyCanvasLayout.ts for block-level equivalent
+ */
 export function computeRouteCanvasLayout(
   nodes: LabelNode[],
   edges: RouteLink[],
@@ -161,6 +221,21 @@ export function computeRouteCanvasLayout(
   }
 }
 
+/**
+ * Computes a fingerprint string for route canvas layout cache invalidation.
+ *
+ * Identical to `computeStoryLayoutFingerprint` but for label nodes instead of blocks.
+ * Includes node ID, container name, dimensions, and edge types in the fingerprint.
+ *
+ * @param nodes - Array of label nodes
+ * @param edges - Array of route links
+ * @param layoutMode - Current layout mode
+ * @param groupingMode - Current grouping mode
+ * @returns Fingerprint string
+ *
+ * @complexity O(n log n) time (due to sorting), O(n) space
+ * @see computeStoryLayoutFingerprint in storyCanvasLayout.ts for block-level equivalent
+ */
 export function computeRouteCanvasLayoutFingerprint(
   nodes: LabelNode[],
   edges: RouteLink[],
