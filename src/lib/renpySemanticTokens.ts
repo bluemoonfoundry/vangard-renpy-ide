@@ -31,6 +31,16 @@ export const SEMANTIC_TOKEN_TYPES = [
 
 export const SEMANTIC_TOKEN_MODIFIERS: string[] = [];
 
+/**
+ * Gets the semantic tokens legend for Monaco editor registration.
+ *
+ * Returns the token type and modifier arrays that Monaco uses to decode the delta-encoded
+ * token data produced by `computeSemanticTokens()`. This function must be called once
+ * during Monaco language registration.
+ *
+ * @returns Monaco semantic tokens legend
+ * @see computeSemanticTokens for token generation
+ */
 export function getSemanticTokensLegend(): monaco.languages.SemanticTokensLegend {
   return {
     tokenTypes: [...SEMANTIC_TOKEN_TYPES],
@@ -105,11 +115,31 @@ interface RawToken {
 }
 
 /**
- * Scan a document and return semantic tokens based on analysis data.
+ * Computes semantic tokens for Ren'Py code with context-aware syntax highlighting.
  *
- * @param text    Full document text.
- * @param analysis  Current Ren'Py analysis result (labels, characters, images, etc.)
- * @returns Uint32Array in the LSP semantic token delta-encoded format.
+ * Scans the document line-by-line using multiple regex patterns to identify:
+ * - Label references in `jump`/`call` statements (known vs. undefined)
+ * - Character names in dialogue lines (known vs. unknown)
+ * - Image names in `show`/`scene`/`hide` statements (known vs. unknown)
+ * - Screen names in `call screen`/`show screen`/`hide screen` (known vs. unknown)
+ * - Variable names in `$` inline Python expressions (known only)
+ *
+ * Returns data in **LSP delta-encoded format**: each token is encoded as 5 uint32 values:
+ * `[deltaLine, deltaStartChar, length, tokenType, tokenModifiers]`. Delta encoding means:
+ * - First token: absolute (line, char) position
+ * - Subsequent tokens: deltas relative to previous token
+ * - Same-line tokens: deltaLine=0, deltaStartChar=char-prevChar
+ * - New-line tokens: deltaLine=line-prevLine, deltaStartChar=absoluteChar
+ *
+ * This function is called on every edit in Monaco, so must remain O(n·m) where n=lines,
+ * m=average regex matches per line.
+ *
+ * @param text - Full document text
+ * @param analysis - Current Ren'Py analysis result with known entities
+ * @returns Uint32Array in LSP semantic token delta-encoded format (5 values per token)
+ *
+ * @complexity O(n·m) time where n=lines, m=matches per line; O(t) space where t=token count
+ * @see getSemanticTokensLegend for legend registration
  */
 export function computeSemanticTokens(
   text: string,

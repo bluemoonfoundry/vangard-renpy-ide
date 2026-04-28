@@ -21,7 +21,18 @@ interface WorkerRequest {
 
 // ── Content-hash cache ────────────────────────────────────────────────────────
 
-/** Fast 32-bit djb2 hash of a string. */
+/**
+ * Computes a fast 32-bit djb2 hash of a string for cache invalidation.
+ *
+ * This hash function is used to detect content changes in `.rpy` files. It's not
+ * cryptographically secure, but it's fast and has good distribution for typical
+ * text content.
+ *
+ * @param str - String to hash
+ * @returns 32-bit signed integer hash
+ *
+ * @complexity O(n) where n = string length
+ */
 function djb2(str: string): number {
   let hash = 5381;
   for (let i = 0; i < str.length; i++) {
@@ -36,10 +47,27 @@ interface BlockSignature {
   contentHash: number;
 }
 
+/**
+ * Computes content signatures for all blocks for cache comparison.
+ *
+ * @param blocks - Array of blocks to hash
+ * @returns Array of signatures with block ID and content hash
+ * @complexity O(n·m) where n=block count, m=average block content length
+ */
 function computeSignatures(blocks: AnalysisBlock[]): BlockSignature[] {
   return blocks.map(b => ({ id: b.id, contentHash: djb2(b.content) }));
 }
 
+/**
+ * Checks if two signature arrays are equal (same IDs in same order with same hashes).
+ *
+ * Used to detect if block content changed since the last analysis run.
+ *
+ * @param a - First signature array
+ * @param b - Second signature array
+ * @returns True if all signatures match
+ * @complexity O(n) where n = signature count
+ */
 function signaturesEqual(a: BlockSignature[], b: BlockSignature[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
@@ -53,6 +81,28 @@ let cachedResult: RenpyAnalysisResult | null = null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Web Worker message handler for Ren'Py analysis requests.
+ *
+ * Receives `WorkerRequest` messages with block content, performs full analysis in three phases:
+ * 1. **Parsing**: Extract labels, characters, images, screens, etc. via `performRenpyAnalysis()`
+ * 2. **Route graph**: Build label nodes and route links via `performRouteAnalysis()`
+ * 3. **Translation**: Analyze dialogue strings via `performTranslationAnalysis()`
+ *
+ * **Content-hash caching**: Before running analysis, computes djb2 hashes of all block content.
+ * If hashes match the previous run, returns the cached result immediately without re-parsing.
+ * This optimization handles the common case where the user drags blocks on the canvas (changing
+ * positions but not content).
+ *
+ * Posts progress updates at 10%, 60%, 80%, and 95% completion.
+ *
+ * @param e - MessageEvent with WorkerRequest containing request ID and blocks
+ *
+ * @complexity O(n·m) where n=block count, m=average block length (dominated by parsing)
+ * @see performRenpyAnalysis for main parsing logic
+ * @see performRouteAnalysis for route graph construction
+ * @see performTranslationAnalysis for translation string extraction
+ */
 self.onmessage = (e: MessageEvent<WorkerRequest>) => {
   const { id, blocks } = e.data;
   try {

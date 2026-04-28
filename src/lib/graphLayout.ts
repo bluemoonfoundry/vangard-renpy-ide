@@ -33,8 +33,16 @@ export interface LayoutConfig {
 }
 
 /**
- * Build a directed graphology graph from nodes and edges,
- * filtering out edges that reference non-existent nodes.
+ * Builds a directed graphology graph from nodes and edges.
+ *
+ * Filters out edges that reference non-existent nodes and prevents duplicate
+ * edges between the same node pair (graphology throws on duplicates).
+ *
+ * @param nodes - Array of layout nodes to add to the graph
+ * @param edges - Array of directed edges connecting nodes
+ * @returns A directed graph with all valid nodes and edges
+ *
+ * @complexity O(V + E) time, O(V) space where V = nodes, E = edges
  */
 export function buildGraph<N extends LayoutNode, E extends LayoutEdge>(
   nodes: N[],
@@ -60,8 +68,17 @@ export function buildGraph<N extends LayoutNode, E extends LayoutEdge>(
 }
 
 /**
- * Get connected components using graphology-components.
- * Returns arrays of node id arrays, preserving the order of input nodes.
+ * Gets connected components using graphology-components.
+ *
+ * Returns arrays of node ID arrays, preserving the order of input nodes.
+ * Each inner array represents a disconnected subgraph in the layout.
+ *
+ * @param nodes - Array of layout nodes
+ * @param edges - Array of directed edges
+ * @returns Array of node ID arrays, one per connected component
+ *
+ * @complexity O(V + E) time, O(V) space
+ * @see buildGraph for graph construction
  */
 export function getConnectedComponents<N extends LayoutNode, E extends LayoutEdge>(
   nodes: N[],
@@ -72,8 +89,32 @@ export function getConnectedComponents<N extends LayoutNode, E extends LayoutEdg
 }
 
 /**
- * Compute a Sugiyama-style layered layout for a set of nodes and edges.
- * Handles disconnected components and cyclic graphs.
+ * Computes a Sugiyama-style layered layout for a set of nodes and edges.
+ *
+ * Implements a hierarchical graph layout algorithm that arranges nodes in layers,
+ * with edges flowing in a consistent direction. Handles disconnected components
+ * (each gets its own layout space) and cyclic graphs (falls back to BFS layering
+ * when topological sort fails). Nodes are centered within their layers and
+ * cross-axis positions are normalized to `config.crossAxisBase`.
+ *
+ * @param nodes - Array of layout nodes to position
+ * @param edges - Array of directed edges defining the graph structure
+ * @param direction - Layout direction: 'lr' (left-to-right) or 'td' (top-down)
+ * @param config - Layout configuration (spacing, padding, dimensions)
+ * @returns Array of nodes with updated positions
+ *
+ * @example
+ * ```typescript
+ * const laid = computeLayeredLayoutGeneric(
+ *   blocks,
+ *   links,
+ *   'lr',
+ *   { paddingX: 200, paddingY: 50, componentSpacing: 400, ... }
+ * );
+ * ```
+ *
+ * @complexity O(V² + E) worst case (cyclic graphs), O(V + E) typical case
+ * @see bfsLayers for cycle-breaking heuristic
  */
 export function computeLayeredLayoutGeneric<N extends LayoutNode>(
   nodes: N[],
@@ -176,7 +217,7 @@ export function computeLayeredLayoutGeneric<N extends LayoutNode>(
 }
 
 /**
- * BFS-based layer assignment for cyclic components.
+ * Computes BFS-based layer assignment for cyclic components.
  *
  * Uses progressive cycle-breaking: when the BFS queue empties but unvisited nodes
  * remain (a cycle has stalled progress), we re-seed from the unvisited node with the
@@ -186,7 +227,19 @@ export function computeLayeredLayoutGeneric<N extends LayoutNode>(
  * back-edges are rendered as left-pointing arrows rather than dumping all cycle
  * participants into a single crowded column.
  *
- * Complexity: O(V² + E) worst case (rare deep nesting of cycles);
+ * @param componentNodeIds - Array of node IDs in this connected component
+ * @param graph - The full graphology graph
+ * @param componentNodeSet - Set of node IDs in this component (for fast lookup)
+ * @returns Array of layers, each layer is an array of node IDs
+ *
+ * @example
+ * ```typescript
+ * // For a cycle A→B→C→A, produces layers like [[A], [B], [C]]
+ * // where the C→A edge becomes a back-edge
+ * const layers = bfsLayers(['A', 'B', 'C'], graph, new Set(['A', 'B', 'C']));
+ * ```
+ *
+ * @complexity O(V² + E) worst case (rare deep nesting of cycles);
  *             O(V + E) for typical story graphs with a small number of back-edges.
  */
 function bfsLayers(
@@ -260,8 +313,34 @@ function bfsLayers(
 }
 
 /**
- * Build clusters from nodes and edges based on grouping mode.
- * `prefixExtractor` returns a prefix string for a node, or null if it can't be clustered.
+ * Builds clusters from nodes and edges based on grouping mode.
+ *
+ * Supports three grouping modes:
+ * 1. `'connected-component'` - Groups nodes by graph connectivity
+ * 2. `'filename-prefix'` - Groups nodes sharing a common prefix (e.g., "ch1_")
+ * 3. `'none'` - Each node becomes its own singleton cluster
+ *
+ * For filename-prefix mode, nodes with no extractable prefix become singletons.
+ * Only prefixes with 2+ nodes form clusters; single-prefix nodes remain singletons.
+ *
+ * @param nodes - Array of layout nodes to cluster
+ * @param edges - Array of directed edges (used for connected-component mode)
+ * @param groupingMode - Clustering strategy
+ * @param prefixExtractor - Function that extracts a prefix from a node, or null if unclustered
+ * @returns Array of clusters, each containing node IDs
+ *
+ * @example
+ * ```typescript
+ * const clusters = buildClustersGeneric(
+ *   blocks,
+ *   links,
+ *   'filename-prefix',
+ *   (block) => inferFilenamePrefix(block.filePath)
+ * );
+ * ```
+ *
+ * @complexity O(V + E) time, O(V) space
+ * @see getConnectedComponents for connected-component mode
  */
 export function buildClustersGeneric<N extends LayoutNode>(
   nodes: N[],
@@ -325,9 +404,23 @@ interface LabelLocation {
 }
 
 /**
- * Build a graphology DirectedGraph from route analysis data, along with
- * start/end node sets. Provides a clean extension point for future graph
- * analyses (cycle detection, SCC, centrality, etc.).
+ * Builds a graphology DirectedGraph from route analysis data with start/end node sets.
+ *
+ * Constructs a directed graph from label nodes and route links, then identifies:
+ * - Start nodes: the "start" label if it exists and is not a menu, else all nodes with in-degree 0
+ * - End nodes: leaf nodes (out-degree 0) and labels with return statements but no terminal statements
+ *
+ * Provides a clean extension point for future graph analyses (cycle detection, SCC,
+ * centrality, etc.). Used by Flow Canvas and Choices Canvas for route visualization.
+ *
+ * @param labelNodes - Map of label node IDs to LabelNode objects
+ * @param routeLinks - Array of route links (jumps/calls between labels)
+ * @param labels - Record of label names to their location metadata
+ * @param blockLabelInfo - Map of block IDs to their label info (for terminal/return detection)
+ * @returns RouteGraph containing the graph, start nodes array, and end nodes set
+ *
+ * @complexity O(V + E) time, O(V) space
+ * @see buildGraph for low-level graph construction
  */
 export function buildRouteGraph(
   labelNodes: Map<string, LabelNode>,

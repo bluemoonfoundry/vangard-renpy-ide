@@ -73,25 +73,57 @@ const MENU_BLOCK_RE = /^\s*menu(?:\s+\w+)?\s*:/;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+/**
+ * Computes the indentation level of a line in spaces.
+ *
+ * @param line - A line of code
+ * @returns Number of leading whitespace characters
+ * @complexity O(n) where n = indentation depth
+ */
 function indentOf(line: string): number {
   return line.match(/^(\s*)/)?.[1].length ?? 0;
 }
 
-/** Return the 1-based column range of the first occurrence of `word` in `line`. */
+/**
+ * Returns the 1-based column range of the first occurrence of a word in a line.
+ *
+ * @param line - Line of code to search
+ * @param word - Word to find
+ * @returns [startColumn, endColumn] (1-indexed), or [1, line.length+1] if not found
+ * @complexity O(n) where n = line length
+ */
 function wordRange(line: string, word: string): [number, number] {
   const col = line.indexOf(word);
   if (col === -1) return [1, line.length + 1];
   return [col + 1, col + 1 + word.length];
 }
 
-/** Strip string literals from a line (replace with spaces) so we don't match
- *  keywords that appear inside quoted text. */
+/**
+ * Strips string literals from a line (replaces with spaces) to avoid matching keywords
+ * inside quoted text.
+ *
+ * Handles both single and double-quoted strings with escape sequences.
+ *
+ * @param line - Line of code
+ * @returns Line with string literals replaced by spaces
+ * @complexity O(n) where n = line length
+ */
 function stripStrings(line: string): string {
   return line
     .replace(/"[^"\\]*(?:\\.[^"\\]*)*"/g, m => ' '.repeat(m.length))
     .replace(/'[^'\\]*(?:\\.[^'\\]*)*'/g, m => ' '.repeat(m.length));
 }
 
+/**
+ * Creates a diagnostic object for Monaco editor markers.
+ *
+ * @param lineNumber - 1-indexed line number
+ * @param startCol - 1-indexed start column
+ * @param endCol - 1-indexed end column
+ * @param message - Diagnostic message
+ * @param severity - 'error' or 'warning'
+ * @returns RenpyDiagnostic object
+ */
 function makeDiag(
   lineNumber: number,
   startCol: number,
@@ -104,6 +136,13 @@ function makeDiag(
 
 // ── Individual rules ───────────────────────────────────────────────────────
 
+/**
+ * Checks if `show expression` is missing an `as` clause (rule 1).
+ *
+ * @param line - Ren'Py statement
+ * @param lineNum - 1-indexed line number
+ * @returns Warning diagnostic if `as` clause is missing, null otherwise
+ */
 function checkShowExpression(line: string, lineNum: number): RenpyDiagnostic | null {
   if (!/^\s*show\s+expression\b/.test(line)) return null;
   const sanitized = stripStrings(line);
@@ -114,6 +153,14 @@ function checkShowExpression(line: string, lineNum: number): RenpyDiagnostic | n
     'warning');
 }
 
+/**
+ * Checks `play` and `queue` statements for missing channels, unknown channels, and
+ * conflicting flags (rules 2-4).
+ *
+ * @param line - Ren'Py statement
+ * @param lineNum - 1-indexed line number
+ * @returns Array of diagnostics (may be empty)
+ */
 function checkPlayQueue(line: string, lineNum: number): RenpyDiagnostic[] {
   const diags: RenpyDiagnostic[] = [];
   const match = line.match(/^(\s*)(play|queue)\s+(.*)/);
@@ -154,6 +201,13 @@ function checkPlayQueue(line: string, lineNum: number): RenpyDiagnostic[] {
   return diags;
 }
 
+/**
+ * Checks `stop` statements for missing channel name (rule 3).
+ *
+ * @param line - Ren'Py statement
+ * @param lineNum - 1-indexed line number
+ * @returns Error diagnostic if channel is missing, null otherwise
+ */
 function checkStop(line: string, lineNum: number): RenpyDiagnostic | null {
   // `stop` with no channel — line is just `stop` optionally followed by `fadeout`
   const match = line.match(/^(\s*)(stop)\s*(.*)/);
@@ -169,6 +223,13 @@ function checkStop(line: string, lineNum: number): RenpyDiagnostic | null {
   return null;
 }
 
+/**
+ * Checks `define` and `default` statements for missing assignment operator (rule 5).
+ *
+ * @param line - Ren'Py statement
+ * @param lineNum - 1-indexed line number
+ * @returns Error diagnostic if `=` is missing, null otherwise
+ */
 function checkDefineDefault(line: string, lineNum: number): RenpyDiagnostic | null {
   const match = line.match(/^\s*(define|default)\s+([\w.]+)\s*$/);
   if (!match) return null;
@@ -180,6 +241,13 @@ function checkDefineDefault(line: string, lineNum: number): RenpyDiagnostic | nu
     'error');
 }
 
+/**
+ * Checks label, screen, menu, transform, and init statements for missing trailing colon (rule 6).
+ *
+ * @param line - Ren'Py statement
+ * @param lineNum - 1-indexed line number
+ * @returns Error diagnostic if colon is missing, null otherwise
+ */
 function checkMissingColon(line: string, lineNum: number): RenpyDiagnostic | null {
   // label name [args] — no colon at end
   const labelMatch = line.match(/^\s*label\s+(\w+)(?:\s*\([^)]*\))?\s*$/);
@@ -229,6 +297,16 @@ function checkMissingColon(line: string, lineNum: number): RenpyDiagnostic | nul
   return null;
 }
 
+/**
+ * Checks image name definitions for reserved words (rule 7).
+ *
+ * Reserved words (at, as, behind, onlayer, with, zorder) cannot be part of image names
+ * as they are special syntax tokens.
+ *
+ * @param line - Ren'Py statement
+ * @param lineNum - 1-indexed line number
+ * @returns Error diagnostic if reserved word found, null otherwise
+ */
 function checkImageName(line: string, lineNum: number): RenpyDiagnostic | null {
   // `image name = ...` or `image name:`
   const match = line.match(/^\s*image\s+(.+?)(?:\s*=|\s*:)/);
@@ -246,6 +324,24 @@ function checkImageName(line: string, lineNum: number): RenpyDiagnostic | null {
   return null;
 }
 
+/**
+ * Checks menu choice lines for missing `if` keyword or missing trailing colon (rules 8-9).
+ *
+ * This is a complex rule that handles multiple menu choice syntax patterns. Valid forms:
+ * - `"text":` — simple choice
+ * - `"text" if condition:` — conditional choice
+ * - `"text" (args):` — parameterized choice (Ren'Py special syntax)
+ *
+ * Detects errors like:
+ * - `"text" condition:` — missing `if` keyword
+ * - `"text" (bool_expr):` — likely missing `if` (warns if expression looks boolean)
+ * - `"text"` — missing trailing colon
+ *
+ * @param line - Ren'Py statement (must be indented choice line)
+ * @param lineNum - 1-indexed line number
+ * @returns Error or warning diagnostic, or null if valid
+ * @complexity O(n) where n = line length
+ */
 function checkMenuChoiceCondition(line: string, lineNum: number): RenpyDiagnostic | null {
   // Choice lines: indented quoted string with something before the colon
   // Valid:   "text":               — no condition
@@ -316,7 +412,15 @@ function checkMenuChoiceCondition(line: string, lineNum: number): RenpyDiagnosti
     'warning');
 }
 
-/** Bare statements that require at least one argument. */
+/**
+ * Checks for bare statements missing required arguments (rules 10-15).
+ *
+ * Validates: jump, call, show, hide, with, voice statements.
+ *
+ * @param line - Ren'Py statement
+ * @param lineNum - 1-indexed line number
+ * @returns Error diagnostic if argument is missing, null otherwise
+ */
 function checkBareStatements(line: string, lineNum: number): RenpyDiagnostic | null {
   // jump with no target
   if (/^\s*jump\s*$/.test(line)) {
@@ -369,7 +473,13 @@ function checkBareStatements(line: string, lineNum: number): RenpyDiagnostic | n
   return null;
 }
 
-/** `call screen`, `show screen`, `hide screen` with no screen name following. */
+/**
+ * Checks `call screen`, `show screen`, `hide screen` for missing screen name (rule 16).
+ *
+ * @param line - Ren'Py statement
+ * @param lineNum - 1-indexed line number
+ * @returns Error diagnostic if screen name is missing, null otherwise
+ */
 function checkScreenCommands(line: string, lineNum: number): RenpyDiagnostic | null {
   if (/^\s*call\s+screen\s*$/.test(line)) {
     const [s, e] = wordRange(line, 'screen');
@@ -392,7 +502,15 @@ function checkScreenCommands(line: string, lineNum: number): RenpyDiagnostic | n
   return null;
 }
 
-/** `window` requires show, hide, or auto. */
+/**
+ * Checks `window` statements for missing or invalid arguments (rule 17).
+ *
+ * Valid arguments: show, hide, auto.
+ *
+ * @param line - Ren'Py statement
+ * @param lineNum - 1-indexed line number
+ * @returns Error diagnostic if argument is missing or invalid, null otherwise
+ */
 function checkWindow(line: string, lineNum: number): RenpyDiagnostic | null {
   // Only match `window` as a standalone statement (not `window:` which is a screen displayable)
   const match = line.match(/^\s*window(?:\s+(\S+))?\s*$/);
@@ -414,7 +532,15 @@ function checkWindow(line: string, lineNum: number): RenpyDiagnostic | null {
   return null;
 }
 
-/** `nvl` requires clear, show, or hide. */
+/**
+ * Checks `nvl` statements for missing or invalid arguments (rule 18).
+ *
+ * Valid arguments: clear, show, hide.
+ *
+ * @param line - Ren'Py statement
+ * @param lineNum - 1-indexed line number
+ * @returns Error diagnostic if argument is missing or invalid, null otherwise
+ */
 function checkNvl(line: string, lineNum: number): RenpyDiagnostic | null {
   const match = line.match(/^\s*nvl(?:\s+(\S+))?\s*$/);
   if (!match) return null;
@@ -435,7 +561,18 @@ function checkNvl(line: string, lineNum: number): RenpyDiagnostic | null {
   return null;
 }
 
-/** Inline Python expression checks (runs on `$` lines). */
+/**
+ * Checks inline Python expressions (`$` statements) for empty expressions and
+ * comparison-as-assignment errors (rules 19-20).
+ *
+ * Detects:
+ * - Empty `$` with no expression following
+ * - `$ var == value` where assignment was likely intended
+ *
+ * @param line - Ren'Py statement
+ * @param lineNum - 1-indexed line number
+ * @returns Error or warning diagnostic, or null if valid
+ */
 function checkInlinePython(line: string, lineNum: number): RenpyDiagnostic | null {
   const trimmed = line.trim();
   if (!trimmed.startsWith('$')) return null;
@@ -464,7 +601,13 @@ function checkInlinePython(line: string, lineNum: number): RenpyDiagnostic | nul
   return null;
 }
 
-/** `pause` given a string literal instead of a numeric duration. */
+/**
+ * Checks `pause` statements for string literals instead of numeric durations (rule 21).
+ *
+ * @param line - Ren'Py statement
+ * @param lineNum - 1-indexed line number
+ * @returns Error diagnostic if string literal is used, null otherwise
+ */
 function checkPause(line: string, lineNum: number): RenpyDiagnostic | null {
   // pause is valid with no argument (waits for click) or a numeric/expression argument.
   // Flag only the obviously wrong case: a quoted string as the duration.
@@ -478,6 +621,31 @@ function checkPause(line: string, lineNum: number): RenpyDiagnostic | null {
 
 // ── Main export ────────────────────────────────────────────────────────────
 
+/**
+ * Validates Ren'Py code and returns an array of diagnostics.
+ *
+ * This is the main entry point for the validator. It implements 21 validation rules
+ * (see module header for the complete list) using a state machine that tracks:
+ * - Python blocks (skip validation inside)
+ * - Screen blocks (suppress certain rules to avoid false positives)
+ * - ATL image blocks (suppress menu choice rules)
+ * - Menu blocks (enable menu choice validation)
+ * - Triple-quoted string literals (skip validation inside)
+ *
+ * The algorithm scans code line-by-line, maintaining indent-based block scopes and
+ * applying appropriate rule sets based on context. It uses logical lines (merged
+ * multi-line statements) for rule checks but reports diagnostics on the physical
+ * line where statements begin.
+ *
+ * Runs on every keystroke in Monaco editor, so must maintain O(n) complexity.
+ *
+ * @param code - Multi-line Ren'Py script code
+ * @returns Array of diagnostics with line/column positions and severity levels
+ *
+ * @complexity O(n) time where n = code length, O(n) space
+ * @see getLogicalLines for multi-line statement merging
+ * @see getTripleQuotedLineMask for triple-quote detection
+ */
 export function validateRenpyCode(code: string): RenpyDiagnostic[] {
   const diagnostics: RenpyDiagnostic[] = [];
   const lines = code.split('\n');

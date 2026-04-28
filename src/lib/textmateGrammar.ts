@@ -14,9 +14,27 @@ let grammar: IGrammar | null = null;
 let initPromise: Promise<void> | null = null;
 
 /**
- * Load the Oniguruma WASM binary and initialise the TextMate registry
- * with the Ren'Py grammar.  Safe to call multiple times — subsequent
- * calls return the same promise.
+ * Initializes the TextMate grammar engine with Oniguruma WASM and Ren'Py grammar.
+ *
+ * This async function performs three steps:
+ * 1. Dynamically imports `vscode-oniguruma` and `vscode-textmate` libraries
+ * 2. Fetches and loads the Oniguruma WASM binary (from `/onig.wasm` in public/)
+ * 3. Creates a TextMate registry and loads the Ren'Py grammar from `renpy.tmLanguage.json`
+ *
+ * The function is idempotent: multiple calls return the same promise and initialization
+ * only happens once. Must be called before `createTextMateTokensProvider()`.
+ *
+ * @returns Promise that resolves when initialization is complete
+ * @throws Error if the grammar fails to load
+ *
+ * @example
+ * ```typescript
+ * await initTextMate();
+ * const provider = createTextMateTokensProvider();
+ * monaco.languages.setTokensProvider('renpy', provider);
+ * ```
+ *
+ * @complexity O(1) after first call (returns cached promise)
  */
 export async function initTextMate(): Promise<void> {
   if (initPromise) return initPromise;
@@ -63,6 +81,13 @@ export async function initTextMate(): Promise<void> {
 // State wrapper — Monaco's IState interface requires `clone()` and `equals()`
 // ---------------------------------------------------------------------------
 
+/**
+ * Monaco IState wrapper for TextMate's StateStack.
+ *
+ * Monaco requires tokenization state to implement `clone()` and `equals()` for
+ * efficient incremental tokenization. This class wraps vscode-textmate's StateStack
+ * and delegates to its native clone/equals methods.
+ */
 class TMState implements monaco.languages.IState {
   constructor(public readonly ruleStack: StateStack) {}
 
@@ -81,9 +106,25 @@ class TMState implements monaco.languages.IState {
 // ---------------------------------------------------------------------------
 
 /**
- * Create a Monaco `TokensProvider` backed by the loaded TextMate grammar.
+ * Creates a Monaco TokensProvider backed by the loaded TextMate grammar.
  *
- * Must be called *after* `initTextMate()` has resolved.
+ * Returns a Monaco-compatible tokenization provider that:
+ * - Uses vscode-textmate to tokenize lines according to the Ren'Py grammar
+ * - Converts TextMate scope names to Monaco token types
+ * - Maintains tokenization state across lines for incremental updates
+ *
+ * The provider selects the most specific scope from each TextMate token (the last element
+ * in the scopes array) and uses it as the Monaco token type. Monaco's theme engine
+ * performs prefix matching, so `keyword.control.jump.renpy` will match theme rules
+ * for `keyword.control`, `keyword`, etc.
+ *
+ * **IMPORTANT**: Must be called after `initTextMate()` has resolved, or this function
+ * will throw an error.
+ *
+ * @returns Monaco TokensProvider for use with `monaco.languages.setTokensProvider()`
+ * @throws Error if called before `initTextMate()` completes
+ *
+ * @see initTextMate for initialization
  */
 export function createTextMateTokensProvider(): monaco.languages.TokensProvider {
   if (!grammar || !vsctm) {
