@@ -3672,14 +3672,15 @@ const App: React.FC = () => {
     setScreenshotCount(count);
   }, []);
 
+  // Note: Screenshot capture is now handled entirely in main process via global shortcut
+  // This handler is kept as a fallback for programmatic calls, but the Cmd+Shift+C
+  // shortcut bypasses the renderer completely for reliability during crashes.
   const handleCaptureScreenshot = useCallback(async () => {
     if (!window.electronAPI?.captureScreenshot) return;
     const result = await window.electronAPI.captureScreenshot();
     if (result.success) {
-      addToast(`Screenshot saved to .renide/screenshots/`, 'success');
+      addToast(`Screenshot saved: ${result.filename}`, 'success');
       await refreshScreenshotCount();
-      // Update menu state
-      window.electronAPI.updateExplorerMenuState?.({ hasScreenshots: true });
     } else {
       addToast(`Failed to capture screenshot: ${result.error}`, 'error');
     }
@@ -3999,7 +4000,8 @@ const App: React.FC = () => {
             if (data.command === 'explorer-rename') setExplorerExternalAction({ type: 'rename', key: Date.now() });
             if (data.command === 'explorer-delete') handleDeleteNode(Array.from(explorerSelectedPaths));
             if (data.command === 'explorer-refresh') handleRefreshProject();
-            if (data.command === 'capture-screenshot') handleCaptureScreenshot();
+            // Note: 'capture-screenshot' command removed - screenshots are now captured
+            // entirely in main process via global shortcut for reliability during crashes
             if (data.command === 'open-screenshots-folder') handleOpenScreenshotsFolder();
             if (data.command === 'close-tab') {
                 // Close the currently active tab
@@ -4011,7 +4013,7 @@ const App: React.FC = () => {
             }
         });
         return removeListener;
-  }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenWithRenpyCheck, loadProject, handleSaveAll, projectRootPath, appSettings.renpyPath, handleOpenStaticTab, handleToggleSearch, updateAppSettings, handleDeleteNode, explorerSelectedPaths, handleRefreshProject, handleCaptureScreenshot, handleOpenScreenshotsFolder, handleCloseTab, activePaneId, activeTabId, secondaryActiveTabId]);
+  }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenWithRenpyCheck, loadProject, handleSaveAll, projectRootPath, appSettings.renpyPath, handleOpenStaticTab, handleToggleSearch, updateAppSettings, handleDeleteNode, explorerSelectedPaths, handleRefreshProject, handleOpenScreenshotsFolder, handleCloseTab, activePaneId, activeTabId, secondaryActiveTabId]);
 
   // --- Screenshot Count ---
   useEffect(() => {
@@ -4019,6 +4021,18 @@ const App: React.FC = () => {
       void refreshScreenshotCount();
     }
   }, [projectRootPath, refreshScreenshotCount]);
+
+  // Listen for screenshot capture events from main process
+  useEffect(() => {
+    if (!window.electronAPI?.onScreenshotCaptured) return;
+    const removeListener = window.electronAPI.onScreenshotCaptured((data: { filename: string; filepath: string }) => {
+      // Show in-app toast (only works if renderer is alive)
+      addToast(`Screenshot saved: ${data.filename}`, 'success');
+      // Refresh count
+      void refreshScreenshotCount();
+    });
+    return removeListener;
+  }, [addToast, refreshScreenshotCount]);
 
   // Update menu state when screenshot count changes
   useEffect(() => {

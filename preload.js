@@ -135,4 +135,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openScreenshotsFolder: () => ipcRenderer.invoke('app:open-screenshots-folder'),
   clearScreenshots: () => ipcRenderer.invoke('app:clear-screenshots'),
   getLatestScreenshotPath: () => ipcRenderer.invoke('app:get-latest-screenshot-path'),
+  onScreenshotCaptured: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('screenshot-captured', handler);
+    return () => ipcRenderer.removeListener('screenshot-captured', handler);
+  },
 });

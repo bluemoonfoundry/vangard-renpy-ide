@@ -14,7 +14,7 @@ if (isAppImage) {
     console.log('[RenIDE] Not running in AppImage mode');
 }
 
-import { app, BrowserWindow, ipcMain, dialog, Menu, protocol, shell, safeStorage, globalShortcut } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, protocol, shell, safeStorage, globalShortcut, Notification } from 'electron';
 
 import electronUpdaterPkg from 'electron-updater';
 const { autoUpdater } = electronUpdaterPkg;
@@ -734,10 +734,65 @@ async function createWindow() {
     mainWindow.webContents.send('check-unsaved-changes-before-exit');
   });
 
-  // Register global screenshot shortcut
-  globalShortcut.register('CommandOrControl+Shift+C', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('menu-command', { command: 'capture-screenshot' });
+  // Register global screenshot shortcut - handled entirely in main process for reliability
+  globalShortcut.register('CommandOrControl+Shift+C', async () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    try {
+      // Capture immediately, bypassing renderer
+      if (!currentProjectRoot) {
+        logger.warn('Screenshot attempted but no project loaded');
+        return;
+      }
+
+      const screenshotsDir = path.join(currentProjectRoot, '.renide', 'screenshots');
+      await fs.mkdir(screenshotsDir, { recursive: true });
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `renide-screenshot-${timestamp}.png`;
+      const filepath = path.join(screenshotsDir, filename);
+
+      const image = await mainWindow.webContents.capturePage();
+      const buffer = image.toPNG();
+      await fs.writeFile(filepath, buffer);
+
+      logger.info(`Screenshot captured: ${filename}`);
+
+      // Try to notify renderer to update state (best effort - might fail if renderer crashed)
+      try {
+        if (!mainWindow.webContents.isDestroyed()) {
+          mainWindow.webContents.send('screenshot-captured', { filename, filepath });
+        }
+      } catch (e) {
+        logger.warn('Could not notify renderer of screenshot capture:', e.message);
+      }
+
+      // Show native OS notification (works even if renderer is dead)
+      if (Notification.isSupported()) {
+        const notification = new Notification({
+          title: 'Screenshot Captured',
+          body: `Saved to .renide/screenshots/`,
+          silent: true
+        });
+        notification.on('click', async () => {
+          await shell.openPath(screenshotsDir);
+        });
+        notification.show();
+      }
+    } catch (error) {
+      logger.error('Failed to capture screenshot:', error);
+      // Try to show error notification
+      try {
+        if (Notification.isSupported()) {
+          new Notification({
+            title: 'Screenshot Failed',
+            body: error.message,
+            silent: true
+          }).show();
+        }
+      } catch (e) {
+        // Silently fail if even notification doesn't work
+      }
     }
   });
 
