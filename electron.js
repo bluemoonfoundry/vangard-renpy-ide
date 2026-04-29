@@ -790,7 +790,7 @@ async function createWindow() {
             silent: true
           }).show();
         }
-      } catch (e) {
+      } catch {
         // Silently fail if even notification doesn't work
       }
     }
