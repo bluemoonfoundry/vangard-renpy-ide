@@ -14,7 +14,7 @@ if (isAppImage) {
     console.log('[RenIDE] Not running in AppImage mode');
 }
 
-import { app, BrowserWindow, ipcMain, dialog, Menu, protocol, shell, safeStorage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, protocol, shell, safeStorage, globalShortcut, Notification } from 'electron';
 
 import electronUpdaterPkg from 'electron-updater';
 const { autoUpdater } = electronUpdaterPkg;
@@ -70,6 +70,9 @@ let gameProcess = null;
 
 // --- Main Window Reference (for auto-updater callbacks) ---
 let mainWindowRef = null;
+
+// --- Project Root Tracking (for screenshots and other features) ---
+let currentProjectRoot = null;
 
 // --- External File Change Watcher ---
 let projectWatcher = null;
@@ -500,6 +503,12 @@ async function updateApplicationMenu() {
                 enabled: false,
                 click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'explorer-refresh' }); }
             },
+            {
+                id: 'open-screenshots-folder',
+                label: 'Open Screenshots Folder',
+                enabled: false,
+                click: (item, focusedWindow) => { if (focusedWindow) focusedWindow.webContents.send('menu-command', { command: 'open-screenshots-folder' }); }
+            },
             { type: 'separator' },
             {
                 id: 'explorer-new-file',
@@ -723,6 +732,68 @@ async function createWindow() {
     }
     e.preventDefault();
     mainWindow.webContents.send('check-unsaved-changes-before-exit');
+  });
+
+  // Register global screenshot shortcut - handled entirely in main process for reliability
+  globalShortcut.register('CommandOrControl+Shift+C', async () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    try {
+      // Capture immediately, bypassing renderer
+      if (!currentProjectRoot) {
+        logger.warn('Screenshot attempted but no project loaded');
+        return;
+      }
+
+      const screenshotsDir = path.join(currentProjectRoot, '.renide', 'screenshots');
+      await fs.mkdir(screenshotsDir, { recursive: true });
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `renide-screenshot-${timestamp}.png`;
+      const filepath = path.join(screenshotsDir, filename);
+
+      const image = await mainWindow.webContents.capturePage();
+      const buffer = image.toPNG();
+      await fs.writeFile(filepath, buffer);
+
+      logger.info(`Screenshot captured: ${filename}`);
+
+      // Try to notify renderer to update state (best effort - might fail if renderer crashed)
+      try {
+        if (!mainWindow.webContents.isDestroyed()) {
+          mainWindow.webContents.send('screenshot-captured', { filename, filepath });
+        }
+      } catch (e) {
+        logger.warn('Could not notify renderer of screenshot capture:', e.message);
+      }
+
+      // Show native OS notification (works even if renderer is dead)
+      if (Notification.isSupported()) {
+        const notification = new Notification({
+          title: 'Screenshot Captured',
+          body: `Saved to .renide/screenshots/`,
+          silent: true
+        });
+        notification.on('click', async () => {
+          await shell.openPath(screenshotsDir);
+        });
+        notification.show();
+      }
+    } catch (error) {
+      logger.error('Failed to capture screenshot:', error);
+      // Try to show error notification
+      try {
+        if (Notification.isSupported()) {
+          new Notification({
+            title: 'Screenshot Failed',
+            body: error.message,
+            silent: true
+          }).show();
+        }
+      } catch {
+        // Silently fail if even notification doesn't work
+      }
+    }
   });
 
   await updateApplicationMenu();
@@ -1082,6 +1153,7 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('project:load', async (event, rootPath) => {
+    currentProjectRoot = rootPath; // Track for screenshots
     const result = await readProjectFiles(rootPath, { readContent: true }, (value, message) => {
       if (!event.sender.isDestroyed()) {
         event.sender.send('project:load-progress', value, message);
@@ -1219,13 +1291,20 @@ app.whenReady().then(() => {
     if (stopItem) stopItem.enabled = running;
   }
 
-  function setExplorerMenuState({ canNewFile, canNewFolder, canRename, canDelete, canRefresh }) {
+  function setExplorerMenuState({ canNewFile, canNewFolder, canRename, canDelete, canRefresh, hasScreenshots }) {
     const menu = Menu.getApplicationMenu();
     if (!menu) return;
-    const ids = { 'explorer-new-file': canNewFile, 'explorer-new-folder': canNewFolder, 'explorer-rename': canRename, 'explorer-delete': canDelete, 'explorer-refresh': canRefresh ?? canNewFile };
+    const ids = {
+      'explorer-new-file': canNewFile,
+      'explorer-new-folder': canNewFolder,
+      'explorer-rename': canRename,
+      'explorer-delete': canDelete,
+      'explorer-refresh': canRefresh ?? canNewFile,
+      'open-screenshots-folder': hasScreenshots
+    };
     for (const [id, enabled] of Object.entries(ids)) {
       const item = menu.getMenuItemById(id);
-      if (item) item.enabled = enabled;
+      if (item && enabled !== undefined) item.enabled = enabled;
     }
   }
 
@@ -1425,6 +1504,88 @@ app.whenReady().then(() => {
         break;
       default:
         electronLog.info(...args);
+    }
+  });
+
+  // --- Screenshot Handlers ---
+  async function getScreenshotsDir() {
+    if (!currentProjectRoot) {
+      throw new Error('No project loaded');
+    }
+    const screenshotsDir = path.join(currentProjectRoot, '.renide', 'screenshots');
+    await fs.mkdir(screenshotsDir, { recursive: true });
+    return screenshotsDir;
+  }
+
+  ipcMain.handle('app:capture-screenshot', async (event) => {
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (!win) throw new Error('No window found');
+
+      const screenshotsDir = await getScreenshotsDir();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `renide-screenshot-${timestamp}.png`;
+      const filepath = path.join(screenshotsDir, filename);
+
+      const image = await win.webContents.capturePage();
+      const buffer = image.toPNG();
+      await fs.writeFile(filepath, buffer);
+
+      logger.info(`Screenshot captured: ${filename}`);
+      return { success: true, filepath, filename };
+    } catch (error) {
+      logger.error('Failed to capture screenshot', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('app:get-screenshot-count', async () => {
+    try {
+      if (!currentProjectRoot) return 0;
+      const screenshotsDir = path.join(currentProjectRoot, '.renide', 'screenshots');
+      const entries = await fs.readdir(screenshotsDir).catch(() => []);
+      return entries.filter(f => f.endsWith('.png')).length;
+    } catch (error) {
+      logger.error('Failed to get screenshot count', error);
+      return 0;
+    }
+  });
+
+  ipcMain.handle('app:open-screenshots-folder', async () => {
+    try {
+      const screenshotsDir = await getScreenshotsDir();
+      await shell.openPath(screenshotsDir);
+      return { success: true };
+    } catch (error) {
+      logger.error('Failed to open screenshots folder', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('app:clear-screenshots', async () => {
+    try {
+      const screenshotsDir = await getScreenshotsDir();
+      const entries = await fs.readdir(screenshotsDir);
+      const screenshots = entries.filter(f => f.endsWith('.png'));
+      await Promise.all(screenshots.map(f => fs.unlink(path.join(screenshotsDir, f))));
+      logger.info(`Cleared ${screenshots.length} screenshots`);
+      return { success: true, count: screenshots.length };
+    } catch (error) {
+      logger.error('Failed to clear screenshots', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('app:get-latest-screenshot-path', async () => {
+    try {
+      const screenshotsDir = await getScreenshotsDir();
+      const entries = await fs.readdir(screenshotsDir);
+      const screenshots = entries.filter(f => f.endsWith('.png')).sort().reverse();
+      if (screenshots.length === 0) return null;
+      return path.join(screenshotsDir, screenshots[0]);
+    } catch (error) {
+      logger.error('Failed to get latest screenshot', error);
+      return null;
     }
   });
 

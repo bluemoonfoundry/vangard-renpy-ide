@@ -129,4 +129,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   log: (level, ...args) => ipcRenderer.send('app:log', level, ...args),
   getLogPath: () => ipcRenderer.invoke('app:get-log-path'),
   openLogDirectory: () => ipcRenderer.invoke('app:open-log-directory'),
+  // --- Screenshots ---
+  captureScreenshot: () => ipcRenderer.invoke('app:capture-screenshot'),
+  getScreenshotCount: () => ipcRenderer.invoke('app:get-screenshot-count'),
+  openScreenshotsFolder: () => ipcRenderer.invoke('app:open-screenshots-folder'),
+  clearScreenshots: () => ipcRenderer.invoke('app:clear-screenshots'),
+  getLatestScreenshotPath: () => ipcRenderer.invoke('app:get-latest-screenshot-path'),
+  onScreenshotCaptured: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('screenshot-captured', handler);
+    return () => ipcRenderer.removeListener('screenshot-captured', handler);
+  },
 });

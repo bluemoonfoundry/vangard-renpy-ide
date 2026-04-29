@@ -14,6 +14,10 @@ interface StatusBarProps {
   blockCount: number;
   errorCount: number;
   warningCount: number;
+  screenshotCount: number;
+  onOpenScreenshotsFolder?: () => void;
+  onClearScreenshots?: () => void;
+  onCopyLatestScreenshotPath?: () => void;
 }
 
 const Spinner: React.FC = () => (
@@ -30,7 +34,13 @@ const StatusBar: React.FC<StatusBarProps> = ({
   blockCount,
   errorCount,
   warningCount,
+  screenshotCount,
+  onOpenScreenshotsFolder,
+  onClearScreenshots,
+  onCopyLatestScreenshotPath,
 }) => {
+  const [showContextMenu, setShowContextMenu] = React.useState(false);
+  const contextMenuRef = React.useRef<HTMLDivElement>(null);
   // Priority: save error > saving > scanning > analysis pending > idle
   const activity = (() => {
     if (saveStatus === 'error') {
@@ -58,6 +68,69 @@ const StatusBar: React.FC<StatusBarProps> = ({
 
       {/* Right — project summary + version */}
       <div className="flex items-center gap-3 text-secondary">
+        {/* Screenshot indicator - only shown after first screenshot */}
+        {screenshotCount > 0 && (
+          <div className="relative">
+            <button
+              onClick={onOpenScreenshotsFolder}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setShowContextMenu(!showContextMenu);
+              }}
+              className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer"
+              title={`View screenshots (${screenshotCount} captured)`}
+              aria-label={`View screenshots (${screenshotCount} captured)`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+              </svg>
+              <span className="text-[10px] font-semibold">{screenshotCount}</span>
+            </button>
+            {/* Context menu */}
+            {showContextMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowContextMenu(false)}
+                />
+                <div
+                  ref={contextMenuRef}
+                  className="absolute bottom-full right-0 mb-1 bg-header border border-primary rounded shadow-lg py-1 text-xs whitespace-nowrap z-50"
+                >
+                  <button
+                    onClick={() => {
+                      onOpenScreenshotsFolder?.();
+                      setShowContextMenu(false);
+                    }}
+                    className="w-full px-3 py-1.5 hover:bg-primary/10 text-left transition-colors"
+                  >
+                    Open Screenshots Folder
+                  </button>
+                  <button
+                    onClick={async () => {
+                      onCopyLatestScreenshotPath?.();
+                      setShowContextMenu(false);
+                    }}
+                    className="w-full px-3 py-1.5 hover:bg-primary/10 text-left transition-colors"
+                  >
+                    Copy Latest Screenshot Path
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Clear all ${screenshotCount} screenshots?`)) {
+                        onClearScreenshots?.();
+                      }
+                      setShowContextMenu(false);
+                    }}
+                    className="w-full px-3 py-1.5 hover:bg-red-500/10 text-red-400 text-left transition-colors"
+                  >
+                    Clear All Screenshots
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
         {errorCount > 0 && (
           <span className="flex items-center gap-1 text-red-400">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">

@@ -380,6 +380,7 @@ const App: React.FC = () => {
   
   // --- State: Game Execution ---
   const [isGameRunning, setIsGameRunning] = useState(false);
+  const [screenshotCount, setScreenshotCount] = useState(0);
 
   // --- State: Application and Project Settings ---
   const {
@@ -3664,6 +3665,39 @@ const App: React.FC = () => {
     }
   }, [appSettings.isLeftSidebarOpen, updateAppSettings]);
 
+  // --- Screenshot Handlers ---
+  const refreshScreenshotCount = useCallback(async () => {
+    if (!window.electronAPI?.getScreenshotCount) return;
+    const count = await window.electronAPI.getScreenshotCount();
+    setScreenshotCount(count);
+  }, []);
+
+  // Note: Screenshot capture is now handled entirely in main process via global shortcut.
+
+  const handleOpenScreenshotsFolder = useCallback(async () => {
+    if (!window.electronAPI?.openScreenshotsFolder) return;
+    await window.electronAPI.openScreenshotsFolder();
+  }, []);
+
+  const handleClearScreenshots = useCallback(async () => {
+    if (!window.electronAPI?.clearScreenshots) return;
+    const result = await window.electronAPI.clearScreenshots();
+    if (result.success) {
+      addToast(`Cleared ${result.count} screenshot${result.count !== 1 ? 's' : ''}`, 'success');
+      await refreshScreenshotCount();
+      window.electronAPI.updateExplorerMenuState?.({ hasScreenshots: false });
+    }
+  }, [addToast, refreshScreenshotCount]);
+
+  const handleCopyLatestScreenshotPath = useCallback(async () => {
+    if (!window.electronAPI?.getLatestScreenshotPath) return;
+    const path = await window.electronAPI.getLatestScreenshotPath();
+    if (path) {
+      await navigator.clipboard.writeText(path);
+      addToast('Screenshot path copied to clipboard', 'success');
+    }
+  }, [addToast]);
+
   const handleCreateNode = useCallback(async (parentPath: string, name: string, type: 'file' | 'folder') => {
     if (!window.electronAPI || !projectRootPath) return;
     try {
@@ -3954,6 +3988,9 @@ const App: React.FC = () => {
             if (data.command === 'explorer-rename') setExplorerExternalAction({ type: 'rename', key: Date.now() });
             if (data.command === 'explorer-delete') handleDeleteNode(Array.from(explorerSelectedPaths));
             if (data.command === 'explorer-refresh') handleRefreshProject();
+            // Note: 'capture-screenshot' command removed - screenshots are now captured
+            // entirely in main process via global shortcut for reliability during crashes
+            if (data.command === 'open-screenshots-folder') handleOpenScreenshotsFolder();
             if (data.command === 'close-tab') {
                 // Close the currently active tab
                 const currentPaneId = activePaneId;
@@ -3964,7 +4001,33 @@ const App: React.FC = () => {
             }
         });
         return removeListener;
-  }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenWithRenpyCheck, loadProject, handleSaveAll, projectRootPath, appSettings.renpyPath, handleOpenStaticTab, handleToggleSearch, updateAppSettings, handleDeleteNode, explorerSelectedPaths, handleRefreshProject, handleCloseTab, activePaneId, activeTabId, secondaryActiveTabId]);
+  }, [handleNewProjectRequest, handleOpenProjectFolder, handleOpenWithRenpyCheck, loadProject, handleSaveAll, projectRootPath, appSettings.renpyPath, handleOpenStaticTab, handleToggleSearch, updateAppSettings, handleDeleteNode, explorerSelectedPaths, handleRefreshProject, handleOpenScreenshotsFolder, handleCloseTab, activePaneId, activeTabId, secondaryActiveTabId]);
+
+  // --- Screenshot Count ---
+  useEffect(() => {
+    if (projectRootPath) {
+      void refreshScreenshotCount();
+    }
+  }, [projectRootPath, refreshScreenshotCount]);
+
+  // Listen for screenshot capture events from main process
+  useEffect(() => {
+    if (!window.electronAPI?.onScreenshotCaptured) return;
+    const removeListener = window.electronAPI.onScreenshotCaptured((data: { filename: string; filepath: string }) => {
+      // Show in-app toast (only works if renderer is alive)
+      addToast(`Screenshot saved: ${data.filename}`, 'success');
+      // Refresh count
+      void refreshScreenshotCount();
+    });
+    return removeListener;
+  }, [addToast, refreshScreenshotCount]);
+
+  // Update menu state when screenshot count changes
+  useEffect(() => {
+    if (window.electronAPI?.updateExplorerMenuState) {
+      window.electronAPI.updateExplorerMenuState({ hasScreenshots: screenshotCount > 0 });
+    }
+  }, [screenshotCount]);
 
   // --- Game Running State ---
   useEffect(() => {
@@ -5009,6 +5072,10 @@ const App: React.FC = () => {
               blockCount={blocks.length}
               errorCount={diagnosticsResult.errorCount}
               warningCount={diagnosticsResult.warningCount}
+              screenshotCount={screenshotCount}
+              onOpenScreenshotsFolder={handleOpenScreenshotsFolder}
+              onClearScreenshots={handleClearScreenshots}
+              onCopyLatestScreenshotPath={handleCopyLatestScreenshotPath}
           />
 
         </div>
