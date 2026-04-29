@@ -3672,19 +3672,7 @@ const App: React.FC = () => {
     setScreenshotCount(count);
   }, []);
 
-  // Note: Screenshot capture is now handled entirely in main process via global shortcut
-  // This handler is kept as a fallback for programmatic calls, but the Cmd+Shift+C
-  // shortcut bypasses the renderer completely for reliability during crashes.
-  const handleCaptureScreenshot = useCallback(async () => {
-    if (!window.electronAPI?.captureScreenshot) return;
-    const result = await window.electronAPI.captureScreenshot();
-    if (result.success) {
-      addToast(`Screenshot saved: ${result.filename}`, 'success');
-      await refreshScreenshotCount();
-    } else {
-      addToast(`Failed to capture screenshot: ${result.error}`, 'error');
-    }
-  }, [addToast, refreshScreenshotCount]);
+  // Note: Screenshot capture is now handled entirely in main process via global shortcut.
 
   const handleOpenScreenshotsFolder = useCallback(async () => {
     if (!window.electronAPI?.openScreenshotsFolder) return;
