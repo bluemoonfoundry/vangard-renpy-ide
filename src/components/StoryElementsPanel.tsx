@@ -9,10 +9,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import type { Character, Variable, ProjectImage, ImageMetadata, RenpyAudio, AudioMetadata, RenpyAnalysisResult, UserSnippet, MenuTemplate, ProjectSettings } from '@/types';
 import type { PaletteColor } from '@/lib/colorPalettes';
-import { useVirtualList } from '@/hooks/useVirtualList';
-
-// p-2 (16px) + color dot/name/tag rows (~36px) + space-y-2 gap (8px)
-const CHAR_ITEM_HEIGHT = 60;
 import VariableManager from './VariableManager';
 import ImageManager from './ImageManager';
 import AudioManager from './AudioManager';
@@ -171,6 +167,11 @@ interface StoryElementsPanelProps {
     projectSettings: ProjectSettings;
     onUpdateProjectSettings: (updater: (draft: ProjectSettings) => void) => void;
     hasProject: boolean;
+
+    // Implicit variable hint banner
+    dismissedImplicitVarHint: boolean;
+    onDismissImplicitVarHint: () => void;
+    onOpenDiagnostics: () => void;
 }
 
 const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
@@ -192,6 +193,7 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
     onCopyColorHex,
     projectColors,
     projectSettings, onUpdateProjectSettings, hasProject,
+    dismissedImplicitVarHint, onDismissImplicitVarHint, onOpenDiagnostics,
 }) => {
     const [activeSubTab, setActiveSubTab] = useState<SubTabId>(
         projectSettings.storyElementsTabState?.activeSubTab ?? 'characters'
@@ -212,7 +214,6 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
         () => Array.from(characters.values()).sort((a: Character, b: Character) => a.name.localeCompare(b.name)),
         [characters],
     );
-    const { containerRef: charContainerRef, handleScroll: charHandleScroll, virtualItems: charVirtualItems, totalHeight: charTotalHeight } = useVirtualList(characterList, CHAR_ITEM_HEIGHT);
 
     const handleCharacterDragStart = (e: React.DragEvent, char: Character) => {
         e.dataTransfer.setData('application/renpy-dnd', JSON.stringify({ text: `${char.tag} "..."` }));
@@ -260,42 +261,36 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                         {characterList.length === 0 ? (
                             <p className="text-sm text-secondary italic">Characters bring your story to life. Click 'Add' to create your first one!</p>
                         ) : (
-                            <div
-                                ref={charContainerRef}
-                                onScroll={charHandleScroll}
-                            >
-                                <div style={{ height: charTotalHeight, position: 'relative' }}>
-                                    {charVirtualItems.map(({ item: char, offsetTop }) => (
-                                        <div
-                                            key={char.tag}
-                                            style={{ position: 'absolute', top: offsetTop, left: 0, right: 0, height: CHAR_ITEM_HEIGHT - 8 }}
-                                            draggable
-                                            onDragStart={(e) => handleCharacterDragStart(e, char)}
-                                            className="p-2 rounded-md bg-secondary border border-primary flex items-center justify-between cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
-                                            onMouseEnter={() => onHoverHighlightStart(char.tag, 'character')}
-                                            onMouseLeave={onHoverHighlightEnd}
-                                            onDoubleClick={() => onOpenCharacterEditor(char.tag)}
-                                            title="Drag to insert dialogue · Double-click to edit"
-                                        >
-                                            <div className="flex items-center space-x-3 min-w-0 pointer-events-none">
-                                                <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: char.color }}></div>
-                                                <div className="min-w-0">
-                                                    <p className="font-semibold truncate text-primary text-sm">{char.name}</p>
-                                                    <p className="text-xs text-secondary font-mono truncate">{char.tag}</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center space-x-1 flex-shrink-0 pl-2">
-                                                <span className="text-xs text-secondary mr-2">({characterUsage.get(char.tag) || 0})</span>
-                                                <button onClick={() => onFindCharacterUsages(char.tag)} title="Find Usages" className="p-1 text-secondary hover:text-accent rounded" aria-label="Find usages">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                                </button>
-                                                <button onClick={() => onOpenCharacterEditor(char.tag)} title="Edit Character" className="p-1 text-secondary hover:text-accent rounded" aria-label="Edit character">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" /></svg>
-                                                </button>
+                            <div className="space-y-2">
+                                {characterList.map((char) => (
+                                    <div
+                                        key={char.tag}
+                                        draggable
+                                        onDragStart={(e) => handleCharacterDragStart(e, char)}
+                                        className="p-2 rounded-md bg-secondary border border-primary flex items-center justify-between cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
+                                        onMouseEnter={() => onHoverHighlightStart(char.tag, 'character')}
+                                        onMouseLeave={onHoverHighlightEnd}
+                                        onDoubleClick={() => onOpenCharacterEditor(char.tag)}
+                                        title="Drag to insert dialogue · Double-click to edit"
+                                    >
+                                        <div className="flex items-center space-x-3 min-w-0 pointer-events-none">
+                                            <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: char.color }}></div>
+                                            <div className="min-w-0">
+                                                <p className="font-semibold truncate text-primary text-sm">{char.name}</p>
+                                                <p className="text-xs text-secondary font-mono truncate">{char.tag}</p>
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
+                                        <div className="flex items-center space-x-1 flex-shrink-0 pl-2">
+                                            <span className="text-xs text-secondary mr-2">({characterUsage.get(char.tag) || 0})</span>
+                                            <button onClick={() => onFindCharacterUsages(char.tag)} title="Find Usages" className="p-1 text-secondary hover:text-accent rounded" aria-label="Find usages">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                            </button>
+                                            <button onClick={() => onOpenCharacterEditor(char.tag)} title="Edit Character" className="p-1 text-secondary hover:text-accent rounded" aria-label="Edit character">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" /></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
@@ -313,6 +308,9 @@ const StoryElementsPanel: React.FC<StoryElementsPanelProps> = ({
                             onFindUsages={onFindVariableUsages}
                             onHoverHighlightStart={onHoverHighlightStart}
                             onHoverHighlightEnd={onHoverHighlightEnd}
+                            dismissedImplicitVarHint={dismissedImplicitVarHint}
+                            onDismissImplicitVarHint={onDismissImplicitVarHint}
+                            onOpenDiagnostics={onOpenDiagnostics}
                         />
                     </div>
                 )}

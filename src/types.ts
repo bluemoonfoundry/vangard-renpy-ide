@@ -240,14 +240,14 @@ export interface Character {
  * Represents a Ren'Py variable definition (define or default statement).
  * @interface Variable
  * @property {string} name - Variable identifier (e.g., "persistent.player_name")
- * @property {'define' | 'default'} type - Statement type: 'define' for constants, 'default' for dynamic
+ * @property {'define' | 'default' | 'implicit'} type - Statement type: 'define' for constants, 'default' for dynamic, 'implicit' for $ statements
  * @property {string} initialValue - Initial value expression as string
  * @property {string} definedInBlockId - ID of the block where variable is defined
  * @property {number} line - Line number in the file where variable is defined
  */
 export interface Variable {
   name: string;
-  type: 'define' | 'default';
+  type: 'define' | 'default' | 'implicit';
   initialValue: string;
   definedInBlockId: string;
   line: number;
@@ -972,6 +972,7 @@ export interface ProjectSettings {
     activeTab: 'storyData' | 'assets' | 'composers' | 'tools';
     activeSubTab?: 'characters' | 'variables' | 'screens' | 'images' | 'audio' | 'scenes' | 'imagemaps' | 'screenLayouts' | 'snippets' | 'menuTemplates' | 'colorPalette';
   };
+  dismissedImplicitVariableHint?: boolean;
 }
 
 /**

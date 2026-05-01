@@ -20,6 +20,9 @@ interface VariableManagerProps {
     onFindUsages: (variableName: string) => void;
     onHoverHighlightStart: (key: string, type: 'character' | 'variable') => void;
     onHoverHighlightEnd: () => void;
+    dismissedImplicitVarHint: boolean;
+    onDismissImplicitVarHint: () => void;
+    onOpenDiagnostics: () => void;
 }
 
 const PERSISTENCE_INFO: Record<'persistent' | 'default' | 'define', { label: string; color: string; tooltip: string }> = {
@@ -65,7 +68,8 @@ const VariableEditor: React.FC<{
     editing?: Variable;
 }> = ({ onSave, onCancel, existingNames, editing }) => {
     const [name, setName] = useState(editing?.name ?? '');
-    const [type, setType] = useState<'define' | 'default'>(editing?.type ?? 'default');
+    // Convert implicit to default when editing (implicit vars can't be manually created)
+    const [type, setType] = useState<'define' | 'default'>(editing?.type === 'implicit' ? 'default' : (editing?.type ?? 'default'));
     const [initialValue, setInitialValue] = useState(editing?.initialValue ?? 'False');
     const [nameError, setNameError] = useState('');
 
@@ -127,7 +131,7 @@ const VariableEditor: React.FC<{
 };
 
 
-const VariableManager: React.FC<VariableManagerProps> = ({ analysisResult, onAddVariable, onEditVariable, onFindUsages, onHoverHighlightStart, onHoverHighlightEnd }) => {
+const VariableManager: React.FC<VariableManagerProps> = ({ analysisResult, onAddVariable, onEditVariable, onFindUsages, onHoverHighlightStart, onHoverHighlightEnd, dismissedImplicitVarHint, onDismissImplicitVarHint, onOpenDiagnostics }) => {
     const { variables, variableUsages, storyBlockIds } = analysisResult;
     const [mode, setMode] = useState<'list' | 'add' | 'edit'>('list');
     const [editingVariable, setEditingVariable] = useState<Variable | null>(null);
@@ -138,6 +142,20 @@ const VariableManager: React.FC<VariableManagerProps> = ({ analysisResult, onAdd
         if (!filterStoryVars) return allVars;
         return allVars.filter((v: Variable) => storyBlockIds.has(v.definedInBlockId));
     }, [variables, filterStoryVars, storyBlockIds]);
+
+    // Count implicit variables
+    const implicitVarCount = useMemo(() =>
+        Array.from(analysisResult.variables.values())
+            .filter(v => v.type === 'implicit').length,
+        [analysisResult.variables]
+    );
+
+    const explicitVarCount = useMemo(() =>
+        filteredVariables.filter(v => v.type !== 'implicit').length,
+        [filteredVariables]
+    );
+
+    const shouldShowBanner = implicitVarCount >= 10 && explicitVarCount < 5 && !dismissedImplicitVarHint;
 
     const { persistent, defaulted, defined } = useMemo(() => {
         const grouped = { persistent: [] as Variable[], defaulted: [] as Variable[], defined: [] as Variable[] };
@@ -261,6 +279,36 @@ const VariableManager: React.FC<VariableManagerProps> = ({ analysisResult, onAdd
         <>
             {mode === 'list' && (
                 <>
+                    {shouldShowBanner && (
+                        <div className="mx-2 mb-3 flex items-start gap-2 p-2.5 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200 text-xs">
+                            <svg className="h-4 w-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                            </svg>
+                            <div className="flex-1">
+                                <div className="font-medium mb-1">Implicit Variables Detected</div>
+                                <div>
+                                    This project uses {implicitVarCount} implicit variable definition{implicitVarCount !== 1 ? 's' : ''}.
+                                    The Variables pane only shows explicit define/default statements.
+                                </div>
+                            </div>
+                            <div className="flex gap-2 mt-1">
+                                <button
+                                    onClick={onOpenDiagnostics}
+                                    className="text-blue-700 dark:text-blue-300 underline hover:no-underline text-xs whitespace-nowrap"
+                                >
+                                    View in Diagnostics
+                                </button>
+                                <button
+                                    onClick={onDismissImplicitVarHint}
+                                    className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
+                                    title="Don't show again"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="flex items-center justify-between mb-4">
                         <label htmlFor="variable-filter-toggle" className="flex items-center gap-3 cursor-pointer">
                             <span className="text-sm text-gray-600 dark:text-gray-400 select-none">

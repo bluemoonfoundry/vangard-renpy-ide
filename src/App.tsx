@@ -305,7 +305,8 @@ const App: React.FC = () => {
   // Diagnostics Tasks State
   const [diagnosticsTasks, setDiagnosticsTasks] = useImmer<DiagnosticsTask[]>([]);
   const [ignoredDiagnostics, setIgnoredDiagnostics] = useImmer<IgnoredDiagnosticRule[]>([]);
-  
+  const [dismissedImplicitVarHint, setDismissedImplicitVarHint] = useState(false);
+
   const [dirtyBlockIds, setDirtyBlockIds] = useState<Set<string>>(new Set());
   const [dirtyEditors, setDirtyEditors] = useState<Set<string>>(new Set()); // Blocks modified in editor but not synced to block state yet
   const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false); // Track project setting changes like sticky notes
@@ -1762,7 +1763,8 @@ const App: React.FC = () => {
                 setDiagnosticsTasks([]);
               }
               setIgnoredDiagnostics(projectData.settings.ignoredDiagnostics || []);
-              
+              setDismissedImplicitVarHint(projectData.settings.dismissedImplicitVariableHint || false);
+
               // Load Scene Compositions
               // Helper to link saved paths back to loaded image objects
               const rehydrateSprite = (s: SerializedSprite): SceneSprite => {
@@ -2537,6 +2539,7 @@ const App: React.FC = () => {
         punchlistMetadata,
         diagnosticsTasks,
         ignoredDiagnostics,
+        dismissedImplicitVariableHint: dismissedImplicitVarHint,
         sceneCompositions: serializableScenes as unknown as Record<string, SceneComposition>,
         sceneNames,
         imagemapCompositions: serializableImagemaps as unknown as Record<string, ImageMapComposition>,
@@ -2551,7 +2554,7 @@ const App: React.FC = () => {
       logger.error("Failed to save IDE settings:", e);
       addToast('Failed to save workspace settings', 'error');
     }
-  }, [projectRootPath, projectSettings, blocks, routeNodeLayoutCache, openTabs, activeTabId, splitLayout, splitPrimarySize, secondaryOpenTabs, secondaryActiveTabId, stickyNotes, routeStickyNotes, choiceStickyNotes, characterProfiles, addToast, sceneCompositions, sceneNames, imagemapCompositions, screenLayoutCompositions, imageScanDirectories, audioScanDirectories, punchlistMetadata, diagnosticsTasks, ignoredDiagnostics]);
+  }, [projectRootPath, projectSettings, blocks, routeNodeLayoutCache, openTabs, activeTabId, splitLayout, splitPrimarySize, secondaryOpenTabs, secondaryActiveTabId, stickyNotes, routeStickyNotes, choiceStickyNotes, characterProfiles, addToast, sceneCompositions, sceneNames, imagemapCompositions, screenLayoutCompositions, imageScanDirectories, audioScanDirectories, punchlistMetadata, diagnosticsTasks, ignoredDiagnostics, dismissedImplicitVarHint]);
 
 
   const handleSaveAll = useCallback(async () => {
@@ -4108,6 +4111,21 @@ const App: React.FC = () => {
   useEffect(() => { handleSaveAllRef.current = handleSaveAll; }, [handleSaveAll]);
   useEffect(() => { handleSaveProjectSettingsRef.current = handleSaveProjectSettings; }, [handleSaveProjectSettings]);
 
+  // Toast for first-time implicit variable detection
+  useEffect(() => {
+    if (!analysisResult || !projectRootPath) return;
+
+    const implicitVarCount = Array.from(analysisResult.variables.values())
+      .filter(v => v.type === 'implicit').length;
+
+    const hasSeenToast = localStorage.getItem(`implicit-var-toast-${projectRootPath}`);
+
+    if (implicitVarCount >= 10 && !hasSeenToast && !dismissedImplicitVarHint) {
+      addToast(`${implicitVarCount} implicit variables detected. Check the Variables pane or Diagnostics tab for details.`, 'info');
+      localStorage.setItem(`implicit-var-toast-${projectRootPath}`, 'true');
+    }
+  }, [analysisResult, projectRootPath, dismissedImplicitVarHint, addToast]);
+
   useEffect(() => {
       if (!window.electronAPI) return;
 
@@ -5156,6 +5174,10 @@ const App: React.FC = () => {
                 projectSettings={projectSettings as ProjectSettings}
                 onUpdateProjectSettings={updateProjectSettings}
                 hasProject={!!projectRootPath}
+                // Implicit Variable Banner
+                dismissedImplicitVarHint={dismissedImplicitVarHint}
+                onDismissImplicitVarHint={() => setDismissedImplicitVarHint(true)}
+                onOpenDiagnostics={() => handleOpenStaticTab('diagnostics')}
             />
           </div>
         )}

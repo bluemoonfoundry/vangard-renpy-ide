@@ -6,4 +6,5 @@ define l = Character("Liam", color="#4682b4")    # Male librarian assistant, qui
 define m = Character("Maya", color="#ff6347")    # Female athletic captain, brave and energetic
 define s = Character("Professor Sterling", color="#8b7355") # Male middle-aged professor, cryptic
 define k = Character("Kenji", color="#6a5acd")  # Male mysterious artist with occult knowledge
-define y = Character("Yuki", color="#00ffff")   # Female tech genius, hacker extraordinaire
+define y = Character("Yuki", color="#00ffff")   # Female tech genius, hacker extraordina
+

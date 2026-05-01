@@ -292,6 +292,27 @@ export function useDiagnostics(
     });
 
     // -----------------------------------------------------------------------
+    // Source 13: Implicit variable definitions
+    // -----------------------------------------------------------------------
+    const implicitVariables = Array.from(analysisResult.variables.values())
+      .filter(v => v.type === 'implicit' && analysisResult.storyBlockIds.has(v.definedInBlockId));
+
+    implicitVariables.forEach(variable => {
+      const block = blocks.find(b => b.id === variable.definedInBlockId);
+      if (block) {
+        issues.push({
+          id: `implicit-variable:${variable.definedInBlockId}:${variable.line}`,
+          severity: 'info',
+          category: 'implicit-variable',
+          message: `[IMPLICIT_VAR] Variable '${variable.name}' uses implicit definition. Consider using 'default ${variable.name} = ...' for better compatibility.`,
+          blockId: variable.definedInBlockId,
+          filePath: block.filePath,
+          line: variable.line
+        });
+      }
+    });
+
+    // -----------------------------------------------------------------------
     // Source 10: Pickle-unsafe default variables
     // Ren'Py save files use Python's pickle. Lambdas and instances of locally-
     // defined classes cannot be pickled reliably, so storing them in a
