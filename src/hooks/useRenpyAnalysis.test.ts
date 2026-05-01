@@ -290,6 +290,60 @@ describe('performRenpyAnalysis — Characters', () => {
     expect(result.variables.has('e')).toBe(false);
     expect(result.characters.has('e')).toBe(true);
   });
+
+  it('extracts 32 characters correctly', () => {
+    const content = `# -- Character Definitions --
+define mc = Character("[mc_name]")
+define h = Character("Hasper", color="#c8a2c8")
+define l = Character("Liam", color="#4682b4")
+define m = Character("Maya", color="#ff6347")
+define s = Character("Professor Sterling", color="#8b7355")
+define k = Character("Kenji", color="#6a5acd")
+define y = Character("Yuki", color="#00ffff")
+
+define c0 = Character("C0", color="#00ffc0")
+define c1 = Character("C1", color="#00ffc0")
+define c2 = Character("C2", color="#00ffc0")
+define c3 = Character("C3", color="#00ffc0")
+define c4 = Character("C4", color="#00ffc0")
+define c5 = Character("C5", color="#00ffc0")
+define c6 = Character("C6", color="#00ffc0")
+define c7 = Character("C7", color="#00ffc0")
+define c8 = Character("C8", color="#00ffc0")
+define c9 = Character("C9", color="#00ffc0")
+define c10 = Character("C10", color="#00ffc0")
+define c11 = Character("C11", color="#00ffc0")
+define c12 = Character("C12", color="#00ffc0")
+define c13 = Character("C13", color="#00ffc0")
+define c14 = Character("C14", color="#00ffc0")
+define c15 = Character("C15", color="#00ffc0")
+define c16 = Character("C16", color="#00ffc0")
+define c17 = Character("C17", color="#00ffc0")
+define c18 = Character("C18", color="#00ffc0")
+define c19 = Character("C19", color="#00ffc0")
+define c20 = Character("C20", color="#00ffc0")
+define c21 = Character("C21", color="#00ffc0")
+define c22 = Character("C22", color="#00ffc0")
+define c23 = Character("C23", color="#00ffc0")
+define c24 = Character("C24", color="#00ffc0")
+`;
+    const result = performRenpyAnalysis([block(content)]);
+    expect(result.characters.size).toBe(32);
+    const tags = Array.from(result.characters.keys()).sort();
+    expect(tags).toEqual([
+      'c0', 'c1', 'c10', 'c11', 'c12', 'c13', 'c14', 'c15', 'c16', 'c17', 'c18', 'c19',
+      'c2', 'c20', 'c21', 'c22', 'c23', 'c24', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9',
+      'h', 'k', 'l', 'm', 'mc', 's', 'y'
+    ]);
+    // Verify all named characters are present
+    expect(result.characters.has('mc')).toBe(true);
+    expect(result.characters.has('h')).toBe(true);
+    expect(result.characters.has('l')).toBe(true);
+    expect(result.characters.has('m')).toBe(true);
+    expect(result.characters.has('s')).toBe(true);
+    expect(result.characters.has('k')).toBe(true);
+    expect(result.characters.has('y')).toBe(true);
+  });
 });
 
 // ===========================================================================

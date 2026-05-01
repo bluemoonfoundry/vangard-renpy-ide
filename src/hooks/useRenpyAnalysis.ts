@@ -33,7 +33,7 @@ const MENU_LABEL_REGEX = /^\s*menu\s+([a-zA-Z0-9_]+):/;
 const DIALOGUE_REGEX = /^\s*([a-zA-Z0-9_]+)\s+"/;
 const NARRATION_REGEX = /^\s*"(?!:)/; 
 const SCREEN_REGEX = /^\s*screen\s+([a-zA-Z0-9_]+)\s*(\(.*\))?:/;
-const DEFINE_DEFAULT_REGEX = /^\s*(define|default)\s+([a-zA-Z0-9_.]+)\s*=\s*(?!Character\s*\()(.+)/;
+const DEFINE_DEFAULT_REGEX = /^\s*(define|default)\s+([a-zA-Z0-9_.]+)\s*=\s*(?!\s*Character\s*\()(.+)/;
 const IMAGE_DEF_REGEX = /^\s*image\s+([a-zA-Z0-9_ ]+?)\s*=/;
 
 const PALETTE = [
