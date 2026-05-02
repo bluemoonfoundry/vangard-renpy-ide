@@ -8,6 +8,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useModalAccessibility } from '@/hooks/useModalAccessibility';
+import { UI_TIMING, Z_INDEX, TUTORIAL_DIMENSIONS } from '@/lib/constants';
 
 const TUTORIAL_STORAGE_KEY = 'renpy-ide-tutorial-completed';
 
@@ -103,7 +104,7 @@ const FirstRunTutorial: React.FC<FirstRunTutorialProps> = ({ onComplete, forceSh
       // Small delay to let the UI render first
       const timer = setTimeout(() => {
         setShowWelcome(true);
-      }, 1000);
+      }, UI_TIMING.TUTORIAL_SHOW_DELAY_MS);
       return () => clearTimeout(timer);
     }
   }, []); // Run once on mount
@@ -136,8 +137,8 @@ const FirstRunTutorial: React.FC<FirstRunTutorialProps> = ({ onComplete, forceSh
       setSpotlightRect(null);
       const viewportHeight = window.innerHeight;
       const viewportWidth = window.innerWidth;
-      const messageWidth = 320;
-      const messageHeight = 200;
+      const messageWidth = TUTORIAL_DIMENSIONS.MESSAGE_WIDTH;
+      const messageHeight = TUTORIAL_DIMENSIONS.MESSAGE_HEIGHT;
       setMessagePosition({
         top: viewportHeight / 2 - messageHeight / 2,
         left: viewportWidth / 2 - messageWidth / 2,
@@ -146,7 +147,7 @@ const FirstRunTutorial: React.FC<FirstRunTutorialProps> = ({ onComplete, forceSh
     }
 
     let retryCount = 0;
-    const maxRetries = 30; // Try for 3 seconds (30 * 100ms)
+    const maxRetries = UI_TIMING.TUTORIAL_MAX_RETRIES;
 
     const updateSpotlight = () => {
       const element = document.querySelector(step.targetSelector);
@@ -163,8 +164,8 @@ const FirstRunTutorial: React.FC<FirstRunTutorialProps> = ({ onComplete, forceSh
         // Calculate message position based on step position preference
         const viewportHeight = window.innerHeight;
         const viewportWidth = window.innerWidth;
-        const messageWidth = 320;
-        const messageHeight = 200;
+        const messageWidth = TUTORIAL_DIMENSIONS.MESSAGE_WIDTH;
+        const messageHeight = TUTORIAL_DIMENSIONS.MESSAGE_HEIGHT;
 
         let top = rect.top;
         let left = rect.left;
@@ -201,14 +202,14 @@ const FirstRunTutorial: React.FC<FirstRunTutorialProps> = ({ onComplete, forceSh
         // Element not found, try again after a short delay (up to maxRetries)
         retryCount++;
         if (retryCount < maxRetries) {
-          setTimeout(updateSpotlight, 100);
+          setTimeout(updateSpotlight, UI_TIMING.TUTORIAL_SPOTLIGHT_RETRY_MS);
         } else {
           // Element not found after retries, show message in center without spotlight
           setSpotlightRect(null);
           const viewportHeight = window.innerHeight;
           const viewportWidth = window.innerWidth;
-          const messageWidth = 320;
-          const messageHeight = 200;
+          const messageWidth = TUTORIAL_DIMENSIONS.MESSAGE_WIDTH;
+          const messageHeight = TUTORIAL_DIMENSIONS.MESSAGE_HEIGHT;
           setMessagePosition({
             top: viewportHeight / 2 - messageHeight / 2,
             left: viewportWidth / 2 - messageWidth / 2,
@@ -256,7 +257,8 @@ const FirstRunTutorial: React.FC<FirstRunTutorialProps> = ({ onComplete, forceSh
   if (showWelcome) {
     return (
       <div
-        className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[200]"
+        className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center"
+        style={{ zIndex: Z_INDEX.TUTORIAL_OVERLAY }}
         onClick={handleSkip}
         {...welcomeModalProps}
       >
@@ -301,9 +303,9 @@ const FirstRunTutorial: React.FC<FirstRunTutorialProps> = ({ onComplete, forceSh
   const isLastStep = currentStepIndex === TOUR_STEPS.length - 1;
 
   return (
-    <div className="fixed inset-0 z-[200] pointer-events-none">
+    <div className="fixed inset-0 pointer-events-none" style={{ zIndex: Z_INDEX.TUTORIAL_OVERLAY }}>
       {/* Semi-transparent overlay with spotlight cutout */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-auto" style={{ zIndex: 200 }}>
+      <svg className="absolute inset-0 w-full h-full pointer-events-auto" style={{ zIndex: Z_INDEX.TUTORIAL_OVERLAY }}>
         <defs>
           <mask id="spotlight-mask">
             <rect x="0" y="0" width="100%" height="100%" fill="white" />
@@ -339,7 +341,7 @@ const FirstRunTutorial: React.FC<FirstRunTutorialProps> = ({ onComplete, forceSh
             left: spotlightRect.left,
             width: spotlightRect.width,
             height: spotlightRect.height,
-            zIndex: 201,
+            zIndex: Z_INDEX.TUTORIAL_SPOTLIGHT_BORDER,
           }}
         />
       )}
@@ -351,8 +353,8 @@ const FirstRunTutorial: React.FC<FirstRunTutorialProps> = ({ onComplete, forceSh
           style={{
             top: messagePosition.top,
             left: messagePosition.left,
-            width: '320px',
-            zIndex: 202,
+            width: `${TUTORIAL_DIMENSIONS.MESSAGE_WIDTH}px`,
+            zIndex: Z_INDEX.TUTORIAL_MESSAGE,
           }}
         >
           <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">

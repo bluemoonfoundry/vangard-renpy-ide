@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { logger } from '@/lib/logger';
 import type { RenpyAnalysisResult } from '@/types';
 import CodeActionButtons from './CodeActionButtons';
 import type * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
@@ -203,7 +204,8 @@ const MenuConstructor: React.FC<MenuConstructorProps> = ({ analysisResult, activ
             setCaption(newCaption);
             setChoices(newChoices);
             setParseError(null);
-        } catch {
+        } catch (err) {
+            logger.debug('Menu code parse failed, disabling visual editing', err);
             setParseError("Cannot parse complex or invalid code. Visual editing disabled.");
         }
     };

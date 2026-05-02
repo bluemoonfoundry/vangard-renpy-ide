@@ -67,6 +67,8 @@ import {
 } from '@/lib/routeCanvasLayout';
 import { resolveWarpTarget } from '@/lib/warpTarget';
 import { logger } from '@/lib/logger';
+import { UI_TIMING } from '@/lib/constants';
+import { isSerializedSceneComposition, isSerializedImageMapComposition } from '@/lib/typeGuards';
 import {
   buildAfterWarpScript,
   getWarpVariableDrafts,
@@ -78,7 +80,7 @@ import type {
   ToastMessage, Theme, ProjectImage, RenpyAudio, Variable,
   ClipboardState, ImageMetadata, AudioMetadata, Character,
   AppSettings, ProjectSettings, StickyNote, SceneComposition, SceneSprite, ImageMapComposition, ScreenLayoutComposition, PunchlistMetadata, DiagnosticsTask, IgnoredDiagnosticRule,
-  SerializedSprite, SerializedSceneComposition, StoryCanvasGroupingMode, StoryCanvasLayoutMode, UserSnippet, MenuTemplate
+  SerializedSprite, SerializedSceneComposition, SerializedImageMapComposition, StoryCanvasGroupingMode, StoryCanvasLayoutMode, UserSnippet, MenuTemplate
 } from '@/types';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
@@ -86,16 +88,6 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 const SILENT_WAV_BASE64 = "UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAAAAAA==";
 
 
-interface SerializedImageRef {
-    filePath: string;
-}
-
-interface SerializedImageMapComposition {
-    screenName: string;
-    groundImage: SerializedImageRef | null;
-    hoverImage: SerializedImageRef | null;
-    hotspots: ImageMapComposition['hotspots'];
-}
 
 // --- Main App Component ---
 
@@ -1034,7 +1026,7 @@ const App: React.FC = () => {
     const timeout = setTimeout(() => {
       setIsInitialAnalysisPending(false);
       addToast('Analysis took too long and was skipped. Results may be incomplete.', 'warning');
-    }, 30_000);
+    }, UI_TIMING.ANALYSIS_TIMEOUT_MS);
     return () => clearTimeout(timeout);
   }, [isInitialAnalysisPending, addToast]);
 
@@ -1790,37 +1782,48 @@ const App: React.FC = () => {
               if (projectData.settings.sceneCompositions) {
                   const restoredScenes: Record<string, SceneComposition> = {};
                   Object.entries(projectData.settings.sceneCompositions).forEach(([id, sc]) => {
-                      const comp = sc as unknown as SerializedSceneComposition;
-                      restoredScenes[id] = {
-                          background: comp.background ? rehydrateSprite(comp.background) : null,
-                          sprites: comp.sprites.map(rehydrateSprite),
-                          resolution: comp.resolution,
-                      };
+                      if (isSerializedSceneComposition(sc)) {
+                          restoredScenes[id] = {
+                              background: sc.background ? rehydrateSprite(sc.background) : null,
+                              sprites: sc.sprites.map(rehydrateSprite),
+                              resolution: sc.resolution,
+                          };
+                      } else {
+                          logger.warn('Skipping malformed scene composition entry', { id, sc });
+                      }
                   });
                   setSceneCompositions(restoredScenes);
                   setSceneNames(projectData.settings.sceneNames || {});
-              } else if ((projectData.settings as unknown as Record<string, unknown>).sceneComposition) {
-                  // Migration for legacy single scene (pre-multi-scene format)
-                  const defaultId = 'scene-default';
-                  setSceneCompositions({ [defaultId]: rehydrateScene((projectData.settings as unknown as Record<string, unknown>).sceneComposition as SerializedSceneComposition) });
-                  setSceneNames({ [defaultId]: 'Default Scene' });
               } else {
-                  setSceneCompositions({});
-                  setSceneNames({});
+                  // Migration for legacy single scene (pre-multi-scene format)
+                  const settings = projectData.settings as unknown as Record<string, unknown>;
+                  const legacyScene = settings.sceneComposition;
+                  if (isSerializedSceneComposition(legacyScene)) {
+                      const defaultId = 'scene-default';
+                      setSceneCompositions({ [defaultId]: rehydrateScene(legacyScene) });
+                      setSceneNames({ [defaultId]: 'Default Scene' });
+                  } else {
+                      setSceneCompositions({});
+                      setSceneNames({});
+                  }
               }
 
               // Restore ImageMap Compositions
               if (projectData.settings.imagemapCompositions) {
                   const restoredImagemaps: Record<string, ImageMapComposition> = {};
-                  Object.entries(projectData.settings.imagemapCompositions as Record<string, SerializedImageMapComposition>).forEach(([id, im]) => {
-                      const groundImg = im.groundImage ? imgMap.get(im.groundImage.filePath) : null;
-                      const hoverImg = im.hoverImage ? imgMap.get(im.hoverImage.filePath) : null;
-                      restoredImagemaps[id] = {
-                          screenName: im.screenName,
-                          groundImage: groundImg || null,
-                          hoverImage: hoverImg || null,
-                          hotspots: im.hotspots
-                      };
+                  Object.entries(projectData.settings.imagemapCompositions).forEach(([id, im]) => {
+                      if (isSerializedImageMapComposition(im)) {
+                          const groundImg = im.groundImage ? imgMap.get(im.groundImage.filePath) : null;
+                          const hoverImg = im.hoverImage ? imgMap.get(im.hoverImage.filePath) : null;
+                          restoredImagemaps[id] = {
+                              screenName: im.screenName,
+                              groundImage: groundImg || null,
+                              hoverImage: hoverImg || null,
+                              hotspots: im.hotspots
+                          };
+                      } else {
+                          logger.warn('Skipping malformed imagemap composition entry', { id, im });
+                      }
                   });
                   setImagemapCompositions(restoredImagemaps);
               } else {
@@ -2540,9 +2543,9 @@ const App: React.FC = () => {
         diagnosticsTasks,
         ignoredDiagnostics,
         dismissedImplicitVariableHint: dismissedImplicitVarHint,
-        sceneCompositions: serializableScenes as unknown as Record<string, SceneComposition>,
+        sceneCompositions: serializableScenes,
         sceneNames,
-        imagemapCompositions: serializableImagemaps as unknown as Record<string, ImageMapComposition>,
+        imagemapCompositions: serializableImagemaps,
         screenLayoutCompositions,
         scannedImagePaths: Array.from(imageScanDirectories.keys()),
         scannedAudioPaths: Array.from(audioScanDirectories.keys()),
@@ -3198,7 +3201,7 @@ const App: React.FC = () => {
           // Small timeout to ensure canvas is rendered if switching tabs
           setTimeout(() => {
               setCenterOnBlockRequest({ blockId, key: Date.now() });
-          }, 50);
+          }, UI_TIMING.CANVAS_CENTER_DELAY_MS);
       } else {
           // Attempt to find sticky note
           const note = stickyNotes.find(n => n.id === target);

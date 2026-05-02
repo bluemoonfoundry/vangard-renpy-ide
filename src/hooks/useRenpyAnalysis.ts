@@ -12,6 +12,7 @@ import { getTripleQuotedLineMask } from '@/lib/renpyTripleQuotes';
 import { isReservedRenpyName } from '@/lib/renpyNames';
 import { collectRenpyHasLabelGuards, isJumpGuardedByHasLabel } from '@/lib/renpyLabelGuards';
 import { buildRouteGraph, computeLayeredLayoutGeneric, type LayoutConfig } from '@/lib/graphLayout';
+import { logger } from '@/lib/logger';
 
 /**
  * Minimal block shape used by the analysis engine — only the fields it actually reads.
@@ -732,7 +733,8 @@ const getAnalysisWorker = (): Worker | null => {
         new URL('../workers/renpyAnalysis.worker.ts', import.meta.url),
         { type: 'module' }
       );
-    } catch {
+    } catch (err) {
+      logger.warn('Failed to create analysis worker; falling back to synchronous analysis', err);
       return null;
     }
   }

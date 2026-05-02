@@ -5,6 +5,7 @@
  */
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { Z_INDEX } from '@/lib/constants';
 
 interface CanvasNodeContextMenuProps {
   x: number;
@@ -52,8 +53,8 @@ const CanvasNodeContextMenu: React.FC<CanvasNodeContextMenuProps> = ({
   return createPortal(
     <div
       ref={menuRef}
-      className="fixed z-[9999] bg-white dark:bg-gray-800 rounded-md shadow-2xl border border-gray-200 dark:border-gray-700 w-56 overflow-hidden"
-      style={{ top: y, left: x }}
+      className="fixed bg-white dark:bg-gray-800 rounded-md shadow-2xl border border-gray-200 dark:border-gray-700 w-56 overflow-hidden"
+      style={{ top: y, left: x, zIndex: Z_INDEX.CONTEXT_MENU }}
       onContextMenu={e => e.preventDefault()}
       onPointerDown={e => e.stopPropagation()}
       onMouseDown={e => e.stopPropagation()}

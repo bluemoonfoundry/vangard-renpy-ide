@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { logger } from '@/lib/logger';
 import { useVirtualList } from '@/hooks/useVirtualList';
 
 // py-1 (4+4) + h-5 icon (20px) = 28px per row
@@ -373,7 +374,9 @@ const FileExplorerPanel: React.FC<FileExplorerPanelProps> = ({
               if (sourcePaths.some(p => node.path.startsWith(p) && node.path.length > p.length)) return;
               onMoveNode(sourcePaths, node.path);
           }
-      } catch { /* ignore */ }
+      } catch (err) {
+          logger.debug('Could not parse drag-drop data transfer payload', err);
+      }
   }, [onMoveNode]);
 
   return (

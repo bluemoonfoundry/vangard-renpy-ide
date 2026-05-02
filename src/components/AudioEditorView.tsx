@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { UI_TIMING } from '@/lib/constants';
+import { logger } from '@/lib/logger';
 import type { RenpyAudio, AudioMetadata } from '@/types';
 
 interface AudioEditorViewProps {
@@ -220,10 +222,11 @@ const AudioEditorView: React.FC<AudioEditorViewProps> = ({ audio, metadata, onSa
     try {
       await onSaveMetadata(currentFilePath, newMetadata);
       setSaveState('saved');
-      savedTimerRef.current = setTimeout(() => setSaveState('idle'), 2000);
-    } catch {
+      savedTimerRef.current = setTimeout(() => setSaveState('idle'), UI_TIMING.SAVE_STATE_RESET_MS);
+    } catch (err) {
+      logger.error('Failed to save audio metadata', err);
       setSaveState('error');
-      savedTimerRef.current = setTimeout(() => setSaveState('idle'), 2000);
+      savedTimerRef.current = setTimeout(() => setSaveState('idle'), UI_TIMING.SAVE_STATE_RESET_MS);
     }
   };
 

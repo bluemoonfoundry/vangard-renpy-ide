@@ -962,9 +962,9 @@ export interface ProjectSettings {
   punchlistMetadata?: Record<string, PunchlistMetadata>;
   diagnosticsTasks?: DiagnosticsTask[];
   ignoredDiagnostics?: IgnoredDiagnosticRule[];
-  sceneCompositions?: Record<string, SceneComposition>;
+  sceneCompositions?: Record<string, SerializedSceneComposition>;
   sceneNames?: Record<string, string>;
-  imagemapCompositions?: Record<string, ImageMapComposition>;
+  imagemapCompositions?: Record<string, SerializedImageMapComposition>;
   screenLayoutCompositions?: Record<string, ScreenLayoutComposition>;
   scannedImagePaths?: string[];
   scannedAudioPaths?: string[];
@@ -1083,6 +1083,19 @@ export interface SerializedSceneComposition {
   background: SerializedSprite | null;
   sprites: SerializedSprite[];
   resolution?: { width: number; height: number };
+}
+
+/** File path reference used when serializing image map compositions for persistence. */
+export interface SerializedImageRef {
+  filePath: string;
+}
+
+/** Serialized image map composition for persistence (paths only, no loaded image objects). */
+export interface SerializedImageMapComposition {
+  screenName: string;
+  groundImage: SerializedImageRef | null;
+  hoverImage: SerializedImageRef | null;
+  hotspots: ImageMapHotspot[];
 }
 
 /**
