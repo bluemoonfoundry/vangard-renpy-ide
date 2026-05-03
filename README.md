@@ -7,7 +7,7 @@
 
 > **The IDE that lets you see your story.**
 
-Vangard is a desktop IDE for Ren'Py visual novel development. Your `.rpy` files appear as draggable blocks on a visual canvas — `jump` and `call` connections auto-draw as arrows. Three canvases let you see your project from every angle: file structure, control flow, and the player's choice experience. A full Monaco code editor, three visual composers, asset managers, diagnostics, and a color picker are all built in.
+Ren'IDE is a desktop IDE for Ren'Py visual novel development. Your `.rpy` files appear as draggable blocks on a visual canvas — `jump` and `call` connections auto-draw as arrows. Three canvases let you see your project from every angle: file structure, control flow, and the player's choice experience. A full Monaco code editor, three visual composers, asset managers, diagnostics, and a color picker are all built in.
 
 It works **alongside** the Ren'Py SDK. Your `.rpy` files stay as `.rpy` files. No lock-in.
 
