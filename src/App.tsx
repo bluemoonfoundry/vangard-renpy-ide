@@ -40,7 +40,7 @@ import { SearchProvider } from '@/contexts/SearchContext';
 import StatsView from '@/components/StatsView';
 import TranslationDashboard from '@/components/TranslationDashboard';
 import GoToLabelModal, { GoToLabelItem } from '@/components/GoToLabelModal';
-import { useRenpyAnalysis } from '@/hooks/useRenpyAnalysis';
+import { useRenpyAnalysis, deriveSceneImageNames } from '@/hooks/useRenpyAnalysis';
 import { useHistory } from '@/hooks/useHistory';
 import { useProjectColorScan } from '@/hooks/useProjectColorScan';
 import { usePerformanceMetrics } from '@/hooks/usePerformanceMetrics';
@@ -643,14 +643,15 @@ const App: React.FC = () => {
   const routeRaw = useMemo(() => {
       const layoutMode = projectSettings.routeCanvasLayoutMode ?? 'flow-lr';
       const groupingMode = projectSettings.routeCanvasGroupingMode ?? 'none';
-      const layoutedNodes = computeRouteCanvasLayout(analysisResult.labelNodes, analysisResult.routeLinks, layoutMode, groupingMode);
+      const nodesWithScenes = deriveSceneImageNames(analysisResult.labelNodes, blocks);
+      const layoutedNodes = computeRouteCanvasLayout(nodesWithScenes, analysisResult.routeLinks, layoutMode, groupingMode);
       return {
           labelNodes: layoutedNodes,
           routeLinks: analysisResult.routeLinks,
           identifiedRoutes: analysisResult.identifiedRoutes,
           routesTruncated: analysisResult.routesTruncated,
       };
-  }, [analysisResult, projectSettings.routeCanvasGroupingMode, projectSettings.routeCanvasLayoutMode]);
+  }, [analysisResult, blocks, projectSettings.routeCanvasGroupingMode, projectSettings.routeCanvasLayoutMode]);
 
   const routeAnalysisResult = useMemo(() => {
       // Apply user-dragged position overrides on top of the auto-layout result.
@@ -4553,6 +4554,7 @@ const App: React.FC = () => {
         onWarpToLabel={handleWarpToLabel}
         centerOnStartRequest={centerOnRouteStartRequest}
         centerOnNodeRequest={centerOnRouteNodeRequest}
+        projectImages={images}
       />;
     }
     if (tab.type === 'choice-canvas') {

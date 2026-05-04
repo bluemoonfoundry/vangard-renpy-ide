@@ -21,7 +21,7 @@ import StickyNoteComponent from './StickyNote';
 import CanvasContextMenu from './CanvasContextMenu';
 import CanvasNodeContextMenu from './CanvasNodeContextMenu';
 import type { MinimapItem } from './Minimap';
-import type { LabelNode, RouteLink, Position, IdentifiedRoute, MouseGestureSettings, StoryCanvasGroupingMode, StoryCanvasLayoutMode, StickyNote } from '@/types';
+import type { LabelNode, RouteLink, Position, IdentifiedRoute, MouseGestureSettings, StoryCanvasGroupingMode, StoryCanvasLayoutMode, StickyNote, ProjectImage } from '@/types';
 import { computeRouteCanvasLayout } from '@/lib/routeCanvasLayout';
 
 interface RouteCanvasProps {
@@ -30,6 +30,7 @@ interface RouteCanvasProps {
   identifiedRoutes: IdentifiedRoute[];
   routesTruncated?: boolean;
   stickyNotes: StickyNote[];
+  projectImages: Map<string, ProjectImage>;
   updateLabelNodePositions: (updates: { id: string, position: Position }[]) => void;
   onAddStickyNote: (position: Position) => void;
   updateStickyNote: (id: string, data: Partial<StickyNote>) => void;
@@ -321,6 +322,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
   onWarpToLabel,
   centerOnStartRequest,
   centerOnNodeRequest,
+  projectImages,
 }) => {
   const [rubberBandRect, setRubberBandRect] = useState<Rect | null>(null);
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
@@ -368,6 +370,21 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
   }, [rawRouteLinks, labelNodes]);
 
   const labelNodeMap = useMemo(() => new Map(labelNodes.map(n => [n.id, n])), [labelNodes]);
+
+  // Normalized scene-name → dataUrl lookup for thumbnail rendering.
+  // Ren'Py derives image tags from subpath after images/: "bg/academy_gate.png" → "bg academy_gate"
+  const sceneImageLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    projectImages.forEach((img) => {
+      if (!img.dataUrl) return;
+      const imagesIdx = img.filePath.toLowerCase().indexOf('/images/');
+      if (imagesIdx === -1) return;
+      const rel = img.filePath.slice(imagesIdx + '/images/'.length);
+      const renpyTag = rel.replace(/\.[^.]+$/, '').replace(/\//g, ' ').toLowerCase();
+      map.set(renpyTag, img.dataUrl);
+    });
+    return map;
+  }, [projectImages]);
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0 });
 
   // File-view graph: one node per file, one edge per cross-file transition
@@ -1998,6 +2015,10 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
                 overlayCount = callHeavyData.counts.get(node.id);
               }
 
+              const sceneImageUrl = node.sceneImageName
+                ? sceneImageLookup.get(node.sceneImageName.toLowerCase())
+                : undefined;
+
               return (
                 <LabelBlock
                   key={node.id}
@@ -2012,6 +2033,7 @@ const RouteCanvas: React.FC<RouteCanvasProps> = ({
                   isDimmed={isNodeDimmed && !isSelected}
                   overlayHighlight={overlayHighlight}
                   overlayCount={overlayCount}
+                  sceneImageUrl={sceneImageUrl}
                 />
               );
             })

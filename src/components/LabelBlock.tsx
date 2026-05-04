@@ -22,6 +22,8 @@ interface LabelBlockProps {
   overlayHighlight?: 'hub' | 'branch' | 'menu-heavy' | 'call-heavy' | null;
   /** Numeric count shown inside the overlay badge (e.g. number of incoming links for hubs) */
   overlayCount?: number;
+  /** Resolved data URL for the scene image associated with this label (if any) */
+  sceneImageUrl?: string;
 }
 
 const OVERLAY_STYLES: Record<NonNullable<LabelBlockProps['overlayHighlight']>, {
@@ -45,6 +47,7 @@ const LabelBlock: React.FC<LabelBlockProps> = React.memo(({
   isDimmed,
   overlayHighlight,
   overlayCount,
+  sceneImageUrl,
 }) => {
 
   const overlayStyle = overlayHighlight ? OVERLAY_STYLES[overlayHighlight] : null;
@@ -91,6 +94,8 @@ const LabelBlock: React.FC<LabelBlockProps> = React.memo(({
     ? `\n${overlayStyle.title}${overlayCount !== undefined ? ` (${overlayCount})` : ''}`
     : '';
 
+  const hasThumbnail = node.sceneImageName !== undefined;
+
   return (
     <div
       data-label-node-id={node.id}
@@ -98,7 +103,7 @@ const LabelBlock: React.FC<LabelBlockProps> = React.memo(({
       role="button"
       aria-label={ariaLabel}
       aria-pressed={isSelected}
-      className={`group label-block-wrapper absolute rounded-md border-2 ${borderClass} ${shadowClass} ${bgClass} flex items-center px-3 space-x-2 cursor-grab transition-all duration-200 ${isDimmed ? 'opacity-20 pointer-events-none' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400`}
+      className={`group label-block-wrapper absolute rounded-md border-2 ${borderClass} ${shadowClass} ${bgClass} flex flex-col cursor-grab transition-all duration-200 ${isDimmed ? 'opacity-20 pointer-events-none' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 overflow-hidden`}
       style={{
         left: node.position.x,
         top: node.position.y,
@@ -111,18 +116,18 @@ const LabelBlock: React.FC<LabelBlockProps> = React.memo(({
       title={`Label: ${node.label}\nDouble-click to open in editor${roleTitle}`}
     >
         {isEntry && !isSelected && (
-          <span className="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-full bg-green-500 border-2 border-white dark:border-gray-900 pointer-events-none" />
+          <span className="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-full bg-green-500 border-2 border-white dark:border-gray-900 pointer-events-none z-10" />
         )}
         {isUnreachable && !isSelected && (
-          <span className="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-full bg-orange-400 border-2 border-white dark:border-gray-900 pointer-events-none" />
+          <span className="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-full bg-orange-400 border-2 border-white dark:border-gray-900 pointer-events-none z-10" />
         )}
         {isDeadEnd && !isSelected && (
-          <span className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-amber-500 border-2 border-white dark:border-gray-900 pointer-events-none" />
+          <span className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-amber-500 border-2 border-white dark:border-gray-900 pointer-events-none z-10" />
         )}
         {/* Overlay badge — bottom-left, shows count */}
         {overlayHighlight && overlayStyle && !isSelected && (
           <span
-            className={`absolute -bottom-1.5 -left-1.5 min-w-[14px] h-3.5 px-0.5 rounded-full ${overlayStyle.bg} border border-white dark:border-gray-900 pointer-events-none flex items-center justify-center`}
+            className={`absolute -bottom-1.5 -left-1.5 min-w-[14px] h-3.5 px-0.5 rounded-full ${overlayStyle.bg} border border-white dark:border-gray-900 pointer-events-none flex items-center justify-center z-10`}
             title={overlayStyle.title}
           >
             {overlayCount !== undefined && (
@@ -130,12 +135,49 @@ const LabelBlock: React.FC<LabelBlockProps> = React.memo(({
             )}
           </span>
         )}
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A1 1 0 012 10V5a1 1 0 011-1h5a1 1 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
-        <span className="text-sm font-semibold font-mono text-gray-800 dark:text-gray-200 truncate flex-1">
-            {node.label}
-        </span>
+
+        {/* Label row */}
+        <div className="flex items-center px-3 space-x-2 flex-shrink-0 border-b border-gray-200 dark:border-gray-700" style={{ height: 40 }}>
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A1 1 0 012 10V5a1 1 0 011-1h5a1 1 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+          <span className="text-sm font-semibold font-mono text-gray-800 dark:text-gray-200 truncate flex-1">
+              {node.label}
+          </span>
+        </div>
+
+        {/* Scene thumbnail — 16:9 aspect ratio, full image visible */}
+        {hasThumbnail && (
+          <div
+            className="w-full flex-shrink-0 overflow-hidden"
+            style={{ height: node.height - 40 }}
+          >
+            {sceneImageUrl ? (
+              <img
+                src={sceneImageUrl}
+                alt={node.sceneImageName}
+                className="w-full h-full object-contain"
+                loading="lazy"
+                draggable={false}
+              />
+            ) : (
+              <div
+                className="w-full h-full flex flex-col items-center justify-center gap-1"
+                style={{
+                  background: 'repeating-linear-gradient(45deg, #e5e7eb, #e5e7eb 4px, #f3f4f6 4px, #f3f4f6 10px)',
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                </svg>
+                <span className="text-gray-500 font-mono leading-none px-1 text-center" style={{ fontSize: 7 }}>
+                  {node.sceneImageName}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         <button
-          className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300"
+          className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 z-10"
           onClick={(e) => { e.stopPropagation(); onOpenEditor(node.blockId, node.startLine); }}
           onPointerDown={(e) => e.stopPropagation()}
           title="Open in editor"

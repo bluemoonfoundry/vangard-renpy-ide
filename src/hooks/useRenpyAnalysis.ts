@@ -36,6 +36,7 @@ const NARRATION_REGEX = /^\s*"(?!:)/;
 const SCREEN_REGEX = /^\s*screen\s+([a-zA-Z0-9_]+)\s*(\(.*\))?:/;
 const DEFINE_DEFAULT_REGEX = /^\s*(define|default)\s+([a-zA-Z0-9_.]+)\s*=\s*(?!\s*Character\s*\()(.+)/;
 const IMAGE_DEF_REGEX = /^\s*image\s+([a-zA-Z0-9_ ]+?)\s*=/;
+const SCENE_STATEMENT_REGEX = /^\s*scene\s+((?!expression\b)[a-zA-Z0-9_][a-zA-Z0-9_ ]*?)(?:\s+with\b|\s*(?:#|$))/;
 
 const PALETTE = [
   '#E57373', '#F06292', '#BA68C8', '#9575CD', '#7986CB', '#64B5F6',
@@ -514,6 +515,60 @@ const ROUTE_INITIAL_CONFIG: LayoutConfig = {
   crossAxisBase: 50,
 };
 
+const NODE_IMAGE_HEIGHT = 40 + Math.round(176 * 9 / 16); // label row + 16:9 image at 180px width
+
+/**
+ * Post-processes label nodes to attach scene image names derived from block content.
+ * Runs on the main thread so it always uses the latest code, bypassing the worker cache.
+ * Labels without their own `scene` statement inherit the last seen scene name from a
+ * prior label in the same file (forward propagation within each block).
+ */
+export function deriveSceneImageNames(nodes: LabelNode[], blocks: AnalysisBlock[]): LabelNode[] {
+  const blockContentMap = new Map(blocks.map(b => [b.id, b.content]));
+
+  const nodesByBlock = new Map<string, LabelNode[]>();
+  nodes.forEach(node => {
+    const arr = nodesByBlock.get(node.blockId) ?? [];
+    arr.push(node);
+    nodesByBlock.set(node.blockId, arr);
+  });
+
+  const updates = new Map<string, Partial<LabelNode>>();
+
+  nodesByBlock.forEach((blockNodes, blockId) => {
+    const content = blockContentMap.get(blockId);
+    if (!content) return;
+
+    const lines = content.split('\n');
+    const sorted = [...blockNodes].sort((a, b) => a.startLine - b.startLine);
+
+    let lastSceneName: string | undefined;
+    sorted.forEach((node, i) => {
+      const nextNode = sorted[i + 1];
+      const endLine = nextNode ? nextNode.startLine - 1 : lines.length;
+
+      let ownScene: string | undefined;
+      for (let j = node.startLine; j < endLine; j++) {
+        const m = (lines[j] ?? '').match(SCENE_STATEMENT_REGEX);
+        if (m) { ownScene = m[1].trim(); break; }
+      }
+
+      if (ownScene !== undefined) lastSceneName = ownScene;
+      const effective = ownScene ?? lastSceneName;
+
+      if (effective !== undefined) {
+        updates.set(node.id, { sceneImageName: effective, height: NODE_IMAGE_HEIGHT });
+      }
+    });
+  });
+
+  if (updates.size === 0) return nodes;
+  return nodes.map(n => {
+    const patch = updates.get(n.id);
+    return patch ? { ...n, ...patch } : n;
+  });
+}
+
 /** Hard cap on the number of routes enumerated to prevent exponential blowup. */
 const MAX_ROUTES = 500;
 /** Maximum recursion depth for path enumeration. */
@@ -591,7 +646,7 @@ export const performRouteAnalysis = (
         const nodeId = `${block.id}:${label}`;
         const node: LabelNode = {
             id: nodeId, label: label, blockId: block.id, containerName: block.title || block.filePath?.split('/').pop() || 'Untitled',
-            startLine: startLine, position: { x: 0, y: 0 }, width: 180, height: 40
+            startLine: startLine, position: { x: 0, y: 0 }, width: 180, height: 40,
         };
         labelNodes.set(nodeId, node);
     });

@@ -467,6 +467,8 @@ export interface LabelNode {
   position: Position;
   width: number;
   height: number;
+  /** Image tag from the first `scene` statement in this label's body (e.g. "bg library") */
+  sceneImageName?: string;
 }
 
 /**
