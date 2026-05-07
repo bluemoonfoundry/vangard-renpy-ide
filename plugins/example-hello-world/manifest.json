@@ -1,0 +1,19 @@
+{
+  "id": "example-hello-world",
+  "name": "Hello World Plugin",
+  "version": "1.0.0",
+  "description": "Example plugin demonstrating the plugin API - displays project statistics and allows testing plugin features",
+  "author": "Ren'IDE Plugin Developer",
+  "entry": "dist/index.js",
+  "minIdeVersion": "0.8.2",
+  "permissions": [],
+  "ui": {
+    "tabs": [
+      {
+        "id": "hello-tab",
+        "label": "Hello World",
+        "icon": "🌍"
+      }
+    ]
+  }
+}

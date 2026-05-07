@@ -623,24 +623,28 @@ export interface RenpyAnalysisResult {
  * Tabs can display different views: canvas, code editor, images, characters, etc.
  * @interface EditorTab
  * @property {string} id - Unique tab identifier (block ID or view name)
- * @property {'canvas' | 'route-canvas' | 'punchlist' | 'editor' | 'image' | 'audio' | 'character' | 'scene-composer'} type - Type of tab content
+ * @property {'canvas' | 'route-canvas' | 'punchlist' | 'editor' | 'image' | 'audio' | 'character' | 'scene-composer' | 'plugin-tab'} type - Type of tab content
  * @property {string} [blockId] - Block ID if editing code (for editor type)
  * @property {string} [filePath] - File path for image/audio tabs
  * @property {string} [characterTag] - Character tag for character editor tabs
  * @property {string} [sceneId] - Scene ID for scene composer tabs
+ * @property {string} [pluginId] - Plugin ID for plugin tabs
+ * @property {string} [pluginTabId] - Plugin tab ID for plugin tabs
  * @property {Object} [scrollRequest] - Request to scroll editor to specific line
  * @property {number} scrollRequest.line - Target line number
  * @property {number} scrollRequest.key - Unique key to trigger scroll event
  */
 export interface EditorTab {
   id: string;
-  type: 'canvas' | 'route-canvas' | 'choice-canvas' | 'punchlist' | 'diagnostics' | 'editor' | 'image' | 'audio' | 'character' | 'scene-composer' | 'imagemap-composer' | 'screen-layout-composer' | 'stats' | 'markdown' | 'translations';
+  type: 'canvas' | 'route-canvas' | 'choice-canvas' | 'punchlist' | 'diagnostics' | 'editor' | 'image' | 'audio' | 'character' | 'scene-composer' | 'imagemap-composer' | 'screen-layout-composer' | 'stats' | 'markdown' | 'translations' | 'plugin-tab';
   blockId?: string;
   filePath?: string;
   characterTag?: string;
   sceneId?: string;
   imagemapId?: string;
   layoutId?: string;
+  pluginId?: string;
+  pluginTabId?: string;
   scrollRequest?: { line: number; key: number };
 }
 
@@ -931,6 +935,7 @@ export interface ScreenLayoutComposition {
  * @property {Record<string, string>} [sceneNames] - Display names for scenes
  * @property {string[]} [scannedImagePaths] - Paths to directories scanned for images
  * @property {string[]} [scannedAudioPaths] - Paths to directories scanned for audio
+ * @property {Record<string, any>} [pluginData] - Plugin-specific persistent data indexed by plugin ID
  */
 export interface ProjectSettings {
   draftingMode: boolean;
@@ -975,6 +980,7 @@ export interface ProjectSettings {
     activeSubTab?: 'characters' | 'variables' | 'screens' | 'images' | 'audio' | 'scenes' | 'imagemaps' | 'screenLayouts' | 'snippets' | 'menuTemplates' | 'colorPalette';
   };
   dismissedImplicitVariableHint?: boolean;
+  pluginData?: Record<string, any>;
 }
 
 /**
@@ -1113,6 +1119,93 @@ export interface CreateProjectOptions {
   sdkPath?: string;        // Optional Ren'Py SDK path
 }
 
+// ---------------------------------------------------------------------------
+// Plugin System Types
+// ---------------------------------------------------------------------------
+
+/**
+ * Plugin manifest schema defining metadata and capabilities.
+ * Located at ~/.vangard-ide/plugins/<plugin-id>/manifest.json
+ */
+export interface PluginManifest {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  entry: string;
+  minIdeVersion: string;
+  permissions?: string[];
+  ui?: {
+    tabs?: Array<{
+      id: string;
+      label: string;
+      icon?: string;
+    }>;
+  };
+}
+
+/**
+ * A loaded plugin with manifest and instance.
+ */
+export interface LoadedPlugin {
+  id: string;
+  manifest: PluginManifest;
+  entryPath: string;
+  instance: PluginInstance | null;
+}
+
+/**
+ * Plugin instance returned by plugin factory function.
+ * Provides lifecycle hooks and UI components.
+ */
+export interface PluginInstance {
+  onDestroy?: () => void;
+  tabs?: Record<string, React.ComponentType>;
+}
+
+/**
+ * Plugin factory function signature.
+ * Default export from plugin entry file.
+ */
+export type PluginFactory = (context: PluginContextValue) => PluginInstance;
+
+/**
+ * Context value provided to plugins via React Context.
+ * Gives read-only access to IDE state and utility APIs.
+ */
+export interface PluginContextValue {
+  state: {
+    blocks: Block[];
+    analysisResult: RenpyAnalysisResult;
+    projectImages: Map<string, ProjectImage>;
+    projectAudios: Map<string, RenpyAudio>;
+    characters: Map<string, Character>;
+    variables: Variable[];
+    projectRootPath: string | null;
+  };
+  api: {
+    logger: {
+      info: (message: string, ...args: any[]) => void;
+      warn: (message: string, ...args: any[]) => void;
+      error: (message: string, ...args: any[]) => void;
+    };
+    toast: (message: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
+    dialog: {
+      showMessage: (title: string, message: string) => Promise<void>;
+      showError: (title: string, message: string) => Promise<void>;
+    };
+  };
+  settings: {
+    get: (key: string, defaultValue?: any) => any;
+    set: (key: string, value: any) => Promise<void>;
+  };
+  plugin: {
+    id: string;
+    version: string;
+  };
+}
+
 /**
  * Global Electron API interface available in windows.electronAPI.
  * Provides access to OS-level features in Electron app mode.
@@ -1133,6 +1226,7 @@ declare global {
           refreshProject: (path: string) => Promise<ProjectLoadResult>;
           readFile: (path: string) => Promise<string>;
           fileExists: (path: string) => Promise<boolean>;
+          listDirectories: (path: string) => Promise<string[]>;
           writeFile: (path: string, content: string, encoding?: string) => Promise<{ success: boolean; error?: string }>;
           createDirectory: (path: string) => Promise<{ success: boolean; error?: string }>;
           removeEntry: (path: string) => Promise<{ success: boolean; error?: string }>;

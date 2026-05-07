@@ -1253,6 +1253,18 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('fs:listDirectories', async (event, dirPath) => {
+    try {
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      return entries
+        .filter(entry => entry.isDirectory())
+        .map(entry => entry.name);
+    } catch (error) {
+      logger.error("List directories failed:", error);
+      return [];
+    }
+  });
+
   ipcMain.handle('path:join', (event, ...args) => {
     return path.join(...args);
   });

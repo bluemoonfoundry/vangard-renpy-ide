@@ -25,6 +25,10 @@ import ScreenLayoutComposer from '@/components/ScreenLayoutComposer';
 import MarkdownPreviewView from '@/components/MarkdownPreviewView';
 import DiagnosticsPanel from '@/components/DiagnosticsPanel';
 import WarpVariablesModal from '@/components/WarpVariablesModal';
+import { PluginManager } from '@/plugins/PluginManager';
+import { PluginContextProvider } from '@/plugins/PluginContext';
+import { PluginErrorBoundary } from '@/plugins/PluginErrorBoundary';
+import type { LoadedPlugin } from '@/types';
 import { useDiagnostics, migratePunchlistToTasks } from '@/hooks/useDiagnostics';
 import { useDebounce } from '@/hooks/useDebounce';
 import TabContextMenu from '@/components/TabContextMenu';
@@ -305,6 +309,10 @@ const App: React.FC = () => {
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saved');
   const [isScanningAssets, setIsScanningAssets] = useState(false);
 
+  // Plugin system state
+  const [loadedPlugins, setLoadedPlugins] = useState<LoadedPlugin[]>([]);
+  const [pluginSettings, setPluginSettings] = useState<Record<string, any>>({});
+
   // Toast notifications
   const { toasts, addToast, removeToast } = useToasts();
 
@@ -477,6 +485,23 @@ const App: React.FC = () => {
       setIsInitialAnalysisPending(false);
     }
   }, [isWorkerPending, isInitialAnalysisPending]);
+
+  // DEVELOPMENT: Expose plugin tab opener for console testing
+  // Remove this once proper UI buttons are added to Toolbar
+  useEffect(() => {
+    (window as any).openPluginTab = (pluginId: string, tabId: string) => {
+      const tab: EditorTab = {
+        id: `plugin:${pluginId}:${tabId}`,
+        type: 'plugin-tab',
+        pluginId,
+        pluginTabId: tabId,
+      };
+      openTab(tab);
+    };
+    return () => {
+      delete (window as any).openPluginTab;
+    };
+  }, [openTab]);
 
   // Memoized flat arrays — Map.values() iteration is O(n); without this every
   // renderTabContent call recreated 14,000-item arrays on each re-render.
@@ -1838,6 +1863,13 @@ const App: React.FC = () => {
                   setScreenLayoutCompositions({});
               }
 
+              // Restore Plugin Data
+              if (projectData.settings.pluginData) {
+                  setPluginSettings(projectData.settings.pluginData);
+              } else {
+                  setPluginSettings({});
+              }
+
               // Restore Scan Directories
               if (projectData.settings.scannedImagePaths) {
                   const paths = projectData.settings.scannedImagePaths;
@@ -2494,7 +2526,16 @@ const App: React.FC = () => {
 
     await doSave();
   }, [projectRootPath, projectSettings.draftingMode, addToast, setBlocks, updateDraftingArtifacts, filesWithDiskConflict]);
-  
+
+  // Handler for plugin settings updates
+  const handleSavePluginSettings = useCallback(async (pluginId: string, data: any) => {
+    setPluginSettings(prev => {
+      const updated = { ...prev, [pluginId]: data };
+      return updated;
+    });
+    setHasUnsavedSettings(true);
+  }, []);
+
   const handleSaveProjectSettings = useCallback(async () => {
     if (!projectRootPath || !window.electronAPI) return;
     try {
@@ -2550,6 +2591,7 @@ const App: React.FC = () => {
         screenLayoutCompositions,
         scannedImagePaths: Array.from(imageScanDirectories.keys()),
         scannedAudioPaths: Array.from(audioScanDirectories.keys()),
+        pluginData: pluginSettings,
       };
       const settingsPath = await window.electronAPI.path.join(projectRootPath as string, 'game/project.ide.json') as string;
       await window.electronAPI.writeFile(settingsPath, JSON.stringify(settingsToSave, null, 2));
@@ -2558,7 +2600,7 @@ const App: React.FC = () => {
       logger.error("Failed to save IDE settings:", e);
       addToast('Failed to save workspace settings', 'error');
     }
-  }, [projectRootPath, projectSettings, blocks, routeNodeLayoutCache, openTabs, activeTabId, splitLayout, splitPrimarySize, secondaryOpenTabs, secondaryActiveTabId, stickyNotes, routeStickyNotes, choiceStickyNotes, characterProfiles, addToast, sceneCompositions, sceneNames, imagemapCompositions, screenLayoutCompositions, imageScanDirectories, audioScanDirectories, punchlistMetadata, diagnosticsTasks, ignoredDiagnostics, dismissedImplicitVarHint]);
+  }, [projectRootPath, projectSettings, blocks, routeNodeLayoutCache, openTabs, activeTabId, splitLayout, splitPrimarySize, secondaryOpenTabs, secondaryActiveTabId, stickyNotes, routeStickyNotes, choiceStickyNotes, characterProfiles, addToast, sceneCompositions, sceneNames, imagemapCompositions, screenLayoutCompositions, imageScanDirectories, audioScanDirectories, punchlistMetadata, diagnosticsTasks, ignoredDiagnostics, dismissedImplicitVarHint, pluginSettings]);
 
 
   const handleSaveAll = useCallback(async () => {
@@ -4721,6 +4763,36 @@ const App: React.FC = () => {
         addToast={addToast}
       />;
     }
+    if (tab.type === 'plugin-tab' && tab.pluginId && tab.pluginTabId) {
+      const plugin = loadedPlugins.find(p => p.id === tab.pluginId);
+      if (!plugin?.instance) {
+        return <div className="flex items-center justify-center h-full text-gray-500">Plugin not found</div>;
+      }
+
+      const TabComponent = plugin.instance.tabs?.[tab.pluginTabId];
+      if (!TabComponent) {
+        return <div className="flex items-center justify-center h-full text-gray-500">Plugin tab not found</div>;
+      }
+
+      return (
+        <PluginErrorBoundary pluginId={plugin.id} tabId={tab.pluginTabId}>
+          <PluginContextProvider
+            pluginId={plugin.id}
+            pluginVersion={plugin.manifest.version}
+            blocks={blocks}
+            analysisResult={analysisResult}
+            projectImages={images}
+            projectAudios={audios}
+            projectRootPath={projectRootPath}
+            addToast={addToast}
+            pluginSettings={pluginSettings}
+            onSavePluginSettings={handleSavePluginSettings}
+          >
+            <TabComponent />
+          </PluginContextProvider>
+        </PluginErrorBoundary>
+      );
+    }
     return null;
   };
 
@@ -5398,6 +5470,18 @@ const App: React.FC = () => {
         warpLabelName={pendingWarpLabelName ?? undefined}
         onClose={resetWarpLaunchState}
         onConfirm={handleConfirmWarpVariables}
+      />
+
+      <PluginManager
+        projectRootPath={projectRootPath}
+        blocks={blocks}
+        analysisResult={analysisResult}
+        projectImages={images}
+        projectAudios={audios}
+        addToast={addToast}
+        pluginSettings={pluginSettings}
+        onPluginsLoaded={setLoadedPlugins}
+        onSavePluginSettings={handleSavePluginSettings}
       />
 
       <FirstRunTutorial
