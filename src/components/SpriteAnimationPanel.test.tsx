@@ -1,3 +1,4 @@
+import React from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -47,7 +48,40 @@ describe('SpriteAnimationPanel', () => {
 
   it('renders one TimelineRow per timeline', () => {
     renderPanel({ animation: anim({ timelines: [timeline({ id: 't1', name: 'bob0' }), timeline({ id: 't2', name: 'bob1' })] }) });
+    expect(screen.getByText('bob0')).toBeInTheDocument();
+    expect(screen.getByText('bob1')).toBeInTheDocument();
+  });
+
+  it('opens the edit dialog for a row on double-click, and closes it on Close', async () => {
+    const user = userEvent.setup();
+    renderPanel({ animation: anim({ timelines: [timeline({ id: 't1', name: 'bob0' })] }) });
+    await user.dblClick(screen.getByRole('button', { name: 'Edit timeline bob0' }));
+    expect(screen.getByRole('heading', { name: 'Edit Timeline' })).toBeInTheDocument();
     expect(screen.getByDisplayValue('bob0')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('heading', { name: 'Edit Timeline' })).not.toBeInTheDocument();
+  });
+
+  it('opens the edit dialog for the new timeline immediately after Add Timeline', async () => {
+    const user = userEvent.setup();
+    const Wrapper: React.FC = () => {
+      const [animation, setAnimation] = React.useState(anim({ timelines: [timeline({ id: 't1', name: 'bob0' })] }));
+      return (
+        <SpriteAnimationPanel
+          spriteLabel="bob"
+          animation={animation}
+          currentValues={currentValues}
+          hasStaticTint={false}
+          onCreateAnimation={() => {}}
+          onChangeAnimation={(updater) => setAnimation(updater)}
+          onDeleteAnimation={() => {}}
+          onPreviewUpdate={() => {}}
+        />
+      );
+    };
+    render(<Wrapper />);
+    await user.click(screen.getByRole('button', { name: '+ Add Timeline' }));
+    expect(screen.getByRole('heading', { name: 'Edit Timeline' })).toBeInTheDocument();
     expect(screen.getByDisplayValue('bob1')).toBeInTheDocument();
   });
 
@@ -96,15 +130,19 @@ describe('SpriteAnimationPanel', () => {
     expect(updater(twoTimelines).timelines.map(t => t.id)).toEqual(['t2']);
   });
 
-  it('computes propertiesClaimedBySiblings correctly for each row (verified via parallel-mode disabling)', () => {
+  it('computes propertiesClaimedBySiblings correctly for each row (verified via parallel-mode disabling)', async () => {
+    const user = userEvent.setup();
     const twoTimelines = anim({
       timelines: [timeline({ id: 't1', name: 'bob0', properties: ['alpha'] }), timeline({ id: 't2', name: 'bob1', properties: [] })],
     });
     renderPanel({ animation: twoTimelines });
-    const rows = screen.getAllByLabelText('Alpha');
-    // First row's own Alpha checkbox is selected+enabled; second row's Alpha checkbox is disabled (claimed by the first).
-    expect(rows[0]).not.toBeDisabled();
-    expect(rows[1]).toBeDisabled();
+
+    await user.dblClick(screen.getByRole('button', { name: 'Edit timeline bob0' }));
+    expect(screen.getByLabelText('Alpha')).not.toBeDisabled(); // this timeline's own selected property
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+
+    await user.dblClick(screen.getByRole('button', { name: 'Edit timeline bob1' }));
+    expect(screen.getByLabelText('Alpha')).toBeDisabled(); // claimed by sibling bob0
   });
 
   it('reordering swaps the timelines and affects sequential playback order', () => {
@@ -169,14 +207,17 @@ describe('SpriteAnimationPanel', () => {
     expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
   });
 
-  it('passes hasStaticTint through to every TimelineRow it renders', () => {
+  it('passes hasStaticTint through to the edit dialog for every timeline', async () => {
+    const user = userEvent.setup();
     const twoTimelines = anim({ timelines: [timeline({ id: 't1', name: 'bob0' }), timeline({ id: 't2', name: 'bob1' })] });
     renderPanel({ animation: twoTimelines, hasStaticTint: true });
-    for (const label of ['Saturation', 'Brightness', 'Contrast', 'Invert']) {
-      // Two rows -> two checkboxes per label; both must be disabled.
-      const checkboxes = screen.getAllByLabelText(label);
-      expect(checkboxes).toHaveLength(2);
-      for (const checkbox of checkboxes) expect(checkbox).toBeDisabled();
+
+    for (const name of ['bob0', 'bob1']) {
+      await user.dblClick(screen.getByRole('button', { name: `Edit timeline ${name}` }));
+      for (const label of ['Saturation', 'Brightness', 'Contrast', 'Invert']) {
+        expect(screen.getByLabelText(label)).toBeDisabled();
+      }
+      await user.click(screen.getByRole('button', { name: 'Close' }));
     }
   });
 

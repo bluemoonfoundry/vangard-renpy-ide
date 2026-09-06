@@ -2,14 +2,17 @@
  * @file SpriteAnimationPanel.tsx
  * @description Root panel for one sprite's `SpriteAnimation`, opened from
  * the "Timeline" toggle in `SceneComposer`. Renders a combine-mode toggle
- * (hidden until 2+ timelines exist), the list of `TimelineRow`s, an
- * "+ Add Timeline" button, and a single overall play/scrub control that
- * previews the sprite's fully combined animation. The generated ATL itself
+ * (hidden until 2+ timelines exist), a compact table of `TimelineRow`
+ * summaries, an "+ Add Timeline" button, and a single overall play/scrub
+ * control that previews the sprite's fully combined animation. Full editing
+ * of a timeline happens in `TimelineEditDialog`, opened by double-clicking a
+ * row or immediately after adding a new timeline. The generated ATL itself
  * comes from `atlCodeGenerator.ts`, independent of this preview.
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { AnimatableProperty, SpriteAnimation, SpriteTimeline } from '@/types';
 import TimelineRow from './TimelineRow';
+import TimelineEditDialog from './TimelineEditDialog';
 import ConfirmModal from './ConfirmModal';
 import { startPlayback, interpolateSpriteAnimation, getTotalDuration, type PlaybackHandle } from '@/lib/timelinePreview';
 import { createId } from '@/lib/createId';
@@ -39,6 +42,7 @@ const SpriteAnimationPanel: React.FC<SpriteAnimationPanelProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [playheadTime, setPlayheadTime] = useState(0);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [editingTimelineId, setEditingTimelineId] = useState<string | null>(null);
   const playbackRef = useRef<PlaybackHandle | null>(null);
 
   const stopPlayback = useCallback(() => {
@@ -120,6 +124,7 @@ const SpriteAnimationPanel: React.FC<SpriteAnimationPanelProps> = ({
     const nextIndex = usedIndices.length > 0 ? Math.max(...usedIndices) + 1 : 0;
     const newTimeline = createTimeline(spriteLabel, nextIndex);
     onChangeAnimation(prev => ({ ...prev, timelines: [...(prev.timelines ?? []), newTimeline] }));
+    setEditingTimelineId(newTimeline.id);
   };
 
   const handleRemoveTimeline = (id: string) => {
@@ -200,17 +205,16 @@ const SpriteAnimationPanel: React.FC<SpriteAnimationPanelProps> = ({
         className="w-full"
       />
 
-      <div className="space-y-2">
+      <div className="space-y-1">
+        <div className="flex items-center gap-3 px-2 text-xs font-semibold text-secondary uppercase tracking-wide">
+          <span className="flex-1">Name</span>
+          <span className="flex-[2]">Keyframes</span>
+        </div>
         {timelines.map((timeline, index) => (
           <TimelineRow
             key={timeline.id}
             timeline={timeline}
-            combineMode={animation.combineMode}
-            canLoop={animation.combineMode === 'parallel' || timeline.id === lastLoopableId}
-            propertiesClaimedBySiblings={timelines.filter((_, i) => i !== index).flatMap(t => t.properties)}
-            hasStaticTint={hasStaticTint}
-            currentValues={currentValues}
-            onChangeTimeline={(updater) => handleChangeTimeline(timeline.id, updater)}
+            onOpenEditor={() => setEditingTimelineId(timeline.id)}
             onRemoveTimeline={() => handleRemoveTimeline(timeline.id)}
             onMoveUp={index > 0 ? () => handleMove(index, -1) : undefined}
             onMoveDown={index < timelines.length - 1 ? () => handleMove(index, 1) : undefined}
@@ -221,6 +225,24 @@ const SpriteAnimationPanel: React.FC<SpriteAnimationPanelProps> = ({
       <button onClick={handleAddTimeline} className="w-full px-3 py-1.5 rounded border border-dashed border-primary text-secondary hover:text-primary hover:border-accent text-sm font-bold">
         + Add Timeline
       </button>
+
+      {(() => {
+        const editingIndex = timelines.findIndex(t => t.id === editingTimelineId);
+        if (editingIndex === -1) return null;
+        const editingTimeline = timelines[editingIndex];
+        return (
+          <TimelineEditDialog
+            timeline={editingTimeline}
+            combineMode={animation.combineMode}
+            canLoop={animation.combineMode === 'parallel' || editingTimeline.id === lastLoopableId}
+            propertiesClaimedBySiblings={timelines.filter((_, i) => i !== editingIndex).flatMap(t => t.properties)}
+            hasStaticTint={hasStaticTint}
+            currentValues={currentValues}
+            onChangeTimeline={(updater) => handleChangeTimeline(editingTimeline.id, updater)}
+            onClose={() => setEditingTimelineId(null)}
+          />
+        );
+      })()}
     </div>
   );
 };
