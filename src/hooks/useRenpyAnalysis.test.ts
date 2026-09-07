@@ -414,6 +414,62 @@ describe('performRenpyAnalysis — Variables', () => {
 });
 
 // ===========================================================================
+// Python Block Functions & Variables
+// ===========================================================================
+
+describe('performRenpyAnalysis — Python block functions & variables', () => {
+  it('extracts a function defined in an init python block', () => {
+    const result = performRenpyAnalysis([
+      block('init python:\n    def give_item(name, qty=1):\n        pass\n'),
+    ]);
+    const v = result.variables.get('give_item');
+    expect(v).toBeDefined();
+    expect(v!.type).toBe('function');
+    expect(v!.initialValue).toBe('name, qty=1');
+    expect(v!.line).toBe(2);
+  });
+
+  it('extracts a function defined in a plain python block', () => {
+    const result = performRenpyAnalysis([
+      block('python:\n    def compute_score():\n        return 1\n'),
+    ]);
+    expect(result.variables.get('compute_score')!.type).toBe('function');
+  });
+
+  it('extracts a top-level assignment inside a python block', () => {
+    const result = performRenpyAnalysis([
+      block('init python:\n    inventory_limit = 20\n'),
+    ]);
+    const v = result.variables.get('inventory_limit');
+    expect(v).toBeDefined();
+    expect(v!.type).toBe('implicit');
+    expect(v!.initialValue).toBe('20');
+  });
+
+  it('does not extract nested/indented assignments inside a function body', () => {
+    const result = performRenpyAnalysis([
+      block('init python:\n    def give_item(name):\n        temp = name\n'),
+    ]);
+    expect(result.variables.has('temp')).toBe(false);
+    expect(result.variables.has('give_item')).toBe(true);
+  });
+
+  it('extracts functions and variables from python early blocks', () => {
+    const result = performRenpyAnalysis([
+      block('python early:\n    def register_things():\n        pass\n'),
+    ]);
+    expect(result.variables.get('register_things')!.type).toBe('function');
+  });
+
+  it('does not overwrite an existing define/default with a python-block extraction of the same name', () => {
+    const result = performRenpyAnalysis([
+      block('default score = 0\n\ninit python:\n    def score():\n        pass\n'),
+    ]);
+    expect(result.variables.get('score')!.type).toBe('default');
+  });
+});
+
+// ===========================================================================
 // Screen Parsing
 // ===========================================================================
 

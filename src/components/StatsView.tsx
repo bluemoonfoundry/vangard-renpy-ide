@@ -454,7 +454,12 @@ const StatsView: React.FC<StatsViewProps> = ({
     let defaulted = 0;
     let implicit = 0;
     let constants = 0;
+    let total = 0;
     variables.forEach(v => {
+      // Python-block functions aren't save-persistence variables — exclude them
+      // from these stats, which are about define/default/implicit variable usage.
+      if (v.type === 'function') return;
+      total++;
       if (v.name.startsWith('persistent.')) {
         persistent++;
       } else if (v.type === 'define') {
@@ -465,7 +470,7 @@ const StatsView: React.FC<StatsViewProps> = ({
         defaulted++;
       }
     });
-    return { total: variables.size, persistent, defaulted, implicit, constants };
+    return { total, persistent, defaulted, implicit, constants };
   }, [variables]);
 
   const undefinedVariableCount = useMemo(() => {
