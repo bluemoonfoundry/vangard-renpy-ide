@@ -302,6 +302,7 @@ function createMockEditorInstance(content = '', selectedText = '') {
     getPosition: vi.fn(() => null),
     getSelection: vi.fn(() => mockSelection),
     setPosition: vi.fn(),
+    setSelection: vi.fn(),
     revealLineInCenter: vi.fn(),
     deltaDecorations: vi.fn(() => []),
     onDidChangeModelContent: vi.fn((_listener: (e: unknown) => void) => ({ dispose: vi.fn() })),
@@ -335,7 +336,7 @@ function createMockMonacoInstance() {
       MouseTargetType: { CONTENT_TEXT: 6 },
     },
     KeyMod: { CtrlCmd: 2048, Shift: 1024 },
-    KeyCode: { KeyS: 49 },
+    KeyCode: { KeyS: 49, KeyB: 32, KeyI: 41, KeyU: 52 },
     MarkerSeverity: { Error: 8, Warning: 4, Info: 2, Hint: 1 },
     Range: class {
       constructor(
@@ -612,6 +613,55 @@ describe('EditorView', () => {
     const action = mockEd.addAction.mock.calls.find((c: unknown[]) => (c[0] as { id: string }).id === 'create-variable-from-selection')?.[0] as { run: (ed: unknown) => void };
     action.run(mockEd);
     expect(onCreateVariableFromSelection).not.toHaveBeenCalled();
+  });
+
+  it('registers the four formatting actions on mount', async () => {
+    const props = makeEditorViewProps();
+    const { mockEd } = await renderAndMount(props);
+    const actionIds = mockEd.addAction.mock.calls.map((c: unknown[]) => (c[0] as { id: string }).id);
+    expect(actionIds).toContain('format-bold');
+    expect(actionIds).toContain('format-italic');
+    expect(actionIds).toContain('format-underline');
+    expect(actionIds).toContain('format-strikethrough');
+  });
+
+  it('wraps selected text with {b}{/b} when the bold action runs', async () => {
+    const props = makeEditorViewProps();
+    const { mockEd } = await renderAndMount(props);
+    (mockEd.getModel() as { getValueInRange: ReturnType<typeof vi.fn> }).getValueInRange.mockReturnValue('hello');
+    (mockEd.getSelection as ReturnType<typeof vi.fn>).mockReturnValue({
+      isEmpty: () => false,
+      startLineNumber: 1,
+      startColumn: 5,
+      endLineNumber: 1,
+      endColumn: 10,
+    });
+    const action = mockEd.addAction.mock.calls.find((c: unknown[]) => (c[0] as { id: string }).id === 'format-bold')?.[0] as { run: (ed: unknown) => void };
+    action.run(mockEd);
+    expect(mockEd.executeEdits).toHaveBeenCalledWith('format-selection', [
+      expect.objectContaining({ text: '{b}hello{/b}' }),
+    ]);
+    expect(mockEd.setSelection).toHaveBeenCalled();
+    expect(mockEd.focus).toHaveBeenCalled();
+  });
+
+  it('inserts an empty {i}{/i} pair and places the cursor between the tags when there is no selection', async () => {
+    const props = makeEditorViewProps();
+    const { mockEd } = await renderAndMount(props);
+    (mockEd.getModel() as { getValueInRange: ReturnType<typeof vi.fn> }).getValueInRange.mockReturnValue('');
+    (mockEd.getSelection as ReturnType<typeof vi.fn>).mockReturnValue({
+      isEmpty: () => true,
+      startLineNumber: 3,
+      startColumn: 7,
+      endLineNumber: 3,
+      endColumn: 7,
+    });
+    const action = mockEd.addAction.mock.calls.find((c: unknown[]) => (c[0] as { id: string }).id === 'format-italic')?.[0] as { run: (ed: unknown) => void };
+    action.run(mockEd);
+    expect(mockEd.executeEdits).toHaveBeenCalledWith('format-selection', [
+      expect.objectContaining({ text: '{i}{/i}' }),
+    ]);
+    expect(mockEd.setPosition).toHaveBeenCalledWith({ lineNumber: 3, column: 10 });
   });
 
   it('syncs renpyHasSelection context key on context menu open', async () => {
