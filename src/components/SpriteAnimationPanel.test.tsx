@@ -40,10 +40,38 @@ describe('SpriteAnimationPanel', () => {
 
   it('shows an "Add Animation" prompt when the sprite has no animation', async () => {
     const user = userEvent.setup();
-    const { props } = renderPanel({ animation: null });
+    const { props } = renderPanel({ animation: null, onCreateAnimation: vi.fn(() => 't1') });
     expect(screen.getByText(/No animation for bob yet/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '+ Add Animation' }));
     expect(props.onCreateAnimation).toHaveBeenCalled();
+  });
+
+  it('opens the edit dialog for the starter timeline immediately after Add Animation', async () => {
+    const user = userEvent.setup();
+    const Wrapper: React.FC = () => {
+      const [animation, setAnimation] = React.useState<SpriteAnimation | null>(null);
+      const handleCreateAnimation = (): string => {
+        const starterTimeline = timeline({ id: 't1', name: 'bob0' });
+        setAnimation({ spriteId: 'bob', combineMode: 'parallel', timelines: [starterTimeline] });
+        return starterTimeline.id;
+      };
+      return (
+        <SpriteAnimationPanel
+          spriteLabel="bob"
+          animation={animation}
+          currentValues={currentValues}
+          hasStaticTint={false}
+          onCreateAnimation={handleCreateAnimation}
+          onChangeAnimation={(updater) => setAnimation(prev => prev && updater(prev))}
+          onDeleteAnimation={() => {}}
+          onPreviewUpdate={() => {}}
+        />
+      );
+    };
+    render(<Wrapper />);
+    await user.click(screen.getByRole('button', { name: '+ Add Animation' }));
+    expect(screen.getByRole('heading', { name: 'Edit Timeline' })).toBeInTheDocument();
+    expect(screen.getByDisplayValue('bob0')).toBeInTheDocument();
   });
 
   it('renders one TimelineRow per timeline', () => {
@@ -72,7 +100,7 @@ describe('SpriteAnimationPanel', () => {
           animation={animation}
           currentValues={currentValues}
           hasStaticTint={false}
-          onCreateAnimation={() => {}}
+          onCreateAnimation={() => ''}
           onChangeAnimation={(updater) => setAnimation(updater)}
           onDeleteAnimation={() => {}}
           onPreviewUpdate={() => {}}
@@ -87,7 +115,7 @@ describe('SpriteAnimationPanel', () => {
 
   it('hides the combine-mode toggle with only one timeline, and shows it with two or more', () => {
     const { rerender } = render(
-      <SpriteAnimationPanel spriteLabel="bob" animation={anim()} currentValues={currentValues} hasStaticTint={false} onCreateAnimation={() => {}} onChangeAnimation={() => {}} onDeleteAnimation={() => {}} onPreviewUpdate={() => {}} />
+      <SpriteAnimationPanel spriteLabel="bob" animation={anim()} currentValues={currentValues} hasStaticTint={false} onCreateAnimation={() => ''} onChangeAnimation={() => {}} onDeleteAnimation={() => {}} onPreviewUpdate={() => {}} />
     );
     expect(screen.queryByRole('radio', { name: 'Parallel' })).not.toBeInTheDocument();
 
@@ -97,7 +125,7 @@ describe('SpriteAnimationPanel', () => {
         animation={anim({ timelines: [timeline({ id: 't1' }), timeline({ id: 't2' })] })}
         currentValues={currentValues}
         hasStaticTint={false}
-        onCreateAnimation={() => {}}
+        onCreateAnimation={() => ''}
         onChangeAnimation={() => {}}
         onDeleteAnimation={() => {}}
         onPreviewUpdate={() => {}}

@@ -808,8 +808,8 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         return (activeAnimation?.timelines ?? []).some(t => t.properties.some(p => MATRIX_FACTOR_PROPERTIES.includes(p)));
     }, [activeAnimation]);
 
-    const handleCreateAnimation = useCallback(() => {
-        if (!selectedSpriteId || !activeSprite) return;
+    const handleCreateAnimation = useCallback((): string => {
+        if (!selectedSpriteId || !activeSprite) return '';
         saveUndo();
         const spriteLabel = selectedSpriteId === 'background' ? 'Background' : getRenpyTag(activeSprite.image);
         const starterTimeline: SpriteTimeline = {
@@ -817,6 +817,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         };
         const newAnimation: SpriteAnimation = { spriteId: selectedSpriteId, combineMode: 'parallel', timelines: [starterTimeline] };
         onSceneChange(prev => ({ ...prev, animations: [...(prev.animations ?? []), newAnimation] }));
+        return starterTimeline.id;
     }, [selectedSpriteId, activeSprite, getRenpyTag, saveUndo, onSceneChange]);
 
     const handleChangeAnimation = useCallback((updater: (prev: SpriteAnimation) => SpriteAnimation) => {

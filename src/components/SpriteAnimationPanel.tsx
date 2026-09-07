@@ -25,7 +25,8 @@ interface SpriteAnimationPanelProps {
   currentValues: Record<AnimatableProperty, number>;
   /** True disables the four matrix-factor checkboxes on every TimelineRow: this sprite already has a static color effect applied (tint/colorize, or a non-default saturation/brightness/contrast/invert), and animating color together with an existing static effect isn't supported. */
   hasStaticTint: boolean;
-  onCreateAnimation: () => void;
+  /** Creates the animation (with a starter timeline) and returns that starter timeline's id, so its edit dialog can be opened immediately. */
+  onCreateAnimation: () => string;
   onChangeAnimation: (updater: (prev: SpriteAnimation) => SpriteAnimation) => void;
   onDeleteAnimation: () => void;
   /** Called every preview frame with interpolated values, and with `null` when playback stops/resets. */
@@ -64,7 +65,7 @@ const SpriteAnimationPanel: React.FC<SpriteAnimationPanelProps> = ({
     return (
       <div className="p-4 text-center">
         <p className="text-sm text-secondary mb-3">No animation for {spriteLabel} yet.</p>
-        <button onClick={onCreateAnimation} className="px-3 py-1.5 rounded bg-accent hover:bg-accent-hover text-white text-sm font-bold">
+        <button onClick={() => setEditingTimelineId(onCreateAnimation())} className="px-3 py-1.5 rounded bg-accent hover:bg-accent-hover text-white text-sm font-bold">
           + Add Animation
         </button>
       </div>
