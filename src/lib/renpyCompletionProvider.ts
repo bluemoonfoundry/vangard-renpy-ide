@@ -233,6 +233,38 @@ const SCREEN_PROPERTY_COMPLETIONS: { label: string; detail: string }[] = [
 ];
 
 /**
+ * Builds a completion item for a variable/function from analysis data. Functions
+ * (python-block `def`s) get a Function kind, a parenthesized snippet insert, and
+ * their parameter list shown as detail instead of an initial value.
+ */
+function buildVariableCompletionItem(
+  name: string,
+  info: { type?: string; initialValue?: string },
+  range: CompletionRange,
+  sortPrefix: string
+): CompletionItem {
+  if (info.type === 'function') {
+    return {
+      label: name,
+      kind: CompletionItemKind.Function,
+      detail: `function(${info.initialValue || ''})`,
+      insertText: `${name}($1)`,
+      insertTextRules: InsertTextRule.InsertAsSnippet,
+      range,
+      sortText: `${sortPrefix}${name}`,
+    };
+  }
+  return {
+    label: name,
+    kind: CompletionItemKind.Variable,
+    detail: `${info.type || 'variable'}: ${info.initialValue || ''}`,
+    insertText: name,
+    range,
+    sortText: `${sortPrefix}${name}`,
+  };
+}
+
+/**
  * Generates completion items for the given context and analysis data.
  */
 export function getRenpyCompletions(
@@ -295,16 +327,9 @@ export function getRenpyCompletions(
       break;
 
     case 'variable':
-      // Suggest variables
+      // Suggest variables (and user-defined python functions)
       for (const [name, info] of data.variables) {
-        items.push({
-          label: name,
-          kind: CompletionItemKind.Variable,
-          detail: `${info.type || 'variable'}: ${info.initialValue || ''}`,
-          insertText: name,
-          range,
-          sortText: `0_${name}`,
-        });
+        items.push(buildVariableCompletionItem(name, info, range, '0_'));
       }
       break;
 
@@ -375,14 +400,7 @@ export function getRenpyCompletions(
 
       // Variables
       for (const [name, info] of data.variables) {
-        items.push({
-          label: name,
-          kind: CompletionItemKind.Variable,
-          detail: `${info.type || 'variable'}: ${info.initialValue || ''}`,
-          insertText: name,
-          range,
-          sortText: `3_${name}`,
-        });
+        items.push(buildVariableCompletionItem(name, info, range, '3_'));
       }
 
       // Screens

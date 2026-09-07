@@ -78,8 +78,10 @@ const VariableEditor: React.FC<{
     prefillInitialValue?: string;
 }> = ({ onSave, onCancel, existingNames, editing, prefillName, prefillInitialValue }) => {
     const [name, setName] = useState(editing?.name ?? prefillName ?? '');
-    // Convert implicit to default when editing (implicit vars can't be manually created)
-    const [type, setType] = useState<'define' | 'default'>(editing?.type === 'implicit' ? 'default' : (editing?.type ?? 'default'));
+    // Convert implicit/function to default when editing (these can't be manually created)
+    const [type, setType] = useState<'define' | 'default'>(
+        editing?.type === 'define' ? 'define' : 'default'
+    );
     const [initialValue, setInitialValue] = useState(editing?.initialValue ?? prefillInitialValue ?? 'False');
     const [nameError, setNameError] = useState('');
 
@@ -154,7 +156,9 @@ const VariableManager: React.FC<VariableManagerProps> = ({ analysisResult, onAdd
     }, [prefill]);
 
     const filteredVariables = useMemo(() => {
-        const allVars = Array.from(variables.values());
+        // Python-block functions aren't save-persistence variables — they belong in
+        // the editor's completion list, not this panel.
+        const allVars = Array.from(variables.values()).filter((v: Variable) => v.type !== 'function');
         if (!filterStoryVars) return allVars;
         return allVars.filter((v: Variable) => storyBlockIds.has(v.definedInBlockId));
     }, [variables, filterStoryVars, storyBlockIds]);

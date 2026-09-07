@@ -1526,6 +1526,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                 enabled: true,
                 delay: 300,
             },
+            acceptSuggestionOnEnter: 'smart',
             'semanticHighlighting.enabled': true,
           }}
         />
