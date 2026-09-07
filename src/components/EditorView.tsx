@@ -88,6 +88,37 @@ function getSelectedText(ed: monaco.editor.ICodeEditor, fallback: string = ''): 
   return model.getValueInRange(selection);
 }
 
+// Wraps the current selection with a Ren'Py formatting tag pair (e.g. {b}...{/b}).
+// With no selection, inserts an empty tag pair and places the cursor between them.
+function wrapSelectionWithTag(ed: monaco.editor.ICodeEditor, openTag: string, closeTag: string): void {
+  const selection = ed.getSelection();
+  const model = ed.getModel();
+  if (!selection || !model) return;
+
+  const selectedText = model.getValueInRange(selection);
+  const newText = `${openTag}${selectedText}${closeTag}`;
+
+  ed.executeEdits('format-selection', [{ range: selection, text: newText, forceMoveMarkers: true }]);
+
+  if (selectedText) {
+    const selectedLines = selectedText.split('\n');
+    const endLineNumber = selection.startLineNumber + selectedLines.length - 1;
+    const endColumn = selectedLines.length > 1
+      ? selectedLines[selectedLines.length - 1].length + 1
+      : selection.startColumn + openTag.length + selectedText.length;
+    ed.setSelection(new monaco.Range(
+      selection.startLineNumber,
+      selection.startColumn + openTag.length,
+      endLineNumber,
+      endColumn,
+    ));
+  } else {
+    const cursorColumn = selection.startColumn + openTag.length;
+    ed.setPosition({ lineNumber: selection.startLineNumber, column: cursorColumn });
+  }
+  ed.focus();
+}
+
 function parseDialogueLine(
   line: string,
   characters: RenpyAnalysisResult['characters']
@@ -955,6 +986,41 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     });
 
     editor.addAction({
+        id: 'format-bold',
+        label: 'Format: Bold',
+        keybindings: [monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyB],
+        contextMenuGroupId: 'renpy-format',
+        contextMenuOrder: 1,
+        run: (ed) => wrapSelectionWithTag(ed, '{b}', '{/b}'),
+    });
+
+    editor.addAction({
+        id: 'format-italic',
+        label: 'Format: Italic',
+        keybindings: [monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyI],
+        contextMenuGroupId: 'renpy-format',
+        contextMenuOrder: 2,
+        run: (ed) => wrapSelectionWithTag(ed, '{i}', '{/i}'),
+    });
+
+    editor.addAction({
+        id: 'format-underline',
+        label: 'Format: Underline',
+        keybindings: [monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyU],
+        contextMenuGroupId: 'renpy-format',
+        contextMenuOrder: 3,
+        run: (ed) => wrapSelectionWithTag(ed, '{u}', '{/u}'),
+    });
+
+    editor.addAction({
+        id: 'format-strikethrough',
+        label: 'Format: Strikethrough',
+        contextMenuGroupId: 'renpy-format',
+        contextMenuOrder: 4,
+        run: (ed) => wrapSelectionWithTag(ed, '{s}', '{/s}'),
+    });
+
+    editor.addAction({
         id: 'create-file-from-selection',
         label: 'New File from Selection',
         contextMenuGroupId: 'renpy',
@@ -1460,6 +1526,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                 enabled: true,
                 delay: 300,
             },
+            acceptSuggestionOnEnter: 'smart',
             'semanticHighlighting.enabled': true,
           }}
         />

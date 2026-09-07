@@ -60,11 +60,11 @@ export interface UseFileSystemManagerParams {
   blocks: Block[];
   addBlock: (filePath: string, content: string, initialPosition?: Position, options?: { markDirty?: boolean }) => string;
   updateBlock: (id: string, data: Partial<Block>) => void;
-  deleteBlock: (id: string) => void;
   clipboard: ClipboardState;
   setClipboard: React.Dispatch<React.SetStateAction<ClipboardState>>;
   openDeleteConfirmModal: (paths: string[], onConfirm: () => void) => void;
   addToast: (message: string, type?: ToastType) => void;
+  handleRefreshProject: () => Promise<void>;
 }
 
 export interface UseFileSystemManagerReturn {
@@ -82,8 +82,8 @@ export interface UseFileSystemManagerReturn {
  * Performs the IPC calls and reconciles both the file system tree and `.rpy` blocks.
  */
 export function useFileSystemManager({
-  projectRootPath, setFileSystemTree, blocks, addBlock, updateBlock, deleteBlock,
-  clipboard, setClipboard, openDeleteConfirmModal, addToast,
+  projectRootPath, setFileSystemTree, blocks, addBlock, updateBlock,
+  clipboard, setClipboard, openDeleteConfirmModal, addToast, handleRefreshProject,
 }: UseFileSystemManagerParams): UseFileSystemManagerReturn {
   const handleCreateNode = useCallback(async (parentPath: string, name: string, type: 'file' | 'folder') => {
     if (!window.electronAPI || !projectRootPath) return null;
@@ -150,12 +150,6 @@ export function useFileSystemManager({
   const handleDeleteNode = useCallback((paths: string[]) => {
       if (!window.electronAPI || !projectRootPath) return;
 
-      // Check if any of the paths are .rpy files that have corresponding blocks
-      const rpyFilesToDelete = paths.filter(path => path.toLowerCase().endsWith('.rpy'));
-      const blocksToDelete = rpyFilesToDelete.map(rpyPath =>
-          blocks.find(block => block.filePath === rpyPath)
-      ).filter(Boolean) as Block[];
-
       // Show confirmation modal
       openDeleteConfirmModal(paths, async () => {
               try {
@@ -165,28 +159,18 @@ export function useFileSystemManager({
                       await window.electronAPI!.removeEntry(fullPath);
                   }
 
-                  // Remove corresponding blocks for .rpy files
-                  blocksToDelete.forEach(block => {
-                      if (block) {
-                          deleteBlock(block.id);
-                          addToast(`Removed block for ${block.filePath}`, 'info');
-                      }
-                  });
-
-                  const projData = await window.electronAPI!.loadProject(projectRootPath);
-                  setFileSystemTree(projData.tree);
-
-                  if (blocksToDelete.length > 0) {
-                      addToast(`Deleted ${paths.length} file(s) and removed ${blocksToDelete.length} block(s)`, 'success');
-                  } else {
-                      addToast(`Deleted ${paths.length} file(s)`, 'success');
-                  }
+                  // Reconcile everything derived from disk state in one pass -- file tree,
+                  // .rpy blocks (closing any open tabs for deleted files), and the
+                  // project images/audios shown in the Story Elements pane. A manual,
+                  // rpy-only reconciliation here previously left deleted images/audios
+                  // stuck in the pane until the user hit "Refresh" themselves.
+                  await handleRefreshProject();
               } catch (err) {
                   logger.error('Failed to delete:', err);
                   addToast('Failed to delete file(s)', 'error');
               }
       });
-  }, [projectRootPath, blocks, deleteBlock, addToast, openDeleteConfirmModal, setFileSystemTree]);
+  }, [projectRootPath, addToast, openDeleteConfirmModal, handleRefreshProject]);
 
   const handleMoveNode = useCallback(async (sourcePaths: string[], targetPath: string) => {
       if (!window.electronAPI || !projectRootPath) return;

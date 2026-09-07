@@ -446,4 +446,4 @@ Buttons are arranged left-to-right. The canvas switcher (Story / Route / Choice)
 
 ---
 
-*Vangard Studio — v1.1.0*
+*Vangard Studio — v1.1.1*

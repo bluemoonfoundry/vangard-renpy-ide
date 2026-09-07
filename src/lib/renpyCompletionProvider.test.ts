@@ -147,6 +147,23 @@ describe('getRenpyCompletions', () => {
     expect(items.every(i => i.kind === CompletionItemKind.Variable)).toBe(true);
   });
 
+  it('renders python-block functions as snippet-inserting Function completions', () => {
+    const dataWithFunction: RenpyCompletionData = {
+      ...sampleData,
+      variables: new Map([
+        ...sampleData.variables,
+        ['give_item', { name: 'give_item', type: 'function', initialValue: 'name, qty=1' }],
+      ]),
+    };
+    const items = getRenpyCompletions('variable', dataWithFunction, range);
+    const fn = items.find(i => i.label === 'give_item');
+    expect(fn).toBeDefined();
+    expect(fn!.kind).toBe(CompletionItemKind.Function);
+    expect(fn!.insertText).toBe('give_item($1)');
+    expect(fn!.insertTextRules).toBe(InsertTextRule.InsertAsSnippet);
+    expect(fn!.detail).toContain('name, qty=1');
+  });
+
   it('returns keywords, characters, labels, variables, screens, and snippets for general context', () => {
     const items = getRenpyCompletions('general', sampleData, range);
 

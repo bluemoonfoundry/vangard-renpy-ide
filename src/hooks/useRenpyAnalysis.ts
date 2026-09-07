@@ -36,6 +36,9 @@ const NARRATION_REGEX = /^\s*"(?!:)/;
 const SCREEN_REGEX = /^\s*screen\s+([a-zA-Z0-9_]+)\s*(\(.*\))?:/;
 const DEFINE_DEFAULT_REGEX = /^\s*(define|default)\s+([a-zA-Z0-9_.]+)\s*=\s*(?!\s*Character\s*\()(.+)/;
 const IMAGE_DEF_REGEX = /^\s*image\s+([a-zA-Z0-9_ ]+?)\s*=/;
+const PYTHON_BLOCK_HEADER_REGEX = /^(\s*)(?:init\s+(?:-?\d+\s+)?python|python)(?:\s+(?:early|hide|in\s+[a-zA-Z0-9_.]+))?\s*:/;
+const PYTHON_DEF_REGEX = /^\s*def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)\s*:/;
+const PYTHON_ASSIGNMENT_REGEX = /^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=(?!=)\s*(.+)/;
 const SCENE_STATEMENT_REGEX = /^\s*scene\s+((?!expression\b)[a-zA-Z0-9_][a-zA-Z0-9_ ]*?)(?:\s+with\b|\s*(?:#|$))/;
 
 const PALETTE = [
@@ -332,6 +335,79 @@ export const performRenpyAnalysis = (blocks: AnalysisBlock[]): RenpyAnalysisResu
             initialValue: value,
             definedInBlockId: block.id,
             line: index + 1
+          });
+        }
+      }
+    });
+  });
+
+  // Detect functions and top-level variables defined inside python blocks
+  // (`python:`, `init python:`, `python early:`, etc.), so users get completions
+  // for their own Python-side helpers when typing `$ ...` (issue #223).
+  blocks.forEach(block => {
+    const lines = block.content.split('\n');
+    const tripleQuotedMask = getTripleQuotedLineMask(block.content);
+
+    let inPythonBlock = false;
+    let blockIndent = 0; // indentation of the python block header itself
+    let statementIndent: number | null = null; // indentation of top-level statements inside it
+
+    lines.forEach((line, index) => {
+      if (tripleQuotedMask[index]) return;
+      if (line.trim() === '' || line.trim().startsWith('#')) return;
+
+      const indent = line.match(/^(\s*)/)?.[1].length ?? 0;
+
+      const headerMatch = line.match(PYTHON_BLOCK_HEADER_REGEX);
+      if (headerMatch) {
+        inPythonBlock = true;
+        blockIndent = headerMatch[1].length;
+        statementIndent = null;
+        return;
+      }
+
+      if (!inPythonBlock) return;
+
+      // Left the python block once we dedent back to (or past) its header indent.
+      if (indent <= blockIndent) {
+        inPythonBlock = false;
+        return;
+      }
+
+      // Lock in the indentation of the block's first statement; only lines at
+      // that exact indent are "top-level" within the block (not nested in a
+      // function/loop/if body).
+      if (statementIndent === null) statementIndent = indent;
+      if (indent !== statementIndent) return;
+
+      const commentIndex = line.indexOf('#');
+      const cleanLine = commentIndex >= 0 ? line.substring(0, commentIndex) : line;
+
+      const defMatch = cleanLine.match(PYTHON_DEF_REGEX);
+      if (defMatch) {
+        const name = defMatch[1];
+        if (!result.variables.has(name)) {
+          result.variables.set(name, {
+            name,
+            type: 'function',
+            initialValue: defMatch[2].trim(),
+            definedInBlockId: block.id,
+            line: index + 1,
+          });
+        }
+        return;
+      }
+
+      const assignMatch = cleanLine.match(PYTHON_ASSIGNMENT_REGEX);
+      if (assignMatch) {
+        const name = assignMatch[1];
+        if (!result.variables.has(name)) {
+          result.variables.set(name, {
+            name,
+            type: 'implicit',
+            initialValue: assignMatch[2].trim(),
+            definedInBlockId: block.id,
+            line: index + 1,
           });
         }
       }

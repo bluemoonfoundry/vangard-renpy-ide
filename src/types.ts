@@ -281,14 +281,14 @@ export interface Character {
  * Represents a Ren'Py variable definition (define or default statement).
  * @interface Variable
  * @property {string} name - Variable identifier (e.g., "persistent.player_name")
- * @property {'define' | 'default' | 'implicit'} type - Statement type: 'define' for constants, 'default' for dynamic, 'implicit' for $ statements
- * @property {string} initialValue - Initial value expression as string
+ * @property {'define' | 'default' | 'implicit' | 'function'} type - Statement type: 'define' for constants, 'default' for dynamic, 'implicit' for $ statements and top-level python-block assignments, 'function' for python-block `def`s
+ * @property {string} initialValue - Initial value expression as string (parameter list for functions)
  * @property {string} definedInBlockId - ID of the block where variable is defined
  * @property {number} line - Line number in the file where variable is defined
  */
 export interface Variable {
   name: string;
-  type: 'define' | 'default' | 'implicit';
+  type: 'define' | 'default' | 'implicit' | 'function';
   initialValue: string;
   definedInBlockId: string;
   line: number;
