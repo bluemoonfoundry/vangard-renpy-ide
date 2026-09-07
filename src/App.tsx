@@ -873,7 +873,7 @@ const App: React.FC = () => {
   const {
     updateBlock, updateGroup, updateBlockPositions, updateGroupPositions,
     addBlock, handleCreateBlockConfirm, handleCreateBlockFromCanvas,
-    deleteBlock, deleteBlockWithFile, deleteBlocksWithFile,
+    deleteBlock: _deleteBlock, deleteBlockWithFile, deleteBlocksWithFile,
     createGroupFromSelection, deleteGroup, getSelectedFolderForNewBlock,
   } = useBlockManagement({
     blocks, setBlocks, setGroups, setDirtyBlockIds,
@@ -1540,8 +1540,8 @@ const App: React.FC = () => {
       handleCreateNode, handleRenameNode, handleDeleteNode, handleMoveNode,
       handleCut, handleCopy, handlePaste,
   } = useFileSystemManager({
-      projectRootPath, setFileSystemTree, blocks, addBlock, updateBlock, deleteBlock,
-      clipboard, setClipboard, openDeleteConfirmModal, addToast,
+      projectRootPath, setFileSystemTree, blocks, addBlock, updateBlock,
+      clipboard, setClipboard, openDeleteConfirmModal, addToast, handleRefreshProject,
   });
 
   // --- User Snippet CRUD ---

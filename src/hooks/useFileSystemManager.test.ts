@@ -177,11 +177,11 @@ function makeHookParams(overrides: Partial<UseFileSystemManagerParams> = {}): Us
     blocks: [],
     addBlock: vi.fn(),
     updateBlock: vi.fn(),
-    deleteBlock: vi.fn(),
     clipboard: null,
     setClipboard: vi.fn(),
     openDeleteConfirmModal: vi.fn(),
     addToast: vi.fn(),
+    handleRefreshProject: vi.fn(),
     ...overrides,
   };
 }
@@ -382,20 +382,37 @@ describe('useFileSystemManager — handleDeleteNode', () => {
     );
   });
 
-  it('identifies .rpy blocks for deletion and deletes them on confirm', async () => {
-    const block = createBlock({ filePath: 'game/script.rpy' });
-    const deleteBlock = vi.fn();
+  it('removes the file via IPC and reconciles project state on confirm', async () => {
+    const handleRefreshProject = vi.fn();
     const openDeleteConfirmModal = vi.fn((_paths: string[], onConfirm: () => void) => {
       onConfirm(); // simulate user confirming
     });
     const { result } = renderHook(() =>
-      useFileSystemManager(makeHookParams({ blocks: [block], deleteBlock, openDeleteConfirmModal }))
+      useFileSystemManager(makeHookParams({ handleRefreshProject, openDeleteConfirmModal }))
     );
     await act(async () => {
       result.current.handleDeleteNode(['game/script.rpy']);
     });
     expect(api.removeEntry).toHaveBeenCalled();
-    expect(deleteBlock).toHaveBeenCalledWith(block.id);
+    // Reconciliation (blocks/tabs/images/audios) is delegated to a single
+    // full refresh so deleted images/audios also disappear from the Story
+    // Elements pane, not just deleted .rpy blocks.
+    expect(handleRefreshProject).toHaveBeenCalled();
+  });
+
+  it('shows an error toast when the delete IPC call fails', async () => {
+    const addToast = vi.fn();
+    api.removeEntry.mockRejectedValue(new Error('locked'));
+    const openDeleteConfirmModal = vi.fn((_paths: string[], onConfirm: () => void) => {
+      onConfirm();
+    });
+    const { result } = renderHook(() =>
+      useFileSystemManager(makeHookParams({ addToast, openDeleteConfirmModal }))
+    );
+    await act(async () => {
+      result.current.handleDeleteNode(['game/script.rpy']);
+    });
+    expect(addToast).toHaveBeenCalledWith('Failed to delete file(s)', 'error');
   });
 });
 
