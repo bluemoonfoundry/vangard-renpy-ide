@@ -2,8 +2,9 @@
  * @file renpyCompletionProvider.ts
  * @description Context-aware completion provider for Ren'Py language in Monaco editor.
  * Analyzes cursor position to suggest labels, characters, variables, screens,
- * images, keywords, and user snippets.
+ * images, keywords, user snippets, and ATL animation presets.
  */
+import { ATL_PRESETS, presetToMonacoSnippet } from './atlPresetLibrary';
 
 // Monaco CompletionItemKind values (avoid importing monaco in this pure module)
 export const CompletionItemKind = {
@@ -393,6 +394,21 @@ export function getRenpyCompletions(
           insertText: name,
           range,
           sortText: `3_${name}`,
+        });
+      }
+
+      // ATL animation presets (e.g. "atl_shake"), for use inside a `transform` block
+      for (const preset of ATL_PRESETS) {
+        const prefix = `atl_${preset.title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`;
+        items.push({
+          label: prefix,
+          kind: CompletionItemKind.Snippet,
+          detail: `ATL Preset: ${preset.title}`,
+          documentation: preset.description,
+          insertText: presetToMonacoSnippet(preset),
+          insertTextRules: InsertTextRule.InsertAsSnippet,
+          range,
+          sortText: `1_${prefix}`,
         });
       }
 

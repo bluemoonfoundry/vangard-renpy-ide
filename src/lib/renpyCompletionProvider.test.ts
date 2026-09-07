@@ -185,6 +185,16 @@ describe('getRenpyCompletions', () => {
     expect(snippet?.insertText).toContain('${1:prompt}');
   });
 
+  it('includes ATL animation presets as snippet completions in general context', () => {
+    const items = getRenpyCompletions('general', sampleData, range);
+    const shake = items.find(i => i.label === 'atl_shake');
+    expect(shake).toBeDefined();
+    expect(shake?.kind).toBe(CompletionItemKind.Snippet);
+    expect(shake?.detail).toBe('ATL Preset: Shake');
+    expect(shake?.insertTextRules).toBe(InsertTextRule.InsertAsSnippet);
+    expect(shake?.insertText).toContain('${1:0.1}');
+  });
+
   it('returns widget names and properties for screen context', () => {
     const items = getRenpyCompletions('screen', sampleData, range);
     const labels = items.map(i => i.label);

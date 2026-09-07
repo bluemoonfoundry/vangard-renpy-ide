@@ -8,9 +8,13 @@
  */
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { logger } from '@/lib/logger';
-import type { ProjectImage, ImageMetadata, SceneComposition, SceneSprite } from '@/types';
+import type { ProjectImage, ImageMetadata, SceneComposition, SceneSprite, SpriteAnimation, SpriteTimeline, AnimatableProperty } from '@/types';
 import CodeActionButtons from './CodeActionButtons';
 import SceneSpriteProperties from './SceneSpriteProperties';
+import SpriteAnimationPanel from './SpriteAnimationPanel';
+import { generateATLFromTimeline, transformNameFor, MATRIX_FACTOR_PROPERTIES } from '@/lib/atlCodeGenerator';
+import { createId } from '@/lib/createId';
+import { currentValuesForSprite } from '@/lib/spriteCurrentValues';
 import type * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
 // Returns the hue-rotate degrees needed to tint an image from sepia baseline (~38°) to the target hex color
@@ -200,6 +204,8 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
     const [isRenaming, setIsRenaming] = useState(false);
     const [editName, setEditName] = useState(sceneName);
     const [isExporting, setIsExporting] = useState(false);
+    const [showTimeline, setShowTimeline] = useState(false);
+    const [timelinePreviewValues, setTimelinePreviewValues] = useState<Partial<Record<AnimatableProperty, number>> | null>(null);
 
     // Undo / Redo
     const [undoStack, setUndoStack] = useState<SceneComposition[]>([]);
@@ -700,12 +706,26 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         }
     };
 
+    // Timeline animations: only ones with at least one timeline that has keyframes produce a
+    // usable `transform`; a spriteId maps to at most one, since a sprite has one SpriteAnimation.
+    const animatedAnimationBySpriteId = useMemo(() => {
+        const map = new Map<string, SpriteAnimation>();
+        for (const anim of scene.animations ?? []) {
+            if ((anim.timelines ?? []).some(t => t.keyframes.length > 0)) map.set(anim.spriteId, anim);
+        }
+        return map;
+    }, [scene.animations]);
+
     // Code Generation
     const generatedCode = useMemo(() => {
         const opts = activeEditor?.getModel()?.getOptions();
         const ind = opts ? (opts.insertSpaces ? ' '.repeat(opts.tabSize) : '\t') : '    ';
 
-        let code = '';
+        const transformBlocks = Array.from(animatedAnimationBySpriteId.values())
+            .map(anim => generateATLFromTimeline(anim))
+            .join('\n');
+
+        let code = transformBlocks ? `${transformBlocks}\n` : '';
         if (scene.background) {
             const bg = scene.background;
             const tag = getRenpyTag(bg.image);
@@ -717,6 +737,9 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             if (bg.alpha !== 1.0) transforms.push(`alpha ${bg.alpha}`);
             if (bg.blur > 0) transforms.push(`blur ${bg.blur}`);
 
+            const bgAnim = animatedAnimationBySpriteId.get('background');
+            const bgAtClause = bgAnim ? ` at ${transformNameFor(bgAnim.spriteId)}` : '';
+
             const bgEffects = spriteEffectCode(bg, ind);
             let bgCode: string;
             if (transforms.length > 0 || bgEffects) {
@@ -725,10 +748,10 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                 const transformBlock = transforms.length > 0
                     ? transforms.map(t => `${ind}${t}`).join('\n') + '\n'
                     : '';
-                bgCode = `scene ${tag}:\n${transformBlock}${bgEffects}`;
+                bgCode = `scene ${tag}${bgAtClause}:\n${transformBlock}${bgEffects}`;
                 if (!bgCode.endsWith('\n')) bgCode += '\n';
             } else {
-                bgCode = `scene ${tag}\n`;
+                bgCode = `scene ${tag}${bgAtClause}\n`;
             }
 
             if (bg.visible === false) {
@@ -752,9 +775,11 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             const blurStr = sprite.blur > 0 ? ` blur ${sprite.blur}` : '';
 
             const zStr = ` zorder ${index + 1}`;
+            const spriteAnim = animatedAnimationBySpriteId.get(sprite.id);
+            const atClause = spriteAnim ? ` at ${transformNameFor(spriteAnim.spriteId)}` : '';
 
             const effectCode = spriteEffectCode(sprite, ind);
-            let spriteCode = `show ${tag}${zStr}:\n${ind}xcenter ${x} ycenter ${y}${zoomStr}${xzoomStr}${yzoomStr}${rotateStr}${alphaStr}${blurStr}\n${effectCode}`;
+            let spriteCode = `show ${tag}${zStr}${atClause}:\n${ind}xcenter ${x} ycenter ${y}${zoomStr}${xzoomStr}${yzoomStr}${rotateStr}${alphaStr}${blurStr}\n${effectCode}`;
 
             if (sprite.visible === false) {
                 spriteCode = spriteCode.split('\n').map(l => l.trim() ? `# ${l}` : l).join('\n');
@@ -762,12 +787,53 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
             code += spriteCode;
         });
         return code;
-    }, [getRenpyTag, scene, activeEditor]);
+    }, [getRenpyTag, scene, activeEditor, animatedAnimationBySpriteId]);
 
     const activeSprite = useMemo(() => {
         if (selectedSpriteId === 'background') return scene.background;
         return scene.sprites.find(s => s.id === selectedSpriteId) || null;
     }, [scene, selectedSpriteId]);
+
+    // Timeline: one animation per sprite, keyed by SceneSprite.id ('background' for the background layer).
+    const activeAnimation = useMemo(() => {
+        if (!selectedSpriteId) return null;
+        return scene.animations?.find(a => a.spriteId === selectedSpriteId) ?? null;
+    }, [scene.animations, selectedSpriteId]);
+
+    // Reciprocal of TimelineRow's hasStaticTint check: whether the active sprite already has a
+    // timeline animating a matrix-factor property, used to disable SceneSpriteProperties' static
+    // tint/colorize controls -- animating color together with a static effect isn't supported
+    // regardless of which one was applied first.
+    const activeHasAnimatedMatrixFactor = useMemo(() => {
+        return (activeAnimation?.timelines ?? []).some(t => t.properties.some(p => MATRIX_FACTOR_PROPERTIES.includes(p)));
+    }, [activeAnimation]);
+
+    const handleCreateAnimation = useCallback((): string => {
+        if (!selectedSpriteId || !activeSprite) return '';
+        saveUndo();
+        const spriteLabel = selectedSpriteId === 'background' ? 'Background' : getRenpyTag(activeSprite.image);
+        const starterTimeline: SpriteTimeline = {
+            id: createId('tl'), name: `${spriteLabel}0`, properties: [], keyframes: [], duration: 1, loop: false,
+        };
+        const newAnimation: SpriteAnimation = { spriteId: selectedSpriteId, combineMode: 'parallel', timelines: [starterTimeline] };
+        onSceneChange(prev => ({ ...prev, animations: [...(prev.animations ?? []), newAnimation] }));
+        return starterTimeline.id;
+    }, [selectedSpriteId, activeSprite, getRenpyTag, saveUndo, onSceneChange]);
+
+    const handleChangeAnimation = useCallback((updater: (prev: SpriteAnimation) => SpriteAnimation) => {
+        if (!activeAnimation) return;
+        onSceneChange(prev => ({
+            ...prev,
+            animations: (prev.animations ?? []).map(a => a.spriteId === activeAnimation.spriteId ? updater(a) : a),
+        }));
+    }, [activeAnimation, onSceneChange]);
+
+    const handleDeleteAnimation = useCallback(() => {
+        if (!activeAnimation) return;
+        saveUndo();
+        setTimelinePreviewValues(null);
+        onSceneChange(prev => ({ ...prev, animations: (prev.animations ?? []).filter(a => a.spriteId !== activeAnimation.spriteId) }));
+    }, [activeAnimation, saveUndo, onSceneChange]);
 
     const layersReversed = useMemo(() => {
         return scene.sprites.map((s, index) => ({ sprite: s, originalIndex: index })).reverse();
@@ -817,6 +883,25 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
         }
     }, [customW, customH, onSceneChange, saveUndo]);
 
+    // Applies the live timeline preview (playback/scrub) to the currently-selected sprite's
+    // render only -- never persisted, and irrelevant once the panel is closed or nothing plays.
+    const withTimelinePreview = useCallback((sprite: SceneSprite, id: string): SceneSprite => {
+        if (!showTimeline || selectedSpriteId !== id || !timelinePreviewValues) return sprite;
+        return {
+            ...sprite,
+            x: timelinePreviewValues.x ?? sprite.x,
+            y: timelinePreviewValues.y ?? sprite.y,
+            zoom: timelinePreviewValues.zoom ?? sprite.zoom,
+            alpha: timelinePreviewValues.alpha ?? sprite.alpha,
+            rotation: timelinePreviewValues.rotation ?? sprite.rotation,
+            blur: timelinePreviewValues.blur ?? sprite.blur,
+            saturation: timelinePreviewValues.saturation ?? sprite.saturation,
+            brightness: timelinePreviewValues.brightness ?? sprite.brightness,
+            contrast: timelinePreviewValues.contrast ?? sprite.contrast,
+            invert: timelinePreviewValues.invert ?? sprite.invert,
+        };
+    }, [showTimeline, selectedSpriteId, timelinePreviewValues]);
+
     const resolutionDropdownValue = (showCustomInputs || isCustomResolution) ? 'custom' : `${REF_WIDTH}x${REF_HEIGHT}`;
     const showResolutionInputs = showCustomInputs || isCustomResolution;
 
@@ -864,6 +949,16 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                             </svg>
                         )}
                         <span>{isExporting ? 'Exporting...' : 'Export Image'}</span>
+                    </button>
+                    <button
+                        onClick={() => setShowTimeline(v => !v)}
+                        className={`flex items-center space-x-2 px-3 py-1 rounded text-xs font-bold transition-colors ${showTimeline ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                        title="Toggle the animation timeline for the selected sprite"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>Timeline</span>
                     </button>
                     <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
                     <div className="flex items-center space-x-1">
@@ -940,7 +1035,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                             style={{ zIndex: 0, pointerEvents: scene.background.locked ? 'none' : 'auto' }}
                             onPointerDown={(e) => handlePointerDown(e, 'background')}
                         >
-                            <SpritePreviewImage sprite={scene.background} isBackground={true} />
+                            <SpritePreviewImage sprite={withTimelinePreview(scene.background, 'background')} isBackground={true} />
                         </div>
                     )}
                     
@@ -957,21 +1052,22 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                         if (sprite.visible === false) return null;
 
                         const isSelected = selectedSpriteId === sprite.id;
+                        const previewSprite = withTimelinePreview(sprite, sprite.id);
 
                         return (
                             <div
                                 key={sprite.id}
                                 className={`absolute transform -translate-x-1/2 -translate-y-1/2 select-none ${sprite.locked ? 'cursor-not-allowed' : 'cursor-move'} ${isSelected ? `ring-2 ${sprite.locked ? 'ring-amber-500' : 'ring-indigo-500'}` : ''}`}
                                 style={{
-                                    left: `${sprite.x * 100}%`,
-                                    top: `${sprite.y * 100}%`,
+                                    left: `${previewSprite.x * 100}%`,
+                                    top: `${previewSprite.y * 100}%`,
                                     zIndex: index + 1,
                                     pointerEvents: sprite.locked ? 'none' : 'auto',
                                 }}
                                 onPointerDown={(e) => handlePointerDown(e, sprite.id)}
                                 onWheel={(e) => handleWheel(e, sprite.id)}
                             >
-                                <SpritePreviewImage sprite={sprite} isBackground={false} />
+                                <SpritePreviewImage sprite={previewSprite} isBackground={false} />
                                 {isSelected && (
                                     <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black/70 text-white text-xs px-2 py-1 rounded whitespace-nowrap pointer-events-none z-[9999]">
                                         X: {sprite.x.toFixed(2)} Y: {sprite.y.toFixed(2)}
@@ -982,6 +1078,33 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                     })}
                 </div>
             </div>
+
+            {/* Timeline Panel */}
+            {showTimeline && (
+                <div className="h-64 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 overflow-y-auto p-3">
+                    {activeSprite ? (
+                        <SpriteAnimationPanel
+                            spriteLabel={selectedSpriteId === 'background' ? 'Background' : getRenpyTag(activeSprite.image)}
+                            animation={activeAnimation}
+                            currentValues={currentValuesForSprite(activeSprite)}
+                            hasStaticTint={
+                                (activeSprite.colorMode === 'tint' && !!activeSprite.tintColor) ||
+                                activeSprite.colorMode === 'colorize' ||
+                                (activeSprite.saturation ?? 1.0) !== 1.0 ||
+                                (activeSprite.brightness ?? 0) !== 0 ||
+                                (activeSprite.contrast ?? 1.0) !== 1.0 ||
+                                (activeSprite.invert ?? 0) !== 0
+                            }
+                            onCreateAnimation={handleCreateAnimation}
+                            onChangeAnimation={handleChangeAnimation}
+                            onDeleteAnimation={handleDeleteAnimation}
+                            onPreviewUpdate={setTimelinePreviewValues}
+                        />
+                    ) : (
+                        <p className="text-sm text-secondary text-center py-8">Select a sprite or the background to animate it.</p>
+                    )}
+                </div>
+            )}
 
             {/* Bottom Panel */}
             <div className="h-80 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex flex-row flex-shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10">
@@ -1004,6 +1127,7 @@ const SceneComposer: React.FC<SceneComposerProps> = ({ images, metadata, scene, 
                             onUpdate={updateSprite}
                             onRangeSliderStart={handleRangeSliderStart}
                             onRangeSliderEnd={handleRangeSliderEnd}
+                            hasAnimatedMatrixFactor={activeHasAnimatedMatrixFactor}
                         />
                     </div>
                 </div>

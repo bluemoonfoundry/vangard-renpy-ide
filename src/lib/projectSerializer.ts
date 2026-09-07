@@ -35,6 +35,7 @@ function deserializeSceneCompositions(
           background: sc.background ? rehydrateSprite(sc.background, imgMap) : null,
           sprites: sc.sprites.map(s => rehydrateSprite(s, imgMap)),
           resolution: sc.resolution,
+          animations: sc.animations,
         };
       } else {
         logger.warn('Skipping malformed scene composition entry', { id, sc });

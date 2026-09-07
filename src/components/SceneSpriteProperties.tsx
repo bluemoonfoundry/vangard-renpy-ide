@@ -9,6 +9,8 @@ interface Props {
     onUpdate: (id: string, updates: Partial<SceneSprite>) => void;
     onRangeSliderStart: () => void;
     onRangeSliderEnd: () => void;
+    /** True if this sprite already has a timeline animating a matrix-factor property (saturation/brightness/contrast/invert) -- disables the reciprocal static tint/colorize controls below, since animating color together with a static effect isn't supported. */
+    hasAnimatedMatrixFactor: boolean;
 }
 
 const SHADER_DEFS: Record<string, Array<{ name: string; label: string; min: number; max: number; step: number; default: number }>> = {
@@ -52,18 +54,20 @@ const SliderRow: React.FC<{
     width?: string;
     onRangeSliderStart?: () => void;
     onRangeSliderEnd?: () => void;
-}> = ({ label, min, max, step, value, onChange, width = 'w-28', onRangeSliderStart, onRangeSliderEnd }) => (
-    <div className={`flex flex-col ${width}`}>
+    disabled?: boolean;
+    title?: string;
+}> = ({ label, min, max, step, value, onChange, width = 'w-28', onRangeSliderStart, onRangeSliderEnd, disabled, title }) => (
+    <div className={`flex flex-col ${width} ${disabled ? 'opacity-50' : ''}`} title={title}>
         <div className="flex justify-between items-center mb-1">
             <span className="text-[9px] text-gray-400">{label}</span>
             <input
-                type="number" min={min} max={max} step={step} value={value}
+                type="number" min={min} max={max} step={step} value={value} disabled={disabled}
                 onChange={e => onChange(Math.min(max, Math.max(min, parseFloat(e.target.value) || min)))}
                 className="w-12 text-[10px] p-0.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-right"
             />
         </div>
         <input
-            type="range" min={min} max={max} step={step} value={value}
+            type="range" min={min} max={max} step={step} value={value} disabled={disabled}
             onChange={e => onChange(parseFloat(e.target.value))}
             onPointerDown={onRangeSliderStart}
             onPointerUp={onRangeSliderEnd}
@@ -91,7 +95,7 @@ const ColorSwatch: React.FC<{ label: string; value: string; onChange: (hex: stri
     </div>
 );
 
-const SceneSpriteProperties: React.FC<Props> = ({ activeSprite, selectedSpriteId: _selectedSpriteId, onUpdate, onRangeSliderStart, onRangeSliderEnd }) => {
+const SceneSpriteProperties: React.FC<Props> = ({ activeSprite, selectedSpriteId: _selectedSpriteId, onUpdate, onRangeSliderStart, onRangeSliderEnd, hasAnimatedMatrixFactor }) => {
     const [customShaderName, setCustomShaderName] = useState('');
     const [customUniforms, setCustomUnforms] = useState<Array<{ key: string; value: number }>>([]);
 
@@ -113,6 +117,7 @@ const SceneSpriteProperties: React.FC<Props> = ({ activeSprite, selectedSpriteId
     const activeShader = activeSprite.activeShader ?? '';
     const shaderUniforms = activeSprite.shaderUniforms ?? {};
     const isCustomShader = activeShader !== '' && !PREDEFINED_SHADERS.includes(activeShader);
+    const matrixFactorDisabledTitle = "Disabled: this sprite already has a timeline animating a color property (saturation/brightness/contrast/invert) — animating color together with a static effect isn't supported.";
 
     const handleShaderChange = (shader: string) => {
         if (shader === '') {
@@ -248,7 +253,7 @@ const SceneSpriteProperties: React.FC<Props> = ({ activeSprite, selectedSpriteId
                     {/* Preset picker + mode selector */}
                     <div className="flex items-center gap-2 flex-wrap">
                         <MatrixPresetPopover onApply={u} />
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5" title={hasAnimatedMatrixFactor ? "Tint/Colorize disabled: this sprite already has a timeline animating a color property (saturation/brightness/contrast/invert) — animating color together with a static tint isn't supported." : undefined}>
                             <span className="text-[9px] text-gray-400 flex-shrink-0">Mode</span>
                             <select
                                 value={colorMode}
@@ -256,8 +261,8 @@ const SceneSpriteProperties: React.FC<Props> = ({ activeSprite, selectedSpriteId
                                 className="text-xs p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
                             >
                                 <option value="none">None</option>
-                                <option value="tint">Tint</option>
-                                <option value="colorize">Colorize</option>
+                                <option value="tint" disabled={hasAnimatedMatrixFactor}>Tint</option>
+                                <option value="colorize" disabled={hasAnimatedMatrixFactor}>Colorize</option>
                             </select>
                         </div>
                     </div>
@@ -291,6 +296,8 @@ const SceneSpriteProperties: React.FC<Props> = ({ activeSprite, selectedSpriteId
                             value={saturation}
                             onChange={v => u({ saturation: v })}
                             width="w-40"
+                            disabled={hasAnimatedMatrixFactor}
+                            title={hasAnimatedMatrixFactor ? matrixFactorDisabledTitle : undefined}
                             onRangeSliderStart={onRangeSliderStart} onRangeSliderEnd={onRangeSliderEnd}
                         />
                     )}
@@ -301,12 +308,16 @@ const SceneSpriteProperties: React.FC<Props> = ({ activeSprite, selectedSpriteId
                             label="Brightness" min={-1} max={1} step={0.05}
                             value={brightness}
                             onChange={v => u({ brightness: v })}
+                            disabled={hasAnimatedMatrixFactor}
+                            title={hasAnimatedMatrixFactor ? matrixFactorDisabledTitle : undefined}
                             onRangeSliderStart={onRangeSliderStart} onRangeSliderEnd={onRangeSliderEnd}
                         />
                         <SliderRow
                             label="Contrast" min={0.1} max={3} step={0.05}
                             value={contrast}
                             onChange={v => u({ contrast: v })}
+                            disabled={hasAnimatedMatrixFactor}
+                            title={hasAnimatedMatrixFactor ? matrixFactorDisabledTitle : undefined}
                             onRangeSliderStart={onRangeSliderStart} onRangeSliderEnd={onRangeSliderEnd}
                         />
                         <SliderRow
@@ -314,6 +325,8 @@ const SceneSpriteProperties: React.FC<Props> = ({ activeSprite, selectedSpriteId
                             value={invert}
                             onChange={v => u({ invert: v })}
                             width="w-20"
+                            disabled={hasAnimatedMatrixFactor}
+                            title={hasAnimatedMatrixFactor ? matrixFactorDisabledTitle : undefined}
                             onRangeSliderStart={onRangeSliderStart} onRangeSliderEnd={onRangeSliderEnd}
                         />
                     </div>

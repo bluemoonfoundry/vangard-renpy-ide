@@ -102,7 +102,7 @@ export default defineConfig(({ mode }) => {
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],
       include: ['**/*.test.{ts,tsx}'],
-      exclude: ['node_modules', 'dist', 'release'],
+      exclude: ['**/node_modules/**', '**/dist/**', '**/release/**', '**/.worktrees/**', '**/worktrees/**'],
       alias: [
         // Monaco cannot run in jsdom — redirect to a minimal stub for all tests.
         // IMPORTANT: more-specific paths must come first so they aren't swallowed

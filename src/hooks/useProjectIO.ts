@@ -156,6 +156,7 @@ export function useProjectIO(params: UseProjectIOParams): UseProjectIOReturn {
               background: sc.background ? serializeSprite(sc.background) : null,
               sprites: sc.sprites.map(serializeSprite),
               resolution: sc.resolution,
+              animations: sc.animations,
           };
       });
 

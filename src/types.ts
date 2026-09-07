@@ -824,6 +824,30 @@ export interface SnippetCategory {
   snippets: Snippet[];
 }
 
+/** A single tunable value on an `ATLPreset`'s template. */
+export interface ATLPresetParameter {
+  name: string;
+  type: 'duration' | 'easing' | 'repeat' | 'offset' | 'intensity';
+  defaultValue: number | string;
+  min?: number;
+  max?: number;
+  step?: number;
+  /** Selectable values for `type: 'easing'`. */
+  options?: string[];
+}
+
+/**
+ * A parameterized ATL (Animation & Transform Language) snippet, browsed and
+ * configured via `ATLPresetBrowser`. `atlTemplate` holds `{paramName}`
+ * placeholders substituted by `instantiatePreset`; `code` holds the template
+ * pre-filled with each parameter's `defaultValue`, so a preset is still a
+ * valid, copyable `Snippet` on its own.
+ */
+export interface ATLPreset extends Snippet {
+  parameters: ATLPresetParameter[];
+  atlTemplate: string;
+}
+
 /** On-disk shape of default-snippets.json, custom.json, .vangard/snippets.json, and exported packs. */
 export interface SnippetPackFile {
   version: string;
@@ -933,6 +957,41 @@ export interface SceneComposition {
   background: SceneSprite | null;
   sprites: SceneSprite[];
   resolution?: { width: number; height: number };
+  animations?: SpriteAnimation[];
+}
+
+/** Ren'Py's standard ATL easing/warp functions. */
+export type EasingFunction = 'linear' | 'ease' | 'easein' | 'easeout' | 'easein_quad' | 'easeout_quad' | 'easeinout_quad';
+
+export type AnimatableProperty = 'x' | 'y' | 'zoom' | 'alpha' | 'rotation' | 'blur' | 'saturation' | 'brightness' | 'contrast' | 'invert';
+
+/** A full pose snapshot for a timeline's covered properties, at a point in time. */
+export interface PoseKeyframe {
+  id: string;
+  /** Seconds from the start of this timeline (not the sprite's other timelines). */
+  time: number;
+  /** One value per property in the owning timeline's `properties` set. */
+  values: Partial<Record<AnimatableProperty, number>>;
+  /** Easing applied to the transition arriving at this keyframe from the previous one. Ignored on a timeline's first keyframe. */
+  easing: EasingFunction;
+}
+
+/** One named, independently-timed pose-keyframe sequence, scoped to a subset of the owning sprite's animatable properties. */
+export interface SpriteTimeline {
+  id: string;
+  name: string;
+  properties: AnimatableProperty[];
+  keyframes: PoseKeyframe[];
+  duration: number;
+  loop: boolean;
+}
+
+/** All timeline-based animation for one sprite (SceneSprite.id, or 'background'). */
+export interface SpriteAnimation {
+  spriteId: string;
+  /** How this sprite's timelines combine: simultaneously (default), or one after another in list order. */
+  combineMode: 'parallel' | 'sequential';
+  timelines: SpriteTimeline[];
 }
 
 /**
@@ -1200,7 +1259,7 @@ export interface ProjectSettings {
   scannedAudioPaths?: string[];
   storyElementsTabState?: {
     activeTab: 'storyData' | 'assets' | 'composers' | 'tools';
-    activeSubTab?: 'characters' | 'variables' | 'screens' | 'images' | 'audio' | 'scenes' | 'imagemaps' | 'snippets' | 'menuTemplates' | 'colorPalette';
+    activeSubTab?: 'characters' | 'variables' | 'screens' | 'images' | 'audio' | 'scenes' | 'imagemaps' | 'snippets' | 'animations' | 'menuTemplates' | 'colorPalette';
   };
   dismissedImplicitVariableHint?: boolean;
   completedMilestones?: string[];
@@ -1403,6 +1462,7 @@ export interface SerializedSceneComposition {
   background: SerializedSprite | null;
   sprites: SerializedSprite[];
   resolution?: { width: number; height: number };
+  animations?: SpriteAnimation[];
 }
 
 /** File path reference used when serializing image map compositions for persistence. */
