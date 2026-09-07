@@ -48,7 +48,7 @@ const languages = {
 };
 
 const KeyMod = { CtrlCmd: 2048, Shift: 1024, Alt: 512 };
-const KeyCode = { KeyS: 49, KeyF: 33, KeyH: 39, Enter: 3, Escape: 9, Tab: 2 };
+const KeyCode = { KeyS: 49, KeyF: 33, KeyH: 39, KeyB: 32, KeyI: 41, KeyU: 52, Enter: 3, Escape: 9, Tab: 2 };
 
 /** Minimal event emitter used by EditorView's semanticTokensChangeEmitter. */
 class Emitter<T = void> {
