@@ -14,7 +14,7 @@ import type { ATLPreset, ATLPresetParameter } from '@/types';
 import { ATL_PRESETS, instantiatePreset } from '@/lib/atlPresetLibrary';
 import { useSnippetStats, getSnippetStatId } from '@/hooks/useSnippetStats';
 import { useModalAccessibility } from '@/hooks/useModalAccessibility';
-import CopyButton from './CopyButton';
+import { logger } from '@/lib/logger';
 
 const STAT_CATEGORY = 'ATL Animations';
 
@@ -25,6 +25,7 @@ interface ATLPresetBrowserProps {
 const ATLPresetBrowser: React.FC<ATLPresetBrowserProps> = ({ onInsertAtCursor }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [activePreset, setActivePreset] = useState<ATLPreset | null>(null);
   const { getStat, toggleFavorite } = useSnippetStats();
 
@@ -38,6 +39,10 @@ const ATLPresetBrowser: React.FC<ATLPresetBrowserProps> = ({ onInsertAtCursor })
 
   const filteredPresets = useMemo(() => {
     let filtered = ATL_PRESETS;
+
+    if (favoritesOnly) {
+      filtered = filtered.filter(preset => getStat(getSnippetStatId(STAT_CATEGORY, preset.title)).favorite);
+    }
 
     if (selectedTags.size > 0) {
       filtered = filtered.filter(preset => preset.tags?.some(tag => selectedTags.has(tag)));
@@ -53,7 +58,7 @@ const ATLPresetBrowser: React.FC<ATLPresetBrowserProps> = ({ onInsertAtCursor })
     }
 
     return filtered;
-  }, [selectedTags, searchQuery]);
+  }, [selectedTags, searchQuery, favoritesOnly, getStat]);
 
   const toggleTag = (tag: string) => {
     setSelectedTags(prev => {
@@ -82,6 +87,20 @@ const ATLPresetBrowser: React.FC<ATLPresetBrowserProps> = ({ onInsertAtCursor })
 
       {/* Tag Filter Chips */}
       <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => setFavoritesOnly(prev => !prev)}
+          aria-pressed={favoritesOnly}
+          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+            favoritesOnly
+              ? 'bg-amber-500 text-white'
+              : 'bg-tertiary text-secondary hover:bg-primary hover:text-primary border border-primary'
+          }`}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" className="h-3 w-3" fill="currentColor">
+            <path d="M10 2.5l2.35 4.76 5.25.76-3.8 3.7.9 5.23L10 14.6l-4.7 2.35.9-5.23-3.8-3.7 5.25-.76z" />
+          </svg>
+          Favorites
+        </button>
         {allTags.map(tag => {
           const isSelected = selectedTags.has(tag);
           return (
@@ -98,9 +117,9 @@ const ATLPresetBrowser: React.FC<ATLPresetBrowserProps> = ({ onInsertAtCursor })
             </button>
           );
         })}
-        {(selectedTags.size > 0 || searchQuery) && (
+        {(selectedTags.size > 0 || searchQuery || favoritesOnly) && (
           <button
-            onClick={() => { setSelectedTags(new Set()); setSearchQuery(''); }}
+            onClick={() => { setSelectedTags(new Set()); setSearchQuery(''); setFavoritesOnly(false); }}
             className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
           >
             Clear Filters
@@ -110,7 +129,7 @@ const ATLPresetBrowser: React.FC<ATLPresetBrowserProps> = ({ onInsertAtCursor })
 
       <div className="text-xs text-secondary">
         {filteredPresets.length} {filteredPresets.length === 1 ? 'animation' : 'animations'}
-        {(selectedTags.size > 0 || searchQuery) && ` (filtered from ${ATL_PRESETS.length})`}
+        {(selectedTags.size > 0 || searchQuery || favoritesOnly) && ` (filtered from ${ATL_PRESETS.length})`}
       </div>
 
       {/* Preset Grid */}
@@ -204,6 +223,15 @@ const ATLPresetParameterModal: React.FC<ATLPresetParameterModalProps> = ({ prese
     onClose();
   };
 
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+    } catch (err) {
+      logger.error('Failed to copy to clipboard:', err);
+    }
+    onClose();
+  };
+
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
       <div
@@ -256,11 +284,8 @@ const ATLPresetParameterModal: React.FC<ATLPresetParameterModalProps> = ({ prese
           ))}
 
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-secondary">Preview</span>
-              <CopyButton text={code} label="Copy" size="xs" />
-            </div>
-            <pre className="bg-gray-800 dark:bg-gray-900 text-white p-2 rounded text-xs font-mono whitespace-pre-wrap max-h-40 overflow-auto">
+            <span className="text-xs font-medium text-secondary">Preview</span>
+            <pre className="bg-gray-800 dark:bg-gray-900 text-white p-2 rounded text-xs font-mono whitespace-pre-wrap max-h-40 overflow-auto mt-1">
               <code>{code}</code>
             </pre>
           </div>
@@ -269,6 +294,9 @@ const ATLPresetParameterModal: React.FC<ATLPresetParameterModalProps> = ({ prese
         <footer className="bg-gray-50 dark:bg-gray-700 p-4 rounded-b-lg flex justify-end items-center space-x-3">
           <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded">
             Cancel
+          </button>
+          <button onClick={handleCopy} className="px-4 py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 rounded shadow-sm">
+            Copy
           </button>
           {onInsertAtCursor && (
             <button onClick={handleInsert} className="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-sm">

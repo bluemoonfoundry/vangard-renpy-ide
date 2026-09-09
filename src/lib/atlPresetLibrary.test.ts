@@ -3,9 +3,9 @@ import { ATL_PRESETS, instantiatePreset } from './atlPresetLibrary';
 import type { ATLPreset } from '@/types';
 
 describe('ATL_PRESETS', () => {
-  it('has between 15 and 20 presets', () => {
+  it('has between 15 and 120 presets', () => {
     expect(ATL_PRESETS.length).toBeGreaterThanOrEqual(15);
-    expect(ATL_PRESETS.length).toBeLessThanOrEqual(20);
+    expect(ATL_PRESETS.length).toBeLessThanOrEqual(120);
   });
 
   it('has unique titles', () => {

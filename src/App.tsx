@@ -1629,9 +1629,12 @@ const App: React.FC = () => {
       if (!editor) { addToast('Open a file in the editor to insert an animation.', 'warning'); return; }
       const pos = editor.getPosition();
       if (!pos) return;
+      const lineTextBeforeCursor = editor.getModel()?.getLineContent(pos.lineNumber).slice(0, pos.column - 1) ?? '';
+      const baseIndent = /^\s*$/.test(lineTextBeforeCursor) ? lineTextBeforeCursor : '';
+      const indentedCode = baseIndent ? code.split('\n').join(`\n${baseIndent}`) : code;
       editor.executeEdits('atl-preset', [{
           range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
-          text: code,
+          text: indentedCode,
           forceMoveMarkers: true,
       }]);
       editor.focus();
