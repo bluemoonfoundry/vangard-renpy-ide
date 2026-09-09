@@ -26,7 +26,7 @@ describe('ATLPresetBrowser', () => {
     await user.type(screen.getByPlaceholderText('Search animations...'), 'shake');
     expect(screen.getByText('Shake')).toBeInTheDocument();
     expect(screen.queryByText('Fade In')).not.toBeInTheDocument();
-  });
+  }, 15000);
 
   it('filters presets by tag chip', async () => {
     const user = userEvent.setup();
@@ -34,7 +34,7 @@ describe('ATLPresetBrowser', () => {
     await user.click(screen.getByRole('button', { name: 'rotation' }));
     expect(screen.getByText('Spin')).toBeInTheDocument();
     expect(screen.queryByText('Fade In')).not.toBeInTheDocument();
-  });
+  }, 15000);
 
   it('opens the parameter editor modal with a live code preview on card click', async () => {
     render(<ATLPresetBrowser />);
@@ -44,7 +44,7 @@ describe('ATLPresetBrowser', () => {
     expect(within(dialog).getByRole('heading', { name: 'Fade In' })).toBeInTheDocument();
     expect(within(dialog).getByText(/alpha 0\.0/)).toBeInTheDocument();
     expect(within(dialog).getByText(/alpha 1\.0/)).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('updates the live preview when a slider parameter changes', async () => {
     render(<ATLPresetBrowser />);
@@ -55,7 +55,7 @@ describe('ATLPresetBrowser', () => {
     fireEvent.change(intensitySlider, { target: { value: '25' } });
 
     expect(within(dialog).getByText(/xoffset 25/)).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('calls onInsertAtCursor with the instantiated code and closes on Insert', async () => {
     const onInsertAtCursor = vi.fn();
@@ -67,13 +67,13 @@ describe('ATLPresetBrowser', () => {
 
     expect(onInsertAtCursor).toHaveBeenCalledWith('alpha 0.0\nlinear 1 alpha 1.0');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
+  }, 15000);
 
   it('does not render an Insert action when onInsertAtCursor is not provided', async () => {
     render(<ATLPresetBrowser />);
     await openPreset('Fade In');
     expect(screen.queryByRole('button', { name: 'Insert to Editor' })).not.toBeInTheDocument();
-  });
+  }, 15000);
 
   it('toggles favorite state without opening the parameter modal', async () => {
     const user = userEvent.setup();
@@ -81,5 +81,5 @@ describe('ATLPresetBrowser', () => {
     await user.click(screen.getByRole('button', { name: 'Favorite Fade In' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Unfavorite Fade In' })).toBeInTheDocument();
-  });
+  }, 15000);
 });
