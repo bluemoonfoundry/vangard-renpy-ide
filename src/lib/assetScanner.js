@@ -10,6 +10,11 @@ const AUDIO_EXTENSIONS = new Set(['.mp3', '.ogg', '.wav', '.opus']);
 // it so one scan can't consume unbounded memory or block indefinitely.
 export const DEFAULT_MAX_ENTRIES = 20000;
 
+/** Converts an absolute filesystem path to a `media://` URL displayable via the app's custom protocol. */
+export function pathToMediaUrl(absolutePath) {
+    return pathToFileURL(absolutePath).toString().replace(/^file:/, 'media:');
+}
+
 /**
  * Recursively scans `dirPath` for image/audio assets.
  * Cancellable via `isCancelled`, bounded via `maxEntries`, and resilient to
@@ -73,7 +78,7 @@ export async function scanDirectoryForAssets(dirPath, options = {}) {
 
                 try {
                     const stats = await statFn(fullPath);
-                    const mediaUrl = pathToFileURL(fullPath).toString().replace(/^file:/, 'media:');
+                    const mediaUrl = pathToMediaUrl(fullPath);
                     const record = {
                         path: normalizedPath,
                         fileName: entry.name,

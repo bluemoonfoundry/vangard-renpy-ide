@@ -77,6 +77,7 @@ export interface UseAssetManagementReturn {
   // Single-file metadata / copy operations (used by ImageEditorView / AudioEditorView tabs)
   handleSaveImageMetadata: (currentFilePath: string, newMeta: ImageMetadata) => Promise<void>;
   handleCopyImageToProject: (sourcePath: string, meta: ImageMetadata) => Promise<void>;
+  handleImportPortraitImage: (sourcePath: string) => Promise<ProjectImage | null>;
   handleSaveAudioMetadata: (currentFilePath: string, newMeta: AudioMetadata) => Promise<void>;
   handleCopyAudioToProject: (sourcePath: string, meta: AudioMetadata) => Promise<void>;
 }
@@ -529,6 +530,45 @@ export function useAssetManagement({
     }
   }, [projectRootPath, addToast, setFileSystemTree, setImages]);
 
+  /**
+   * Imports an arbitrary image file (from an OS file-browser drag or a file-selection
+   * dialog) into `game/images/portraits/`, registering it as a new `ProjectImage` entry.
+   * Unlike `handleCopyImagesToProjectBulk`, the source doesn't need to already be a
+   * known scanned image -- this covers files the app has never seen before.
+   */
+  const handleImportPortraitImage = useCallback(async (sourcePath: string): Promise<ProjectImage | null> => {
+    if (!window.electronAPI || !projectRootPath) return null;
+    try {
+      // Uses a dedicated main-process handler rather than copyEntry: sourcePath is
+      // expected to live outside the project (an OS drag or a file-dialog pick), and
+      // copyEntry rejects any source outside the current project root.
+      const result = await window.electronAPI.importPortraitImage(sourcePath);
+      if (!result.success || !result.relPath || !result.absPath || !result.mediaUrl) {
+        throw new Error(result.error || 'Unknown error importing portrait image');
+      }
+      const newImage: ProjectImage = {
+        filePath: result.relPath,
+        fileName: result.relPath.split('/').pop() || result.relPath,
+        dataUrl: result.mediaUrl,
+        fileHandle: null,
+        isInProject: true,
+        projectFilePath: result.absPath,
+      };
+      setImages(prev => {
+        const next = new Map(prev);
+        next.set(result.relPath as string, newImage);
+        return next;
+      });
+      const freshTree = await window.electronAPI.refreshProjectTree(projectRootPath);
+      setFileSystemTree(freshTree);
+      return newImage;
+    } catch (err) {
+      logger.error('Failed to import portrait image:', err);
+      addToast('Failed to import portrait image', 'error');
+      return null;
+    }
+  }, [projectRootPath, addToast, setFileSystemTree, setImages]);
+
   const handleSaveAudioMetadata = useCallback(async (currentFilePath: string, newMeta: AudioMetadata) => {
     if (!projectRootPath || !window.electronAPI) return;
 
@@ -667,6 +707,7 @@ export function useAssetManagement({
     // Single-file metadata / copy operations
     handleSaveImageMetadata,
     handleCopyImageToProject,
+    handleImportPortraitImage,
     handleSaveAudioMetadata,
     handleCopyAudioToProject,
   };

@@ -12,6 +12,7 @@ export interface UseCharacterManagementProps {
   addBlock: (filePath: string, content: string) => void;
   setFileSystemTree: Dispatch<SetStateAction<import('@/types').FileSystemTreeNode | null>>;
   setCharacterProfiles: Updater<Record<string, string>>;
+  setCharacterPortraits: Updater<Record<string, string>>;
   setHasUnsavedSettings: Dispatch<SetStateAction<boolean>>;
   addToast: (message: string, type: string) => void;
   pendingTagRenameRef: MutableRefObject<{ oldTag: string; newTag: string } | null>;
@@ -40,6 +41,7 @@ export function useCharacterManagement({
   addBlock,
   setFileSystemTree,
   setCharacterProfiles,
+  setCharacterPortraits,
   setHasUnsavedSettings,
   addToast,
   pendingTagRenameRef,
@@ -106,6 +108,16 @@ export function useCharacterManagement({
       }
       if (char.profile) {
         draft[char.tag] = char.profile;
+      } else {
+        delete draft[char.tag];
+      }
+    });
+    setCharacterPortraits(draft => {
+      if (oldTag && oldTag !== char.tag) {
+        delete draft[oldTag];
+      }
+      if (char.portraitPath) {
+        draft[char.tag] = char.portraitPath;
       } else {
         delete draft[char.tag];
       }
@@ -185,7 +197,7 @@ export function useCharacterManagement({
     }
 
     addToast(`Character '${char.name}' saved.`, 'success');
-  }, [addToast, analysisResult.characters, blocks, projectRootPath, setCharacterProfiles, setHasUnsavedSettings, updateBlock, addBlock, setFileSystemTree, pendingTagRenameRef]);
+  }, [addToast, analysisResult.characters, blocks, projectRootPath, setCharacterProfiles, setCharacterPortraits, setHasUnsavedSettings, updateBlock, addBlock, setFileSystemTree, pendingTagRenameRef]);
 
   return { handleOpenCharacterEditor, handleUpdateCharacter };
 }

@@ -270,6 +270,7 @@ export function deserializeProjectData(
     notecardLinks: data.settings?.notecardLinks ?? [],
     notecardTimeline: data.settings?.notecardTimeline ?? { slotLabels: {} },
     characterProfiles: data.settings?.characterProfiles ?? {},
+    characterPortraits: data.settings?.characterPortraits ?? {},
     punchlistMetadata: data.settings?.punchlistMetadata ?? {},
     diagnosticsTasks,
     ignoredDiagnostics: data.settings?.ignoredDiagnostics ?? [],

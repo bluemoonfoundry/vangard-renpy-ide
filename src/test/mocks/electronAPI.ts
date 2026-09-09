@@ -66,6 +66,7 @@ export interface MockElectronAPI {
   removeEntry: Mock<(path: string) => Promise<{ success: boolean; error?: string }>>;
   moveFile: Mock<(oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>>;
   copyEntry: Mock<(sourcePath: string, destPath: string) => Promise<{ success: boolean; error?: string }>>;
+  importPortraitImage: Mock<(sourcePath: string) => Promise<{ success: boolean; relPath?: string; absPath?: string; mediaUrl?: string; error?: string }>>;
   scanDirectory: Mock<(path: string) => Promise<MockScannedDirectory>>;
   cancelScanDirectory: Mock<() => void>;
   onScanProgress: Mock<(callback: (count: number) => void) => Unsubscribe>;
@@ -83,6 +84,7 @@ export interface MockElectronAPI {
 
   // Game execution
   selectRenpy: Mock<() => Promise<string | null>>;
+  selectImage: Mock<() => Promise<string | null>>;
   runGame: Mock<(renpyPath: string, projectPath: string, warpTarget?: string) => void>;
   stopGame: Mock<() => void>;
   checkRenpyPath: Mock<(path: string) => Promise<boolean>>;
@@ -116,6 +118,9 @@ export interface MockElectronAPI {
   path: {
     join: Mock<(...paths: string[]) => Promise<string>>;
   };
+  webUtils: {
+    getPathForFile: Mock<(file: File) => string>;
+  };
 
   // Snippet pack import/export
   readUserGlobalSnippets: Mock<() => Promise<string | null>>;
@@ -146,6 +151,7 @@ export function createMockElectronAPI(): MockElectronAPI {
     removeEntry: vi.fn().mockResolvedValue({ success: true }),
     moveFile: vi.fn().mockResolvedValue({ success: true }),
     copyEntry: vi.fn().mockResolvedValue({ success: true }),
+    importPortraitImage: vi.fn().mockResolvedValue({ success: true, relPath: 'game/images/portraits/image.png', absPath: '/project/game/images/portraits/image.png', mediaUrl: 'media:///project/game/images/portraits/image.png' }),
     scanDirectory: vi.fn().mockResolvedValue({ images: [], audios: [], truncated: false, cancelled: false, errors: [] }),
     cancelScanDirectory: vi.fn(),
     onScanProgress: vi.fn().mockReturnValue(noopUnsubscribe),
@@ -163,6 +169,7 @@ export function createMockElectronAPI(): MockElectronAPI {
 
     // Game execution
     selectRenpy: vi.fn().mockResolvedValue(null),
+    selectImage: vi.fn().mockResolvedValue(null),
     runGame: vi.fn(),
     stopGame: vi.fn(),
     checkRenpyPath: vi.fn().mockResolvedValue(false),
@@ -195,6 +202,9 @@ export function createMockElectronAPI(): MockElectronAPI {
     showSaveDialog: vi.fn().mockResolvedValue(null),
     path: {
       join: vi.fn().mockImplementation((...paths: string[]) => Promise.resolve(paths.join('/'))),
+    },
+    webUtils: {
+      getPathForFile: vi.fn().mockReturnValue(''),
     },
 
     // Snippet pack import/export

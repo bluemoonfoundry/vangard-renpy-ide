@@ -47,6 +47,7 @@ function makeParams(overrides: Partial<UseProjectIOParams> = {}): UseProjectIOPa
     notecardLinks: [],
     notecardTimeline: { slotLabels: {} },
     characterProfiles: {},
+    characterPortraits: {},
     punchlistMetadata: {},
     diagnosticsTasks: [],
     ignoredDiagnostics: [],

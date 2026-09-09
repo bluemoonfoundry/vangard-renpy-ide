@@ -21,13 +21,15 @@ interface CharacterEditorViewProps {
   analysisResult: RenpyAnalysisResult;
   blocks: Block[];
   onOpenEditor: (blockId: string, line?: number) => void;
+  /** Copies an external file (OS drag, file dialog) into the project and registers it as a `ProjectImage`. */
+  onImportPortrait: (sourcePath: string) => Promise<ProjectImage | null>;
 }
 
 const HelpText: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{children}</p>
 );
 
-const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, onSave, existingTags, projectImages, imageMetadata, initialTag, initialName, analysisResult, blocks, onOpenEditor }) => {
+const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, onSave, existingTags, projectImages, imageMetadata, initialTag, initialName, analysisResult, blocks, onOpenEditor, onImportPortrait }) => {
     const isNew = !character;
 
     // Core
@@ -37,6 +39,8 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
     const [image, setImage] = useState(character?.image || '');
     const [imageSearch, setImageSearch] = useState('');
     const [profile, setProfile] = useState(character?.profile || '');
+    const [portraitPath, setPortraitPath] = useState(character?.portraitPath || '');
+    const [isPortraitDragOver, setIsPortraitDragOver] = useState(false);
 
     // Dialogue color — tracked separately so empty = "no override"
     const [overrideWhatColor, setOverrideWhatColor] = useState(!!character?.what_color);
@@ -68,6 +72,7 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
             setColor(character.color);
             setImage(character.image || '');
             setProfile(character.profile || '');
+            setPortraitPath(character.portraitPath || '');
             setOverrideWhatColor(!!character.what_color);
             setWhatColor(character.what_color || '#ffffff');
             setWhoPrefix(character.who_prefix || '');
@@ -85,6 +90,7 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
             setColor('#E57373');
             setImage('');
             setProfile('');
+            setPortraitPath('');
             setOverrideWhatColor(false);
             setWhatColor('#ffffff');
             setWhoPrefix('');
@@ -116,6 +122,51 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
         return Array.from(options.keys()).sort().slice(0, 100);
     }, [projectImages, imageMetadata, imageSearch]);
 
+    const portraitDataUrl = useMemo(() => {
+        if (!portraitPath) return undefined;
+        const match = projectImages.find(img => img.projectFilePath === portraitPath || img.filePath === portraitPath);
+        return match?.dataUrl;
+    }, [portraitPath, projectImages]);
+
+    const importPortraitFromSource = async (sourcePath: string) => {
+        const imported = await onImportPortrait(sourcePath);
+        // Always store the stable, project-relative path -- projectFilePath is an
+        // absolute path that isn't populated the same way after a fresh project-load
+        // scan, so storing it would resolve fine this session but fail to match any
+        // scanned image (and thus render blank) after a restart.
+        if (imported) setPortraitPath(imported.filePath);
+    };
+
+    const handlePortraitDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsPortraitDragOver(false);
+
+        const imagePanePath = e.dataTransfer.getData('application/renpy-image-path');
+        if (imagePanePath) {
+            const dropped = projectImages.find(img => img.filePath === imagePanePath);
+            if (dropped) {
+                if (dropped.isInProject) {
+                    setPortraitPath(dropped.filePath);
+                } else {
+                    void importPortraitFromSource(dropped.filePath);
+                }
+            }
+            return;
+        }
+
+        const file = e.dataTransfer.files?.[0];
+        if (file && window.electronAPI?.webUtils) {
+            const sourcePath = window.electronAPI.webUtils.getPathForFile(file);
+            if (sourcePath) void importPortraitFromSource(sourcePath);
+        }
+    };
+
+    const handlePortraitDoubleClick = async () => {
+        if (!window.electronAPI) return;
+        const selected = await window.electronAPI.selectImage();
+        if (selected) void importPortraitFromSource(selected);
+    };
+
     const usageLocations = useMemo(() => {
         if (!character) return [];
         const occurrences: { blockId: string; line: number }[] = [];
@@ -141,6 +192,7 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
             color,
             image: image || undefined,
             profile: profile.trim() || undefined,
+            portraitPath: portraitPath || undefined,
             what_color: overrideWhatColor ? what_color : undefined,
             who_prefix: who_prefix.trim() || undefined,
             who_suffix: who_suffix.trim() || undefined,
@@ -185,6 +237,44 @@ const CharacterEditorView: React.FC<CharacterEditorViewProps> = ({ character, on
                 {/* Left Column — Primary Attributes */}
                 <div className="space-y-4">
                     <h3 className="text-lg font-semibold border-b pb-2 border-gray-300 dark:border-gray-700">Primary Attributes</h3>
+
+                    <div>
+                        <label className="text-sm font-medium">Portrait</label>
+                        <div
+                            role="button"
+                            tabIndex={0}
+                            aria-label="Character portrait — drop an image or double-click to choose one"
+                            onDragOver={(e) => { e.preventDefault(); setIsPortraitDragOver(true); }}
+                            onDragLeave={() => setIsPortraitDragOver(false)}
+                            onDrop={handlePortraitDrop}
+                            onDoubleClick={handlePortraitDoubleClick}
+                            className={`relative mt-1 w-[512px] max-w-full aspect-square rounded bg-white dark:bg-gray-700 border-2 border-dashed flex items-center justify-center overflow-hidden ${isPortraitDragOver ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30' : 'border-gray-300 dark:border-gray-600'}`}
+                        >
+                            {portraitDataUrl ? (
+                                <img src={portraitDataUrl} alt="Character portrait" className="w-full h-full object-contain object-center" />
+                            ) : (
+                                <div className="flex flex-col items-center gap-2 text-gray-400 dark:text-gray-500 select-none px-4 text-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16" viewBox="0 0 24 24" fill="none">
+                                        <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.5"/>
+                                        <path d="M4 20c0-4.418 3.582-7 8-7s8 2.582 8 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                    </svg>
+                                    <span className="text-sm">Drag an image here or double-click to choose one</span>
+                                </div>
+                            )}
+                            {portraitPath && (
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setPortraitPath(''); }}
+                                    title="Remove portrait"
+                                    aria-label="Remove portrait"
+                                    className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center text-sm leading-none"
+                                >
+                                    ×
+                                </button>
+                            )}
+                        </div>
+                        <HelpText>Reference image shown in the editor only — not used in generated Ren&apos;Py code.</HelpText>
+                    </div>
 
                     <div>
                         <label htmlFor="character-editor-name" className="text-sm font-medium">Display Name</label>

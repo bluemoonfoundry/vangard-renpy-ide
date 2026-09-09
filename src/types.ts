@@ -238,6 +238,8 @@ export interface Character {
   tag: string;
   color: string;
   profile?: string;
+  /** IDE-only reference portrait shown in the Character editor's portrait box. Never written to .rpy. */
+  portraitPath?: string;
   definedInBlockId: string;
 
   // Other Ren'Py Character parameters
@@ -1211,6 +1213,7 @@ export interface ScreenLayoutComposition {
  * @property {string} activeTabId - ID of the currently active tab
  * @property {StickyNote[]} [stickyNotes] - Annotations on the canvas
  * @property {Record<string, string>} [characterProfiles] - Character profile notes indexed by character tag
+ * @property {Record<string, string>} [characterPortraits] - Character reference portrait paths indexed by character tag
  * @property {Record<string, PunchlistMetadata>} [punchlistMetadata] - Task tracking metadata
  * @property {Record<string, SceneComposition>} [sceneCompositions] - Saved scene layouts indexed by scene ID
  * @property {Record<string, string>} [sceneNames] - Display names for scenes
@@ -1249,6 +1252,7 @@ export interface ProjectSettings {
   notecardLinks?: NotecardLink[];
   notecardTimeline?: NotecardTimelineSettings;
   characterProfiles?: Record<string, string>;
+  characterPortraits?: Record<string, string>;
   punchlistMetadata?: Record<string, PunchlistMetadata>;
   diagnosticsTasks?: DiagnosticsTask[];
   ignoredDiagnostics?: IgnoredDiagnosticRule[];
@@ -1270,7 +1274,7 @@ export interface ProjectSettings {
  * The excluded fields are persisted separately (their own useImmer/useState in App.tsx) or
  * are session-only, per CLAUDE.md's state table.
  */
-export type PersistedProjectSettings = Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'punchlistMetadata' | 'diagnosticsTasks' | 'ignoredDiagnostics' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>;
+export type PersistedProjectSettings = Omit<ProjectSettings, 'openTabs' | 'activeTabId' | 'stickyNotes' | 'characterProfiles' | 'characterPortraits' | 'punchlistMetadata' | 'diagnosticsTasks' | 'ignoredDiagnostics' | 'sceneCompositions' | 'sceneNames' | 'scannedImagePaths' | 'scannedAudioPaths'>;
 
 /**
  * Combined settings interface for components that need both app and project settings.
@@ -1409,6 +1413,7 @@ export interface ProjectSnapshot {
   notecardLinks: NotecardLink[];
   notecardTimeline: NotecardTimelineSettings;
   characterProfiles: Record<string, string>;
+  characterPortraits: Record<string, string>;
   punchlistMetadata: Record<string, PunchlistMetadata>;
   diagnosticsTasks: DiagnosticsTask[];
   ignoredDiagnostics: IgnoredDiagnosticRule[];
@@ -1516,6 +1521,7 @@ declare global {
           removeEntry: (path: string) => Promise<{ success: boolean; error?: string }>;
           moveFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
           copyEntry: (sourcePath: string, destPath: string) => Promise<{ success: boolean; error?: string }>;
+          importPortraitImage: (sourcePath: string) => Promise<{ success: boolean; relPath?: string; absPath?: string; mediaUrl?: string; error?: string }>;
           scanDirectory: (path: string) => Promise<ScanDirectoryResult>;
           cancelScanDirectory?: () => void;
           onScanProgress?: (callback: (count: number) => void) => () => void;
@@ -1528,6 +1534,7 @@ declare global {
           saveAppSettings: (settings: AppSettings) => Promise<{ success: boolean; error?: string }>;
           getUserDataPath: () => Promise<string>;
           selectRenpy: () => Promise<string | null>;
+          selectImage: () => Promise<string | null>;
           runGame: (renpyPath: string, projectPath: string, warpTarget?: string) => void;
           stopGame: () => void;
           checkRenpyPath: (path: string) => Promise<boolean>;
@@ -1540,6 +1547,9 @@ declare global {
           ideStateSavedForQuit: () => void;
           path: {
               join: (...paths: string[]) => Promise<string>;
+          };
+          webUtils: {
+              getPathForFile: (file: File) => string;
           };
           searchInProject: (options: {
               projectPath: string;

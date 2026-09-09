@@ -37,7 +37,7 @@ import { Worker } from 'worker_threads';
 import { deriveGuiColors } from './src/lib/colorUtils.js';
 import { updateGuiRpy, updateOptionsRpy, generateSaveDirectory } from './src/lib/templateProcessor.js';
 import { validateProjectPath, validateExternalUrl, canonicalize } from './src/lib/ipcSecurity.js';
-import { scanDirectoryForAssets } from './src/lib/assetScanner.js';
+import { scanDirectoryForAssets, pathToMediaUrl } from './src/lib/assetScanner.js';
 import { searchInDirectory } from './src/lib/projectSearch.js';
 import { atomicWriteFile, cleanupStaleTempFiles } from './src/lib/atomicFileWrite.js';
 
@@ -1256,6 +1256,24 @@ app.whenReady().then(async () => {
     }
   });
 
+  ipcMain.handle('dialog:selectImage', async () => {
+    try {
+      const { canceled, filePaths } = await dialog.showOpenDialog({
+        title: 'Select Portrait Image',
+        properties: ['openFile'],
+        filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+      });
+      if (canceled) {
+        return null;
+      } else {
+        return filePaths[0];
+      }
+    } catch (error) {
+      logger.error('Failed to open image selection dialog:', error);
+      return null;
+    }
+  });
+
   /**
    * Resolve the Ren'Py executable from an SDK directory.
    * Returns the full path to renpy.exe (Windows) or renpy.sh (macOS/Linux).
@@ -1581,7 +1599,34 @@ app.whenReady().then(async () => {
       return { success: false, error: error.message };
     }
   });
-  
+
+  // Imports a file from OUTSIDE the project (an OS drag-and-drop or a native file-dialog
+  // selection -- both genuine user gestures) into game/images/portraits/. Deliberately
+  // does NOT guardProjectPath the source: unlike fs:copyEntry, that path is expected to be
+  // external. To keep this from becoming an arbitrary-write primitive for a compromised
+  // renderer, the destination is computed entirely here (never renderer-supplied) and the
+  // filename is reduced to its basename, so no path segment from the input can escape the
+  // portraits folder.
+  ipcMain.handle('fs:importPortraitImage', async (event, sourcePath) => {
+    try {
+      if (!currentProjectRoot) throw new Error('No project loaded');
+      const stat = await fs.stat(sourcePath);
+      if (!stat.isFile()) throw new Error('Source is not a file');
+
+      const fileName = path.basename(sourcePath);
+      const destDir = path.join(currentProjectRoot, 'game', 'images', 'portraits');
+      await fs.mkdir(destDir, { recursive: true });
+      const destPath = path.join(destDir, fileName);
+      await fs.cp(sourcePath, destPath, { recursive: false });
+
+      const relPath = `game/images/portraits/${fileName}`;
+      return { success: true, relPath, absPath: destPath, mediaUrl: pathToMediaUrl(destPath) };
+    } catch (error) {
+      logger.error('Failed to import portrait image:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('fs:scanDirectory', async (event, dirPath) => {
       try {
           await guardProjectPath(dirPath);

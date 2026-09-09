@@ -305,3 +305,74 @@ describe('useAssetManagement — setImages / setAudios direct setters', () => {
     expect(result.current.audios.size).toBe(1);
   });
 });
+
+// ============================================================================
+// handleImportPortraitImage
+// ============================================================================
+
+describe('useAssetManagement — handleImportPortraitImage', () => {
+  beforeEach(() => {
+    installElectronAPI();
+  });
+
+  afterAll(() => {
+    uninstallElectronAPI();
+  });
+
+  it('imports the source file via the dedicated main-process handler and registers a new ProjectImage', async () => {
+    const api = window.electronAPI!;
+    (api.importPortraitImage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      relPath: 'game/images/portraits/eileen.png',
+      absPath: '/project/game/images/portraits/eileen.png',
+      mediaUrl: 'media:///project/game/images/portraits/eileen.png',
+    });
+    (api.refreshProjectTree as ReturnType<typeof vi.fn>).mockResolvedValue({ name: 'game', path: '/project/game', children: [] });
+
+    const { result } = renderHook(() => useAssetManagement(makeParams()));
+
+    let imported: ProjectImage | null = null;
+    await act(async () => {
+      imported = await result.current.handleImportPortraitImage('/external/eileen.png');
+    });
+
+    expect(api.importPortraitImage).toHaveBeenCalledWith('/external/eileen.png');
+    expect(imported).toEqual({
+      filePath: 'game/images/portraits/eileen.png',
+      fileName: 'eileen.png',
+      dataUrl: 'media:///project/game/images/portraits/eileen.png',
+      fileHandle: null,
+      isInProject: true,
+      projectFilePath: '/project/game/images/portraits/eileen.png',
+    });
+    expect(result.current.images.get('game/images/portraits/eileen.png')).toEqual(imported);
+  });
+
+  it('returns null and toasts an error when the import fails', async () => {
+    const api = window.electronAPI!;
+    (api.importPortraitImage as ReturnType<typeof vi.fn>).mockResolvedValue({ success: false, error: 'disk full' });
+
+    const params = makeParams();
+    const { result } = renderHook(() => useAssetManagement(params));
+
+    let imported: ProjectImage | null = null;
+    await act(async () => {
+      imported = await result.current.handleImportPortraitImage('/external/eileen.png');
+    });
+
+    expect(imported).toBeNull();
+    expect(params.addToast).toHaveBeenCalledWith('Failed to import portrait image', 'error');
+  });
+
+  it('returns null when there is no project root', async () => {
+    installElectronAPI();
+    const { result } = renderHook(() => useAssetManagement(makeParams({ projectRootPath: null })));
+
+    let imported: ProjectImage | null = null;
+    await act(async () => {
+      imported = await result.current.handleImportPortraitImage('/external/eileen.png');
+    });
+
+    expect(imported).toBeNull();
+  });
+});

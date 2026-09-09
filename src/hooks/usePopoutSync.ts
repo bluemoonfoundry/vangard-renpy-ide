@@ -316,6 +316,7 @@ export interface PopoutHandlers {
   saveUntitledFile: (tabId: string, liveContent?: string) => Promise<boolean>;
   handleSaveImageMetadata: (currentFilePath: string, newMeta: ImageMetadata) => Promise<void>;
   handleCopyImageToProject: (sourcePath: string, meta: ImageMetadata) => void | Promise<void>;
+  handleImportPortraitImage: (sourcePath: string) => Promise<ProjectImage | null>;
   handleSaveAudioMetadata: (currentFilePath: string, newMeta: AudioMetadata) => Promise<void>;
   handleCopyAudioToProject: (sourcePath: string, meta: AudioMetadata) => void | Promise<void>;
   handleUpdateCharacter: (char: Character, oldTag?: string) => void | Promise<void>;

@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   getStartupArgs: () => ipcRenderer.invoke('app:get-startup-args'),
@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeEntry: (entryPath) => ipcRenderer.invoke('fs:removeEntry', entryPath),
   moveFile: (oldPath, newPath) => ipcRenderer.invoke('fs:moveFile', oldPath, newPath),
   copyEntry: (sourcePath, destPath) => ipcRenderer.invoke('fs:copyEntry', sourcePath, destPath),
+  importPortraitImage: (sourcePath) => ipcRenderer.invoke('fs:importPortraitImage', sourcePath),
   scanDirectory: (dirPath) => ipcRenderer.invoke('fs:scanDirectory', dirPath),
   cancelScanDirectory: () => ipcRenderer.send('fs:cancel-scan-directory'),
   onScanProgress: (callback) => {
@@ -64,6 +65,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   // --- Game Execution ---
   selectRenpy: () => ipcRenderer.invoke('dialog:selectRenpy'),
+  selectImage: () => ipcRenderer.invoke('dialog:selectImage'),
   runGame: (renpyPath, projectPath, warpTarget) => ipcRenderer.send('game:run', renpyPath, projectPath, warpTarget),
   stopGame: () => ipcRenderer.send('game:stop'),
   checkRenpyPath: (path) => ipcRenderer.invoke('renpy:check-path', path),
@@ -95,6 +97,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // --- Path utils ---
   path: {
     join: (...args) => ipcRenderer.invoke('path:join', ...args),
+  },
+  webUtils: {
+    getPathForFile: (file) => webUtils.getPathForFile(file),
   },
   // --- Search ---
   searchInProject: (options) => ipcRenderer.invoke('project:search', options),

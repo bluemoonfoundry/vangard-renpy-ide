@@ -41,6 +41,7 @@ export interface HydrateSetters {
   setNotecardLinks: Updater<NotecardLink[]>;
   setNotecardTimeline: Updater<NotecardTimelineSettings>;
   setCharacterProfiles: Updater<Record<string, string>>;
+  setCharacterPortraits: Updater<Record<string, string>>;
   setPunchlistMetadata: Updater<Record<string, PunchlistMetadata>>;
   setDiagnosticsTasks: Updater<DiagnosticsTask[]>;
   setIgnoredDiagnostics: Updater<IgnoredDiagnosticRule[]>;
@@ -73,7 +74,7 @@ export function hydrateFromProjectData(snapshot: ProjectSnapshot, setters: Hydra
     setImages, setAudios, setImageScanDirectories, setAudioScanDirectories, setIsScanningAssets,
     setIsRefreshingImages, setIsRefreshingAudios, setImagesLastScanned, setAudiosLastScanned,
     setStickyNotes, setRouteStickyNotes, setChoiceStickyNotes, setNotecards, setNotecardLinks, setNotecardTimeline,
-    setCharacterProfiles,
+    setCharacterProfiles, setCharacterPortraits,
     setPunchlistMetadata, setDiagnosticsTasks, setIgnoredDiagnostics, setDismissedImplicitVarHint,
     setSceneCompositions, setSceneNames, setImagemapCompositions,
     setRouteNodeLayoutCache,
@@ -120,6 +121,7 @@ export function hydrateFromProjectData(snapshot: ProjectSnapshot, setters: Hydra
   setNotecardLinks(snapshot.notecardLinks);
   setNotecardTimeline(snapshot.notecardTimeline);
   setCharacterProfiles(snapshot.characterProfiles);
+  setCharacterPortraits(snapshot.characterPortraits);
   setPunchlistMetadata(snapshot.punchlistMetadata);
   setDiagnosticsTasks(snapshot.diagnosticsTasks);
   setIgnoredDiagnostics(snapshot.ignoredDiagnostics);

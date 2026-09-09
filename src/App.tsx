@@ -375,6 +375,8 @@ const App: React.FC = () => {
     updateProjectSettings,
     characterProfiles,
     setCharacterProfiles,
+    characterPortraits,
+    setCharacterPortraits,
     isRenpyPathValid,
     setIsRenpyPathValid,
     isGeneratingTranslations,
@@ -493,6 +495,7 @@ const App: React.FC = () => {
     handleCopyAudiosToProjectBulk,
     handleSaveImageMetadata,
     handleCopyImageToProject,
+    handleImportPortraitImage,
     handleSaveAudioMetadata,
     handleCopyAudioToProject,
     cancelAssetScan,
@@ -933,7 +936,7 @@ const App: React.FC = () => {
           setImages, setAudios, setImageScanDirectories, setAudioScanDirectories, setIsScanningAssets,
           setIsRefreshingImages, setIsRefreshingAudios, setImagesLastScanned, setAudiosLastScanned,
           setStickyNotes, setRouteStickyNotes, setChoiceStickyNotes, setNotecards, setNotecardLinks, setNotecardTimeline,
-          setCharacterProfiles,
+          setCharacterProfiles, setCharacterPortraits,
           setPunchlistMetadata, setDiagnosticsTasks, setIgnoredDiagnostics, setDismissedImplicitVarHint,
           setSceneCompositions, setSceneNames, setImagemapCompositions,
           setRouteNodeLayoutCache,
@@ -954,7 +957,7 @@ const App: React.FC = () => {
       projectSettings,
       blocks, setBlocks,
       setImages, setAudios, imageScanDirectories, audioScanDirectories,
-      stickyNotes, routeStickyNotes, choiceStickyNotes, notecards, notecardLinks, notecardTimeline, characterProfiles,
+      stickyNotes, routeStickyNotes, choiceStickyNotes, notecards, notecardLinks, notecardTimeline, characterProfiles, characterPortraits,
       punchlistMetadata, diagnosticsTasks, ignoredDiagnostics, dismissedImplicitVarHint,
       sceneCompositions, sceneNames, imagemapCompositions,
       routeNodeLayoutCache,
@@ -1492,12 +1495,13 @@ const App: React.FC = () => {
     const newCharacters = new Map(analysisResult.characters);
     newCharacters.forEach((char, tag) => {
         const profile = characterProfiles[tag];
-        if (profile !== undefined) {
-            newCharacters.set(tag, { ...char, profile });
+        const portraitPath = characterPortraits[tag];
+        if (profile !== undefined || portraitPath !== undefined) {
+            newCharacters.set(tag, { ...char, ...(profile !== undefined && { profile }), ...(portraitPath !== undefined && { portraitPath }) });
         }
     });
     return { ...analysisResult, characters: newCharacters };
-  }, [analysisResult, characterProfiles]);
+  }, [analysisResult, characterProfiles, characterPortraits]);
 
   // When a character tag rename is in-flight, wait until analysis has resolved the new
   // tag before updating the open tab.  This avoids the flash of "New Character" form
@@ -1522,7 +1526,7 @@ const App: React.FC = () => {
   const { handleOpenCharacterEditor, handleUpdateCharacter } = useCharacterManagement({
     blocks, analysisResult, projectRootPath,
     updateBlock, addBlock, setFileSystemTree,
-    setCharacterProfiles, setHasUnsavedSettings, addToast,
+    setCharacterProfiles, setCharacterPortraits, setHasUnsavedSettings, addToast,
     pendingTagRenameRef,
     openTabs, secondaryOpenTabs, activePaneId, splitLayout,
     setOpenTabs, setActiveTabId, setSecondaryOpenTabs, setSecondaryActiveTabId, setActivePaneId,
@@ -1852,6 +1856,7 @@ const App: React.FC = () => {
     saveUntitledFile,
     handleSaveImageMetadata,
     handleCopyImageToProject,
+    handleImportPortraitImage,
     handleSaveAudioMetadata,
     handleCopyAudioToProject,
     handleUpdateCharacter,
@@ -1901,7 +1906,7 @@ const App: React.FC = () => {
     handleChangeStoryCanvasGroupingMode,
     handleOpenRouteCanvasTab,
     setCanvasFilters,
-  }), [updateBlock, handleSaveBlock, handleSaveAll, setBlockContentFromPopout, setEditorDirtyFromPopout, handleWarpToLabel, handleCreateFileFromSelection, handleCreateVariableFromSelection, handleCreateCharacterFromSelection, handleSaveMenuTemplate, addToast, handleOpenEditor, updateUntitledContent, setUntitledDirty, saveUntitledFile, handleSaveImageMetadata, handleCopyImageToProject, handleSaveAudioMetadata, handleCopyAudioToProject, handleUpdateCharacter, handleUpdateDiagnosticsTasks, handleUpdateIgnoredDiagnostics, handleCenterOnBlock, handleGenerateTranslations, handleOpenStaticTab, handleUpdateRouteNodePositions, addRouteStickyNote, updateRouteStickyNote, deleteRouteStickyNote, handleChangeRouteCanvasLayoutMode, handleChangeRouteCanvasGroupingMode, addChoiceStickyNote, updateChoiceStickyNote, deleteChoiceStickyNote, addNotecard, updateNotecard, deleteNotecard, deleteNotecards, restoreNotecards, addNotecardLink, updateNotecardLink, deleteNotecardLink, renameNotecardTimelineSlot, moveNotecardWithinTimeline, unassignNotecardFromTimeline, insertTimelineSlot, deleteTimelineSlot, handleSceneUpdate, handleRenameScene, handleImageMapUpdate, handleRenameImageMap, updateGroup, updateBlockPositions, updateGroupPositions, deleteBlockWithFile, deleteBlocksWithFile, createGroupFromSelection, deleteGroup, addStickyNote, updateStickyNote, deleteStickyNote, handleCreateBlockFromCanvas, handleChangeStoryCanvasLayoutMode, handleChangeStoryCanvasGroupingMode, handleOpenRouteCanvasTab, setCanvasFilters]);
+  }), [updateBlock, handleSaveBlock, handleSaveAll, setBlockContentFromPopout, setEditorDirtyFromPopout, handleWarpToLabel, handleCreateFileFromSelection, handleCreateVariableFromSelection, handleCreateCharacterFromSelection, handleSaveMenuTemplate, addToast, handleOpenEditor, updateUntitledContent, setUntitledDirty, saveUntitledFile, handleSaveImageMetadata, handleCopyImageToProject, handleImportPortraitImage, handleSaveAudioMetadata, handleCopyAudioToProject, handleUpdateCharacter, handleUpdateDiagnosticsTasks, handleUpdateIgnoredDiagnostics, handleCenterOnBlock, handleGenerateTranslations, handleOpenStaticTab, handleUpdateRouteNodePositions, addRouteStickyNote, updateRouteStickyNote, deleteRouteStickyNote, handleChangeRouteCanvasLayoutMode, handleChangeRouteCanvasGroupingMode, addChoiceStickyNote, updateChoiceStickyNote, deleteChoiceStickyNote, addNotecard, updateNotecard, deleteNotecard, deleteNotecards, restoreNotecards, addNotecardLink, updateNotecardLink, deleteNotecardLink, renameNotecardTimelineSlot, moveNotecardWithinTimeline, unassignNotecardFromTimeline, insertTimelineSlot, deleteTimelineSlot, handleSceneUpdate, handleRenameScene, handleImageMapUpdate, handleRenameImageMap, updateGroup, updateBlockPositions, updateGroupPositions, deleteBlockWithFile, deleteBlocksWithFile, createGroupFromSelection, deleteGroup, addStickyNote, updateStickyNote, deleteStickyNote, handleCreateBlockFromCanvas, handleChangeStoryCanvasLayoutMode, handleChangeStoryCanvasGroupingMode, handleOpenRouteCanvasTab, setCanvasFilters]);
 
   useMainWindowPopoutSync({
     poppedOutTabs: poppedOutSyncableTabs,
@@ -1982,7 +1987,7 @@ const App: React.FC = () => {
     handleClosePrimaryPane, handleCloseSecondaryPane,
     handleOpenEditor, handleOpenRouteCanvasTab, handleOpenStaticTab,
     images, imagesArray, imageMetadata, audios, audioMetadata,
-    handleSaveImageMetadata, handleCopyImageToProject, handleSaveAudioMetadata, handleCopyAudioToProject,
+    handleSaveImageMetadata, handleCopyImageToProject, handleImportPortraitImage, handleSaveAudioMetadata, handleCopyAudioToProject,
     existingImageTags, existingAudioPaths,
     perfSnapshot, handleGenerateTranslations, isGeneratingTranslations, isRenpyPathValid,
     editorCursorBlockId, editorCursorPosition,

@@ -29,6 +29,10 @@ export interface UseSettingsManagementReturn {
   characterProfiles: Record<string, string>;
   setCharacterProfiles: (updater: (draft: Record<string, string>) => void) => void;
 
+  // Character reference portraits (per-project)
+  characterPortraits: Record<string, string>;
+  setCharacterPortraits: (updater: (draft: Record<string, string>) => void) => void;
+
   // Validation state
   isRenpyPathValid: boolean;
   setIsRenpyPathValid: React.Dispatch<React.SetStateAction<boolean>>;
@@ -115,6 +119,9 @@ export function useSettingsManagement(): UseSettingsManagementReturn {
 
   // --- Character profiles ---
   const [characterProfiles, setCharacterProfiles] = useImmer<Record<string, string>>({});
+
+  // --- Character reference portraits ---
+  const [characterPortraits, setCharacterPortraits] = useImmer<Record<string, string>>({});
 
   // --- Validation state ---
   const [isRenpyPathValid, setIsRenpyPathValid] = useState(false);
@@ -264,6 +271,10 @@ export function useSettingsManagement(): UseSettingsManagementReturn {
     // Character profiles
     characterProfiles,
     setCharacterProfiles,
+
+    // Character reference portraits
+    characterPortraits,
+    setCharacterPortraits,
 
     // Validation state
     isRenpyPathValid,

@@ -32,7 +32,7 @@ import { applyTheme } from '@/App';
 import { usePopoutTabClient, fromLightBlocks } from '@/hooks/usePopoutSync';
 import { EMPTY_ANALYSIS_RESULT } from '@/hooks/useRenpyAnalysis';
 import type { CanvasTransform } from '@/hooks/useCanvasInteraction';
-import type { Block, ImageMapComposition, RenpyAnalysisResult, SceneComposition } from '@/types';
+import type { Block, ImageMapComposition, ProjectImage, RenpyAnalysisResult, SceneComposition } from '@/types';
 
 interface PopoutTabRootProps {
   tabId: string;
@@ -347,6 +347,7 @@ const PopoutTabRoot: React.FC<PopoutTabRootProps> = ({ tabId }) => {
             void callHandler('handleOpenEditor', blockId, line);
             window.electronAPI?.focusMainWindow?.();
           }}
+          onImportPortrait={(sourcePath) => callHandler<ProjectImage | null>('handleImportPortraitImage', sourcePath)}
         />
       </PopoutChrome>
     );

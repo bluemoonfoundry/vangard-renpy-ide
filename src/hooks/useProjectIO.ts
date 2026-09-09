@@ -58,6 +58,7 @@ export interface UseProjectIOParams {
   notecardLinks: NotecardLink[];
   notecardTimeline: NotecardTimelineSettings;
   characterProfiles: Record<string, string>;
+  characterPortraits: Record<string, string>;
   punchlistMetadata: Record<string, PunchlistMetadata>;
   diagnosticsTasks: DiagnosticsTask[];
   ignoredDiagnostics: IgnoredDiagnosticRule[];
@@ -128,7 +129,7 @@ export function useProjectIO(params: UseProjectIOParams): UseProjectIOReturn {
     projectSettings,
     blocks, setBlocks,
     setImages, setAudios, imageScanDirectories, audioScanDirectories,
-    stickyNotes, routeStickyNotes, choiceStickyNotes, notecards, notecardLinks, notecardTimeline, characterProfiles,
+    stickyNotes, routeStickyNotes, choiceStickyNotes, notecards, notecardLinks, notecardTimeline, characterProfiles, characterPortraits,
     punchlistMetadata, diagnosticsTasks, ignoredDiagnostics, dismissedImplicitVarHint,
     sceneCompositions, sceneNames, imagemapCompositions,
     routeNodeLayoutCache,
@@ -190,6 +191,7 @@ export function useProjectIO(params: UseProjectIOParams): UseProjectIOReturn {
         notecardLinks: Array.from(notecardLinks),
         notecardTimeline,
         characterProfiles,
+        characterPortraits,
         punchlistMetadata,
         diagnosticsTasks,
         ignoredDiagnostics,
@@ -210,7 +212,7 @@ export function useProjectIO(params: UseProjectIOParams): UseProjectIOReturn {
       addToast(e instanceof Error ? `Failed to save workspace settings: ${e.message}` : 'Failed to save workspace settings', 'error');
       return false;
     }
-  }, [projectRootPath, projectSettings, blocks, routeNodeLayoutCache, openTabs, activeTabId, splitLayout, splitPrimarySize, secondaryOpenTabs, secondaryActiveTabId, stickyNotes, routeStickyNotes, choiceStickyNotes, notecards, notecardLinks, notecardTimeline, characterProfiles, addToast, sceneCompositions, sceneNames, imagemapCompositions, imageScanDirectories, audioScanDirectories, punchlistMetadata, diagnosticsTasks, ignoredDiagnostics, dismissedImplicitVarHint, setHasUnsavedSettings]);
+  }, [projectRootPath, projectSettings, blocks, routeNodeLayoutCache, openTabs, activeTabId, splitLayout, splitPrimarySize, secondaryOpenTabs, secondaryActiveTabId, stickyNotes, routeStickyNotes, choiceStickyNotes, notecards, notecardLinks, notecardTimeline, characterProfiles, characterPortraits, addToast, sceneCompositions, sceneNames, imagemapCompositions, imageScanDirectories, audioScanDirectories, punchlistMetadata, diagnosticsTasks, ignoredDiagnostics, dismissedImplicitVarHint, setHasUnsavedSettings]);
 
   const handleSaveAll = useCallback(async () => {
     const dirtyIds = new Set([...dirtyBlockIds, ...dirtyEditors]);

@@ -30,6 +30,11 @@ describe('useSettingsManagement', () => {
     expect(result.current.characterProfiles).toEqual({});
   });
 
+  it('initializes characterPortraits as empty object', () => {
+    const { result } = renderHook(() => useSettingsManagement());
+    expect(result.current.characterPortraits).toEqual({});
+  });
+
   it('initializes draftingMode as false', () => {
     const { result } = renderHook(() => useSettingsManagement());
     expect(result.current.projectSettings.draftingMode).toBe(false);

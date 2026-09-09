@@ -193,6 +193,7 @@ export interface UseTabContentRendererParams {
   audioMetadata: Map<string, AudioMetadata>;
   handleSaveImageMetadata: (currentFilePath: string, newMeta: ImageMetadata) => Promise<void>;
   handleCopyImageToProject: (sourcePath: string, meta: ImageMetadata) => Promise<void>;
+  handleImportPortraitImage: (sourcePath: string) => Promise<ProjectImage | null>;
   handleSaveAudioMetadata: (currentFilePath: string, newMeta: AudioMetadata) => Promise<void>;
   handleCopyAudioToProject: (sourcePath: string, meta: AudioMetadata) => Promise<void>;
   existingImageTags: Set<string>;
@@ -283,7 +284,7 @@ export function useTabContentRenderer(params: UseTabContentRendererParams): UseT
     handleClosePrimaryPane, handleCloseSecondaryPane,
     handleOpenEditor, handleOpenRouteCanvasTab, handleOpenStaticTab,
     images, imagesArray, imageMetadata, audios, audioMetadata,
-    handleSaveImageMetadata, handleCopyImageToProject, handleSaveAudioMetadata, handleCopyAudioToProject,
+    handleSaveImageMetadata, handleCopyImageToProject, handleImportPortraitImage, handleSaveAudioMetadata, handleCopyAudioToProject,
     existingImageTags, existingAudioPaths,
     perfSnapshot, handleGenerateTranslations, isGeneratingTranslations, isRenpyPathValid,
     editorCursorBlockId, editorCursorPosition,
@@ -530,6 +531,7 @@ export function useTabContentRenderer(params: UseTabContentRendererParams): UseT
         analysisResult={analysisResultWithProfiles}
         blocks={blocks}
         onOpenEditor={handleOpenEditor}
+        onImportPortrait={handleImportPortraitImage}
       />;
     }
     if (tab.type === 'scene-composer' && tab.sceneId) {

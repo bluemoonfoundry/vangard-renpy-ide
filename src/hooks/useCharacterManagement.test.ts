@@ -26,6 +26,7 @@ function makeProps(overrides: Partial<UseCharacterManagementProps> = {}): UseCha
     addBlock: vi.fn(),
     setFileSystemTree: vi.fn(),
     setCharacterProfiles: vi.fn(),
+    setCharacterPortraits: vi.fn(),
     setHasUnsavedSettings: vi.fn(),
     addToast: vi.fn(),
     pendingTagRenameRef: { current: null },
